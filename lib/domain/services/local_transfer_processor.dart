@@ -2,7 +2,6 @@ import '../../core/clock.dart';
 import '../../core/id_generator.dart';
 import '../../core/result.dart';
 import '../entities/audit.dart';
-import '../entities/customer.dart';
 import '../entities/message.dart';
 import '../entities/transaction.dart';
 import '../repositories/repositories.dart';
