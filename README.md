@@ -6,7 +6,7 @@
 
 ## الحالة الحالية
 
-المشروع في مرحلة التهيئة الأولى. تم إنشاء هيكل Flutter Android قياسي، ولم تُنقل أي شاشة إنتاجية أو تُضاف بيانات تجريبية. المرحلة التالية هي تثبيت قرارات المجال وقاعدة البيانات قبل تنفيذ الواجهات.
+تم إنشاء هيكل Flutter Android قياسي، وأضيفت وثائق المشروع الرسمية. لم تُنقل أي شاشة إنتاجية بعد، ولم تُضف بيانات Mock أو منطق مالي غير موثق. المرحلة الحالية هي تثبيت المتطلبات والدومين وقاعدة البيانات قبل تنفيذ الواجهات.
 
 ## المبادئ
 
@@ -16,6 +16,18 @@
 - Android Native Bridge لمعالجة SMS والخدمات الخلفية عند الحاجة.
 - منع Mock Data في نسخة الإنتاج.
 - تنفيذ كل ميزة من Domain إلى Database إلى Service إلى UI إلى Tests.
+
+## الوثائق الأساسية
+
+- [خطة التنفيذ الكاملة](docs/master-plan.md)
+- [المواصفات الوظيفية لـ NET](docs/net-functional-specification.md)
+- [تحليل مستودع Kotlin المرجعي](docs/kotlin-reference-analysis-ar.md)
+- [خطة التنفيذ الأولية](docs/implementation-plan.md)
+- [خريطة نقل الشاشات](docs/migration-map.md)
+
+## المستودع المرجعي
+
+https://github.com/KAYANSTOR/kayan-android-kotlan
 
 ## المتطلبات
 
@@ -31,9 +43,3 @@ flutter pub get
 flutter analyze
 flutter test
 ```
-
-## المراجع
-
-- مستودع الواجهات المرجعي: https://github.com/KAYANSTOR/kayan-android-kotlan
-- خطة التنفيذ: [`docs/implementation-plan.md`](docs/implementation-plan.md)
-- خريطة النقل: [`docs/migration-map.md`](docs/migration-map.md)
