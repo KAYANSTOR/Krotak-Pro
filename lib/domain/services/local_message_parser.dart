@@ -89,16 +89,14 @@ final class LocalMessageParser implements MessageParser {
       account: account,
       ref: ref,
     );
-    if (resolved == null) return null;
-
-    final reference = (ref != null && ref.isNotEmpty) ? ref : 'auto-${messageId.hashCode.abs()}';
+    if (resolved == null || ref == null || ref.isEmpty) return null;
 
     return ParsedTransfer(
       messageId: messageId,
       amount: Money(minorUnits: minor, currencyCode: defaultCurrencyCode),
       customerIdentifier: resolved.value,
       identifierType: resolved.type,
-      reference: reference,
+      reference: ref,
       templateId: template.id,
       rawIdentifier: resolved.raw,
     );
