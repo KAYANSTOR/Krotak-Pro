@@ -4,6 +4,7 @@ import 'application/app_container.dart';
 import 'domain/entities/message.dart';
 import 'ui/app_scope.dart';
 import 'ui/home_shell.dart';
+import 'ui/theme/kayan_theme.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -46,13 +47,9 @@ class _NetAppState extends State<NetApp> {
       child: MaterialApp(
         title: 'NET',
         debugShowCheckedModeBanner: false,
-        theme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(
-            seedColor: const Color(0xFF0B5FFF),
-            brightness: Brightness.light,
-          ),
-          useMaterial3: true,
-        ),
+        theme: buildKayanLightTheme(),
+        darkTheme: buildKayanDarkTheme(),
+        themeMode: ThemeMode.system,
         home: const HomeShell(),
       ),
     );
