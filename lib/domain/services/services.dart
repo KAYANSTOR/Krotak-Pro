@@ -71,6 +71,7 @@ abstract interface class SaleService {
   Future<Result<Sale>> sellFromBalance({
     required String customerId,
     required String categoryId,
+    String? operationId,
   });
 
   Future<Result<Sale>> reverseSale({required String saleId});
