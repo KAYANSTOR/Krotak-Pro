@@ -22,13 +22,13 @@ final class LocalMessageParser implements MessageParser {
   final List<TransferTemplate> templates;
   final String defaultCurrencyCode;
 
-  static const _regexMeta = <String>{
+  static final Set<String> _regexMeta = <String>{
     '.',
     '+',
     '*',
     '?',
     '^',
-    '$',
+    r'$',
     '(',
     ')',
     '|',
@@ -36,7 +36,7 @@ final class LocalMessageParser implements MessageParser {
     ']',
     '{',
     '}',
-    '\\',
+    r'\',
   };
 
   @override
@@ -91,9 +91,7 @@ final class LocalMessageParser implements MessageParser {
     );
     if (resolved == null) return null;
 
-    final reference = (ref != null && ref.isNotEmpty)
-        ? ref
-        : 'auto-${messageId.hashCode.abs()}';
+    final reference = (ref != null && ref.isNotEmpty) ? ref : 'auto-${messageId.hashCode.abs()}';
 
     return ParsedTransfer(
       messageId: messageId,
