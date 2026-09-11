@@ -25,6 +25,7 @@ final class Customer {
     required this.status,
     required this.createdAt,
     required this.updatedAt,
+    this.mergedIntoId,
   });
 
   final String id;
@@ -32,4 +33,25 @@ final class Customer {
   final CustomerStatus status;
   final DateTime createdAt;
   final DateTime updatedAt;
+
+  /// When [status] is [CustomerStatus.merged], points to the surviving account.
+  final String? mergedIntoId;
+
+  Customer copyWith({
+    String? displayName,
+    CustomerStatus? status,
+    DateTime? updatedAt,
+    String? mergedIntoId,
+    bool clearMergedIntoId = false,
+  }) {
+    return Customer(
+      id: id,
+      displayName: displayName ?? this.displayName,
+      status: status ?? this.status,
+      createdAt: createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      mergedIntoId:
+          clearMergedIntoId ? null : (mergedIntoId ?? this.mergedIntoId),
+    );
+  }
 }

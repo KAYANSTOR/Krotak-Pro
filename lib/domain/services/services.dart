@@ -1,8 +1,57 @@
 import '../../core/result.dart';
 import '../entities/card.dart';
+import '../entities/customer.dart';
 import '../entities/message.dart';
 import '../entities/money.dart';
 import '../entities/transaction.dart';
+import '../entities/wallet.dart';
+
+abstract interface class CustomerService {
+  Future<Result<Customer>> create({
+    required String displayName,
+    required CustomerIdentifierType identifierType,
+    required String identifierValue,
+  });
+
+  Future<Result<void>> blacklist(String customerId);
+
+  Future<Result<void>> addIdentifier({
+    required String customerId,
+    required CustomerIdentifierType type,
+    required String value,
+    required bool isPrimary,
+  });
+}
+
+abstract interface class CustomerBalanceService {
+  Future<Result<Money>> getBalance({
+    required String customerId,
+    required String currencyCode,
+  });
+
+  Future<Result<Transaction>> credit({
+    required String customerId,
+    required Money amount,
+    String? reference,
+  });
+}
+
+abstract interface class CardCatalogService {
+  Future<Result<CardCategory>> saveCategory(CardCategory category);
+
+  Future<Result<int>> importCards({
+    required String categoryId,
+    required List<CardImportDraft> drafts,
+  });
+}
+
+abstract interface class WalletCatalogService {
+  Future<Result<Wallet>> saveWallet({required String name});
+}
+
+abstract interface class PointOfSaleCatalogService {
+  Future<Result<PointOfSale>> savePointOfSale({required String name});
+}
 
 abstract interface class CardInventoryService {
   Future<Result<Card>> reserveAvailableCard({
@@ -16,6 +65,15 @@ abstract interface class CardInventoryService {
     required String cardId,
     required String reservationId,
   });
+}
+
+abstract interface class SaleService {
+  Future<Result<Sale>> sellFromBalance({
+    required String customerId,
+    required String categoryId,
+  });
+
+  Future<Result<Sale>> reverseSale({required String saleId});
 }
 
 abstract interface class MessageParser {
@@ -35,6 +93,16 @@ abstract interface class TransferProcessor {
 
 abstract interface class LicenseService {
   Future<Result<void>> verifyOnline();
+}
+
+final class CardImportDraft {
+  const CardImportDraft({
+    required this.serialNumber,
+    required this.secretCode,
+  });
+
+  final String serialNumber;
+  final String secretCode;
 }
 
 final class UnresolvedDomainDecision implements Exception {

@@ -1,46 +1,33 @@
 # NET Flutter
 
-إعادة بناء تطبيق **NET** لأصحاب ومزودي شبكات الإنترنت باستخدام Flutter وDart.
+تطبيق Android لإدارة بيع الكروت والتحويلات عبر SMS — يعمل محلياً (Drift) مع جسر Native لاستقبال/إرسال الرسائل.
 
-هذا المستودع مستقل عن مستودع Kotlin المرجعي. مستودع Kotlin يُستخدم كمرجع للتصميم وتدفقات الواجهات فقط، بينما تُبنى قاعدة البيانات والمنطق التجاري ومعالجة SMS من الصفر وفق مواصفات NET المعتمدة.
+## المعمارية
 
-## الحالة الحالية
+```
+UI (Flutter)
+  → AppContainer (composition root)
+  → Domain services / use cases
+  → Repositories → Drift SQLite
+  → Android SmsReceiver + MethodChannel/EventChannel
+```
 
-تم إنشاء هيكل Flutter Android قياسي، وإضافة الوثائق الرسمية، ثم بناء أول طبقة Domain محايدة تضم الكيانات والعقود الأولية واختبارات وحدتها. لم تُنقل أي شاشة إنتاجية بعد، ولم تُضف بيانات Mock أو قاعدة بيانات أو API أو منطق SMS.
-
-## المبادئ
-
-- Local-first والعمل اليومي دون الاعتماد على الإنترنت.
-- معاملات مالية ذرية وقابلة للتدقيق.
-- Flutter للواجهة والمنطق المشترك.
-- Android Native Bridge لمعالجة SMS والخدمات الخلفية عند الحاجة.
-- منع Mock Data في نسخة الإنتاج.
-- تنفيذ كل ميزة من Domain إلى Database إلى Service إلى UI إلى Tests.
-
-## الوثائق الأساسية
-
-- [خطة التنفيذ الكاملة](docs/master-plan.md)
-- [المواصفات الوظيفية لـ NET](docs/net-functional-specification.md)
-- [تحليل مستودع Kotlin المرجعي](docs/kotlin-reference-analysis-ar.md)
-- [نموذج Domain الأولي](docs/domain-model.md)
-- [خطة التنفيذ الأولية](docs/implementation-plan.md)
-- [خريطة نقل الشاشات](docs/migration-map.md)
-
-## المستودع المرجعي
-
-https://github.com/KAYANSTOR/kayan-android-kotlan
-
-## المتطلبات
-
-- Flutter 3.47.3 أو إصدار stable متوافق.
-- Dart 3.13.3 أو إصدار متوافق.
-- Android Studio وAndroid SDK.
-- JDK متوافق مع نسخة Flutter/Gradle المستخدمة.
-
-## أوامر التحقق
+## التشغيل
 
 ```bash
 flutter pub get
-flutter analyze
+dart run build_runner build --delete-conflicting-outputs
+flutter run
+```
+
+صلاحيات SMS تُطلب من شاشة لوحة التحكم.
+
+## الاختبار
+
+```bash
 flutter test
 ```
+
+## المراحل المكتملة
+
+انظر [docs/progress.md](docs/progress.md).

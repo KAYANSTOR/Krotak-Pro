@@ -1,7 +1,7 @@
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:net_app/core/result.dart';
-import 'package:net_app/data/database/app_database.dart';
+import 'package:net_app/data/database/app_database.dart' hide Customer, Card, Sale, TransferTemplate;
 import 'package:net_app/data/repositories/local_repositories.dart';
 import 'package:net_app/domain/entities/card.dart' as domain;
 import 'package:net_app/domain/entities/customer.dart' as domain;

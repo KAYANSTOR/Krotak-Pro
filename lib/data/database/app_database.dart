@@ -179,6 +179,26 @@ class AppDatabase extends _$AppDatabase {
   MigrationStrategy get migration => MigrationStrategy(
         onCreate: (Migrator migrator) async {
           await migrator.createAll();
+          await customStatement(
+            'CREATE UNIQUE INDEX IF NOT EXISTS idx_customer_identifiers_value '
+            'ON customer_identifiers (value)',
+          );
+          await customStatement(
+            'CREATE UNIQUE INDEX IF NOT EXISTS idx_cards_serial_number '
+            'ON cards (serial_number)',
+          );
+          await customStatement(
+            'CREATE UNIQUE INDEX IF NOT EXISTS idx_cards_secret_code '
+            'ON cards (secret_code)',
+          );
+          await customStatement(
+            'CREATE UNIQUE INDEX IF NOT EXISTS idx_incoming_messages_external_reference '
+            'ON incoming_messages (external_reference)',
+          );
+          await customStatement(
+            'CREATE UNIQUE INDEX IF NOT EXISTS idx_transactions_reference '
+            'ON transactions (reference)',
+          );
         },
         onUpgrade: (Migrator migrator, int from, int to) async {
           // Future schema changes must be added as explicit, tested migrations.
