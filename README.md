@@ -1,16 +1,33 @@
 # NET Flutter
 
-تطبيق NET لإدارة بيع الكروت والشحنات على Android، مبني بـ Flutter مع قاعدة بيانات محلية (Drift) ومعالجة رسائل SMS.
+تطبيق Android لإدارة بيع الكروت والتحويلات عبر SMS — يعمل محلياً (Drift) مع جسر Native لاستقبال/إرسال الرسائل.
 
-## الحالة الحالية
+## المعمارية
 
-- تهيئة المشروع + الوثائق والخطة
-- كيانات Domain وعقود المستودعات
-- مخطط Drift المحلي + المستودعات المحلية
-- خدمات العملاء والمحافظ والفئات والمخزون
-- البيع من الرصيد وعكس العملية + Ledger + Unit of Work
-- اختبارات الوحدة والتكامل المحلي
+```
+UI (Flutter)
+  → AppContainer (composition root)
+  → Domain services / use cases
+  → Repositories → Drift SQLite
+  → Android SmsReceiver + MethodChannel/EventChannel
+```
 
-الخطوة التالية: `MessageParser` و `TransferProcessor` ثم Android SMS Receiver.
+## التشغيل
 
-انظر [docs/progress.md](docs/progress.md) و [docs/implementation-plan.md](docs/implementation-plan.md).
+```bash
+flutter pub get
+dart run build_runner build --delete-conflicting-outputs
+flutter run
+```
+
+صلاحيات SMS تُطلب من شاشة لوحة التحكم.
+
+## الاختبار
+
+```bash
+flutter test
+```
+
+## المراحل المكتملة
+
+انظر [docs/progress.md](docs/progress.md).
