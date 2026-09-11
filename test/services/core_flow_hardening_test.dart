@@ -13,7 +13,6 @@ import 'package:net_app/domain/entities/money.dart';
 import 'package:net_app/domain/entities/transaction.dart';
 import 'package:net_app/domain/repositories/repositories.dart';
 import 'package:net_app/domain/repositories/unit_of_work.dart';
-import 'package:net_app/domain/services/local_customer_identity_resolver.dart';
 import 'package:net_app/domain/services/local_transfer_processor.dart';
 import 'package:net_app/domain/services/services.dart';
 import 'package:net_app/platform/sms_bridge.dart';
