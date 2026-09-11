@@ -3,7 +3,8 @@ import 'package:flutter/material.dart';
 import 'screens/customers_screen.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/inventory_screen.dart';
-import 'screens/messages_screen.dart';
+import 'screens/offers_screen.dart';
+import 'screens/reports_screen.dart';
 import 'screens/settings_screen.dart';
 import 'widgets/kayan_bottom_nav.dart';
 
@@ -34,9 +35,9 @@ class _HomeShellState extends State<HomeShell> {
       case 'cards':
         return const InventoryScreen();
       case 'reports':
-        return const MessagesScreen();
+        return const ReportsScreen();
       case 'offers':
-        return const SettingsScreen();
+        return const OffersScreen();
       case 'dashboard':
       default:
         return const DashboardScreen();
@@ -50,6 +51,22 @@ class _HomeShellState extends State<HomeShell> {
       child: Scaffold(
         appBar: AppBar(
           title: Text(_titles[_route] ?? 'NET'),
+          actions: [
+            if (_route == 'dashboard')
+              IconButton(
+                icon: const Icon(Icons.settings_outlined),
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => Scaffold(
+                        appBar: AppBar(title: const Text('الإعدادات')),
+                        body: const SettingsScreen(),
+                      ),
+                    ),
+                  );
+                },
+              ),
+          ],
         ),
         body: _pageFor(_route),
         bottomNavigationBar: KayanBottomNav(
