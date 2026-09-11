@@ -66,6 +66,42 @@ void main() {
     expect(find.text('أرصدة العملاء'), findsOneWidget);
   });
 
+  testWidgets('NetBalanceCard onTapAccounts and onTapCards fire', (tester) async {
+    String? tab;
+    await tester.pumpWidget(
+      _wrap(
+        NetBalanceCard(
+          balanceMinor: 0,
+          accountsCount: 3,
+          availableCards: 5,
+          onTapAccounts: () => tab = 'accounts',
+          onTapCards: () => tab = 'cards',
+        ),
+      ),
+    );
+    await tester.tap(find.text('حسابات'));
+    expect(tab, 'accounts');
+    await tester.tap(find.text('كروت متاحة'));
+    expect(tab, 'cards');
+  });
+
+  testWidgets('NetMetricCard onTap callback', (tester) async {
+    var tapped = false;
+    await tester.pumpWidget(
+      _wrap(
+        NetMetricCard(
+          title: 'الحسابات النشطة',
+          value: '4',
+          subtitle: 'عملاء',
+          icon: Icons.people_outline,
+          onTap: () => tapped = true,
+        ),
+      ),
+    );
+    await tester.tap(find.text('الحسابات النشطة'));
+    expect(tapped, isTrue);
+  });
+
   testWidgets('NetMetricCard shows title value subtitle', (tester) async {
     await tester.pumpWidget(
       _wrap(const NetMetricCard(title: 'مبيعات اليوم', value: '100 ر.ي', subtitle: '3 عملية', icon: Icons.today_outlined)),
@@ -132,20 +168,4 @@ void main() {
     await tester.tap(find.text('الكل'));
     expect(tapped, isTrue);
   });
-}
-
-Widget _wrap(
-  Widget child, {
-  ThemeMode mode = ThemeMode.light,
-  TextDirection direction = TextDirection.rtl,
-}) {
-  return MaterialApp(
-    theme: buildKayanLightTheme(),
-    darkTheme: buildKayanDarkTheme(),
-    themeMode: mode,
-    home: Directionality(
-      textDirection: direction,
-      child: Scaffold(body: child),
-    ),
-  );
 }
