@@ -1,27 +1,40 @@
 # تقدم تنفيذ خطة NET
 
-## التحقق (2026-09-11)
+## التحقق الأخير
+
+التاريخ: 2026-09-11
 
 ```text
-flutter analyze --no-fatal-infos
-No issues found!
+flutter analyze — يفشل حاليًا بسبب عدم توافق عقود Repository والخدمات والاختبارات بعد دمج تغييرات متوازية.
+flutter test — يفشل حاليًا لعدم ترجمة بعض اختبارات الخدمات والعقود القديمة.
 ```
 
-- التحليل نظيف على كامل المشروع (`lib` + `test`).
-- بعض اختبارات التكامل القديمة تحتاج محاذاة مع عقود الخدمات الحالية.
+التفاصيل الكاملة في [تقرير مقارنة الخطة بالتنفيذ](progress-audit-2026-09-11.md).
 
-## ما اكتمل
+## ما اكتمل جزئيًا أو كليًا
 
 | البند | الحالة |
 |---|---|
-| Domain + Drift + Services | مكتمل |
-| MessageParser + TransferProcessor | مكتمل |
-| Android SMS Bridge | مكتمل |
-| Design System من kayan-android-kotlan | مكتمل |
-| Dashboard: Balance / Sales / QuickActions | مكتمل |
-| تنقل سفلي مطابق Kotlin | مكتمل |
-| CI | مكتمل |
-| flutter analyze نظيف | مكتمل |
+| Flutter project والمستودع والتوثيق | مكتمل |
+| Domain entities وMoney وResult | مكتمل كأساس، مع توسعة مستمرة |
+| Drift وSchema وUnit of Work | منفذ أوليًا ويحتاج قيودًا وmigrations واختبارات أوسع |
+| Ledger وAudit وID وClock | منفذ كأساس |
+| العملاء والمحافظ وفئات الكروت والمخزون | منفذ جزئيًا |
+| البيع والعكس | منفذ جزئيًا ويحتاج تثبيت العقود والمعاملات |
+| MessageParser وTransferProcessor | منفذ أوليًا مع اختبارات، لكن الدمج الحالي غير مستقر |
+| Android SMS Bridge وReceiver | منفذ أوليًا ويحتاج اختبارات جهاز وWorker واستعادة |
+| License وSettings وBackup/Restore المحلي | منفذ محليًا، دون Backend ترخيص نهائي |
+| Kayan Design System والثيم والتنقل | منفذ أوليًا |
+| Dashboard وCustomers وInventory وMessages وSettings | شاشات أولية منفذة، وليست كل شاشات المنتج |
+| CI | ملف CI موجود، لكن يجب إعادة جعله أخضر بعد توحيد العقود |
+
+## الأولوية الحالية
+
+1. توحيد عقود Repositories وServices مع الاختبارات.
+2. إعادة `flutter analyze` و`flutter test` إلى حالة خضراء.
+3. تثبيت معاملات البيع والتحويل والحجز والعكس مع Audit وidempotency.
+4. إكمال Android Worker وSMS recovery والاختبارات الأصلية.
+5. ربط الشاشات بالـUse Cases الحقيقية ثم استكمال الشاشات ذات الأولوية.
 
 ## المرجع البصري
 
