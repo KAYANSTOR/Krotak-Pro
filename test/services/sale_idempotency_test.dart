@@ -96,15 +96,16 @@ void main() {
   test(
     'retries with the same operation id return one sale and one ledger entry',
     () async {
-      final customer =
-          (await customerService.create(
-            displayName: 'Ali',
-            identifierType: CustomerIdentifierType.phoneNumber,
-            identifierValue: '733000000',
-          ) as Success<Customer>)
-              .value;
+      final customerResult = await customerService.create(
+        displayName: 'Ali',
+        identifierType: CustomerIdentifierType.phoneNumber,
+        identifierValue: '733000000',
+      );
+      expect(customerResult, isA<Success<Customer>>());
+      if (customerResult is! Success<Customer>) return;
+      final customer = customerResult.value;
 
-      await catalogService.saveCategory(
+      final categoryResult = await catalogService.saveCategory(
         const CardCategory(
           id: 'cat-500',
           name: 'Yemen Mobile 500',
@@ -112,18 +113,26 @@ void main() {
           isActive: true,
         ),
       );
-      await catalogService.importCards(
+      expect(categoryResult, isA<Success<CardCategory>>());
+      if (categoryResult is! Success<CardCategory>) return;
+
+      final importResult = await catalogService.importCards(
         categoryId: 'cat-500',
         drafts: const [
           CardImportDraft(serialNumber: 'A-1', secretCode: 'secret-1'),
           CardImportDraft(serialNumber: 'B-2', secretCode: 'secret-2'),
         ],
       );
-      await balanceService.credit(
+      expect(importResult, isA<Success<int>>());
+      if (importResult is! Success<int>) return;
+
+      final creditResult = await balanceService.credit(
         customerId: customer.id,
         amount: const Money(minorUnits: 1000, currencyCode: 'YER'),
         reference: 'deposit-1',
       );
+      expect(creditResult, isA<Success<Transaction>>());
+      if (creditResult is! Success<Transaction>) return;
 
       final first = await saleService.sellFromBalance(
         customerId: customer.id,
@@ -135,27 +144,32 @@ void main() {
         categoryId: 'cat-500',
         operationId: 'sale-op-42',
       );
-
       final customerLedger = await transactions.findByCustomer(customer.id);
       final allCards = await cards.findByCategory('cat-500');
       final allSales = await sales.findByCustomer(customer.id);
 
       expect(first, isA<Success<Sale>>());
       expect(second, isA<Success<Sale>>());
-      expect((second as Success<Sale>).value.id, 'sale-op-42');
+      expect(customerLedger, isA<Success<List<Transaction>>>());
+      expect(allCards, isA<Success<List<Card>>>());
+      expect(allSales, isA<Success<List<Sale>>>());
+      if (first is! Success<Sale> ||
+          second is! Success<Sale> ||
+          customerLedger is! Success<List<Transaction>> ||
+          allCards is! Success<List<Card>> ||
+          allSales is! Success<List<Sale>>) {
+        return;
+      }
+
+      expect(second.value.id, 'sale-op-42');
+      expect(first.value.id, second.value.id);
       expect(
-        (first as Success<Sale>).value.id,
-        (second as Success<Sale>).value.id,
-      );
-      expect(
-        (customerLedger as Success<List<Transaction>>).value
-            .where((t) => t.type == TransactionType.sale),
+        customerLedger.value.where((t) => t.type == TransactionType.sale),
         hasLength(1),
       );
-      expect((allSales as Success<List<Sale>>).value, hasLength(1));
+      expect(allSales.value, hasLength(1));
       expect(
-        (allCards as Success<List<Card>>).value
-            .where((c) => c.status.name == 'sold'),
+        allCards.value.where((c) => c.status.name == 'sold'),
         hasLength(1),
       );
     },
