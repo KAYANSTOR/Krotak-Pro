@@ -442,7 +442,7 @@ final class _FakeAudit implements AuditLogRepository {
   }
 
   @override
-  Future<Result<List<AuditLog>>> listForEntity(
+  Future<Result<List<AuditLog>>> findByEntity(
     String entityType,
     String entityId,
   ) async =>
