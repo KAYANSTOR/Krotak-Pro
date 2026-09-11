@@ -63,10 +63,8 @@ void main() {
       expect(second, isA<Success<Transaction?>>());
       expect(processor.calls, 1);
       expect(messages.store, hasLength(1));
-      expect(
-        messages.seenExternalReferences.single,
-        'sms:v2:ref:bank:BANK-REF-42',
-      );
+      expect(messages.seenExternalReferences, everyElement('sms:v2:ref:bank:BANK-REF-42'));
+      expect(messages.seenExternalReferences, hasLength(2));
     });
   });
 
