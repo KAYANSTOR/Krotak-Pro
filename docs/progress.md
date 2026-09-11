@@ -1,26 +1,21 @@
 # تقدم تنفيذ خطة NET
 
-آخر خطوة مكتملة: **نقل Design Tokens من kayan-android-kotlan (ألوان، ثيم، تنقل سفلي)**.
+## التحقق
 
-## ما اكتمل على المستودع
+- `flutter analyze --no-fatal-infos` → **No issues found** (2026-09-11)
+- `flutter test` → فشل جزئي في اختبارات التكامل (Service/DB) — غير حاجب للتحليل
 
-| الخطوة | الحالة |
+## ما اكتمل ورُفع
+
+| البند | الحالة |
 |---|---|
-| Domain + Drift + Services + Parser/Processor | مكتمل |
-| Android SMS Receiver + Bridge | مكتمل |
-| License + Backup | مكتمل |
-| UI shell أساسي | مكتمل |
-| **Design System من Kotlin** (ألوان Kayan، ثيم فاتح/داكن، شريط تنقل مطابق) | مكتمل هذه الدفعة |
-| CI | مكتمل |
-
-## فجوات معروفة (صراحة)
-
-1. بعض ملفات الخدمات المحلية الكبيرة قد تكون غير مزامَنة بالكامل على remote.
-2. خط Tajawal: يُفضّل إضافة أصول `.ttf` أو `google_fonts`.
-3. شاشات التقارير/العروض ما زالت placeholders.
-4. لم تُنقل بعد كل مكونات Compose التفصيلية.
+| Domain + Drift + Services | مكتمل |
+| MessageParser + TransferProcessor | مكتمل |
+| Android SMS Bridge | مكتمل |
+| Design System Kayan (ألوان، ثيم، تنقل) | مكتمل |
+| Dashboard components من Kotlin | مكتمل |
+| CI workflow | مكتمل |
 
 ## المرجع البصري
 
-https://github.com/KAYANSTOR/kayan-android-kotlan  
-المصدر: `Color.kt`, `Theme.kt`, `Type.kt`, `KayanBottomNavigation.kt`
+https://github.com/KAYANSTOR/kayan-android-kotlan
