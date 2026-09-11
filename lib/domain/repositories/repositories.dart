@@ -69,7 +69,15 @@ abstract interface class MessageRepository {
   Future<Result<IncomingMessage?>> findById(String id);
   Future<Result<IncomingMessage?>> findByExternalReference(String reference);
   Future<Result<List<IncomingMessage>>> pendingProcessing();
+  Future<Result<List<IncomingMessage>>> listByStatus(MessageProcessingStatus status);
+  Future<Result<List<IncomingMessage>>> listRecent({int limit = 100});
   Future<Result<void>> updateStatus(String id, MessageProcessingStatus status);
+}
+
+abstract interface class TransferTemplateRepository {
+  Future<Result<List<TransferTemplate>>> listAll();
+  Future<Result<TransferTemplate?>> findById(String id);
+  Future<Result<void>> save(TransferTemplate template);
 }
 
 abstract interface class LicenseRepository {
