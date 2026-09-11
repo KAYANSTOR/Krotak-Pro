@@ -40,7 +40,9 @@ class _HomeShellState extends State<HomeShell> {
         return const OffersScreen();
       case 'dashboard':
       default:
-        return const DashboardScreen();
+        return DashboardScreen(
+          onNavigateToTab: (id) => setState(() => _route = id),
+        );
     }
   }
 
