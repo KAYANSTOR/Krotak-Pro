@@ -195,6 +195,156 @@ final class LocalSaleService implements SaleService {
   }
 
   @override
+  Future<Result<Sale>> completeReservedSale({
+    required String customerId,
+    required String cardId,
+    required String reservationId,
+    required String operationId,
+  }) {
+    final stableOperationId = operationId.trim();
+    if (stableOperationId.isEmpty) {
+      return Future.value(
+        const Failure(
+          AppFailure(
+            code: 'invalid_operation_id',
+            message: 'Sale operation id must not be empty',
+          ),
+        ),
+      );
+    }
+
+    return unitOfWork.run(() async {
+      final existingSale = await sales.findById(stableOperationId);
+      if (existingSale is Failure<Sale?>) return Failure(existingSale.error);
+      if ((existingSale as Success<Sale?>).value != null) {
+        return Success(existingSale.value!);
+      }
+
+      final existingLedger =
+          await transactions.findByReference('sale-op:$stableOperationId');
+      if (existingLedger is Failure<Transaction?>) {
+        return Failure(existingLedger.error);
+      }
+      if ((existingLedger as Success<Transaction?>).value != null) {
+        return const Failure(
+          AppFailure(
+            code: 'sale_operation_conflict',
+            message: 'Sale operation has a ledger record but no sale record',
+          ),
+        );
+      }
+
+      final foundCustomer = await customers.findById(customerId);
+      if (foundCustomer is Failure<Customer?>) return Failure(foundCustomer.error);
+      final customer = (foundCustomer as Success<Customer?>).value;
+      if (customer == null) {
+        return const Failure(
+          AppFailure(code: 'customer_not_found', message: 'Customer was not found'),
+        );
+      }
+      if (customer.status != CustomerStatus.active) {
+        return const Failure(
+          AppFailure(
+            code: 'customer_not_sellable',
+            message: 'Customer is not allowed to buy',
+          ),
+        );
+      }
+
+      final foundCard = await cards.findById(cardId);
+      if (foundCard is Failure<Card?>) return Failure(foundCard.error);
+      final card = (foundCard as Success<Card?>).value;
+      if (card == null) {
+        return const Failure(
+          AppFailure(code: 'card_not_found', message: 'Card was not found'),
+        );
+      }
+      if (card.categoryId.isEmpty) {
+        return const Failure(
+          AppFailure(code: 'card_category_missing', message: 'Card category is missing'),
+        );
+      }
+      if (card.status != CardStatus.reserved ||
+          card.reservation.reservationId != reservationId) {
+        return const Failure(
+          AppFailure(
+            code: 'reservation_not_owned',
+            message: 'Card is not reserved by this transfer operation',
+          ),
+        );
+      }
+
+      final foundCategory = await categories.findById(card.categoryId);
+      if (foundCategory is Failure<CardCategory?>) return Failure(foundCategory.error);
+      final category = (foundCategory as Success<CardCategory?>).value;
+      if (category == null || !category.isActive) {
+        return const Failure(
+          AppFailure(
+            code: 'category_unavailable',
+            message: 'Card category is unavailable',
+          ),
+        );
+      }
+
+      final balance = await balances.getBalance(
+        customerId: customerId,
+        currencyCode: category.faceValue.currencyCode,
+      );
+      if (balance is Failure<Money>) return Failure(balance.error);
+      if ((balance as Success<Money>).value.minorUnits < category.faceValue.minorUnits) {
+        return const Failure(
+          AppFailure(
+            code: 'insufficient_balance',
+            message: 'Customer balance is insufficient',
+          ),
+        );
+      }
+
+      final now = clock.now();
+      final sale = Sale(
+        id: stableOperationId,
+        customerId: customerId,
+        cardId: card.id,
+        amount: category.faceValue,
+        status: TransactionStatus.completed,
+        createdAt: now,
+      );
+
+      final marked = await cards.markSold(card.id, sale.id);
+      if (marked is Failure<void>) return Failure(marked.error);
+
+      final saleTxn = Transaction(
+        id: ids.next('txn'),
+        type: TransactionType.sale,
+        status: TransactionStatus.completed,
+        amount: category.faceValue,
+        createdAt: now,
+        customerId: customerId,
+        reference: 'sale-op:$stableOperationId',
+      );
+      final appended = await transactions.append(saleTxn);
+      if (appended is Failure<void>) return Failure(appended.error);
+
+      final saved = await sales.save(sale);
+      if (saved is Failure<void>) return Failure(saved.error);
+
+      final audited = await auditLogs.append(
+        AuditLog(
+          id: ids.next('audit'),
+          entityType: 'sale',
+          entityId: sale.id,
+          action: 'completed',
+          occurredAt: now,
+          payloadJson:
+              '{"cardId":"${card.id}","customerId":"$customerId","operationId":"$stableOperationId","reservationId":"$reservationId"}',
+        ),
+      );
+      if (audited is Failure<void>) return Failure(audited.error);
+      return Success(sale);
+    });
+  }
+
+  @override
   Future<Result<Sale>> reverseSale({required String saleId}) {
     return unitOfWork.run(() async {
       final found = await sales.findById(saleId);
