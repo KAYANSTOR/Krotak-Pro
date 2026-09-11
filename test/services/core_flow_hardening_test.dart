@@ -4,7 +4,9 @@ import 'package:net_app/application/incoming_sms_handler.dart';
 import 'package:net_app/core/clock.dart';
 import 'package:net_app/core/id_generator.dart';
 import 'package:net_app/core/result.dart';
-import 'package:net_app/data/database/app_database.dart' hide Customer, Card, Sale, TransferTemplate, CardCategory, Transaction;
+import 'package:net_app/data/database/app_database.dart'
+    hide Customer, Card, Sale, TransferTemplate, CardCategory, Transaction,
+        IncomingMessage, CustomerIdentifier, AuditLog;
 import 'package:net_app/data/repositories/local_repositories.dart';
 import 'package:net_app/domain/entities/audit.dart';
 import 'package:net_app/domain/entities/customer.dart';
@@ -61,7 +63,10 @@ void main() {
       expect(second, isA<Success<Transaction?>>());
       expect(processor.calls, 1);
       expect(messages.store, hasLength(1));
-      expect(messages.seenExternalReferences.single, 'sms:v2:ref:bank:BANK-REF-42');
+      expect(
+        messages.seenExternalReferences.single,
+        'sms:v2:ref:bank:BANK-REF-42',
+      );
     });
   });
 
@@ -83,7 +88,9 @@ void main() {
     });
 
     test('rejection survives business rollback boundary', () async {
-      await messages.save(_message('m-reject', status: MessageProcessingStatus.received));
+      await messages.save(
+        _message('m-reject', status: MessageProcessingStatus.received),
+      );
       final processor = LocalTransferProcessor(
         messages: messages,
         customers: customers,
@@ -98,53 +105,61 @@ void main() {
       final stored = await messages.findById('m-reject');
 
       expect(result, isA<Failure<Transaction>>());
-      expect((stored as Success<IncomingMessage?>).value!.status,
-          MessageProcessingStatus.rejected);
+      expect(
+        (stored as Success<IncomingMessage?>).value!.status,
+        MessageProcessingStatus.rejected,
+      );
     });
 
-    test('mid-flow audit failure rolls back transaction and leaves failed state for recovery',
-        () async {
-      await customers.save(
-        Customer(
-          id: 'customer-1',
-          displayName: 'Customer',
-          status: CustomerStatus.active,
-          createdAt: DateTime.utc(2026, 1, 1),
-          updatedAt: DateTime.utc(2026, 1, 1),
-        ),
-      );
-      await customers.saveIdentifier(
-        const CustomerIdentifier(
-          id: 'phone-1',
-          customerId: 'customer-1',
-          type: CustomerIdentifierType.phoneNumber,
-          value: '770123456',
-          isPrimary: true,
-        ),
-      );
-      await messages.save(_message('m-fail', status: MessageProcessingStatus.parsed));
+    test(
+      'mid-flow audit failure rolls back transaction and leaves failed state for recovery',
+      () async {
+        await customers.save(
+          Customer(
+            id: 'customer-1',
+            displayName: 'Customer',
+            status: CustomerStatus.active,
+            createdAt: DateTime.utc(2026, 1, 1),
+            updatedAt: DateTime.utc(2026, 1, 1),
+          ),
+        );
+        await customers.saveIdentifier(
+          const CustomerIdentifier(
+            id: 'phone-1',
+            customerId: 'customer-1',
+            type: CustomerIdentifierType.phoneNumber,
+            value: '770123456',
+            isPrimary: true,
+          ),
+        );
+        await messages.save(
+          _message('m-fail', status: MessageProcessingStatus.parsed),
+        );
 
-      final audit = _FailingAudit();
-      final processor = LocalTransferProcessor(
-        messages: messages,
-        customers: customers,
-        balances: _DbWritingBalance(transactions),
-        auditLogs: audit,
-        unitOfWork: _DriftUow(database),
-        clock: FixedClock(DateTime.utc(2026, 9, 12, 1)),
-        ids: SequentialIdGenerator(),
-      );
+        final audit = _FailingAudit();
+        final processor = LocalTransferProcessor(
+          messages: messages,
+          customers: customers,
+          balances: _DbWritingBalance(transactions),
+          auditLogs: audit,
+          unitOfWork: _DriftUow(database),
+          clock: FixedClock(DateTime.utc(2026, 9, 12, 1)),
+          ids: SequentialIdGenerator(),
+        );
 
-      final result = await processor.process(_transfer('m-fail'));
-      final stored = await messages.findById('m-fail');
-      final ledger = await transactions.findByCustomer('customer-1');
+        final result = await processor.process(_transfer('m-fail'));
+        final stored = await messages.findById('m-fail');
+        final ledger = await transactions.findByCustomer('customer-1');
 
-      expect(result, isA<Failure<Transaction>>());
-      expect((stored as Success<IncomingMessage?>).value!.status,
-          MessageProcessingStatus.failed);
-      expect((ledger as Success<List<Transaction>>).value, isEmpty);
-      expect(audit.attempts, 1);
-    });
+        expect(result, isA<Failure<Transaction>>());
+        expect(
+          (stored as Success<IncomingMessage?>).value!.status,
+          MessageProcessingStatus.failed,
+        );
+        expect((ledger as Success<List<Transaction>>).value, isEmpty);
+        expect(audit.attempts, 1);
+      },
+    );
   });
 }
 
@@ -175,7 +190,8 @@ final class _FakeMessages implements MessageRepository {
   @override
   Future<Result<void>> save(IncomingMessage message) async {
     if (message.externalReference != null &&
-        store.values.any((m) => m.externalReference == message.externalReference)) {
+        store.values
+            .any((m) => m.externalReference == message.externalReference)) {
       return const Failure(
         AppFailure(code: 'unique_violation', message: 'duplicate'),
       );
@@ -188,7 +204,9 @@ final class _FakeMessages implements MessageRepository {
   Future<Result<IncomingMessage?>> findById(String id) async => Success(store[id]);
 
   @override
-  Future<Result<IncomingMessage?>> findByExternalReference(String reference) async {
+  Future<Result<IncomingMessage?>> findByExternalReference(
+    String reference,
+  ) async {
     seenExternalReferences.add(reference);
     for (final message in store.values) {
       if (message.externalReference == reference) return Success(message);
@@ -198,7 +216,11 @@ final class _FakeMessages implements MessageRepository {
 
   @override
   Future<Result<List<IncomingMessage>>> pendingProcessing() async =>
-      Success(store.values.where((m) => m.status != MessageProcessingStatus.processed).toList());
+      Success(
+        store.values
+            .where((m) => m.status != MessageProcessingStatus.processed)
+            .toList(),
+      );
 
   @override
   Future<Result<List<IncomingMessage>>> listByStatus(
@@ -211,7 +233,10 @@ final class _FakeMessages implements MessageRepository {
       Success(store.values.take(limit).toList());
 
   @override
-  Future<Result<void>> updateStatus(String id, MessageProcessingStatus status) async {
+  Future<Result<void>> updateStatus(
+    String id,
+    MessageProcessingStatus status,
+  ) async {
     final current = store[id];
     if (current == null) {
       return const Failure(AppFailure(code: 'not_found', message: 'missing'));
@@ -302,7 +327,10 @@ final class _AcceptingAudit implements AuditLogRepository {
   Future<Result<void>> append(AuditLog log) async => const Success(null);
 
   @override
-  Future<Result<List<AuditLog>>> findByEntity(String entityType, String entityId) async =>
+  Future<Result<List<AuditLog>>> findByEntity(
+    String entityType,
+    String entityId,
+  ) async =>
       const Success([]);
 }
 
@@ -318,7 +346,10 @@ final class _FailingAudit implements AuditLogRepository {
   }
 
   @override
-  Future<Result<List<AuditLog>>> findByEntity(String entityType, String entityId) async =>
+  Future<Result<List<AuditLog>>> findByEntity(
+    String entityType,
+    String entityId,
+  ) async =>
       const Success([]);
 }
 
