@@ -6,7 +6,7 @@
 
 ## الحالة الحالية
 
-تم إنشاء هيكل Flutter Android قياسي، وإضافة الوثائق الرسمية، ثم بناء أول طبقة Domain محايدة تضم الكيانات والعقود الأولية واختبارات وحدتها. لم تُنقل أي شاشة إنتاجية بعد، ولم تُضف بيانات Mock أو قاعدة بيانات أو API أو منطق SMS.
+تم إنشاء هيكل Flutter Android قياسي، وإضافة الوثائق الرسمية، ثم بناء أول طبقات Domain وقاعدة البيانات المحلية وRepositories واختباراتها. لم تُنقل أي شاشة إنتاجية بعد، ولم تُضف بيانات Mock أو API أو معالجة SMS فعلية.
 
 ## المبادئ
 
@@ -23,6 +23,8 @@
 - [المواصفات الوظيفية لـ NET](docs/net-functional-specification.md)
 - [تحليل مستودع Kotlin المرجعي](docs/kotlin-reference-analysis-ar.md)
 - [نموذج Domain الأولي](docs/domain-model.md)
+- [مخطط قاعدة البيانات المحلية](docs/database-schema.md)
+- [ميزات ما بعد الخطة الأولى](docs/post-v1-features.md)
 - [خطة التنفيذ الأولية](docs/implementation-plan.md)
 - [خريطة نقل الشاشات](docs/migration-map.md)
 
