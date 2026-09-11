@@ -1,18 +1,20 @@
 # تقدم تنفيذ خطة NET
 
-## التحقق (2026-09-11)
+## تحقق
 
 ```text
-flutter analyze --no-fatal-infos  →  No issues found!
-flutter test                      →  All tests passed! (37+)
+dart analyze lib test  → No issues found!
+flutter test           → All tests passed! (41)
 ```
 
-**ملاحظة:** Drift يتطلب `libsqlite3-dev` (مثبت في CI).
+## Domain
 
-## مكتمل ومغطى باختبارات
+عملاء، رصيد، مخزون، بيع، SMS، تسوية، استعادة، **دمج حسابات**، Audit.
 
-عملاء، رصيد، مخزون FIFO، بيع+عكس، Parser+Transfer، استعادة رسائل، تسوية، Audit، SMS Bridge، Design System Kayan.
+## UI ≈ 12–18%
 
-## Post-v1
+انظر docs/ui-audit-report.md
 
-سلفني، إشعارات المحافظ، التسوية التلقائية، البث الجماعي، دمج الحسابات.
+## متبقٍ
+
+سلفني، إشعارات محافظ، تسوية مجدولة، بث جماعي، شاشات تقارير/محافظ، Dashboard بيانات حية.
