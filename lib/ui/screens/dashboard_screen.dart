@@ -18,8 +18,15 @@ import '../widgets/net/net_recent_transaction_card.dart';
 import '../widgets/net/net_section_header.dart';
 
 /// Production dashboard — real Domain/Repository data only.
+///
+/// [onNavigateToTab] switches the parent [HomeShell] bottom-nav tab
+/// (e.g. `'accounts'`, `'cards'`, `'reports'`). Required for Balance Card
+/// and metric chips that must change the shell route, not push a new page.
 class DashboardScreen extends StatefulWidget {
-  const DashboardScreen({super.key});
+  const DashboardScreen({super.key, this.onNavigateToTab});
+
+  /// Callback into [HomeShell] to select a bottom-nav tab by id.
+  final ValueChanged<String>? onNavigateToTab;
 
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
@@ -166,6 +173,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
               balanceMinor: _customerBalanceMinor,
               accountsCount: _accountsCount,
               availableCards: _availableCards,
+              onTapAccounts: () => widget.onNavigateToTab?.call('accounts'),
+              onTapCards: () => widget.onNavigateToTab?.call('cards'),
             ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -178,9 +187,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ]),
                   const SizedBox(height: 10),
                   Row(children: [
-                    Expanded(child: NetMetricCard(title: 'كروت متاحة', value: '$_availableCards', subtitle: 'من المخزون', icon: Icons.sim_card_outlined)),
+                    Expanded(child: NetMetricCard(title: 'كروت متاحة', value: '$_availableCards', subtitle: 'من المخزون', icon: Icons.sim_card_outlined, onTap: () => widget.onNavigateToTab?.call('cards'))),
                     const SizedBox(width: 10),
-                    Expanded(child: NetMetricCard(title: 'الحسابات النشطة', value: '$_accountsCount', subtitle: 'عملاء', icon: Icons.people_outline)),
+                    Expanded(child: NetMetricCard(title: 'الحسابات النشطة', value: '$_accountsCount', subtitle: 'عملاء', icon: Icons.people_outline, onTap: () => widget.onNavigateToTab?.call('accounts'))),
                   ]),
                 ],
               ),
