@@ -84,7 +84,7 @@ class _TemplatesScreenState extends State<TemplatesScreen> {
     patternCtrl.dispose();
     if (r is Failure && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text((r as Failure).error.message)),
+        SnackBar(content: Text(r.error.message)),
       );
     }
     await _load();

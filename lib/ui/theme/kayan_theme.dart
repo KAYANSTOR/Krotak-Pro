@@ -35,7 +35,7 @@ ThemeData buildKayanLightTheme() {
         statusBarIconBrightness: Brightness.dark,
       ),
     ),
-    cardTheme: CardTheme(
+    cardTheme: CardThemeData(
       color: KayanColors.surface,
       elevation: 0,
       shape: RoundedRectangleBorder(
