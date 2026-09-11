@@ -4,7 +4,7 @@
 **Branch:** `hardening/core-flow-p0-20260912`  
 **Main:** ما زال عند `26ea5d1dcd47efd7348faaac810befc0e62e73fc` ولم يتم الدمج.
 
-## 1. التدفق الفعلي في الكود
+## 1. التدفق الفعلي بعد القرار التجاري
 
 ```text
 Android SMS Receiver
@@ -21,44 +21,30 @@ LocalCustomerIdentityResolver
   ↓
 LocalTransferProcessor
   ↓
-LocalCustomerBalanceService.credit
-  ↓
-TransactionRepository + AuditLogRepository
-  ↓
-IncomingMessage = processed / rejected / failed
-```
-
-ومسار البيع الموجود فعليًا منفصل:
-
-```text
-DirectSaleScreen
-  ↓
-LocalSaleService.sellFromBalance(operationId)
-  ↓
-LocalCustomerBalanceService.getBalance
+Find active CardCategory where faceValue == transfer amount
   ↓
 LocalCardInventoryService.reserveAvailableCard
   ↓
+LocalCustomerBalanceService.credit(reference = transfer reference)
+  ↓
+MessageSender / NativeMessageSender
+  ↓
+SmsBridge → Android SmsManager
+  ↓
+Audit: sms_delivery_succeeded
+  ↓
+ReservedSaleService / LocalSaleService.completeReservedSale
+  ↓
 CardRepository.markSold
   ↓
-TransactionRepository (sale-op:<operationId>)
+SaleRepository + TransactionRepository
   ↓
-SaleRepository
+Audit: sale completed
   ↓
-AuditLogRepository
+IncomingMessage = processed
 ```
 
-والإرسال الأصلي الموجود في Android:
-
-```text
-SmsBridge.sendSms
-  ↓
-MethodChannel com.kayan.net/sms
-  ↓
-MainActivity.kt
-  ↓
-SmsManager.sendTextMessage
-```
+Recovery after a successful SMS but failed financial commit follows the persisted `sms_delivery_succeeded` audit state and completes the same reservation/sale without sending another SMS.
 
 ## 2. الخدمات والمستودعات المشاركة
 
@@ -72,81 +58,82 @@ SmsManager.sendTextMessage
 - `LocalCustomerIdentityResolver`
 - `CustomerRepository`
 
-### Financial ledger
+### Category / Inventory
+- `CardCategoryRepository`
+- `LocalCardInventoryService`
+- `CardRepository`
+- `CardCategory.faceValue`
+
+### Financial ledger / Sale
 - `LocalCustomerBalanceService`
+- `LocalSaleService`
+- narrow `ReservedSaleService` boundary
+- `SaleRepository`
 - `TransactionRepository`
 - `AuditLogRepository`
 - `DriftUnitOfWork`
 
-### Inventory / Sale
-- `LocalCardInventoryService`
-- `CardRepository`
-- `LocalSaleService`
-- `SaleRepository`
-
 ### SMS transport
+- `MessageSender`
+- `NativeMessageSender`
 - `SmsBridge`
-- Native Android `SmsManager`
-- `MessageSender` موجود كـcontract فقط، ولا توجد implementation موصولة بالـCore Flow الحالي.
+- Android `SmsManager`
 
-## 3. ما تم إصلاحه في Core Reliability
+## 3. ما تم إصلاحه
 
-1. أزيلت هوية SMS القديمة المبنية على `hashCode + minute`.
-2. أصبح للرسالة الصحيحة مفتاح ثابت مشتق من `sender + reference`، مع fallback حتمي للرسائل التي لا تملك reference.
-3. `incoming_messages.external_reference` عليه unique index، مع re-check عند تعارض الإدخال لمنع معالجة SMS نفسها مرتين بسبب race.
-4. `LocalTransferProcessor` لم يعد يفقد `rejected/failed` عندما يعمل الـbusiness transaction Rollback؛ الحالة النهائية تُحفظ بعد خروج المعاملة.
-5. `LocalSaleService` يدعم `operationId` ثابتًا، ويمنع إنشاء Sale ثانية أو Ledger ثانية لنفس العملية.
-6. Sale Ledger يستخدم مرجعًا ثابتًا `sale-op:<operationId>`.
-7. Reverse Sale يحتفظ برابط المعاملة الأصلية.
-8. أضيفت اختبارات Drift حقيقية للـrollback وSale idempotency.
+1. أزيلت هوية SMS غير الثابتة المبنية على `hashCode + minute`.
+2. أصبح مفتاح SMS ثابتًا من `sender + reference` مع fallback حتمي إلى `sender + canonical body`.
+3. `incoming_messages.external_reference` عليه unique index، مع re-check بعد insert race.
+4. حالات `rejected/failed` تُحفظ خارج rollback المالي.
+5. `LocalSaleService` يمنع تكرار Sale/Ledger باستخدام stable `operationId`.
+6. Sale Ledger يستخدم `sale-op:<operationId>`.
+7. Reverse Sale يحتفظ بمرجع المعاملة الأصلية.
+8. تم ربط `NativeMessageSender` فعليًا داخل `AppContainer`.
+9. تم اعتماد اختيار الفئة من Catalog الموجود فعليًا حسب exact amount + currency؛ لا `categoryId` ثابت ولا Category جديدة.
+10. تم إضافة حجز ثابت مشتق من `operationId`، بحيث يكون الحجز جزءًا من نفس عملية الاسترداد.
+11. أضيفت `ReservedSaleService` كحد ضيق لإكمال الكرت المحجوز بعد نجاح الإرسال دون حجز ثانٍ.
+12. يتم تسجيل `sms_delivery_succeeded` قبل إكمال الـSale، ويُستخدم كدليل Recovery لمنع إعادة إرسال نفس بيانات الكرت.
 
-## 4. الفجوة التجارية المثبتة
+## 4. الحالات التجارية
 
-`LocalTransferProcessor` الحالي لا ينشئ Sale ولا يحجز Card؛ هو يعالج التحويل كـCredit إلى رصيد العميل.
-
-`ParsedTransfer` الحالي لا يحمل `categoryId` أو معلومات كافية لتحديد فئة بطاقة تجارية دون اختراع قاعدة عمل جديدة.
-
-`MessageSender` موجود كحد Domain صحيح، لكن لا توجد implementation مرتبطة به في Application composition. `SmsBridge` نفسه هو transport حقيقي، لكنه ليس Delivery abstraction مع state/retry/recovery داخل التدفق.
-
-لذلك لا توجد إمكانية صحيحة لادعاء أن التدفق الحالي هو:
-
+### Amount matched + card available
 ```text
-Transfer → Credit → Reserve Card → Sale → Send SMS
+200
+→ Category.faceValue = 200
+→ Reserve card
+→ Credit transfer idempotently
+→ Send card credentials
+→ Persist delivery success
+→ Complete reserved sale
+→ Sold + Ledger + Audit
 ```
 
-حتى يتم تحديد مصدر فئة البطاقة/fulfillment بشكل صريح، وربط `MessageSender` بالـApplication مع حالة تسليم قابلة للاسترداد.
+### No matching category
+`unmatched_amount` → رفض قابل للتدقيق، بدون Credit أو Reservation أو Sale.
 
-## 5. أقل تصميم متوافق مع البنية الحالية
+### Matching category but no card
+`out_of_stock` → رفض/حالة واضحة، بدون Credit أو Sale.
 
-لا حاجة إلى Provider بديل أو Fake Service.
+### SMS failure
+`failed` + `sms_delivery_failed` → تحرير الحجز، ولا Sale ثانية. إعادة المحاولة بنفس operationId تعيد المحاولة على نفس العملية.
 
-الحد الأدنى الصحيح لاحقًا هو:
+### Delivery success then sale failure
+`failed` + `sms_delivery_succeeded` + `transfer_sale_commit_failed` → لا يُعاد SMS. Recovery يعيد امتلاك نفس البطاقة إن بقيت قابلة للاسترداد ثم يكمل Sale بنفس operationId.
 
-```text
-MessageSender
-    ↓
-SmsBridge adapter
-    ↓
-Android SmsManager
-```
+### Duplicate / retry
+الـLedger المرجعي `sale-op:<operationId>` هو نقطة idempotency قبل أي Credit/Reservation جديد. نفس العملية لا تنتج Sale أو Ledger ثانية.
 
-وتكون العملية المالية منفصلة عن التسليم:
+## 5. التزامن وRace Condition
 
-```text
-Financial Commit
-  = Sale + Ledger + Card State + Audit
+حجز الكرت في `LocalCardRepository.reserve` يتم عبر تحديث شرطي على `status = available`. لذلك لا يمكن لعمليتين متزامنتين أن تنجحا في حجز نفس الكرت؛ العملية الخاسرة تحصل على `card_not_available`/`out_of_stock` ولا تتابع إلى Credit أو Sale.
 
-Delivery State
-  = pending → sent | failed
-```
+## 6. Reverse Sale
 
-فشل SMS لا يعيد العملية المالية ولا ينشئ Sale ثانية. Recovery يعيد محاولة التسليم فقط باستخدام `operationId/messageId` الثابت.
+البيع المكتمل يحتفظ بمعرف العملية نفسه في `Sale.id`. عند `reverseSale` تتم استعادة البطاقة، إنشاء Transaction من نوع `reversal`، وربطها بـ`relatedTransactionId` للـSale Ledger الأصلي. لا ينشئ Reverse عملية بيع جديدة.
 
-لكن تنفيذ هذه الحدود الآن يحتاج أولًا إلى قرار تجاري موثق حول مصدر `categoryId`/فئة الكرت في التحويل؛ لا يوجد هذا الحقل في `ParsedTransfer` الحالي، ولا يجوز استنتاجه بالتخمين.
+## 7. نتائج التحقق
 
-## 6. نتائج الاختبارات الموثقة حتى الآن
-
-آخر CI مكتمل قبل أحدث دورة تصحيح:
+آخر دورة مكتملة قبل إغلاق هذه المرحلة كانت:
 
 ```text
 dart analyze lib test            → PASS
@@ -154,18 +141,28 @@ flutter analyze --no-fatal-infos → PASS
 flutter test                     → 69 passed / 3 failed
 ```
 
-تم تحديد الفشل الثلاثة وإصلاحها في الفرع:
+تم بعد ذلك تعديل تدفق `Transfer → Category → Reservation → SMS → Reserved Sale` وإضافة اختبارات Drift جديدة تغطي:
 
-- customer-missing test كان يستخدم phone غير صالح.
-- dedupe assertion كانت تستخدم `.single` رغم وجود lookup أولي وإعادة lookup.
-- typed `Result<Transaction>` داخل `LocalTransferProcessor` كان يحتاج تثبيتًا صريحًا.
+- amount → matching category
+- no matching category
+- matching category without stock
+- stable-operation retry
+- SMS failure and retry
+- concurrent card consumption
+- Reverse Sale + original ledger relation
 
-بعد ذلك بدأت دورة CI جديدة للتحقق من رأس الفرع الحالي؛ نتيجتها النهائية لم تثبت بعد في وقت إنشاء هذا التقرير.
+**نتيجة CI لهذه التغييرات الجديدة يجب اعتمادها فقط من أحدث Run على رأس الفرع.** لا تعتبر الاختبارات ناجحة قبل ظهور نتيجة GitHub Actions النهائية.
 
-## 7. الحالة النهائية
+## 8. الفجوات المتبقية
 
-**P0 Ready: NO.**
+الفجوة المتبقية الرئيسية هي حدود ضمان Recovery بعد مدة تتجاوز TTL للحجز: إذا أصبح الكرت المباع عبر SMS متاحًا ثم تم أخذه بواسطة عملية تجارية أخرى، يتوقف Recovery ولا يخترع Card بديلًا ولا يعيد إرسال بيانات جديدة. هذا سلوك مقصود لحماية الاتساق.
 
-السبب ليس Dashboard Navigation وليس نقص اختبار شكلي. السبب أن التدفق التجاري الكامل Transfer → Sale → SMS Delivery غير موجود كمسار موحد قابل للاسترداد، وأن متطلبات تحديد فئة البطاقة وحالة التسليم ليست ممثلة حاليًا في العقود/التخزين بما يكفي لإكمالها دون اختراع منطق أعمال.
+كما أن `MessageSender` التجاري ما زال يعتمد على الإرسال الأصلي في الجهاز عبر `SmsManager`; لا يوجد Provider تجاري خارجي داخل المشروع، ولم يتم اختراع Provider جديد.
 
-**قرار الدمج:** لا دمج إلى `main` قبل نجاح التحقق الكامل وبعد إغلاق الفجوة التجارية بتصميم مبني على قواعد العمل الفعلية.
+## 9. P0 Ready
+
+**P0 Ready: NO حتى الآن.**
+
+السبب الحاكم هو ضرورة نجاح أحدث CI بالكامل وإثبات الاختبارات الجديدة على الرأس النهائي. من ناحية التصميم، الفجوة `Transfer → Category → Reservation → SMS → Sale → Ledger → Audit` أصبحت ممثلة في الـCore الحالي دون إنشاء Architecture موازية.
+
+**قرار الدمج:** لا دمج إلى `main`، ولا تغيير في `26ea5d1`، حتى ينجح `dart analyze lib test` و`flutter analyze --no-fatal-infos` و`flutter test` على أحدث HEAD.
