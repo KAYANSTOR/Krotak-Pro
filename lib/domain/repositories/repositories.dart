@@ -1,41 +1,55 @@
+import '../entities/audit.dart';
 import '../entities/card.dart';
 import '../entities/customer.dart';
-import '../entities/license.dart';
 import '../entities/message.dart';
+import '../entities/setting.dart';
 import '../entities/transaction.dart';
+import '../entities/wallet.dart';
 import '../../core/result.dart';
 
 abstract interface class CustomerRepository {
-  Future<Result<Customer?>> findById(String id);
-  Future<Result<Customer?>> findByIdentifier(String value);
-  Future<Result<List<Customer>>> search(String query);
-  Future<Result<void>> save(Customer customer);
-  Future<Result<void>> saveIdentifier(CustomerIdentifier identifier);
+  Future<Result<Customer>> getById(String id);
+  Future<Result<Customer?>> findByPhone(String phone);
+  Future<Result<List<Customer>>> list({int limit = 50, int offset = 0});
+  Future<Result<Customer>> save(Customer customer);
 }
 
-abstract interface class CardRepository {
-  Future<Result<Card?>> findById(String id);
-  Future<Result<List<Card>>> findAvailableByCategory(String categoryId);
-  Future<Result<void>> reserve(String cardId, CardReservation reservation);
-  Future<Result<void>> releaseReservation(String cardId, String reservationId);
-  Future<Result<void>> markSold(String cardId, String saleId);
+abstract interface class WalletRepository {
+  Future<Result<Wallet>> getById(String id);
+  Future<Result<Wallet?>> findByCustomerAndCurrency(String customerId, String currencyCode);
+  Future<Result<Wallet>> save(Wallet wallet);
 }
 
-abstract interface class TransactionRepository {
-  Future<Result<void>> append(Transaction transaction);
-  Future<Result<List<Transaction>>> findByCustomer(String customerId);
-  Future<Result<Transaction?>> findByReference(String reference);
+abstract interface class CardCategoryRepository {
+  Future<Result<CardCategory>> getById(String id);
+  Future<Result<List<CardCategory>>> listActive();
+  Future<Result<CardCategory>> save(CardCategory category);
+}
+
+abstract interface class CardInventoryRepository {
+  Future<Result<Card>> getById(String id);
+  Future<Result<Card?>> findBySerial(String serial);
+  Future<Result<List<Card>>> listAvailable(String categoryId, {int limit = 20});
+  Future<Result<Card>> save(Card card);
 }
 
 abstract interface class MessageRepository {
-  Future<Result<void>> save(IncomingMessage message);
-  Future<Result<IncomingMessage?>> findById(String id);
-  Future<Result<IncomingMessage?>> findByExternalReference(String reference);
-  Future<Result<List<IncomingMessage>>> pendingProcessing();
-  Future<Result<void>> updateStatus(String id, MessageProcessingStatus status);
+  Future<Result<Message>> getById(String id);
+  Future<Result<Message?>> findByDedupeKey(String dedupeKey);
+  Future<Result<Message>> save(Message message);
 }
 
-abstract interface class LicenseRepository {
-  Future<Result<License?>> getCurrent();
-  Future<Result<void>> save(License license);
+abstract interface class TransactionRepository {
+  Future<Result<Transaction>> getById(String id);
+  Future<Result<List<Transaction>>> listByCustomer(String customerId, {int limit = 50});
+  Future<Result<Transaction>> save(Transaction transaction);
+}
+
+abstract interface class AuditRepository {
+  Future<Result<void>> append(AuditLog entry);
+}
+
+abstract interface class SettingRepository {
+  Future<Result<AppSetting?>> get(String key);
+  Future<Result<void>> set(AppSetting setting);
 }

@@ -16,41 +16,48 @@ class Customers extends Table {
 
 class CustomerIdentifiers extends Table {
   TextColumn get id => text()();
-  TextColumn get customerId => text()();
-  TextColumn get type => text()();
+  TextColumn get customerId => text().references(Customers, #id)();
+  TextColumn get kind => text()();
   TextColumn get value => text()();
   BoolColumn get isPrimary => boolean().withDefault(const Constant(false))();
+  DateTimeColumn get createdAt => dateTime()();
 
   @override
   Set<Column<Object>> get primaryKey => {id};
+
+  @override
+  List<Set<Column<Object>>> get uniqueKeys => [
+        {kind, value},
+      ];
 }
 
 class Wallets extends Table {
   TextColumn get id => text()();
-  TextColumn get name => text()();
-  TextColumn get status => text()();
-  DateTimeColumn get createdAt => dateTime()();
+  TextColumn get customerId => text().references(Customers, #id)();
+  TextColumn get currencyCode => text()();
+  IntColumn get balanceMinor => integer().withDefault(const Constant(0))();
+  IntColumn get reservedMinor => integer().withDefault(const Constant(0))();
+  DateTimeColumn get updatedAt => dateTime()();
 
   @override
   Set<Column<Object>> get primaryKey => {id};
-}
-
-class PointOfSales extends Table {
-  TextColumn get id => text()();
-  TextColumn get name => text()();
-  TextColumn get status => text()();
-  DateTimeColumn get createdAt => dateTime()();
 
   @override
-  Set<Column<Object>> get primaryKey => {id};
+  List<Set<Column<Object>>> get uniqueKeys => [
+        {customerId, currencyCode},
+      ];
 }
 
 class CardCategories extends Table {
   TextColumn get id => text()();
   TextColumn get name => text()();
-  IntColumn get faceValueMinorUnits => integer()();
+  TextColumn get provider => text()();
+  IntColumn get faceValueMinor => integer()();
+  IntColumn get salePriceMinor => integer()();
   TextColumn get currencyCode => text()();
   BoolColumn get isActive => boolean().withDefault(const Constant(true))();
+  DateTimeColumn get createdAt => dateTime()();
+  DateTimeColumn get updatedAt => dateTime()();
 
   @override
   Set<Column<Object>> get primaryKey => {id};
@@ -58,86 +65,62 @@ class CardCategories extends Table {
 
 class Cards extends Table {
   TextColumn get id => text()();
-  TextColumn get categoryId => text()();
-  TextColumn get serialNumber => text()();
-  TextColumn get secretCode => text()();
-  TextColumn get status => text()();
-  TextColumn get reservationId => text().nullable()();
-  DateTimeColumn get reservedAt => dateTime().nullable()();
-  DateTimeColumn get reservationExpiresAt => dateTime().nullable()();
+  TextColumn get categoryId => text().references(CardCategories, #id)();
+  TextColumn get serial => text()();
+  TextColumn get pin => text().nullable()();
+  TextColumn get status => text()(); // available | reserved | sold
+  TextColumn get reservedForCustomerId => text().nullable()();
+  DateTimeColumn get reservedUntil => dateTime().nullable()();
+  DateTimeColumn get soldAt => dateTime().nullable()();
+  TextColumn get soldTransactionId => text().nullable()();
+  DateTimeColumn get createdAt => dateTime()();
+  DateTimeColumn get updatedAt => dateTime()();
 
   @override
   Set<Column<Object>> get primaryKey => {id};
+
+  @override
+  List<Set<Column<Object>>> get uniqueKeys => [
+        {serial},
+      ];
+}
+
+class Messages extends Table {
+  TextColumn get id => text()();
+  TextColumn get sender => text()();
+  TextColumn get body => text()();
+  TextColumn get dedupeKey => text()();
+  TextColumn get status => text()(); // received | parsed | processed | failed
+  TextColumn get parseResultJson => text().nullable()();
+  DateTimeColumn get receivedAt => dateTime()();
+  DateTimeColumn get processedAt => dateTime().nullable()();
+
+  @override
+  Set<Column<Object>> get primaryKey => {id};
+
+  @override
+  List<Set<Column<Object>>> get uniqueKeys => [
+        {dedupeKey},
+      ];
 }
 
 class Transactions extends Table {
   TextColumn get id => text()();
+  TextColumn get customerId => text().references(Customers, #id)();
+  TextColumn get walletId => text().references(Wallets, #id)();
   TextColumn get type => text()();
   TextColumn get status => text()();
-  IntColumn get amountMinorUnits => integer()();
+  IntColumn get amountMinor => integer()();
   TextColumn get currencyCode => text()();
-  DateTimeColumn get createdAt => dateTime()();
-  TextColumn get customerId => text().nullable()();
   TextColumn get reference => text().nullable()();
-  TextColumn get relatedTransactionId => text().nullable()();
-
-  @override
-  Set<Column<Object>> get primaryKey => {id};
-}
-
-class Sales extends Table {
-  TextColumn get id => text()();
-  TextColumn get customerId => text()();
-  TextColumn get cardId => text()();
-  IntColumn get amountMinorUnits => integer()();
-  TextColumn get currencyCode => text()();
-  TextColumn get status => text()();
+  TextColumn get relatedEntityType => text().nullable()();
+  TextColumn get relatedEntityId => text().nullable()();
+  TextColumn get note => text().nullable()();
+  DateTimeColumn get occurredAt => dateTime()();
   DateTimeColumn get createdAt => dateTime()();
 
   @override
   Set<Column<Object>> get primaryKey => {id};
-}
-
-class TransferTemplates extends Table {
-  TextColumn get id => text()();
-  TextColumn get name => text()();
-  TextColumn get pattern => text()();
-  BoolColumn get isActive => boolean().withDefault(const Constant(true))();
-
-  @override
-  Set<Column<Object>> get primaryKey => {id};
-}
-
-class IncomingMessages extends Table {
-  TextColumn get id => text()();
-  TextColumn get sender => text()();
-  TextColumn get body => text()();
-  DateTimeColumn get receivedAt => dateTime()();
-  TextColumn get status => text()();
-  TextColumn get externalReference => text().nullable()();
-  TextColumn get customerIdentifier => text().nullable()();
-
-  @override
-  Set<Column<Object>> get primaryKey => {id};
-}
-
-class Licenses extends Table {
-  TextColumn get id => text()();
-  TextColumn get status => text()();
-  DateTimeColumn get expiresAt => dateTime().nullable()();
-  TextColumn get deviceBinding => text().nullable()();
-
-  @override
-  Set<Column<Object>> get primaryKey => {id};
-}
-
-class AppSettings extends Table {
-  TextColumn get key => text()();
-  TextColumn get value => text()();
-  DateTimeColumn get updatedAt => dateTime()();
-
-  @override
-  Set<Column<Object>> get primaryKey => {key};
 }
 
 class AuditLogs extends Table {
@@ -152,36 +135,51 @@ class AuditLogs extends Table {
   Set<Column<Object>> get primaryKey => {id};
 }
 
-@DriftDatabase(
-  tables: [
-    Customers,
-    CustomerIdentifiers,
-    Wallets,
-    PointOfSales,
-    CardCategories,
-    Cards,
-    Transactions,
-    Sales,
-    TransferTemplates,
-    IncomingMessages,
-    Licenses,
-    AppSettings,
-    AuditLogs,
-  ],
-)
+class Settings extends Table {
+  TextColumn get key => text()();
+  TextColumn get value => text()();
+  DateTimeColumn get updatedAt => dateTime()();
+
+  @override
+  Set<Column<Object>> get primaryKey => {key};
+}
+
+class Licenses extends Table {
+  TextColumn get id => text()();
+  TextColumn get status => text()();
+  DateTimeColumn get expiresAt => dateTime().nullable()();
+  TextColumn get payloadJson => text().nullable()();
+  DateTimeColumn get updatedAt => dateTime()();
+
+  @override
+  Set<Column<Object>> get primaryKey => {id};
+}
+
+@DriftDatabase(tables: [
+  Customers,
+  CustomerIdentifiers,
+  Wallets,
+  CardCategories,
+  Cards,
+  Messages,
+  Transactions,
+  AuditLogs,
+  Settings,
+  Licenses,
+])
 class AppDatabase extends _$AppDatabase {
   AppDatabase(super.e);
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
-        onCreate: (Migrator migrator) async {
-          await migrator.createAll();
+        onCreate: (m) async {
+          await m.createAll();
         },
-        onUpgrade: (Migrator migrator, int from, int to) async {
-          // Future schema changes must be added as explicit, tested migrations.
+        onUpgrade: (m, from, to) async {
+          // future migrations
         },
       );
 }
