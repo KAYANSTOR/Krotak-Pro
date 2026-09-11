@@ -1,25 +1,21 @@
 import 'package:flutter/material.dart';
 
+import 'routing/app_routes.dart';
 import 'screens/customers_screen.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/inventory_screen.dart';
 import 'screens/offers_screen.dart';
 import 'screens/reports_screen.dart';
-import 'screens/settings_screen.dart';
 import 'widgets/kayan_bottom_nav.dart';
 
-/// Shell matching Kotlin bottom nav routes:
-/// dashboard | reports | offers | accounts | cards
 class HomeShell extends StatefulWidget {
   const HomeShell({super.key});
-
   @override
   State<HomeShell> createState() => _HomeShellState();
 }
 
 class _HomeShellState extends State<HomeShell> {
   String _route = 'dashboard';
-
   static const _titles = {
     'dashboard': 'لوحة التحكم',
     'reports': 'التقارير',
@@ -55,16 +51,7 @@ class _HomeShellState extends State<HomeShell> {
             if (_route == 'dashboard')
               IconButton(
                 icon: const Icon(Icons.settings_outlined),
-                onPressed: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute<void>(
-                      builder: (_) => Scaffold(
-                        appBar: AppBar(title: const Text('الإعدادات')),
-                        body: const SettingsScreen(),
-                      ),
-                    ),
-                  );
-                },
+                onPressed: () => AppRoutes.openSettings(context),
               ),
           ],
         ),
