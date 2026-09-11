@@ -10,7 +10,7 @@ import '../repositories/repositories.dart';
 import '../repositories/unit_of_work.dart';
 import 'services.dart';
 
-final class LocalSaleService implements SaleService {
+final class LocalSaleService implements SaleService, ReservedSaleService {
   const LocalSaleService({
     required this.customers,
     required this.categories,
@@ -62,9 +62,7 @@ final class LocalSaleService implements SaleService {
         final existingSale = await sales.findById(stableOperationId);
         if (existingSale is Failure<Sale?>) return Failure(existingSale.error);
         final existing = (existingSale as Success<Sale?>).value;
-        if (existing != null) {
-          return Success(existing);
-        }
+        if (existing != null) return Success(existing);
 
         final operationTransaction =
             await transactions.findByReference('sale-op:$stableOperationId');
@@ -86,10 +84,7 @@ final class LocalSaleService implements SaleService {
       final customer = (foundCustomer as Success<Customer?>).value;
       if (customer == null) {
         return const Failure(
-          AppFailure(
-            code: 'customer_not_found',
-            message: 'Customer was not found',
-          ),
+          AppFailure(code: 'customer_not_found', message: 'Customer was not found'),
         );
       }
       if (customer.status != CustomerStatus.active) {
@@ -102,24 +97,16 @@ final class LocalSaleService implements SaleService {
       }
 
       final foundCategory = await categories.findById(categoryId);
-      if (foundCategory is Failure<CardCategory?>) {
-        return Failure(foundCategory.error);
-      }
+      if (foundCategory is Failure<CardCategory?>) return Failure(foundCategory.error);
       final category = (foundCategory as Success<CardCategory?>).value;
       if (category == null) {
         return const Failure(
-          AppFailure(
-            code: 'category_not_found',
-            message: 'Category was not found',
-          ),
+          AppFailure(code: 'category_not_found', message: 'Category was not found'),
         );
       }
       if (!category.isActive) {
         return const Failure(
-          AppFailure(
-            code: 'category_inactive',
-            message: 'Category is not active',
-          ),
+          AppFailure(code: 'category_inactive', message: 'Category is not active'),
         );
       }
 
@@ -128,8 +115,7 @@ final class LocalSaleService implements SaleService {
         currencyCode: category.faceValue.currencyCode,
       );
       if (balance is Failure<Money>) return Failure(balance.error);
-      if ((balance as Success<Money>).value.minorUnits <
-          category.faceValue.minorUnits) {
+      if ((balance as Success<Money>).value.minorUnits < category.faceValue.minorUnits) {
         return const Failure(
           AppFailure(
             code: 'insufficient_balance',
@@ -157,7 +143,6 @@ final class LocalSaleService implements SaleService {
         status: TransactionStatus.completed,
         createdAt: now,
       );
-
       final marked = await cards.markSold(card.id, sale.id);
       if (marked is Failure<void>) return Failure(marked.error);
 
@@ -168,9 +153,7 @@ final class LocalSaleService implements SaleService {
         amount: category.faceValue,
         createdAt: now,
         customerId: customerId,
-        reference: stableOperationId == null
-            ? sale.id
-            : 'sale-op:$stableOperationId',
+        reference: stableOperationId == null ? sale.id : 'sale-op:$stableOperationId',
       );
       final appended = await transactions.append(saleTxn);
       if (appended is Failure<void>) return Failure(appended.error);
@@ -222,9 +205,7 @@ final class LocalSaleService implements SaleService {
 
       final existingLedger =
           await transactions.findByReference('sale-op:$stableOperationId');
-      if (existingLedger is Failure<Transaction?>) {
-        return Failure(existingLedger.error);
-      }
+      if (existingLedger is Failure<Transaction?>) return Failure(existingLedger.error);
       if ((existingLedger as Success<Transaction?>).value != null) {
         return const Failure(
           AppFailure(
@@ -257,11 +238,6 @@ final class LocalSaleService implements SaleService {
       if (card == null) {
         return const Failure(
           AppFailure(code: 'card_not_found', message: 'Card was not found'),
-        );
-      }
-      if (card.categoryId.isEmpty) {
-        return const Failure(
-          AppFailure(code: 'card_category_missing', message: 'Card category is missing'),
         );
       }
       if (card.status != CardStatus.reserved ||
@@ -369,17 +345,12 @@ final class LocalSaleService implements SaleService {
 
       final original = await transactions.findByReference(sale.id);
       if (original is Failure<Transaction?>) return Failure(original.error);
-
-      Transaction? originalTransaction =
-          (original as Success<Transaction?>).value;
+      Transaction? originalTransaction = (original as Success<Transaction?>).value;
       if (originalTransaction == null) {
         final operationTransaction =
             await transactions.findByReference('sale-op:${sale.id}');
-        if (operationTransaction is Failure<Transaction?>) {
-          return Failure(operationTransaction.error);
-        }
-        originalTransaction =
-            (operationTransaction as Success<Transaction?>).value;
+        if (operationTransaction is Failure<Transaction?>) return Failure(operationTransaction.error);
+        originalTransaction = (operationTransaction as Success<Transaction?>).value;
       }
 
       final now = clock.now();
