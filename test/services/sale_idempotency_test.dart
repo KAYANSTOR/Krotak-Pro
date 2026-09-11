@@ -3,9 +3,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:net_app/core/clock.dart';
 import 'package:net_app/core/id_generator.dart';
 import 'package:net_app/core/result.dart';
-import 'package:net_app/data/database/app_database.dart' hide Customer, Card, Sale, TransferTemplate, CardCategory, Transaction;
-import 'package:net_app/data/database/drift_unit_of_work.dart';
+import 'package:net_app/data/database/app_database.dart'
+    hide Customer, Card, Sale, TransferTemplate, CardCategory, Transaction;
 import 'package:net_app/data/repositories/local_repositories.dart';
+import 'package:net_app/domain/entities/card.dart';
 import 'package:net_app/domain/entities/customer.dart';
 import 'package:net_app/domain/entities/money.dart';
 import 'package:net_app/domain/entities/transaction.dart';
@@ -14,6 +15,7 @@ import 'package:net_app/domain/services/local_catalog_services.dart';
 import 'package:net_app/domain/services/local_customer_balance_service.dart';
 import 'package:net_app/domain/services/local_customer_service.dart';
 import 'package:net_app/domain/services/local_sale_service.dart';
+import 'package:net_app/domain/services/services.dart';
 
 void main() {
   late AppDatabase database;
@@ -90,60 +92,71 @@ void main() {
     await database.close();
   });
 
-  test('retries with the same operation id return one sale and one ledger entry', () async {
-    final customer =
-        (await customerService.create(
-          displayName: 'Ali',
-          identifierType: CustomerIdentifierType.phoneNumber,
-          identifierValue: '733000000',
-        ) as Success<Customer>)
-            .value;
+  test(
+    'retries with the same operation id return one sale and one ledger entry',
+    () async {
+      final customer =
+          (await customerService.create(
+            displayName: 'Ali',
+            identifierType: CustomerIdentifierType.phoneNumber,
+            identifierValue: '733000000',
+          ) as Success<Customer>)
+              .value;
 
-    await catalogService.saveCategory(
-      const CardCategory(
-        id: 'cat-500',
-        name: 'Yemen Mobile 500',
-        faceValue: Money(minorUnits: 500, currencyCode: 'YER'),
-        isActive: true,
-      ),
-    );
-    await catalogService.importCards(
-      categoryId: 'cat-500',
-      drafts: const [
-        CardImportDraft(serialNumber: 'A-1', secretCode: 'secret-1'),
-        CardImportDraft(serialNumber: 'B-2', secretCode: 'secret-2'),
-      ],
-    );
-    await balanceService.credit(
-      customerId: customer.id,
-      amount: const Money(minorUnits: 1000, currencyCode: 'YER'),
-      reference: 'deposit-1',
-    );
+      await catalogService.saveCategory(
+        const CardCategory(
+          id: 'cat-500',
+          name: 'Yemen Mobile 500',
+          faceValue: Money(minorUnits: 500, currencyCode: 'YER'),
+          isActive: true,
+        ),
+      );
+      await catalogService.importCards(
+        categoryId: 'cat-500',
+        drafts: const [
+          CardImportDraft(serialNumber: 'A-1', secretCode: 'secret-1'),
+          CardImportDraft(serialNumber: 'B-2', secretCode: 'secret-2'),
+        ],
+      );
+      await balanceService.credit(
+        customerId: customer.id,
+        amount: const Money(minorUnits: 1000, currencyCode: 'YER'),
+        reference: 'deposit-1',
+      );
 
-    const first = await saleService.sellFromBalance(
-      customerId: customer.id,
-      categoryId: 'cat-500',
-      operationId: 'sale-op-42',
-    );
-    final second = await saleService.sellFromBalance(
-      customerId: customer.id,
-      categoryId: 'cat-500',
-      operationId: 'sale-op-42',
-    );
+      final first = await saleService.sellFromBalance(
+        customerId: customer.id,
+        categoryId: 'cat-500',
+        operationId: 'sale-op-42',
+      );
+      final second = await saleService.sellFromBalance(
+        customerId: customer.id,
+        categoryId: 'cat-500',
+        operationId: 'sale-op-42',
+      );
 
-    final customerLedger = await transactions.findByCustomer(customer.id);
-    final allCards = await cards.findByCategory('cat-500');
-    final allSales = await sales.findByCustomer(customer.id);
+      final customerLedger = await transactions.findByCustomer(customer.id);
+      final allCards = await cards.findByCategory('cat-500');
+      final allSales = await sales.findByCustomer(customer.id);
 
-    expect(first, isA<Success<Sale>>());
-    expect(second, isA<Success<Sale>>());
-    expect((second as Success<Sale>).value.id, 'sale-op-42');
-    expect((first as Success<Sale>).value.id,
-        (second as Success<Sale>).value.id);
-    expect((customerLedger as Success<List<Transaction>>).value
-        .where((t) => t.type == TransactionType.sale), hasLength(1));
-    expect((allSales as Success<List<Sale>>).value, hasLength(1));
-    expect((allCards as Success<List<Card>>).value
-        .where((c) => c.status.name == 'sold'), hasLength(1));
-  });
+      expect(first, isA<Success<Sale>>());
+      expect(second, isA<Success<Sale>>());
+      expect((second as Success<Sale>).value.id, 'sale-op-42');
+      expect(
+        (first as Success<Sale>).value.id,
+        (second as Success<Sale>).value.id,
+      );
+      expect(
+        (customerLedger as Success<List<Transaction>>).value
+            .where((t) => t.type == TransactionType.sale),
+        hasLength(1),
+      );
+      expect((allSales as Success<List<Sale>>).value, hasLength(1));
+      expect(
+        (allCards as Success<List<Card>>).value
+            .where((c) => c.status.name == 'sold'),
+        hasLength(1),
+      );
+    },
+  );
 }
