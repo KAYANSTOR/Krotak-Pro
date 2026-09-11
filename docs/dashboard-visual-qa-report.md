@@ -1,57 +1,59 @@
 # تقرير التحقق البصري والتكامل — Dashboard والثيم
 
-**Commit المرجع السابق:** `610723d` ثم phase 6A حتى `78f5837`  
-**Commit HomeShell:** `234df1d`  
-**Commit إكمال الربط:** يُدفع فوق `234df1d`
+**Commit المرجع:** `26ea5d1dcd47efd7348faaac810befc0e62e73fc`  
+**فرع التحقق:** `hardening/core-flow-p0-20260912`  
+**Dashboard Navigation:** مغلق قبل هذه المرحلة، ولم تُعدل ملفات التنقل ضمن هذه المرحلة.
 
-## نتيجة التحليل والاختبارات
+## نتيجة الاختبارات والتحليل
 
 ```text
-flutter test test/widget/           → All tests passed! (22+)
-  - net_components_test.dart
-  - dashboard_navigation_test.dart
-  - p1_navigation_smoke_test.dart
-flutter analyze                     → analysis server OOM في هذه البيئة (exit -9)
-flutter build apk --debug           → غير متاح (لا Android SDK)
+Local environment → لا يوجد checkout/Flutter toolchain قابل للتنفيذ من جلسة العمل الحالية.
+GitHub Actions CI → بدأ على Pull Request #1، وحاليًا ما يزال قيد التنفيذ عند تجهيز Flutter.
+
+flutter test                    → لم تظهر نتيجة نهائية بعد.
+dart analyze lib test           → لم تظهر نتيجة نهائية بعد.
+flutter analyze --no-fatal-infos → لم تظهر نتيجة نهائية بعد.
 ```
 
-ملاحظة: فشل بعض اختبارات `test/services/*` (مثل account_merge) موجود مسبقًا وغير ناتج عن تغييرات التنقل في Dashboard.
+**ممنوع اعتبار الحالة ناجحة قبل اكتمال CI وظهور نتيجتي Analyze وUnit tests بنجاح.**
 
-## الأجهزة / المقاسات
+## إثبات سلامة نطاق Dashboard Navigation
+
+المقارنة بين `78f5837` و`26ea5d1` تُظهر أن تغييرات هذه الفترة اقتصرت على:
+
+- `lib/ui/home_shell.dart`
+- `lib/ui/screens/dashboard_screen.dart`
+- `test/widget/dashboard_navigation_test.dart`
+- `test/widget/net_components_test.dart`
+- هذا التقرير
+
+ولا تشمل `Domain` أو `Database` أو `Repositories` أو `Services`. لذلك لا توجد صلاحية لنسبة أي فشل خدمات إلى تغييرات Dashboard Navigation دون دليل آخر.
+
+## Core Business Flow Hardening
+
+تم تنفيذ إصلاحات على الفرع للتحقق من:
+
+1. إزالة هوية SMS المبنية على `hashCode + minute` واستبدالها بمفتاح ثابت مشتق من sender/reference أو sender/body.
+2. الحفاظ على حالة `rejected/failed` بعد Rollback بدل فقدانها داخل نفس المعاملة.
+3. إضافة `operationId` ثابت للبيع لمنع تكرار Sale/Ledger عند إعادة المحاولة.
+4. الحفاظ على رابط معاملة البيع الأصلية عند Reverse Sale في مسار `operationId`.
+5. إضافة اختبارات Drift حقيقية لمسار idempotency وrollback/recovery.
+
+## الأجهزة / Android
 
 | البيئة | النتيجة |
-|--------|----------|
-| Widget tests — سطح Flutter الافتراضي | ناجح |
-| RTL (`TextDirection.rtl`) | مدعوم |
-| Light / Dark Theme | مدعوم |
-| Android Emulator | **غير متاح** |
-| `flutter build apk` | **No Android SDK** |
+|---|---|
+| Android Emulator | غير متحقق |
+| `flutter build apk` | غير متحقق في هذه المرحلة |
+| Android SDK | غير متاح في جلسة العمل الحالية |
 
-## التنقل الذي تم إصلاحه (جذريًا)
+## حالة P0 Navigation
 
-**Root cause:** `NetBalanceCard` وبطاقات المقاييس (الحسابات / الكروت) لم تكن مربوطة بأي callback من `DashboardScreen`، و`HomeShell` كان يحتفظ بـ `_route` داخليًا دون واجهة للطفل لطلب تبديل التبويب. لا يوجد SnackBar كبديل للتنقل.
+**P0 Navigation: مغلق وظيفيًا حسب الكود والاختبارات المضافة سابقًا.**  
+ولم يُعاد فتحه أو تعديله ضمن Hardening الحالي.
 
-**الحل الكامل:**
+## حالة Core Business Flow
 
-1. `DashboardScreen` يقبل `ValueChanged<String>? onNavigateToTab`.
-2. `HomeShell` يمرّر `(id) => setState(() => _route = id)` إلى `DashboardScreen`.
-3. `NetBalanceCard`: `onTapAccounts` → `'accounts'`، `onTapCards` → `'cards'`.
-4. `NetMetricCard` للحسابات النشطة والكروت المتاحة مربوطان بنفس الـ callback.
-5. Quick Actions (بيع مباشر، محافظ/POS، سجل العمليات، الإعدادات) عبر `AppRoutes` كما هي.
-6. لا تغيير على Domain / Database / SMS / Business Logic.
+**غير P0 Ready بعد.** السبب الحالي ليس فشلًا مثبتًا في الاختبارات، بل أن التحقق التنفيذي الكامل لم يكتمل بعد، كما أن مسار `LocalTransferProcessor` الحالي ما زال يفصل تحويل الرصيد عن عملية البيع/إرسال SMS، ولا توجد في المعمارية الحالية خدمة إرسال SMS تجارية مدمجة داخل هذا المسار يمكن إضافتها بأمان دون اختراع طبقة بديلة.
 
-## الاختبارات المضافة
-
-- `test/widget/net_components_test.dart`: callbacks لـ Balance و Metric.
-- `test/widget/dashboard_navigation_test.dart`: chips، metric، BottomNav ids، shell-style switch بدون SnackBar.
-
-## مشاكل متبقية (بسبب البيئة)
-
-- لا Android SDK → لا تحقق بصري على Emulator ولا APK build.
-- لا يُدّعى التطابق البصري الكامل مع Kotlin.
-
-## ما لم يُمس (حسب النطاق)
-
-- Domain / Database / SMS / Transfer intelligence (phase 6A)
-- Post-v1
-- مطابقة بكسلية
+**القرار:** لا دمج إلى `main` ولا إعلان نجاح نهائي قبل ظهور CI النهائي وإغلاق الفجوة المتبقية في التدفق الأساسي بناءً على الخدمات الموجودة فعليًا.
