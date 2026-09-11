@@ -33,8 +33,6 @@ final class LocalTransferProcessor implements TransferProcessor {
   final UnitOfWork unitOfWork;
   final Clock clock;
   final IdGenerator ids;
-
-  /// When null, a resolver is built from [customers] (keeps tests simple).
   final LocalCustomerIdentityResolver? identityResolver;
 
   LocalCustomerIdentityResolver get _resolver =>
@@ -44,17 +42,17 @@ final class LocalTransferProcessor implements TransferProcessor {
   Future<Result<Transaction>> process(ParsedTransfer transfer) async {
     final msgResult = await messages.findById(transfer.messageId);
     if (msgResult is Failure<IncomingMessage?>) {
-      return Failure(msgResult.error);
+      return Failure<Transaction>(msgResult.error);
     }
     final message = (msgResult as Success<IncomingMessage?>).value;
     if (message == null) {
-      return const Failure(
+      return const Failure<Transaction>(
         AppFailure(code: 'message_not_found', message: 'Message was not found'),
       );
     }
 
     if (message.status == MessageProcessingStatus.processed) {
-      return const Failure(
+      return const Failure<Transaction>(
         AppFailure(
           code: 'message_already_processed',
           message: 'Message was already processed',
@@ -67,7 +65,7 @@ final class LocalTransferProcessor implements TransferProcessor {
       identifierType: transfer.identifierType,
     );
     if (resolutionResult is Failure<CustomerIdentityResolution>) {
-      return Failure(resolutionResult.error);
+      return Failure<Transaction>(resolutionResult.error);
     }
     final resolution =
         (resolutionResult as Success<CustomerIdentityResolution>).value;
@@ -84,7 +82,7 @@ final class LocalTransferProcessor implements TransferProcessor {
         transfer: transfer,
         deliveryPhone: resolution.deliveryPhone,
       );
-      return Failure(failure);
+      return Failure<Transaction>(failure);
     }
 
     final customer = resolution.customer!;
@@ -104,17 +102,17 @@ final class LocalTransferProcessor implements TransferProcessor {
         transfer: transfer,
         deliveryPhone: resolution.deliveryPhone,
       );
-      return const Failure(failure);
+      return const Failure<Transaction>(failure);
     }
 
-    final result = await unitOfWork.run(() async {
+    final Result<Transaction> result = await unitOfWork.run<Transaction>(() async {
       final creditResult = await balances.credit(
         customerId: customer.id,
         amount: transfer.amount,
         reference: transfer.reference,
       );
       if (creditResult is Failure<Transaction>) {
-        return Failure(creditResult.error);
+        return Failure<Transaction>(creditResult.error);
       }
       final tx = (creditResult as Success<Transaction>).value;
 
@@ -123,7 +121,7 @@ final class LocalTransferProcessor implements TransferProcessor {
         MessageProcessingStatus.processed,
       );
       if (marked is Failure<void>) {
-        return Failure(marked.error);
+        return Failure<Transaction>(marked.error);
       }
 
       final delivery = resolution.deliveryPhone ?? '';
@@ -139,10 +137,10 @@ final class LocalTransferProcessor implements TransferProcessor {
         ),
       );
       if (audited is Failure<void>) {
-        return Failure(audited.error);
+        return Failure<Transaction>(audited.error);
       }
 
-      return Success(tx);
+      return Success<Transaction>(tx);
     });
 
     if (result is Success<Transaction>) {
@@ -158,7 +156,7 @@ final class LocalTransferProcessor implements TransferProcessor {
       transfer: transfer,
       deliveryPhone: resolution.deliveryPhone,
     );
-    return Failure(failure);
+    return Failure<Transaction>(failure);
   }
 
   Future<void> _persistTerminalFailure({
