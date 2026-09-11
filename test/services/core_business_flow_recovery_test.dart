@@ -130,7 +130,7 @@ void main() {
       ),
     );
 
-    const reserved = await inventoryService.reserveAvailableCard(
+    final reserved = await inventoryService.reserveAvailableCard(
       categoryId: 'cat-200',
       reservationId: 'transfer-reservation:RECOVERY-1',
       now: clock.now(),
