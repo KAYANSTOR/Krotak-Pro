@@ -74,16 +74,19 @@ abstract interface class SaleService {
     String? operationId,
   });
 
-  /// Completes a sale for a card that has already been reserved by the
-  /// transfer flow. No second reservation is performed.
+  Future<Result<Sale>> reverseSale({required String saleId});
+}
+
+/// Narrow application boundary used after SMS delivery has succeeded.
+/// It completes an already-reserved card without performing a second
+/// reservation, keeping the financial commit separate from delivery.
+abstract interface class ReservedSaleService {
   Future<Result<Sale>> completeReservedSale({
     required String customerId,
     required String cardId,
     required String reservationId,
     required String operationId,
   });
-
-  Future<Result<Sale>> reverseSale({required String saleId});
 }
 
 abstract interface class MessageParser {
