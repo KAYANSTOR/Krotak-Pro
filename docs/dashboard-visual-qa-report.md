@@ -1,59 +1,65 @@
 # تقرير التحقق البصري والتكامل — Dashboard والثيم
 
 **Commit المرجع:** `26ea5d1dcd47efd7348faaac810befc0e62e73fc`  
-**فرع التحقق:** `hardening/core-flow-p0-20260912`  
-**Dashboard Navigation:** مغلق قبل هذه المرحلة، ولم تُعدل ملفات التنقل ضمن هذه المرحلة.
+**فرع Hardening:** `hardening/core-flow-p0-20260912`  
+**حالة `main`:** ما زال عند `26ea5d1dcd47efd7348faaac810befc0e62e73fc` ولم يتم الدمج.
+
+## نطاق المرحلة
+
+هذه المرحلة مخصصة لـ Core Reliability فقط. لم يتم تعديل Dashboard Navigation، ولم يبدأ Post-v1.
 
 ## نتيجة الاختبارات والتحليل
 
-```text
-Local environment → لا يوجد checkout/Flutter toolchain قابل للتنفيذ من جلسة العمل الحالية.
-GitHub Actions CI → بدأ على Pull Request #1، وحاليًا ما يزال قيد التنفيذ عند تجهيز Flutter.
+أحدث دورة CI مكتملة موثقة (`run #62`) وصلت إلى جميع خطوات التحقق:
 
-flutter test                    → لم تظهر نتيجة نهائية بعد.
-dart analyze lib test           → لم تظهر نتيجة نهائية بعد.
-flutter analyze --no-fatal-infos → لم تظهر نتيجة نهائية بعد.
+```text
+dart analyze lib test          → PASS
+flutter analyze --no-fatal-infos → PASS
+flutter test                   → 69 passed, 3 failed
 ```
 
-**ممنوع اعتبار الحالة ناجحة قبل اكتمال CI وظهور نتيجتي Analyze وUnit tests بنجاح.**
+الفشل الثلاثة في تلك الدورة كانت:
+
+1. اختبار `LocalTransferProcessor` كان يمرر معرف هاتف غير صالح (`unknown`) ولذلك أعاد `invalid_phone_identifier`; تم تصحيح الاختبار ليستخدم رقمًا صالحًا غير مرتبط بعميل.
+2. اختبار deduplication كان يستخدم `.single` رغم أن الـhandler يجري استعلام تحقق أولي ثم استعلامًا عند الإعادة؛ تم تصحيح التوقع ليُثبت أن المفتاح نفسه استُخدم مرتين.
+3. كان هناك فشل typing داخل `LocalTransferProcessor` بسبب استنتاج `Failure<Object?>`؛ تم تثبيت نوع `Result<Transaction>` صراحة داخل `unitOfWork.run<Transaction>`.
+
+بعد هذه الإصلاحات بدأت دورة CI جديدة على رأس الفرع الحالي، وما زالت قيد التنفيذ عند تاريخ تحديث هذا التقرير. لذلك لا تعتبر المرحلة ناجحة بعد.
+
+## اختبارات Widget
+
+في دورة `run #62` نجحت اختبارات واجهة Dashboard والتنقل:
+
+- `dashboard_navigation_test.dart` — 4 اختبارات.
+- `p1_navigation_smoke_test.dart` — 4 اختبارات.
+- `net_components_test.dart` — 13 اختبارًا.
+- `widget_test.dart` — اختبار واحد placeholder.
+
+الإجمالي: **22 اختبار Widget ناجح**.
 
 ## إثبات سلامة نطاق Dashboard Navigation
 
-المقارنة بين `78f5837` و`26ea5d1` تُظهر أن تغييرات هذه الفترة اقتصرت على:
+المقارنة Git بين `78f5837` و`26ea5d1` تُظهر أن تغييرات Navigation كانت محصورة في ملفات UI والاختبارات والتقرير، ولم تشمل Domain/Database/Repositories/Services. وبالتالي لا تُنسب إخفاقات Core Services إلى Dashboard Navigation.
 
-- `lib/ui/home_shell.dart`
-- `lib/ui/screens/dashboard_screen.dart`
-- `test/widget/dashboard_navigation_test.dart`
-- `test/widget/net_components_test.dart`
-- هذا التقرير
-
-ولا تشمل `Domain` أو `Database` أو `Repositories` أو `Services`. لذلك لا توجد صلاحية لنسبة أي فشل خدمات إلى تغييرات Dashboard Navigation دون دليل آخر.
-
-## Core Business Flow Hardening
-
-تم تنفيذ إصلاحات على الفرع للتحقق من:
-
-1. إزالة هوية SMS المبنية على `hashCode + minute` واستبدالها بمفتاح ثابت مشتق من sender/reference أو sender/body.
-2. الحفاظ على حالة `rejected/failed` بعد Rollback بدل فقدانها داخل نفس المعاملة.
-3. إضافة `operationId` ثابت للبيع لمنع تكرار Sale/Ledger عند إعادة المحاولة.
-4. الحفاظ على رابط معاملة البيع الأصلية عند Reverse Sale في مسار `operationId`.
-5. إضافة اختبارات Drift حقيقية لمسار idempotency وrollback/recovery.
-
-## الأجهزة / Android
+## Android والبيئة
 
 | البيئة | النتيجة |
 |---|---|
-| Android Emulator | غير متحقق |
-| `flutter build apk` | غير متحقق في هذه المرحلة |
-| Android SDK | غير متاح في جلسة العمل الحالية |
+| GitHub Actions | متاح ويشغل Flutter/SQLite فعليًا |
+| Flutter في CI | `3.47.4` |
+| Ubuntu runner | `24.04.5 LTS` |
+| SQLite development package | مثبت وناجح |
+| Android Emulator | غير متاح للتحقق البصري هنا |
+| Android SDK في جلسة العمل المحلية | غير متاح |
+| APK build محلي | لم يُعتبر شرطًا لنجاح اختبارات Dart/Flutter الحالية |
 
-## حالة P0 Navigation
+## P0 Navigation
 
-**P0 Navigation: مغلق وظيفيًا حسب الكود والاختبارات المضافة سابقًا.**  
-ولم يُعاد فتحه أو تعديله ضمن Hardening الحالي.
+**P0 Navigation: مغلق وظيفيًا.**  
+لم يُعدّل ضمن هذه المرحلة، واختبارات التنقل المخصصة نجحت.
 
-## حالة Core Business Flow
+## Core Business Flow
 
-**غير P0 Ready بعد.** السبب الحالي ليس فشلًا مثبتًا في الاختبارات، بل أن التحقق التنفيذي الكامل لم يكتمل بعد، كما أن مسار `LocalTransferProcessor` الحالي ما زال يفصل تحويل الرصيد عن عملية البيع/إرسال SMS، ولا توجد في المعمارية الحالية خدمة إرسال SMS تجارية مدمجة داخل هذا المسار يمكن إضافتها بأمان دون اختراع طبقة بديلة.
+**Core Business Flow P0: غير مغلق بعد.** السبب المعماري المثبت هو أن `LocalTransferProcessor` ينتهي حاليًا عند Credit + Message State + Audit، بينما `LocalSaleService` مسار منفصل يحتاج `categoryId/operationId`، و`ParsedTransfer` الحالي لا يحمل فئة بيع. كما أن `MessageSender` موجود كـcontract فقط ولا توجد implementation مرتبطة به في الـApplication flow، بينما `SmsBridge` هو النقل الأصلي الفعلي.
 
-**القرار:** لا دمج إلى `main` ولا إعلان نجاح نهائي قبل ظهور CI النهائي وإغلاق الفجوة المتبقية في التدفق الأساسي بناءً على الخدمات الموجودة فعليًا.
+لا يجوز إعلان P0 Ready قبل اكتمال واختبار ربط Transfer → Sale → Delivery State مع Recovery مستقل للتسليم.
