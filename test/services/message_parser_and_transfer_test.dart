@@ -9,6 +9,7 @@ import 'package:net_app/domain/entities/money.dart';
 import 'package:net_app/domain/entities/transaction.dart';
 import 'package:net_app/domain/repositories/repositories.dart';
 import 'package:net_app/domain/repositories/unit_of_work.dart';
+import 'package:net_app/domain/services/local_customer_identity_resolver.dart';
 import 'package:net_app/domain/services/local_message_parser.dart';
 import 'package:net_app/domain/services/local_transfer_processor.dart';
 import 'package:net_app/domain/services/services.dart';
@@ -22,10 +23,16 @@ void main() {
         pattern: 'تم تحويل {amount} ريال الى {phone} برقم العملية {ref}',
         isActive: true,
       ),
+      const TransferTemplate(
+        id: 't-account',
+        name: 'Account style percent',
+        pattern: 'ايداع %amount لحساب %account المرجع %ref',
+        isActive: true,
+      ),
     ];
     final parser = LocalMessageParser(templates: templates);
 
-    test('parses a matching SMS body', () {
+    test('parses a matching SMS body with phone type', () {
       final message = IncomingMessage(
         id: 'm1',
         sender: '777',
@@ -37,10 +44,47 @@ void main() {
       final result = parser.parse(message);
       expect(result, isA<Success<ParsedTransfer>>());
       final parsed = (result as Success<ParsedTransfer>).value;
-      expect(parsed.amount.minorUnits, 150000); // 1500.00 * 100
+      expect(parsed.amount.minorUnits, 150000);
       expect(parsed.customerIdentifier, '770123456');
+      expect(parsed.identifierType, TransferIdentifierType.phone);
       expect(parsed.reference, 'REF-99');
       expect(parsed.messageId, 'm1');
+      expect(parsed.templateId, 't1');
+    });
+
+    test('parses %account style and classifies as account', () {
+      final message = IncomingMessage(
+        id: 'm-acc',
+        sender: 'bank',
+        body: 'ايداع 200 لحساب 120025 المرجع OP-88',
+        receivedAt: DateTime.utc(2026, 1, 1),
+        status: MessageProcessingStatus.received,
+      );
+
+      final result = parser.parse(message);
+      expect(result, isA<Success<ParsedTransfer>>());
+      final parsed = (result as Success<ParsedTransfer>).value;
+      expect(parsed.amount.minorUnits, 20000);
+      expect(parsed.customerIdentifier, '120025');
+      expect(parsed.identifierType, TransferIdentifierType.account);
+      expect(parsed.reference, 'OP-88');
+    });
+
+    test('normalizes Arabic-Indic digits in amount and phone', () {
+      final message = IncomingMessage(
+        id: 'm-ar',
+        sender: '777',
+        body: 'تم تحويل ١٥٠٠ ريال الى ٧٧٠١٢٣٤٥٦ برقم العملية REF-AR',
+        receivedAt: DateTime.utc(2026, 1, 1),
+        status: MessageProcessingStatus.received,
+      );
+
+      final result = parser.parse(message);
+      expect(result, isA<Success<ParsedTransfer>>());
+      final parsed = (result as Success<ParsedTransfer>).value;
+      expect(parsed.amount.minorUnits, 150000);
+      expect(parsed.customerIdentifier, '770123456');
+      expect(parsed.identifierType, TransferIdentifierType.phone);
     });
 
     test('fails when body does not match', () {
@@ -54,7 +98,10 @@ void main() {
 
       final result = parser.parse(message);
       expect(result, isA<Failure<ParsedTransfer>>());
-      expect((result as Failure<ParsedTransfer>).error.code, 'message_not_matched');
+      expect(
+        (result as Failure<ParsedTransfer>).error.code,
+        'message_not_matched',
+      );
     });
 
     test('fails when no active templates', () {
@@ -66,9 +113,94 @@ void main() {
         receivedAt: DateTime.utc(2026, 1, 1),
         status: MessageProcessingStatus.received,
       );
+
       final result = emptyParser.parse(message);
       expect(result, isA<Failure<ParsedTransfer>>());
-      expect((result as Failure).error.code, 'no_active_template');
+      expect(
+        (result as Failure<ParsedTransfer>).error.code,
+        'no_active_template',
+      );
+    });
+  });
+
+  group('LocalCustomerIdentityResolver', () {
+    test('resolves phone and exposes delivery phone', () async {
+      final customers = _FakeCustomers();
+      customers.byId['770123456'] = Customer(
+        id: 'c1',
+        displayName: 'Ali',
+        status: CustomerStatus.active,
+        createdAt: DateTime.utc(2026, 1, 1),
+        updatedAt: DateTime.utc(2026, 1, 1),
+      );
+      customers.identifiers['c1'] = [
+        const CustomerIdentifier(
+          id: 'id1',
+          customerId: 'c1',
+          type: CustomerIdentifierType.phoneNumber,
+          value: '770123456',
+          isPrimary: true,
+        ),
+      ];
+      final resolver = LocalCustomerIdentityResolver(customers: customers);
+      final result = await resolver.resolve(
+        identifierValue: '770123456',
+        identifierType: TransferIdentifierType.phone,
+      );
+      expect(result, isA<Success<CustomerIdentityResolution>>());
+      final r = (result as Success<CustomerIdentityResolution>).value;
+      expect(r.isResolved, isTrue);
+      expect(r.customer!.id, 'c1');
+      expect(r.deliveryPhone, '770123456');
+    });
+
+    test('account maps to customer without treating account as delivery phone',
+        () async {
+      final customers = _FakeCustomers();
+      customers.byId['120025'] = Customer(
+        id: 'c2',
+        displayName: 'Shop',
+        status: CustomerStatus.active,
+        createdAt: DateTime.utc(2026, 1, 1),
+        updatedAt: DateTime.utc(2026, 1, 1),
+      );
+      customers.identifiers['c2'] = [
+        const CustomerIdentifier(
+          id: 'id-acc',
+          customerId: 'c2',
+          type: CustomerIdentifierType.externalReference,
+          value: '120025',
+          isPrimary: false,
+        ),
+        const CustomerIdentifier(
+          id: 'id-ph',
+          customerId: 'c2',
+          type: CustomerIdentifierType.phoneNumber,
+          value: '770999888',
+          isPrimary: true,
+        ),
+      ];
+      final resolver = LocalCustomerIdentityResolver(customers: customers);
+      final result = await resolver.resolve(
+        identifierValue: '120025',
+        identifierType: TransferIdentifierType.account,
+      );
+      final r = (result as Success<CustomerIdentityResolution>).value;
+      expect(r.isResolved, isTrue);
+      expect(r.deliveryPhone, '770999888');
+      expect(r.deliveryPhone, isNot('120025'));
+    });
+
+    test('unresolved when no mapping', () async {
+      final resolver =
+          LocalCustomerIdentityResolver(customers: _FakeCustomers());
+      final result = await resolver.resolve(
+        identifierValue: 'missing',
+        identifierType: TransferIdentifierType.account,
+      );
+      final r = (result as Success<CustomerIdentityResolution>).value;
+      expect(r.isResolved, isFalse);
+      expect(r.reasonCode, 'customer_not_found');
     });
   });
 
@@ -78,26 +210,24 @@ void main() {
     late _FakeBalances balances;
     late _FakeAudit audit;
     late LocalTransferProcessor processor;
-    late FixedClock clock;
 
     setUp(() {
       messages = _FakeMessages();
       customers = _FakeCustomers();
       balances = _FakeBalances();
       audit = _FakeAudit();
-      clock = FixedClock(DateTime.utc(2026, 9, 11));
       processor = LocalTransferProcessor(
         messages: messages,
         customers: customers,
         balances: balances,
         auditLogs: audit,
         unitOfWork: const _PassthroughUnitOfWork(),
-        clock: clock,
+        clock: FixedClock(DateTime.utc(2026, 9, 11)),
         ids: SequentialIdGenerator(),
       );
     });
 
-    test('credits customer and marks message processed', () async {
+    test('credits active customer and marks processed', () async {
       messages.store['m1'] = IncomingMessage(
         id: 'm1',
         sender: 'bank',
@@ -117,6 +247,7 @@ void main() {
         messageId: 'm1',
         amount: const Money(minorUnits: 50000, currencyCode: 'YER'),
         customerIdentifier: '770123456',
+        identifierType: TransferIdentifierType.phone,
         reference: 'REF-1',
       );
 
@@ -124,7 +255,7 @@ void main() {
       expect(result, isA<Success<Transaction>>());
       expect(messages.store['m1']!.status, MessageProcessingStatus.processed);
       expect(balances.credits.length, 1);
-      expect(audit.logs.length, 1);
+      expect(audit.logs.any((l) => l.action == 'transfer_processed'), isTrue);
     });
 
     test('rejects when customer missing', () async {
@@ -140,6 +271,7 @@ void main() {
         messageId: 'm2',
         amount: const Money(minorUnits: 1000, currencyCode: 'YER'),
         customerIdentifier: 'unknown',
+        identifierType: TransferIdentifierType.phone,
         reference: 'REF-2',
       );
 
@@ -147,6 +279,7 @@ void main() {
       expect(result, isA<Failure<Transaction>>());
       expect((result as Failure).error.code, 'customer_not_found');
       expect(messages.store['m2']!.status, MessageProcessingStatus.rejected);
+      expect(audit.logs.any((l) => l.action == 'transfer_unresolved'), isTrue);
     });
 
     test('fails when already processed', () async {
@@ -162,6 +295,7 @@ void main() {
         messageId: 'm3',
         amount: const Money(minorUnits: 1000, currencyCode: 'YER'),
         customerIdentifier: '770123456',
+        identifierType: TransferIdentifierType.phone,
         reference: 'REF-3',
       );
 
@@ -194,17 +328,22 @@ final class _FakeMessages implements MessageRepository {
       Success(store[id]);
 
   @override
-  Future<Result<IncomingMessage?>> findByExternalReference(String reference) async =>
+  Future<Result<IncomingMessage?>> findByExternalReference(
+    String reference,
+  ) async =>
       const Success(null);
 
   @override
   Future<Result<List<IncomingMessage>>> pendingProcessing() async =>
       const Success([]);
 
-
   @override
-  Future<Result<List<IncomingMessage>>> listByStatus(MessageProcessingStatus status) async =>
-      Success(store.values.where((m) => m.status == status).toList(growable: false));
+  Future<Result<List<IncomingMessage>>> listByStatus(
+    MessageProcessingStatus status,
+  ) async =>
+      Success(
+        store.values.where((m) => m.status == status).toList(growable: false),
+      );
 
   @override
   Future<Result<List<IncomingMessage>>> listRecent({int limit = 100}) async =>
@@ -236,9 +375,10 @@ final class _FakeMessages implements MessageRepository {
 
 final class _FakeCustomers implements CustomerRepository {
   final byId = <String, Customer>{};
+  final identifiers = <String, List<CustomerIdentifier>>{};
 
   @override
-  Future<Result<Customer?>> findById(String id) async => const Success(null);
+  Future<Result<Customer?>> findById(String id) async => Success(byId[id]);
 
   @override
   Future<Result<Customer?>> findByIdentifier(String value) async =>
@@ -252,7 +392,7 @@ final class _FakeCustomers implements CustomerRepository {
   Future<Result<List<CustomerIdentifier>>> listIdentifiers(
     String customerId,
   ) async =>
-      const Success([]);
+      Success(identifiers[customerId] ?? const []);
 
   @override
   Future<Result<void>> save(Customer customer) async => const Success(null);
@@ -284,8 +424,8 @@ final class _FakeBalances implements CustomerBalanceService {
       type: TransactionType.deposit,
       status: TransactionStatus.completed,
       amount: amount,
-      reference: reference,
       createdAt: DateTime.utc(2026, 9, 11),
+      reference: reference,
     );
     credits.add(tx);
     return Success(tx);
@@ -302,9 +442,13 @@ final class _FakeAudit implements AuditLogRepository {
   }
 
   @override
-  Future<Result<List<AuditLog>>> findByEntity(
+  Future<Result<List<AuditLog>>> listForEntity(
     String entityType,
     String entityId,
   ) async =>
-      Success(logs.where((l) => l.entityType == entityType && l.entityId == entityId).toList());
+      Success(
+        logs
+            .where((l) => l.entityType == entityType && l.entityId == entityId)
+            .toList(),
+      );
 }
