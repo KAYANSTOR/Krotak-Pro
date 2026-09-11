@@ -7,11 +7,12 @@ import '../entities/message.dart';
 import '../entities/transaction.dart';
 import '../repositories/repositories.dart';
 import '../repositories/unit_of_work.dart';
+import 'local_customer_identity_resolver.dart';
 import 'services.dart';
 
 /// Processes a [ParsedTransfer]:
 /// 1. Load message & enforce already-processed
-/// 2. Resolve customer by identifier
+/// 2. Resolve customer identity (never send to account/name tokens)
 /// 3. Credit wallet (deposit)
 /// 4. Mark message processed
 /// 5. Write audit log
@@ -26,6 +27,7 @@ final class LocalTransferProcessor implements TransferProcessor {
     required this.unitOfWork,
     required this.clock,
     required this.ids,
+    this.identityResolver,
   });
 
   final MessageRepository messages;
@@ -35,6 +37,12 @@ final class LocalTransferProcessor implements TransferProcessor {
   final UnitOfWork unitOfWork;
   final Clock clock;
   final IdGenerator ids;
+
+  /// When null, a resolver is built from [customers] (keeps tests simple).
+  final LocalCustomerIdentityResolver? identityResolver;
+
+  LocalCustomerIdentityResolver get _resolver =>
+      identityResolver ?? LocalCustomerIdentityResolver(customers: customers);
 
   @override
   Future<Result<Transaction>> process(ParsedTransfer transfer) {
@@ -60,34 +68,55 @@ final class LocalTransferProcessor implements TransferProcessor {
         );
       }
 
-      // 2. Resolve customer
-      final customerResult =
-          await customers.findByIdentifier(transfer.customerIdentifier);
-      if (customerResult is Failure<Customer?>) {
-        return Failure(customerResult.error);
+      // 2. Resolve customer identity — explicit Unresolved, no guessing
+      final resolutionResult = await _resolver.resolve(
+        identifierValue: transfer.customerIdentifier,
+        identifierType: transfer.identifierType,
+      );
+      if (resolutionResult is Failure<CustomerIdentityResolution>) {
+        return Failure(resolutionResult.error);
       }
-      final customer = (customerResult as Success<Customer?>).value;
-      if (customer == null) {
+      final resolution =
+          (resolutionResult as Success<CustomerIdentityResolution>).value;
+      if (!resolution.isResolved || resolution.customer == null) {
         await messages.updateStatus(
           message.id,
           MessageProcessingStatus.rejected,
         );
-        return const Failure(
+        await auditLogs.append(
+          AuditLog(
+            id: ids.next('audit'),
+            entityType: 'message',
+            entityId: message.id,
+            action: 'transfer_unresolved',
+            occurredAt: clock.now(),
+            payloadJson:
+                '{"code":"${resolution.reasonCode}","identifierType":"${transfer.identifierType.name}","identifier":"${transfer.customerIdentifier}"}',
+          ),
+        );
+        return Failure(
           AppFailure(
-            code: 'customer_not_found',
-            message: 'No customer matches the transfer identifier',
+            code: resolution.reasonCode ?? 'unresolved_identity',
+            message: resolution.reasonMessage ??
+                'Could not resolve customer identity',
           ),
         );
       }
-      if (customer.status != CustomerStatus.active) {
+      final customer = resolution.customer!;
+
+      // Guard: account/name/reference must never be treated as delivery phone.
+      if (transfer.identifierType != TransferIdentifierType.phone &&
+          resolution.deliveryPhone != null &&
+          resolution.deliveryPhone == transfer.customerIdentifier) {
         await messages.updateStatus(
           message.id,
           MessageProcessingStatus.rejected,
         );
         return const Failure(
           AppFailure(
-            code: 'customer_not_active',
-            message: 'Customer is not active',
+            code: 'identifier_type_mismatch',
+            message:
+                'Non-phone identifier cannot equal delivery phone without mapping',
           ),
         );
       }
@@ -114,6 +143,7 @@ final class LocalTransferProcessor implements TransferProcessor {
       );
 
       // 5. Audit
+      final delivery = resolution.deliveryPhone ?? '';
       await auditLogs.append(
         AuditLog(
           id: ids.next('audit'),
@@ -122,7 +152,7 @@ final class LocalTransferProcessor implements TransferProcessor {
           action: 'transfer_processed',
           occurredAt: clock.now(),
           payloadJson:
-              '{"transactionId":"${tx.id}","reference":"${transfer.reference}"}',
+              '{"transactionId":"${tx.id}","reference":"${transfer.reference}","identifierType":"${transfer.identifierType.name}","deliveryPhone":"$delivery"}',
         ),
       );
 
