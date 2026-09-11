@@ -43,8 +43,41 @@ final class LocalSaleService implements SaleService {
   Future<Result<Sale>> sellFromBalance({
     required String customerId,
     required String categoryId,
+    String? operationId,
   }) {
+    final stableOperationId = operationId?.trim();
+    if (stableOperationId != null && stableOperationId.isEmpty) {
+      return Future.value(
+        const Failure(
+          AppFailure(code: 'invalid_operation_id', message: 'Sale operation id must not be empty'),
+        ),
+      );
+    }
+
     return unitOfWork.run(() async {
+      if (stableOperationId != null) {
+        final existingSale = await sales.findById(stableOperationId);
+        if (existingSale is Failure<Sale?>) return Failure(existingSale.error);
+        final existing = (existingSale as Success<Sale?>).value;
+        if (existing != null) {
+          return Success(existing);
+        }
+
+        final operationTransaction =
+            await transactions.findByReference('sale-op:$stableOperationId');
+        if (operationTransaction is Failure<Transaction?>) {
+          return Failure(operationTransaction.error);
+        }
+        if ((operationTransaction as Success<Transaction?>).value != null) {
+          return const Failure(
+            AppFailure(
+              code: 'sale_operation_conflict',
+              message: 'Sale operation has a ledger record but no sale record',
+            ),
+          );
+        }
+      }
+
       final foundCustomer = await customers.findById(customerId);
       if (foundCustomer is Failure<Customer?>) return Failure(foundCustomer.error);
       final customer = (foundCustomer as Success<Customer?>).value;
@@ -74,7 +107,10 @@ final class LocalSaleService implements SaleService {
       }
       if (!category.isActive) {
         return const Failure(
-          AppFailure(code: 'category_inactive', message: 'Category is not active'),
+          AppFailure(
+            code: 'category_inactive',
+            message: 'Category is not active',
+          ),
         );
       }
 
@@ -85,11 +121,15 @@ final class LocalSaleService implements SaleService {
       if (balance is Failure<Money>) return Failure(balance.error);
       if ((balance as Success<Money>).value.minorUnits < category.faceValue.minorUnits) {
         return const Failure(
-          AppFailure(code: 'insufficient_balance', message: 'Customer balance is insufficient'),
+          AppFailure(
+            code: 'insufficient_balance',
+            message: 'Customer balance is insufficient',
+          ),
         );
       }
 
       final now = clock.now();
+      final saleId = stableOperationId ?? ids.next('sale');
       final reserved = await inventory.reserveAvailableCard(
         categoryId: categoryId,
         reservationId: ids.next('reservation'),
@@ -100,7 +140,7 @@ final class LocalSaleService implements SaleService {
       final card = (reserved as Success<Card>).value;
 
       final sale = Sale(
-        id: ids.next('sale'),
+        id: saleId,
         customerId: customerId,
         cardId: card.id,
         amount: category.faceValue,
@@ -118,7 +158,9 @@ final class LocalSaleService implements SaleService {
         amount: category.faceValue,
         createdAt: now,
         customerId: customerId,
-        reference: sale.id,
+        reference: stableOperationId == null
+            ? sale.id
+            : 'sale-op:$stableOperationId',
       );
       final appended = await transactions.append(saleTxn);
       if (appended is Failure<void>) return Failure(appended.error);
@@ -132,7 +174,8 @@ final class LocalSaleService implements SaleService {
           entityType: 'sale',
           entityId: sale.id,
           action: 'completed',
-          payloadJson: '{"cardId":"${card.id}","customerId":"$customerId"}',
+          payloadJson:
+              '{"cardId":"${card.id}","customerId":"$customerId","operationId":"${stableOperationId ?? ''}"}',
           occurredAt: now,
         ),
       );
