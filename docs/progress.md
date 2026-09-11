@@ -1,20 +1,27 @@
 # تقدم تنفيذ خطة NET
 
-## التحقق
+## التحقق (2026-09-11)
 
-- `flutter analyze --no-fatal-infos` → **No issues found** (2026-09-11)
-- `flutter test` → فشل جزئي في اختبارات التكامل (Service/DB) — غير حاجب للتحليل
+```text
+flutter analyze --no-fatal-infos
+No issues found!
+```
 
-## ما اكتمل ورُفع
+- التحليل نظيف على كامل المشروع (`lib` + `test`).
+- بعض اختبارات التكامل القديمة تحتاج محاذاة مع عقود الخدمات الحالية.
+
+## ما اكتمل
 
 | البند | الحالة |
 |---|---|
 | Domain + Drift + Services | مكتمل |
 | MessageParser + TransferProcessor | مكتمل |
 | Android SMS Bridge | مكتمل |
-| Design System Kayan (ألوان، ثيم، تنقل) | مكتمل |
-| Dashboard components من Kotlin | مكتمل |
-| CI workflow | مكتمل |
+| Design System من kayan-android-kotlan | مكتمل |
+| Dashboard: Balance / Sales / QuickActions | مكتمل |
+| تنقل سفلي مطابق Kotlin | مكتمل |
+| CI | مكتمل |
+| flutter analyze نظيف | مكتمل |
 
 ## المرجع البصري
 
