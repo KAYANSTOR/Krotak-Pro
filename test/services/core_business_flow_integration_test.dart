@@ -6,6 +6,7 @@ import 'package:net_app/core/result.dart';
 import 'package:net_app/data/database/app_database.dart' hide Customer, Card, Sale, TransferTemplate, CardCategory, Transaction, IncomingMessage, CustomerIdentifier, AuditLog;
 import 'package:net_app/data/database/drift_unit_of_work.dart';
 import 'package:net_app/data/repositories/local_repositories.dart';
+import 'package:net_app/domain/entities/audit.dart';
 import 'package:net_app/domain/entities/card.dart';
 import 'package:net_app/domain/entities/customer.dart';
 import 'package:net_app/domain/entities/message.dart';
@@ -39,7 +40,7 @@ void main() {
   late _FakeMessageSender sender;
   late LocalTransferProcessor processor;
 
-  setUp(() async {
+  setUp(() {
     database = AppDatabase(NativeDatabase.memory());
     customers = LocalCustomerRepository(database);
     categories = LocalCardCategoryRepository(database);
@@ -205,7 +206,7 @@ void main() {
 
   test('unmatched transfer amount is rejected without credit, reservation, sale, or delivery', () async {
     final customer = await seedCustomer();
-    await seedCategoryAndCard(minorUnits: 500);
+    await seedCategoryAndCard(minorUnits: 500, categoryId: 'cat-500');
     await seedMessage('m2');
 
     final result = await processor.process(transfer('m2', 200));
@@ -267,11 +268,7 @@ void main() {
     expect(second, isA<Success<Transaction>>());
     expect((ledger as Success<Transaction?>).value?.reference, 'sale-op:RETRY-200');
     expect((sale as Success<Sale?>).value?.id, 'RETRY-200');
-    expect(
-      (rows as Success<List<Transaction>>).value
-          .where((item) => item.type == TransactionType.sale),
-      hasLength(1),
-    );
+    expect((rows as Success<List<Transaction>>).value.where((item) => item.type == TransactionType.sale), hasLength(1));
     expect(sender.calls, 1);
   });
 
@@ -319,11 +316,12 @@ void main() {
     await seedMessage('m7');
 
     final completed = await processor.process(transfer('m7', 200, reference: 'REV-200'));
-    final sale = (completed as Success<Transaction>).value;
+    final saleTxn = (completed as Success<Transaction>).value;
     final reversed = await saleService.reverseSale(saleId: 'REV-200');
     final cardRows = await cards.findByCategory('cat-200');
     final ledgerRows = await transactions.findByCustomer(customer.id);
 
+    expect(saleTxn.reference, 'sale-op:REV-200');
     expect(reversed, isA<Success<Sale>>());
     expect((cardRows as Success<List<Card>>).value.single.status, CardStatus.available);
     final rows = (ledgerRows as Success<List<Transaction>>).value;
