@@ -49,7 +49,10 @@ final class LocalSaleService implements SaleService {
     if (stableOperationId != null && stableOperationId.isEmpty) {
       return Future.value(
         const Failure(
-          AppFailure(code: 'invalid_operation_id', message: 'Sale operation id must not be empty'),
+          AppFailure(
+            code: 'invalid_operation_id',
+            message: 'Sale operation id must not be empty',
+          ),
         ),
       );
     }
@@ -83,7 +86,10 @@ final class LocalSaleService implements SaleService {
       final customer = (foundCustomer as Success<Customer?>).value;
       if (customer == null) {
         return const Failure(
-          AppFailure(code: 'customer_not_found', message: 'Customer was not found'),
+          AppFailure(
+            code: 'customer_not_found',
+            message: 'Customer was not found',
+          ),
         );
       }
       if (customer.status != CustomerStatus.active) {
@@ -102,7 +108,10 @@ final class LocalSaleService implements SaleService {
       final category = (foundCategory as Success<CardCategory?>).value;
       if (category == null) {
         return const Failure(
-          AppFailure(code: 'category_not_found', message: 'Category was not found'),
+          AppFailure(
+            code: 'category_not_found',
+            message: 'Category was not found',
+          ),
         );
       }
       if (!category.isActive) {
@@ -119,7 +128,8 @@ final class LocalSaleService implements SaleService {
         currencyCode: category.faceValue.currencyCode,
       );
       if (balance is Failure<Money>) return Failure(balance.error);
-      if ((balance as Success<Money>).value.minorUnits < category.faceValue.minorUnits) {
+      if ((balance as Success<Money>).value.minorUnits <
+          category.faceValue.minorUnits) {
         return const Failure(
           AppFailure(
             code: 'insufficient_balance',
@@ -197,7 +207,10 @@ final class LocalSaleService implements SaleService {
       }
       if (sale.status != TransactionStatus.completed) {
         return const Failure(
-          AppFailure(code: 'sale_not_reversible', message: 'Sale cannot be reversed'),
+          AppFailure(
+            code: 'sale_not_reversible',
+            message: 'Sale cannot be reversed',
+          ),
         );
       }
 
@@ -206,6 +219,18 @@ final class LocalSaleService implements SaleService {
 
       final original = await transactions.findByReference(sale.id);
       if (original is Failure<Transaction?>) return Failure(original.error);
+
+      Transaction? originalTransaction =
+          (original as Success<Transaction?>).value;
+      if (originalTransaction == null) {
+        final operationTransaction =
+            await transactions.findByReference('sale-op:${sale.id}');
+        if (operationTransaction is Failure<Transaction?>) {
+          return Failure(operationTransaction.error);
+        }
+        originalTransaction =
+            (operationTransaction as Success<Transaction?>).value;
+      }
 
       final now = clock.now();
       final reversal = Transaction(
@@ -216,7 +241,7 @@ final class LocalSaleService implements SaleService {
         createdAt: now,
         customerId: sale.customerId,
         reference: 'reversal:${sale.id}',
-        relatedTransactionId: (original as Success<Transaction?>).value?.id,
+        relatedTransactionId: originalTransaction?.id,
       );
       final appended = await transactions.append(reversal);
       if (appended is Failure<void>) return Failure(appended.error);
