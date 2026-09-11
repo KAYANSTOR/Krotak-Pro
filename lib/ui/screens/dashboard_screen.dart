@@ -8,12 +8,16 @@ import '../../domain/entities/money.dart';
 import '../../domain/entities/transaction.dart';
 import '../app_scope.dart';
 import '../routing/app_routes.dart';
-import '../theme/kayan_colors.dart';
 import '../widgets/async_views.dart';
-import '../widgets/dashboard/customer_balance_card.dart';
-import '../widgets/dashboard/quick_actions_grid.dart';
-import '../widgets/dashboard/sales_cards_row.dart';
+import '../widgets/net/net_alert_banner.dart';
+import '../widgets/net/net_balance_card.dart';
+import '../widgets/net/net_dashboard_header.dart';
+import '../widgets/net/net_metric_card.dart';
+import '../widgets/net/net_quick_action_card.dart';
+import '../widgets/net/net_recent_transaction_card.dart';
+import '../widgets/net/net_section_header.dart';
 
+/// Production dashboard — real Domain/Repository data only.
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
 
@@ -60,7 +64,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
       final monthlySales = await c.sales.listCompletedBetween(monthStart, now);
       final recent = await c.transactions.listRecent(limit: 10);
 
-      // Sum outstanding customer balances (active customers, YER)
       var outstanding = 0;
       var accounts = 0;
       if (customers is Success<List<Customer>>) {
@@ -98,8 +101,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _smsOk = sms;
         _customerBalanceMinor = outstanding;
         _accountsCount = accounts;
-        _availableCards =
-            available is Success<List<domain.Card>> ? available.value.length : 0;
+        _availableCards = available is Success<List<domain.Card>> ? available.value.length : 0;
         _dailySalesMinor = sumSales(dailySales);
         _dailyCards = countSales(dailySales);
         _monthlySalesMinor = sumSales(monthlySales);
@@ -122,178 +124,98 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
+  String? get _alertMessage {
+    if (!_smsOk) return 'إذن SMS غير مفعّل — قد يتوقف استلام التحويلات';
+    if (_licenseLabel == 'غير مفعّل' || _licenseLabel == 'expired' || _licenseLabel == 'invalid') {
+      return 'الترخيص: $_licenseLabel — راجع الإعدادات للتفعيل';
+    }
+    if (_error != null) return _error;
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
-    if (_loading) return const AsyncLoadingView();
+    if (_loading) {
+      return const SafeArea(child: AsyncLoadingView(message: 'جاري تحميل اللوحة…'));
+    }
     if (_error != null && _accountsCount == 0 && _recent.isEmpty) {
-      return AsyncErrorView(message: _error!, onRetry: _load);
+      return SafeArea(child: AsyncErrorView(message: _error!, onRetry: _load));
     }
 
-    return RefreshIndicator(
-      onRefresh: _load,
-      child: ListView(
-        padding: const EdgeInsets.only(bottom: 24),
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
-            child: Row(
-              children: [
-                IconButton(
-                  onPressed: () => AppRoutes.openSettings(context),
-                  icon: const Icon(Icons.settings_outlined, color: KayanColors.textPrimary),
-                ),
-                const Spacer(),
-                const Text(
-                  'NET',
-                  style: TextStyle(
-                    fontFamily: 'Tajawal',
-                    fontWeight: FontWeight.bold,
-                    fontSize: 18,
-                    color: KayanColors.textPrimary,
-                  ),
-                ),
-              ],
+    final alert = _alertMessage;
+
+    return SafeArea(
+      child: RefreshIndicator(
+        onRefresh: _load,
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.only(bottom: 28),
+          children: [
+            NetDashboardHeader(
+              title: 'NET',
+              subtitle: 'ترخيص: $_licenseLabel · SMS: ${_smsOk ? 'جاهز' : 'غير مفعّل'}',
+              onSettings: () => AppRoutes.openSettings(context),
             ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'مرحباً بك',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontFamily: 'Tajawal',
-                        fontWeight: FontWeight.bold,
-                      ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'الترخيص: $_licenseLabel',
-                  style: const TextStyle(
-                    fontFamily: 'Tajawal',
-                    color: KayanColors.textSecondary,
-                    fontSize: 13,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-            child: Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: _smsOk ? KayanColors.successBackground : KayanColors.warningBackground,
-                borderRadius: BorderRadius.circular(16),
+            if (alert != null)
+              NetAlertBanner(
+                message: alert,
+                icon: !_smsOk ? Icons.sms_failed_outlined : Icons.warning_amber_outlined,
+                onTap: () => AppRoutes.openSettings(context),
               ),
-              child: Row(
+            NetBalanceCard(
+              balanceMinor: _customerBalanceMinor,
+              accountsCount: _accountsCount,
+              availableCards: _availableCards,
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Column(
                 children: [
-                  Icon(
-                    _smsOk ? Icons.check_circle : Icons.warning_amber,
-                    color: _smsOk ? KayanColors.success : KayanColors.warning,
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      _smsOk ? 'النظام نشط — صلاحيات SMS جاهزة' : 'يلزم تفعيل صلاحيات SMS',
-                      style: TextStyle(
-                        fontFamily: 'Tajawal',
-                        fontWeight: FontWeight.bold,
-                        color: _smsOk ? KayanColors.success : KayanColors.warning,
-                      ),
-                    ),
-                  ),
-                  if (!_smsOk)
-                    TextButton(
-                      onPressed: () async {
-                        await AppScope.of(context).smsBridge.requestPermissions();
-                        await _load();
-                      },
-                      child: const Text('تفعيل', style: TextStyle(fontFamily: 'Tajawal')),
-                    ),
+                  Row(children: [
+                    Expanded(child: NetMetricCard(title: 'مبيعات اليوم', value: formatMoneyMinor(_dailySalesMinor), subtitle: '$_dailyCards عملية', icon: Icons.today_outlined, onTap: () => AppRoutes.openTransactionsLog(context))),
+                    const SizedBox(width: 10),
+                    Expanded(child: NetMetricCard(title: 'مبيعات الشهر', value: formatMoneyMinor(_monthlySalesMinor), subtitle: '$_monthlyCards عملية', icon: Icons.calendar_month_outlined, onTap: () => AppRoutes.openTransactionsLog(context))),
+                  ]),
+                  const SizedBox(height: 10),
+                  Row(children: [
+                    Expanded(child: NetMetricCard(title: 'كروت متاحة', value: '$_availableCards', subtitle: 'من المخزون', icon: Icons.sim_card_outlined)),
+                    const SizedBox(width: 10),
+                    Expanded(child: NetMetricCard(title: 'الحسابات النشطة', value: '$_accountsCount', subtitle: 'عملاء', icon: Icons.people_outline)),
+                  ]),
                 ],
               ),
             ),
-          ),
-          CustomerBalanceCard(
-            amount: _customerBalanceMinor,
-            accounts: _accountsCount,
-            cards: _availableCards,
-            onCardStockClick: () {},
-          ),
-          SalesCardsRow(
-            dailyAmount: _dailySalesMinor,
-            dailyCards: _dailyCards,
-            monthlyAmount: _monthlySalesMinor,
-            monthlyCards: _monthlyCards,
-            onDailyClick: () => AppRoutes.openTransactionsLog(context),
-            onMonthlyClick: () => AppRoutes.openTransactionsLog(context),
-          ),
-          QuickActionsGrid(
-            onAction: (id) {
-              switch (id) {
-                case 'manualDirectSale':
-                  AppRoutes.openDirectSale(context).then((_) => _load());
-                case 'salesPoints':
-                  AppRoutes.openWalletsAndPos(context);
-                default:
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        'غير متاح في هذا الإصدار: $id',
-                        style: const TextStyle(fontFamily: 'Tajawal'),
-                      ),
-                    ),
-                  );
-              }
-            },
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'آخر العمليات',
-                  style: TextStyle(
-                    fontFamily: 'Tajawal',
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                    color: KayanColors.textPrimary,
-                  ),
-                ),
-                TextButton(
-                  onPressed: () => AppRoutes.openTransactionsLog(context),
-                  child: const Text('الكل', style: TextStyle(fontFamily: 'Tajawal', color: KayanColors.primary)),
-                ),
-              ],
+            const NetSectionHeader(title: 'إجراءات سريعة'),
+            SizedBox(
+              height: 96,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                children: [
+                  NetQuickActionCard(label: 'بيع مباشر', icon: Icons.point_of_sale_outlined, onTap: () => AppRoutes.openDirectSale(context).then((_) => _load())),
+                  const SizedBox(width: 10),
+                  NetQuickActionCard(label: 'محافظ / POS', icon: Icons.account_balance_wallet_outlined, onTap: () => AppRoutes.openWalletsAndPos(context)),
+                  const SizedBox(width: 10),
+                  NetQuickActionCard(label: 'سجل العمليات', icon: Icons.receipt_long_outlined, onTap: () => AppRoutes.openTransactionsLog(context)),
+                  const SizedBox(width: 10),
+                  NetQuickActionCard(label: 'الإعدادات', icon: Icons.settings_outlined, onTap: () => AppRoutes.openSettings(context)),
+                ],
+              ),
             ),
-          ),
-          if (_recent.isEmpty)
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 20),
-              child: AsyncEmptyView(message: 'لا توجد عمليات حديثة'),
-            )
-          else
-            ..._recent.map((tx) {
-              return ListTile(
-                contentPadding: const EdgeInsets.symmetric(horizontal: 20),
-                title: Text(
-                  '${tx.type.name} — ${formatMoneyMinor(tx.amount.minorUnits)}',
-                  style: const TextStyle(fontFamily: 'Tajawal'),
-                ),
-                subtitle: Text(
-                  tx.reference ?? tx.id,
-                  style: const TextStyle(fontFamily: 'Tajawal', fontSize: 12),
-                ),
-                trailing: Text(
-                  tx.status.name,
-                  style: const TextStyle(fontFamily: 'Tajawal', fontSize: 12),
-                ),
-              );
-            }),
-        ],
+            NetSectionHeader(
+              title: 'آخر العمليات',
+              actionLabel: 'الكل',
+              onAction: () => AppRoutes.openTransactionsLog(context),
+            ),
+            if (_recent.isEmpty)
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 12),
+                child: AsyncEmptyView(message: 'لا توجد عمليات حديثة'),
+              )
+            else
+              ..._recent.map((tx) => NetRecentTransactionCard(transaction: tx, onTap: () => AppRoutes.openTransactionsLog(context))),
+          ],
+        ),
       ),
     );
   }
