@@ -2,8 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'kayan_colors.dart';
+import 'net_semantic_colors.dart';
+import 'net_theme.dart';
 
-ThemeData buildKayanLightTheme() {
+/// Preferred entry points — FlexColorScheme-backed NET themes.
+ThemeData buildKayanLightTheme() => buildNetLightTheme();
+
+ThemeData buildKayanDarkTheme() => buildNetDarkTheme();
+
+ThemeData buildLegacyKayanLightTheme() {
   final colorScheme = ColorScheme.light(
     primary: KayanColors.primary,
     onPrimary: Colors.white,
@@ -31,11 +38,11 @@ ThemeData buildKayanLightTheme() {
       elevation: 0,
       centerTitle: true,
       systemOverlayStyle: SystemUiOverlayStyle(
-        statusBarColor: KayanColors.appBackground,
+        statusBarColor: Colors.transparent,
         statusBarIconBrightness: Brightness.dark,
       ),
     ),
-    cardTheme: CardThemeData(
+    cardTheme: CardTheme(
       color: KayanColors.surface,
       elevation: 0,
       shape: RoundedRectangleBorder(
@@ -43,21 +50,11 @@ ThemeData buildKayanLightTheme() {
         side: const BorderSide(color: KayanColors.border),
       ),
     ),
-    filledButtonTheme: FilledButtonThemeData(
-      style: FilledButton.styleFrom(
-        backgroundColor: KayanColors.primary,
-        foregroundColor: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ),
-    ),
-    navigationBarTheme: NavigationBarThemeData(
-      backgroundColor: KayanColors.surface,
-      indicatorColor: KayanColors.lightBackground,
-    ),
+    extensions: const <ThemeExtension<dynamic>>[NetSemanticColors.light],
   );
 }
 
-ThemeData buildKayanDarkTheme() {
+ThemeData buildLegacyKayanDarkTheme() {
   final colorScheme = ColorScheme.dark(
     primary: KayanColors.primary,
     onPrimary: Colors.white,
@@ -83,6 +80,11 @@ ThemeData buildKayanDarkTheme() {
       foregroundColor: KayanColors.darkTextPrimary,
       elevation: 0,
       centerTitle: true,
+      systemOverlayStyle: SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.light,
+      ),
     ),
+    extensions: const <ThemeExtension<dynamic>>[NetSemanticColors.dark],
   );
 }
