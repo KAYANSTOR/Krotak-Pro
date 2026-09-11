@@ -38,7 +38,7 @@ A card reservation is distinct from a sale. The reservation is stable for the tr
 
 The incoming transfer credit is idempotent by the transfer reference. The sale uses the same stable operation identity on retry.
 
-The financial sale commit happens only after the native `MessageSender` reports successful SMS delivery. The existing `LocalSaleService` is extended only with a narrow reserved-card completion boundary so the transfer flow does not perform a second reservation.
+The financial sale commit happens only after the native `MessageSender` reports successful SMS dispatch. The existing `LocalSaleService` is extended only with a narrow reserved-card completion boundary so the transfer flow does not perform a second reservation.
 
 ## Delivery state and recovery
 
@@ -48,7 +48,9 @@ The existing `MessageSender` / `SmsBridge` boundary is used through `NativeMessa
 
 Because the repository already has `AuditLogRepository` but does not have a delivery-state table, `sms_delivery_succeeded` is persisted as an audit event containing `operationId`, `cardId`, `categoryId`, `reservationId`, and destination. Recovery checks this event before attempting another send.
 
-If SMS delivery succeeds but sale commit fails, the card reservation is not released. Recovery completes the same reserved sale with the same operationId. If the reservation has expired, recovery may safely re-reserve the same card only while it remains available and in the original category; otherwise it stops rather than selling or sending another card.
+If SMS dispatch succeeds but sale commit fails, the card reservation is not released. Recovery completes the same reserved sale with the same operationId. If the reservation has expired, recovery may safely re-reserve the same card only while it remains available and in the original category; otherwise it stops rather than selling or sending another card.
+
+**Important native transport limitation:** `SmsBridge` invokes Android `SmsManager.sendTextMessage`. The current `MessageSender` success therefore proves native SMS dispatch was accepted by the platform call; it is not a carrier-level delivery receipt. No claim of confirmed handset delivery is made by this architecture.
 
 ## Existing architecture reused
 
@@ -84,4 +86,6 @@ flutter analyze --no-fatal-infos
 flutter test
 ```
 
-P0 is not considered Ready until the current branch passes all three checks and the integration tests prove amount matching, reservation, delivery, sale, ledger, audit, retry, concurrency, and reversal behavior.
+P0 is not considered Ready until the current branch passes all three checks and the integration tests prove amount matching, reservation, delivery dispatch, sale, ledger, audit, retry, concurrency, and reversal behavior.
+
+**Verification trigger note:** this documentation update is intentionally non-functional and exists only to force a fresh Pull Request CI run against the current branch HEAD after the previous CI run failed before reading the latest test code.
