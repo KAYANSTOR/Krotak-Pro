@@ -70,26 +70,13 @@ void main() {
     late AppDatabase database;
     late LocalMessageRepository messages;
     late LocalTransactionRepository transactions;
-    late _FailingAudit audit;
-    late _SuccessfulResolver resolver;
-    late LocalTransferProcessor processor;
+    late LocalCustomerRepository customers;
 
     setUp(() {
       database = AppDatabase(NativeDatabase.memory());
       messages = LocalMessageRepository(database);
       transactions = LocalTransactionRepository(database);
-      audit = _FailingAudit();
-      resolver = _SuccessfulResolver();
-      processor = LocalTransferProcessor(
-        messages: messages,
-        customers: _UnusedCustomers(),
-        balances: _DbWritingBalance(transactions),
-        auditLogs: audit,
-        unitOfWork: _DriftUow(database),
-        clock: FixedClock(DateTime.utc(2026, 9, 12, 1)),
-        ids: SequentialIdGenerator(),
-        identityResolver: resolver,
-      );
+      customers = LocalCustomerRepository(database);
     });
 
     tearDown(() async {
@@ -98,18 +85,17 @@ void main() {
 
     test('rejection survives business rollback boundary', () async {
       await messages.save(_message('m-reject', status: MessageProcessingStatus.received));
-      final rejectProcessor = LocalTransferProcessor(
+      final processor = LocalTransferProcessor(
         messages: messages,
-        customers: _UnusedCustomers(),
+        customers: customers,
         balances: _DbWritingBalance(transactions),
         auditLogs: _AcceptingAudit(),
         unitOfWork: _DriftUow(database),
         clock: FixedClock(DateTime.utc(2026, 9, 12, 1)),
         ids: SequentialIdGenerator(),
-        identityResolver: _UnresolvedResolver(),
       );
 
-      final result = await rejectProcessor.process(_transfer('m-reject'));
+      final result = await processor.process(_transfer('m-reject'));
       final stored = await messages.findById('m-reject');
 
       expect(result, isA<Failure<Transaction>>());
@@ -119,7 +105,36 @@ void main() {
 
     test('mid-flow audit failure rolls back transaction and leaves failed state for recovery',
         () async {
+      await customers.save(
+        Customer(
+          id: 'customer-1',
+          displayName: 'Customer',
+          status: CustomerStatus.active,
+          createdAt: DateTime.utc(2026, 1, 1),
+          updatedAt: DateTime.utc(2026, 1, 1),
+        ),
+      );
+      await customers.saveIdentifier(
+        const CustomerIdentifier(
+          id: 'phone-1',
+          customerId: 'customer-1',
+          type: CustomerIdentifierType.phoneNumber,
+          value: '770123456',
+          isPrimary: true,
+        ),
+      );
       await messages.save(_message('m-fail', status: MessageProcessingStatus.parsed));
+
+      final audit = _FailingAudit();
+      final processor = LocalTransferProcessor(
+        messages: messages,
+        customers: customers,
+        balances: _DbWritingBalance(transactions),
+        auditLogs: audit,
+        unitOfWork: _DriftUow(database),
+        clock: FixedClock(DateTime.utc(2026, 9, 12, 1)),
+        ids: SequentialIdGenerator(),
+      );
 
       final result = await processor.process(_transfer('m-fail'));
       final stored = await messages.findById('m-fail');
@@ -249,69 +264,6 @@ final class _FakeProcessor implements TransferProcessor {
       ),
     );
   }
-}
-
-final class _UnresolvedResolver extends LocalCustomerIdentityResolver {
-  const _UnresolvedResolver() : super(customers: _UnusedCustomers());
-
-  @override
-  Future<Result<CustomerIdentityResolution>> resolve({
-    required String identifierValue,
-    required TransferIdentifierType identifierType,
-  }) async =>
-      const Success(
-        CustomerIdentityResolution.unresolved(
-          reasonCode: 'customer_not_found',
-          reasonMessage: 'missing',
-        ),
-      );
-}
-
-final class _SuccessfulResolver extends LocalCustomerIdentityResolver {
-  const _SuccessfulResolver() : super(customers: _UnusedCustomers());
-
-  @override
-  Future<Result<CustomerIdentityResolution>> resolve({
-    required String identifierValue,
-    required TransferIdentifierType identifierType,
-  }) async =>
-      Success(
-        CustomerIdentityResolution.resolved(
-          customer: Customer(
-            id: 'customer-1',
-            displayName: 'Customer',
-            status: CustomerStatus.active,
-            createdAt: DateTime.utc(2026, 1, 1),
-            updatedAt: DateTime.utc(2026, 1, 1),
-          ),
-          deliveryPhone: identifierValue,
-          matchedIdentifier: null,
-        ),
-      );
-}
-
-final class _UnusedCustomers implements CustomerRepository {
-  const _UnusedCustomers();
-
-  @override
-  Future<Result<Customer?>> findById(String id) async => const Success(null);
-
-  @override
-  Future<Result<Customer?>> findByIdentifier(String value) async => const Success(null);
-
-  @override
-  Future<Result<List<Customer>>> search(String query) async => const Success([]);
-
-  @override
-  Future<Result<List<CustomerIdentifier>>> listIdentifiers(String customerId) async =>
-      const Success([]);
-
-  @override
-  Future<Result<void>> save(Customer customer) async => const Success(null);
-
-  @override
-  Future<Result<void>> saveIdentifier(CustomerIdentifier identifier) async =>
-      const Success(null);
 }
 
 final class _DbWritingBalance implements CustomerBalanceService {
