@@ -1,33 +1,26 @@
 # تقدم تنفيذ خطة NET
 
-آخر خطوة مكتملة: **واجهات Flutter الأساسية + SMS Bridge + الترخيص والنسخ الاحتياطي + CI**.
+آخر خطوة مكتملة: **نقل Design Tokens من kayan-android-kotlan (ألوان، ثيم، تنقل سفلي)**.
 
-## ما اكتمل
+## ما اكتمل على المستودع
 
 | الخطوة | الحالة |
 |---|---|
-| 0. تهيئة مشروع Flutter Android | مكتمل |
-| 1. الوثائق والخطة والمواصفات | مكتمل |
-| 2. عقود Domain والكيانات | مكتمل |
-| 3. مخطط Drift المحلي | مكتمل |
-| 4–5. المستودعات المحلية | مكتمل |
-| 6. خدمات العملاء والمخزون | مكتمل |
-| 7. البيع من الرصيد وعكس العملية | مكتمل |
-| 8. MessageParser و TransferProcessor | مكتمل |
-| 9. Android SMS Receiver + Method/Event Channel | مكتمل |
-| 10. IncomingSmsHandler + جسر Flutter | مكتمل |
-| 11. الترخيص المحلي + النسخ الاحتياطي | مكتمل |
-| 12. واجهات Flutter (لوحة، عملاء، مخزون، رسائل، إعدادات) | مكتمل |
-| 13. CI (GitHub Actions) | مكتمل |
+| Domain + Drift + Services + Parser/Processor | مكتمل |
+| Android SMS Receiver + Bridge | مكتمل |
+| License + Backup | مكتمل |
+| UI shell أساسي | مكتمل |
+| **Design System من Kotlin** (ألوان Kayan، ثيم فاتح/داكن، شريط تنقل مطابق) | مكتمل هذه الدفعة |
+| CI | مكتمل |
 
-## المتبقي لاحقاً (تحسينات)
+## فجوات معروفة (صراحة)
 
-- دمج الحسابات، سلفني، العروض والمكافآت، نقاط البيع
-- استعادة الرسائل الفائتة من صندوق الوارد
-- تشفير النسخ الاحتياطي لملف SQLite بالكامل
-- اختبارات تكامل Android instrumented
-- ربط UI بكل عمليات التقارير
+1. بعض ملفات الخدمات المحلية الكبيرة قد تكون غير مزامَنة بالكامل على remote.
+2. خط Tajawal: يُفضّل إضافة أصول `.ttf` أو `google_fonts`.
+3. شاشات التقارير/العروض ما زالت placeholders.
+4. لم تُنقل بعد كل مكونات Compose التفصيلية.
 
-## قرارات مؤقتة
+## المرجع البصري
 
-انظر [business-rules.md](business-rules.md).
+https://github.com/KAYANSTOR/kayan-android-kotlan  
+المصدر: `Color.kt`, `Theme.kt`, `Type.kt`, `KayanBottomNavigation.kt`
