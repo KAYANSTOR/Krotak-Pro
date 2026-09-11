@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../theme/kayan_colors.dart';
-
 /// Shared loading indicator for list/detail bodies.
 class AsyncLoadingView extends StatelessWidget {
   const AsyncLoadingView({super.key, this.message = 'جاري التحميل…'});
@@ -10,17 +8,18 @@ class AsyncLoadingView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const CircularProgressIndicator(),
+          CircularProgressIndicator(color: cs.primary),
           const SizedBox(height: 12),
           Text(
             message,
-            style: const TextStyle(
+            style: TextStyle(
               fontFamily: 'Tajawal',
-              color: KayanColors.textSecondary,
+              color: cs.onSurfaceVariant,
             ),
           ),
         ],
@@ -45,20 +44,21 @@ class AsyncEmptyView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 48, color: KayanColors.textSecondary),
+            Icon(icon, size: 48, color: cs.onSurfaceVariant),
             const SizedBox(height: 12),
             Text(
               message,
               textAlign: TextAlign.center,
-              style: const TextStyle(
+              style: TextStyle(
                 fontFamily: 'Tajawal',
-                color: KayanColors.textSecondary,
+                color: cs.onSurfaceVariant,
                 fontSize: 15,
               ),
             ),
@@ -85,25 +85,29 @@ class AsyncErrorView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.error_outline, size: 48, color: KayanColors.warning),
+            Icon(Icons.error_outline, size: 48, color: cs.error),
             const SizedBox(height: 12),
             Text(
               message,
               textAlign: TextAlign.center,
-              style: const TextStyle(
+              style: TextStyle(
                 fontFamily: 'Tajawal',
-                color: KayanColors.textPrimary,
+                color: cs.onSurface,
               ),
             ),
             if (onRetry != null) ...[
               const SizedBox(height: 16),
-              OutlinedButton(onPressed: onRetry, child: const Text('إعادة المحاولة')),
+              OutlinedButton(
+                onPressed: onRetry,
+                child: const Text('إعادة المحاولة'),
+              ),
             ],
           ],
         ),
