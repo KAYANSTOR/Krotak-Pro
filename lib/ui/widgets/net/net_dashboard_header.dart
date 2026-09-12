@@ -95,7 +95,7 @@ class _HeaderIconButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return Material(
-      color: cs.surfaceContainerHighest.withValues(alpha: 0.65),
+      color: cs.surfaceContainerHighest.withOpacity(0.65),
       borderRadius: BorderRadius.circular(12),
       child: IconButton(
         onPressed: onPressed,
