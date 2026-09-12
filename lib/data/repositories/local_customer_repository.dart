@@ -20,8 +20,11 @@ final class LocalCustomerRepository implements CustomerRepository {
   @override
   Future<Result<domain.Customer?>> findByIdentifier(String value) async {
     try {
+      final keys = PhoneNormalizer.lookupKeys(value);
+      if (keys.isEmpty) return const Success(null);
+
       final identifierQuery = database.select(database.customerIdentifiers)
-        ..where((table) => table.value.equals(value));
+        ..where((table) => table.value.isIn(keys));
       final identifier = await identifierQuery.getSingleOrNull();
       if (identifier == null) return const Success(null);
 
@@ -47,8 +50,10 @@ final class LocalCustomerRepository implements CustomerRepository {
       final byName = await (database.select(database.customers)
             ..where((table) => table.displayName.contains(trimmed)))
           .get();
+      final phoneKeys = PhoneNormalizer.lookupKeys(trimmed);
       final identifiers = await (database.select(database.customerIdentifiers)
-            ..where((table) => table.value.contains(trimmed)))
+            ..where((table) =>
+                table.value.contains(trimmed) | table.value.isIn(phoneKeys)))
           .get();
       final ids = <String>{
         ...byName.map((row) => row.id),
