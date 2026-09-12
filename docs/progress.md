@@ -36,6 +36,13 @@ flutter test           → يمر في CI
 ### Dashboard — كرت الرصيد / Header / Alert / Metric Cards / بيع يدوي
 - معتمدة PD-01…04 و PD-06 — انظر [product-decisions.md](product-decisions.md)
 
+### إعدادات — B1 / S3 Domain منفَّذ (2026-09-12)
+- `IncomingSmsHandler`: إن `sms_auto_processing_enabled=false` → حفظ+تحليل فقط (`parsed`) بلا إيداع/بيع/إرسال
+- `LocalTransferProcessor`: إن `process_category_amounts_only=true` (افتراضي) ومبلغ بلا فئة → `parsed` + `unmatched_amount_pending` (معلّقة) لا `rejected`
+- `LocalMessageRecoveryService`: إن `process_old_messages_on_resume=false` → تخطي الاستعادة؛ `pendingProcessing` يشمل `received`+`parsed`
+- `AppContainer.startBackgroundHandlers`: استدعاء `recoverPending` عند الإقلاع
+- اختبارات: `test/services/pd07_settings_gating_test.dart` + تحديث تكامل unmatched
+
 ### إعدادات — S1/S2 منفَّذ (2026-09-12)
 - أقسام PD-07 الستة + كروت + مفاتيح محفوظة محليًا
 - كرت اسم الشبكة + Bottom Sheet (نص SMS المعتمد)
@@ -50,7 +57,7 @@ flutter test           → يمر في CI
 
 ## متبقٍ (بالترتيب الجذري)
 
-1. **الدفعة B** — S0–S2✓. التالي مترابط: **B1 S3 Domain** → **B2 معلّقة** → **B3 مرفوضة** → B4 دفتر → B5–B7 كروت/فئات/استيراد → B8 مساعدة.
+1. **الدفعة B** — S0–S2✓ · **B1 S3 Domain ✓ (2026-09-12)**. التالي: **B2 معلّقة** → **B3 مرفوضة** → B4 دفتر → B5–B7 كروت/فئات/استيراد → B8 مساعدة.
 2. **منهجية مطابقة الواجهة (PD-05)** — مستمر لباقي الشاشات (محافظ، فوسك، محاكاة، قوالب عملاء = دفعة لاحقة).
 3. **عينات قوالب SMS حقيقية** من المحافظ المعتمدة.
 4. **اختبار جهاز حقيقي** لمسار SMS الكامل.
