@@ -94,47 +94,22 @@ abstract interface class ReservedSaleService {
 }
 
 abstract interface class MessageParser {
-  Future<Result<ParsedTransfer?>> parse(IncomingMessage message);
+  Result<ParsedTransfer> parse(IncomingMessage message);
+}
+
+abstract interface class MessageSender {
+  Future<Result<void>> send({
+    required String destination,
+    required String body,
+  });
 }
 
 abstract interface class TransferProcessor {
-  Future<Result<void>> process(IncomingMessage message);
-}
-
-abstract interface class CustomerIdentityResolver {
-  Future<Result<ResolvedIdentity>> resolve({
-    required String rawIdentifier,
-    TransferIdentifierType? preferredType,
-  });
+  Future<Result<Transaction>> process(ParsedTransfer transfer);
 }
 
 abstract interface class LicenseService {
-  Future<Result<License>> current();
-  Future<Result<License>> activateOffline({required String code});
-}
-
-abstract interface class BackupService {
-  Future<Result<String>> exportBackup();
-  Future<Result<void>> restoreBackup(String payload);
-}
-
-abstract interface class MessageRecoveryService {
-  Future<Result<int>> recoverPending();
-}
-
-abstract interface class SettlementService {
-  Future<Result<void>> settlePointOfSale({
-    required String pointOfSaleId,
-    required Money amount,
-    String? reference,
-  });
-}
-
-abstract interface class AccountMergeService {
-  Future<Result<void>> merge({
-    required String sourceCustomerId,
-    required String targetCustomerId,
-  });
+  Future<Result<void>> verifyOnline();
 }
 
 final class CardImportDraft {
@@ -147,32 +122,22 @@ final class CardImportDraft {
   final String secretCode;
 }
 
-final class ParsedTransfer {
-  const ParsedTransfer({
+final class UnresolvedDomainDecision implements Exception {
+  const UnresolvedDomainDecision(this.decision);
+
+  final String decision;
+}
+
+final class TransferProcessingInput {
+  const TransferProcessingInput({
+    required this.messageId,
     required this.amount,
-    required this.rawIdentifier,
-    this.identifierType,
-    this.reference,
-    this.walletHint,
+    required this.customerIdentifier,
+    required this.reference,
   });
 
+  final String messageId;
   final Money amount;
-  final String rawIdentifier;
-  final TransferIdentifierType? identifierType;
-  final String? reference;
-  final String? walletHint;
+  final String customerIdentifier;
+  final String reference;
 }
-
-final class ResolvedIdentity {
-  const ResolvedIdentity({
-    required this.customerId,
-    required this.deliveryPhone,
-    this.identifierId,
-  });
-
-  final String customerId;
-  final String deliveryPhone;
-  final String? identifierId;
-}
-
-enum TransferIdentifierType { phone, account, reference, name }
