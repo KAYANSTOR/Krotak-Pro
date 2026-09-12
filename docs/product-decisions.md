@@ -72,6 +72,73 @@ CustomerBalanceService.getTotalOutstanding(currencyCode: 'YER')
 
 ---
 
+## PD-2026-09-12-02 — Header لوحة التحكم (Dashboard Header)
+
+| الحقل | القيمة المعتمدة |
+|--------|------------------|
+| **Screen** | Dashboard |
+| **Element** | NetDashboardHeader |
+| **Status** | Confirmed by product owner |
+| **Date** | 2026-09-12 |
+
+### المعنى / المحتوى المعتمد
+
+الـ Header يعرض **فقط**:
+
+1. **شعار البرنامج** + **اسم الشبكة** (اسم البرنامج القابل للتعديل).
+2. **تاريخ واسم اليوم** (من ساعة الجهاز عبر `Clock`).
+3. **أيقونة الإعدادات** → شاشة الإعدادات.
+4. **أيقونة المساعدة** → شاشة مركز المساعدة.
+
+**لا يُعرض في الـ Header:** حالة الترخيص، حالة SMS، رسائل متبقية، بطاقة حالة نظام، أو أي سطر فرعي تشغيلي آخر.
+
+### اسم الشبكة — مصدر الحقيقة
+
+```text
+SettingsRepository.find(SettingKeys.networkName)
+  → القيمة المحفوظة إن وُجدت وغير فارغة بعد trim
+  → وإلا الافتراضي: "NET"
+```
+
+- المفتاح: `SettingKeys.networkName` = `network_name`
+- التعديل: من **الإعدادات → اسم الشبكة** (حفظ عبر `SettingsRepository.save`)
+- بعد الحفظ والعودة للوحة: يُعاد تحميل الاسم في الـ Header
+
+### التاريخ
+
+- المصدر: `Clock.now()` (لا نص ثابت)
+- العرض: اسم اليوم + رقم اليوم + اسم الشهر بالعربية (مثال: `السبت، 12 سبتمبر`)
+- بلا ضغط
+
+### تفاعلات الضغط
+
+| المنطقة | السلوك المعتمد |
+|---------|----------------|
+| الشعار / اسم الشبكة / التاريخ | **لا إجراء** |
+| أيقونة الإعدادات | `AppRoutes.openSettings` |
+| أيقونة المساعدة | `AppRoutes.openHelp` → `HelpCenterScreen` |
+
+### التنفيذ في المستودع
+
+| ملف | دور |
+|-----|-----|
+| `lib/domain/entities/setting.dart` | مفتاح `networkName` + ثابت الافتراضي |
+| `lib/ui/widgets/net/net_app_logo.dart` | شعار البرنامج |
+| `lib/ui/widgets/net/net_dashboard_header.dart` | التخطيط والتفاعلات |
+| `lib/ui/screens/dashboard_screen.dart` | تحميل الاسم والتاريخ |
+| `lib/ui/routing/app_routes.dart` | `openHelp` |
+| `lib/ui/screens/settings/network_name_settings_screen.dart` | تعديل وحفظ اسم الشبكة |
+| `lib/ui/screens/settings/settings_hub_screen.dart` | دخول «اسم الشبكة» |
+
+### ما يُلغى
+
+- عرض الترخيص أو SMS داخل الـ Header → **ملغى**.
+- عنوان ثابت غير قابل للتعديل دون مسار إعدادات → **ملغى**.
+- زر بحث في Header Dashboard → **غير مستخدم / غير مطلوب**.
+- قيم Kotlin الوهمية (اشتراك/رسائل متبقية في الـ Header) → **مرفوض**.
+
+---
+
 ## قالب إضافة قرار لاحق
 
 ```markdown
