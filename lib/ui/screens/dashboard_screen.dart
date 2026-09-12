@@ -70,21 +70,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
       final dailySales = await c.sales.listCompletedBetween(dayStart, now);
       final monthlySales = await c.sales.listCompletedBetween(monthStart, now);
       final recent = await c.transactions.listRecent(limit: 10);
+      final totalBalance = await c.balanceService.getTotalOutstanding(currencyCode: 'YER');
 
-      var outstanding = 0;
       var accounts = 0;
       if (customers is Success<List<Customer>>) {
         accounts = customers.value.where((e) => e.status == CustomerStatus.active).length;
-        for (final customer in customers.value) {
-          if (customer.status != CustomerStatus.active) continue;
-          final bal = await c.balanceService.getBalance(
-            customerId: customer.id,
-            currencyCode: 'YER',
-          );
-          if (bal is Success<Money>) {
-            outstanding += bal.value.minorUnits;
-          }
-        }
       }
 
       int sumSales(Result<List<Sale>> r) {
@@ -106,7 +96,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           _licenseLabel = 'غير مفعّل';
         }
         _smsOk = sms;
-        _customerBalanceMinor = outstanding;
+        _customerBalanceMinor = totalBalance is Success<Money> ? totalBalance.value.minorUnits : 0;
         _accountsCount = accounts;
         _availableCards = available is Success<List<domain.Card>> ? available.value.length : 0;
         _dailySalesMinor = sumSales(dailySales);
@@ -118,7 +108,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
             available is Failure ||
             dailySales is Failure ||
             monthlySales is Failure ||
-            recent is Failure) {
+            recent is Failure ||
+            totalBalance is Failure) {
           _error = 'تعذر تحميل بعض بيانات اللوحة';
         }
       });
