@@ -51,14 +51,23 @@ final class LocalMessageRepository implements MessageRepository {
     }
   }
 
+  /// Messages eligible for recovery / deferred commercial processing.
+  ///
+  /// Includes [MessageProcessingStatus.received] (interrupted before parse)
+  /// and [MessageProcessingStatus.parsed] (saved while auto-processing was
+  /// off, or awaiting operator review for unmatched amounts — PD-07).
   @override
   Future<Result<List<domain.IncomingMessage>>> pendingProcessing() async {
     try {
       final rows = await (database.select(database.incomingMessages)
             ..where(
-              (table) => table.status.equals(
-                domain.MessageProcessingStatus.received.name,
-              ),
+              (table) =>
+                  table.status.equals(
+                    domain.MessageProcessingStatus.received.name,
+                  ) |
+                  table.status.equals(
+                    domain.MessageProcessingStatus.parsed.name,
+                  ),
             )
             ..orderBy([(table) => OrderingTerm(expression: table.receivedAt)]))
           .get();
