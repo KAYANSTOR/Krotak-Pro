@@ -36,46 +36,36 @@ flutter test           → يمر في CI
 ### Dashboard — كرت الرصيد / Header / Alert / Metric Cards / بيع يدوي
 - معتمدة PD-01…04 و PD-06 — انظر [product-decisions.md](product-decisions.md)
 
+### الفئات والكروت والاستيراد — B5–B7 منفَّذ (2026-09-12)
+- `InventoryScreen`: بحث فئات · بطاقة فئة (متاح/محجوز/مباع + منخفض) · فئة جديدة · عرض كروت · استيراد فردي/جماعي
+- `CardImportParser`: CSV/فاصلة/فاصلة منقوطة/تاب + تخطي التعليقات والرأس + كشف التكرار
+- منع الاستيراد لفئة غير نشطة
+- `CardStockSheet` (موجود) يعرض أرقامًا حقيقية من المخزون
+- اختبارات: `test/services/card_import_parser_test.dart`
+
 ### الحسابات والدفتر — B4 منفَّذ (2026-09-12)
 - `CustomersScreen`: بحث · بطاقة حساب (رصيد متاح / مدين / متوازن) · إضافة عميل
 - `CustomerDetailScreen`: رأس هوية · بطاقة رصيد مدين/دائن · دفتر حركات حقيقي (إيداع/بيع/سحب/تسوية/عكس) مع وسم CREDIT/DEBIT/REVERSAL
 - الاعتماد من المعلّقة يظهر كـ `deposit` في نفس الحساب
 
 ### الرسائل المرفوضة — B3 منفَّذ (2026-09-12)
-- `RejectedMessageCatalog`: تصنيف الأسباب من Audit (مخزون، فشل SMS، معلّقة، قالب…)
-- `RejectedMessagesScreen`: عنوان + وصف · بطاقة إجمالي + جديد · فلاتر أفقية · بحث · بطاقات
-- `SettingKeys.lastRejectedMessagesViewedAt` لعدّ «جديد»
-- التقارير + `AppRoutes.openRejectedMessages` → الشاشة الجديدة
-- اختبارات: `test/services/rejected_message_catalog_test.dart`
+- `RejectedMessageCatalog` + `RejectedMessagesScreen` (فلاتر/إجمالي/جديد/بطاقات)
 
 ### الرسائل المعلّقة — B2 منفَّذ (2026-09-12)
-- `PendingMessageReviewService`: اعتماد (parse → resolve/create → credit → processed + audit) · رفض → rejected + audit
-- `PendingMessagesScreen`: عنوان قيد التأكيد · بحث جوال · بطاقات · اعتماد/رفض · فراغ
-- `AppRoutes.openPendingMessages` / Banner → شاشة المعلّقة
-- اختبارات: `test/services/pending_message_review_test.dart`
+- `PendingMessageReviewService` + `PendingMessagesScreen`
 
 ### إعدادات — B1 / S3 Domain منفَّذ (2026-09-12)
-- `IncomingSmsHandler`: إن `sms_auto_processing_enabled=false` → حفظ+تحليل فقط (`parsed`) بلا إيداع/بيع/إرسال
-- `LocalTransferProcessor`: إن `process_category_amounts_only=true` (افتراضي) ومبلغ بلا فئة → `parsed` + `unmatched_amount_pending` (معلّقة) لا `rejected`
-- `LocalMessageRecoveryService`: إن `process_old_messages_on_resume=false` → تخطي الاستعادة؛ `pendingProcessing` يشمل `received`+`parsed`
-- `AppContainer.startBackgroundHandlers`: استدعاء `recoverPending` عند الإقلاع
-- اختبارات: `test/services/pd07_settings_gating_test.dart` + تحديث تكامل unmatched
+- بوابات PD-07 الثلاثة في handler/processor/recovery + اختبارات
 
 ### إعدادات — S1/S2 منفَّذ (2026-09-12)
-- أقسام PD-07 الستة + كروت + مفاتيح محفوظة محليًا
-- كرت اسم الشبكة + Bottom Sheet (نص SMS المعتمد)
-- المظهر light/dark عبر `themeModeNotifier`
-
-### قرارات إعدادات النظام (معتمد 2026-09-12)
-- PD-07 / PD-08
-- **خطة التنفيذ المحدّثة (دفعة B):** [ui-build-plan-settings-help.md](ui-build-plan-settings-help.md)
+- أقسام PD-07 + كروت + مفاتيح محلية + اسم الشبكة + المظهر
 
 ### CI
-- `.github/workflows/ci.yml` يشغّل analyze + test على كل push/PR — أخضر على main
+- `.github/workflows/ci.yml` — analyze + test على كل push/PR
 
 ## متبقٍ (بالترتيب الجذري)
 
-1. **الدفعة B** — S0–S2✓ · B1✓ · B2✓ · B3✓ · **B4 دفتر ✓ (2026-09-12)**. التالي: **B5–B7 كروت/فئات/استيراد** → B8 مساعدة.
+1. **الدفعة B** — S0–S2✓ · B1✓ · B2✓ · B3✓ · B4✓ · **B5–B7 ✓**. التالي: **B8 مساعدة**.
 2. **منهجية مطابقة الواجهة (PD-05)** — مستمر لباقي الشاشات (محافظ، فوسك، محاكاة، قوالب عملاء = دفعة لاحقة).
 3. **عينات قوالب SMS حقيقية** من المحافظ المعتمدة.
 4. **اختبار جهاز حقيقي** لمسار SMS الكامل.
