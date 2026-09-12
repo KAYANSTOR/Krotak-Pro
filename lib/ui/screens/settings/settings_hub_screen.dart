@@ -5,6 +5,7 @@ import '../help_center_screen.dart';
 import 'battery_settings_screen.dart';
 import 'clean_logs_screen.dart';
 import 'export_ledger_screen.dart';
+import 'network_name_settings_screen.dart';
 import 'renew_subscription_screen.dart';
 import 'sim_settings_screen.dart';
 import 'templates_screen.dart';
@@ -21,6 +22,12 @@ class SettingsHubScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return ListView(
       children: [
+        _tile(
+          context,
+          Icons.badge_outlined,
+          'اسم الشبكة',
+          const NetworkNameSettingsScreen(),
+        ),
         _tile(context, Icons.sim_card_outlined, 'إعدادات الشريحة', const SimSettingsScreen()),
         _tile(context, Icons.battery_saver_outlined, 'البطارية', const BatterySettingsScreen()),
         _tile(context, Icons.pattern, 'قوالب التحويل', const TemplatesScreen()),
