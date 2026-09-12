@@ -7,6 +7,7 @@ import '../app_scope.dart';
 import '../routing/app_routes.dart';
 import '../widgets/async_views.dart';
 import 'pending_messages_screen.dart';
+import 'rejected_messages_screen.dart';
 import 'reports/messages_by_status_screen.dart';
 import 'reports/pos_report_screen.dart';
 
@@ -119,12 +120,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
           _tile(
             title: 'الرسائل المرفوضة',
             value: '$_rejected رسالة',
-            onTap: () => _open(
-              const MessagesByStatusScreen(
-                title: 'الرسائل المرفوضة',
-                statuses: [MessageProcessingStatus.rejected],
-              ),
-            ),
+            onTap: () => _open(const RejectedMessagesScreen()),
           ),
           _tile(
             title: 'الرسائل المعلّقة',

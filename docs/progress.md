@@ -36,6 +36,13 @@ flutter test           → يمر في CI
 ### Dashboard — كرت الرصيد / Header / Alert / Metric Cards / بيع يدوي
 - معتمدة PD-01…04 و PD-06 — انظر [product-decisions.md](product-decisions.md)
 
+### الرسائل المرفوضة — B3 منفَّذ (2026-09-12)
+- `RejectedMessageCatalog`: تصنيف الأسباب من Audit (مخزون، فشل SMS، معلّقة، قالب…)
+- `RejectedMessagesScreen`: عنوان + وصف · بطاقة إجمالي + جديد · فلاتر أفقية · بحث · بطاقات
+- `SettingKeys.lastRejectedMessagesViewedAt` لعدّ «جديد»
+- التقارير + `AppRoutes.openRejectedMessages` → الشاشة الجديدة
+- اختبارات: `test/services/rejected_message_catalog_test.dart`
+
 ### الرسائل المعلّقة — B2 منفَّذ (2026-09-12)
 - `PendingMessageReviewService`: اعتماد (parse → resolve/create → credit → processed + audit) · رفض → rejected + audit
 - `PendingMessagesScreen`: عنوان قيد التأكيد · بحث جوال · بطاقات · اعتماد/رفض · فراغ
@@ -63,7 +70,7 @@ flutter test           → يمر في CI
 
 ## متبقٍ (بالترتيب الجذري)
 
-1. **الدفعة B** — S0–S2✓ · B1✓ · **B2 معلّقة ✓ (2026-09-12)**. التالي: **B3 مرفوضة** → B4 دفتر → B5–B7 كروت → B8 مساعدة.
+1. **الدفعة B** — S0–S2✓ · B1✓ · B2✓ · **B3 مرفوضة ✓ (2026-09-12)**. التالي: **B4 دفتر** → B5–B7 كروت → B8 مساعدة.
 2. **منهجية مطابقة الواجهة (PD-05)** — مستمر لباقي الشاشات (محافظ، فوسك، محاكاة، قوالب عملاء = دفعة لاحقة).
 3. **عينات قوالب SMS حقيقية** من المحافظ المعتمدة.
 4. **اختبار جهاز حقيقي** لمسار SMS الكامل.
