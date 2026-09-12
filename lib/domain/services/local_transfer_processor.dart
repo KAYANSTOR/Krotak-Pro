@@ -79,17 +79,6 @@ final class LocalTransferProcessor implements TransferProcessor {
       );
     }
 
-    // The processor itself is an idempotency boundary; callers must not need
-    // the handler to guarantee that an already-processed message is rejected.
-    if (message.status == MessageProcessingStatus.processed) {
-      return const Failure<Transaction>(
-        AppFailure(
-          code: 'message_already_processed',
-          message: 'Message was already processed',
-        ),
-      );
-    }
-
     final operationId = _operationId(transfer);
     final txRepo = transactions;
     if (txRepo != null) {
@@ -103,6 +92,18 @@ final class LocalTransferProcessor implements TransferProcessor {
         await messages.updateStatus(message.id, MessageProcessingStatus.processed);
         return Success<Transaction>(existing);
       }
+    }
+
+    // The processor itself is an idempotency boundary for messages that do
+    // not already have a committed commercial ledger. A committed sale must
+    // win first so retries of the same operation return the original ledger.
+    if (message.status == MessageProcessingStatus.processed) {
+      return const Failure<Transaction>(
+        AppFailure(
+          code: 'message_already_processed',
+          message: 'Message was already processed',
+        ),
+      );
     }
 
     final resolutionResult = await _resolver.resolve(
