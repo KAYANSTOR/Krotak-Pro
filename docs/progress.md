@@ -29,6 +29,14 @@ flutter test           → All tests passed! (41+)
 - Reports / Offers: placeholders صادقة
 - لا شاشة مربوطة بالكامل مع Loading/Empty/Error + بيانات حية في كل الحالات
 
+## اختبارات Widget مع AppContainer حقيقي (جديد)
+
+`AppContainer.forTesting(...)` + `test/widget/app_container_screens_test.dart`
+يغلقان فجوة "full widget tests need AppContainer bootstrap" لـ Dashboard/
+Customers/Inventory/Reports/TransactionsLog/WalletsPos. التفاصيل والتنبيهات
+في `docs/widget-integration-tests-report.md`. لم يُشغَّل `flutter test` محليًا
+لعدم توفر Flutter SDK في بيئة الكتابة؛ التحقق النهائي عبر CI.
+
 ## متبقٍ (Post-v1 + UI)
 
 سلفني، إشعارات المحافظ، التسوية التلقائية المجدولة، البث الجماعي، شاشات التقارير/المحافظ/الإعدادات الفرعية، ربط Dashboard بالبيانات الحية، عينات قوالب محفظة حقيقية.

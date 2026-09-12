@@ -98,12 +98,57 @@ final class AppContainer {
   final Clock clock;
   final IdGenerator ids;
 
+  /// Production entry point. Opens the on-device database under the app's
+  /// documents directory via `path_provider`.
   static Future<AppContainer> bootstrap({
     List<TransferTemplate> templates = const [],
   }) async {
     final database = await openAppDatabase();
-    final clock = SystemClock();
-    final ids = RandomIdGenerator();
+    final docs = await getApplicationDocumentsDirectory();
+    final backupDirectory = Directory(p.join(docs.path, 'backups'));
+
+    return _wire(
+      database: database,
+      clock: SystemClock(),
+      ids: RandomIdGenerator(),
+      backupDirectory: backupDirectory,
+      templates: templates,
+    );
+  }
+
+  /// Test entry point. Takes an already-open [database] (typically
+  /// `AppDatabase(NativeDatabase.memory())`) and never touches
+  /// `path_provider`/platform channels during construction, so it can be
+  /// used from plain `flutter_test` widget tests without a running device.
+  ///
+  /// Callers that exercise [smsBridge] (e.g. `DashboardScreen`, which calls
+  /// `hasPermissions()`) should stub the `com.kayan.net/sms` MethodChannel
+  /// via `TestDefaultBinaryMessengerBinding` before pumping a widget that
+  /// depends on it — this factory does not do that on their behalf.
+  static Future<AppContainer> forTesting({
+    required AppDatabase database,
+    Clock? clock,
+    IdGenerator? ids,
+    Directory? backupDirectory,
+    List<TransferTemplate> templates = const [],
+  }) async {
+    return _wire(
+      database: database,
+      clock: clock ?? SystemClock(),
+      ids: ids ?? SequentialIdGenerator(),
+      backupDirectory:
+          backupDirectory ?? Directory.systemTemp.createTempSync('net_test_backup_'),
+      templates: templates,
+    );
+  }
+
+  static Future<AppContainer> _wire({
+    required AppDatabase database,
+    required Clock clock,
+    required IdGenerator ids,
+    required Directory backupDirectory,
+    required List<TransferTemplate> templates,
+  }) async {
     final uow = DriftUnitOfWork(database);
 
     final customers = LocalCustomerRepository(database);
@@ -202,13 +247,11 @@ final class AppContainer {
       clock: clock,
     );
 
-    final docs = await getApplicationDocumentsDirectory();
-    final backupDir = Directory(p.join(docs.path, 'backups'));
     final backupService = LocalBackupService(
       settings: settings,
       clock: clock,
       ids: ids,
-      backupDirectory: backupDir,
+      backupDirectory: backupDirectory,
     );
 
     final smsHandler = IncomingSmsHandler(
