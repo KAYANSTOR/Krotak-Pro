@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/result.dart';
 import '../../domain/entities/card.dart' as domain;
 import '../../domain/entities/customer.dart';
-import '../../domain/entities/license.dart';
+import '../../domain/entities/message.dart';
 import '../../domain/entities/money.dart';
 import '../../domain/entities/setting.dart';
 import '../../domain/entities/transaction.dart';
@@ -37,8 +37,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   String? _error;
   String _networkName = SettingDefaults.networkName;
   String _dateLabel = '';
-  String _licenseLabel = '—';
-  bool _smsOk = false;
+  int _attentionMessagesCount = 0;
   int _customerBalanceMinor = 0;
   int _accountsCount = 0;
   int _availableCards = 0;
@@ -47,6 +46,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
   int _monthlySalesMinor = 0;
   int _monthlyCards = 0;
   List<Transaction> _recent = const [];
+
+  /// Same attention set as ReportsScreen (rejected + suspended).
+  static const _attentionStatuses = <MessageProcessingStatus>[
+    MessageProcessingStatus.rejected,
+    MessageProcessingStatus.received,
+    MessageProcessingStatus.parsed,
+    MessageProcessingStatus.failed,
+  ];
 
   @override
   void initState() {
@@ -66,8 +73,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final dateLabel = formatArabicDashboardDate(now);
 
     try {
-      final license = await c.licenseService.current();
-      final sms = await c.smsBridge.hasPermissions();
       final customers = await c.customers.search('');
       final available = await c.cards.listByStatus(domain.CardStatus.available);
       final dailySales = await c.sales.listCompletedBetween(dayStart, now);
@@ -77,6 +82,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
       final totalBalance =
           await c.balanceService.getTotalOutstanding(currencyCode: 'YER');
       final networkSetting = await c.settings.find(SettingKeys.networkName);
+
+      var attentionCount = 0;
+      var attentionFailed = false;
+      for (final status in _attentionStatuses) {
+        final r = await c.messages.listByStatus(status);
+        if (r is Success<List<IncomingMessage>>) {
+          attentionCount += r.value.length;
+        } else {
+          attentionFailed = true;
+        }
+      }
 
       var accounts = 0;
       if (customers is Success<List<Customer>>) {
@@ -107,12 +123,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _loading = false;
         _networkName = networkName;
         _dateLabel = dateLabel;
-        if (license is Success<License>) {
-          _licenseLabel = license.value.status.name;
-        } else {
-          _licenseLabel = 'غير مفعّل';
-        }
-        _smsOk = sms;
+        _attentionMessagesCount = attentionCount;
         _customerBalanceMinor =
             totalBalance is Success<Money> ? totalBalance.value.minorUnits : 0;
         _accountsCount = accounts;
@@ -129,7 +140,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
             dailySales is Failure ||
             monthlySales is Failure ||
             recent is Failure ||
-            totalBalance is Failure) {
+            totalBalance is Failure ||
+            attentionFailed) {
           _error = 'تعذر تحميل بعض بيانات اللوحة';
         }
       });
@@ -159,15 +171,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
     await AppRoutes.openHelp(context);
   }
 
-  String? get _alertMessage {
-    if (!_smsOk) return 'إذن SMS غير مفعّل — قد يتوقف استلام التحويلات';
-    if (_licenseLabel == 'غير مفعّل' ||
-        _licenseLabel == 'expired' ||
-        _licenseLabel == 'invalid') {
-      return 'الترخيص: $_licenseLabel — راجع الإعدادات للتفعيل';
-    }
-    if (_error != null) return _error;
-    return null;
+  Future<void> _openAttentionMessages() async {
+    await AppRoutes.openAttentionMessages(context);
+    if (mounted) await _load();
+  }
+
+  String? get _attentionBannerMessage {
+    final n = _attentionMessagesCount;
+    if (n <= 0) return null;
+    if (n == 1) return 'لديك رسالة واحدة مرفوضة أو معلّقة';
+    return 'لديك $n رسالة مرفوضة أو معلّقة';
   }
 
   @override
@@ -181,7 +194,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       return SafeArea(child: AsyncErrorView(message: _error!, onRetry: _load));
     }
 
-    final alert = _alertMessage;
+    final attentionMessage = _attentionBannerMessage;
 
     return SafeArea(
       child: RefreshIndicator(
@@ -198,13 +211,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
               onSettings: _openSettings,
               onHelp: _openHelp,
             ),
-            if (alert != null)
+            if (attentionMessage != null)
               NetAlertBanner(
-                message: alert,
-                icon: !_smsOk
-                    ? Icons.sms_failed_outlined
-                    : Icons.warning_amber_outlined,
-                onTap: _openSettings,
+                message: attentionMessage,
+                icon: Icons.mark_email_unread_outlined,
+                onTap: _openAttentionMessages,
               ),
             NetBalanceCard(
               balanceMinor: _customerBalanceMinor,
