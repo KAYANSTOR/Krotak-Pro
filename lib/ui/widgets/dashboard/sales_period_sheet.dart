@@ -11,27 +11,32 @@ import '../async_views.dart';
 enum SalesPeriod { day, month }
 
 /// Bottom sheet: completed sales for today or current month.
-/// Pattern aligned with [CardStockSheet] — half-screen, real data, summary + action.
+///
+/// Visual parity with Kotlin reference (product screenshots):
+/// title «تفاصيل مبيعات اليوم/الشهر», empty «لا توجد مبيعات مسجلة لهذه الفترة»,
+/// footer «إجمالي المبيعات» + «X ر.ي (N كرت)»,
+/// CTA «الذهاب إلى تقرير المبيعات التفصيلي».
 class SalesPeriodSheet extends StatefulWidget {
   const SalesPeriodSheet({
     super.key,
     required this.period,
-    required this.onGoToLog,
+    required this.onGoToReport,
   });
 
   final SalesPeriod period;
-  final VoidCallback onGoToLog;
+  final VoidCallback onGoToReport;
 
   static Future<void> show(
     BuildContext context, {
     required SalesPeriod period,
-    required VoidCallback onGoToLog,
+    required VoidCallback onGoToReport,
   }) {
     return showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => SalesPeriodSheet(period: period, onGoToLog: onGoToLog),
+      builder: (ctx) =>
+          SalesPeriodSheet(period: period, onGoToReport: onGoToReport),
     );
   }
 
@@ -55,12 +60,11 @@ class _SalesPeriodSheetState extends State<SalesPeriodSheet> {
   List<_SaleRow> _rows = const [];
   int _totalMinor = 0;
 
-  String get _title =>
-      widget.period == SalesPeriod.day ? 'مبيعات اليوم' : 'مبيعات الشهر';
+  String get _title => widget.period == SalesPeriod.day
+      ? 'تفاصيل مبيعات اليوم'
+      : 'تفاصيل مبيعات الشهر';
 
-  String get _emptyMessage => widget.period == SalesPeriod.day
-      ? 'لا توجد مبيعات مكتملة اليوم'
-      : 'لا توجد مبيعات مكتملة هذا الشهر';
+  static const _emptyMessage = 'لا توجد مبيعات مسجلة لهذه الفترة';
 
   String get _loadingMessage => widget.period == SalesPeriod.day
       ? 'جاري تحميل مبيعات اليوم…'
@@ -96,7 +100,6 @@ class _SalesPeriodSheetState extends State<SalesPeriodSheet> {
     }
 
     final sales = (salesResult as Success<List<Sale>>).value;
-    // Newest first (repository already orders desc; keep stable).
     final sorted = List<Sale>.from(sales)
       ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
@@ -142,6 +145,11 @@ class _SalesPeriodSheetState extends State<SalesPeriodSheet> {
     return '${dt.day}/${dt.month} $h:$m';
   }
 
+  String get _totalValueLabel {
+    final money = formatMoneyMinor(_totalMinor);
+    return '$money (${_rows.length} كرت)';
+  }
+
   @override
   Widget build(BuildContext context) {
     final bottom = MediaQuery.paddingOf(context).bottom;
@@ -171,6 +179,7 @@ class _SalesPeriodSheetState extends State<SalesPeriodSheet> {
               padding: const EdgeInsets.fromLTRB(24, 20, 24, 12),
               child: Text(
                 _title,
+                textAlign: TextAlign.center,
                 style: const TextStyle(
                   fontFamily: 'Tajawal',
                   fontSize: 18,
@@ -191,15 +200,14 @@ class _SalesPeriodSheetState extends State<SalesPeriodSheet> {
                 child: AsyncErrorView(message: _error!, onRetry: _load),
               )
             else if (_rows.isEmpty)
-              Padding(
-                padding:
-                    const EdgeInsets.symmetric(vertical: 40, horizontal: 24),
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 48, horizontal: 24),
                 child: Text(
                   _emptyMessage,
                   textAlign: TextAlign.center,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontFamily: 'Tajawal',
-                    fontSize: 14,
+                    fontSize: 15,
                     color: KayanColors.textSecondary,
                   ),
                 ),
@@ -226,18 +234,16 @@ class _SalesPeriodSheetState extends State<SalesPeriodSheet> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(
-                        widget.period == SalesPeriod.day
-                            ? 'إجمالي اليوم'
-                            : 'إجمالي الشهر',
-                        style: const TextStyle(
+                      const Text(
+                        'إجمالي المبيعات',
+                        style: TextStyle(
                           fontFamily: 'Tajawal',
                           fontSize: 14,
                           color: KayanColors.textSecondary,
                         ),
                       ),
                       Text(
-                        '${formatMoneyMinor(_totalMinor)} · ${_rows.length} عملية',
+                        _totalValueLabel,
                         style: const TextStyle(
                           fontFamily: 'Tajawal',
                           fontSize: 16,
@@ -255,19 +261,19 @@ class _SalesPeriodSheetState extends State<SalesPeriodSheet> {
                       style: FilledButton.styleFrom(
                         backgroundColor: KayanColors.primary,
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: BorderRadius.circular(28),
                         ),
                       ),
                       onPressed: () {
                         Navigator.of(context).pop();
-                        widget.onGoToLog();
+                        widget.onGoToReport();
                       },
-                      icon: const Icon(Icons.receipt_long_outlined, size: 20),
+                      icon: const Icon(Icons.bar_chart_rounded, size: 20),
                       label: const Text(
-                        'الذهاب إلى سجل العمليات',
+                        'الذهاب إلى تقرير المبيعات التفصيلي',
                         style: TextStyle(
                           fontFamily: 'Tajawal',
-                          fontSize: 15,
+                          fontSize: 14,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
