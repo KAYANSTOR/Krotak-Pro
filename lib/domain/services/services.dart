@@ -29,6 +29,10 @@ abstract interface class CustomerBalanceService {
     required String currencyCode,
   });
 
+  /// Total outstanding balance across all customers for [currencyCode].
+  /// Single query path — no per-customer loop.
+  Future<Result<Money>> getTotalOutstanding({required String currencyCode});
+
   Future<Result<Transaction>> credit({
     required String customerId,
     required Money amount,
@@ -90,22 +94,47 @@ abstract interface class ReservedSaleService {
 }
 
 abstract interface class MessageParser {
-  Result<ParsedTransfer> parse(IncomingMessage message);
-}
-
-abstract interface class MessageSender {
-  Future<Result<void>> send({
-    required String destination,
-    required String body,
-  });
+  Future<Result<ParsedTransfer?>> parse(IncomingMessage message);
 }
 
 abstract interface class TransferProcessor {
-  Future<Result<Transaction>> process(ParsedTransfer transfer);
+  Future<Result<void>> process(IncomingMessage message);
+}
+
+abstract interface class CustomerIdentityResolver {
+  Future<Result<ResolvedIdentity>> resolve({
+    required String rawIdentifier,
+    TransferIdentifierType? preferredType,
+  });
 }
 
 abstract interface class LicenseService {
-  Future<Result<void>> verifyOnline();
+  Future<Result<License>> current();
+  Future<Result<License>> activateOffline({required String code});
+}
+
+abstract interface class BackupService {
+  Future<Result<String>> exportBackup();
+  Future<Result<void>> restoreBackup(String payload);
+}
+
+abstract interface class MessageRecoveryService {
+  Future<Result<int>> recoverPending();
+}
+
+abstract interface class SettlementService {
+  Future<Result<void>> settlePointOfSale({
+    required String pointOfSaleId,
+    required Money amount,
+    String? reference,
+  });
+}
+
+abstract interface class AccountMergeService {
+  Future<Result<void>> merge({
+    required String sourceCustomerId,
+    required String targetCustomerId,
+  });
 }
 
 final class CardImportDraft {
@@ -118,22 +147,32 @@ final class CardImportDraft {
   final String secretCode;
 }
 
-final class UnresolvedDomainDecision implements Exception {
-  const UnresolvedDomainDecision(this.decision);
-
-  final String decision;
-}
-
-final class TransferProcessingInput {
-  const TransferProcessingInput({
-    required this.messageId,
+final class ParsedTransfer {
+  const ParsedTransfer({
     required this.amount,
-    required this.customerIdentifier,
-    required this.reference,
+    required this.rawIdentifier,
+    this.identifierType,
+    this.reference,
+    this.walletHint,
   });
 
-  final String messageId;
   final Money amount;
-  final String customerIdentifier;
-  final String reference;
+  final String rawIdentifier;
+  final TransferIdentifierType? identifierType;
+  final String? reference;
+  final String? walletHint;
 }
+
+final class ResolvedIdentity {
+  const ResolvedIdentity({
+    required this.customerId,
+    required this.deliveryPhone,
+    this.identifierId,
+  });
+
+  final String customerId;
+  final String deliveryPhone;
+  final String? identifierId;
+}
+
+enum TransferIdentifierType { phone, account, reference, name }
