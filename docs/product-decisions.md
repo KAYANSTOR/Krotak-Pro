@@ -139,6 +139,69 @@ SettingsRepository.find(SettingKeys.networkName)
 
 ---
 
+## PD-2026-09-12-03 — Alert Banner في Dashboard
+
+| الحقل | القيمة المعتمدة |
+|--------|------------------|
+| **Screen** | Dashboard |
+| **Element** | NetAlertBanner |
+| **Status** | Confirmed by product owner |
+| **Date** | 2026-09-12 |
+
+### المعنى
+
+الـ Banner يعرض **عدد الرسائل المرفوضة أو المعلّقة** فقط، ويختفي عندما يكون العدد صفرًا.
+
+### تصنيف الحالات (مطابق لتقارير التطبيق)
+
+| التصنيف | `MessageProcessingStatus` |
+|---------|---------------------------|
+| **مرفوضة** | `rejected` |
+| **معلّقة** | `received` + `parsed` + `failed` |
+
+```text
+count = len(listByStatus(rejected))
+      + len(listByStatus(received))
+      + len(listByStatus(parsed))
+      + len(listByStatus(failed))
+```
+
+- المصدر: `MessageRepository.listByStatus` فقط — ممنوع أرقام ثابتة.
+- `processed` لا يدخل في العدد.
+
+### الظهور والنص
+
+- يظهر فقط إذا `count > 0`
+- النص المعتمد: **«لديك {N} رسالة مرفوضة أو معلّقة»** (مع مراعاة صيغة المفرد عند N = 1 إن رُغبت لاحقًا؛ الحالي بصيغة موحّدة واضحة)
+- لا يعرض تحذير SMS أو الترخيص أو أخطاء التحميل العامة في هذا الـ Banner
+
+### تفاعل الضغط
+
+| المنطقة | السلوك |
+|---------|--------|
+| الـ Banner | فتح شاشة **الرسائل المرفوضة والمعلّقة** |
+
+الشاشة = `MessagesByStatusScreen` بالحالات الأربع أعلاه، العنوان: **الرسائل المرفوضة والمعلّقة**.  
+المسار: `AppRoutes.openAttentionMessages`.
+
+بعد العودة من الشاشة: يُفضَّل إعادة تحميل العدد في اللوحة.
+
+### ما يُلغى
+
+- استخدام الـ Banner لترخيص / إذن SMS / خطأ تحميل عام → **ملغى** لهذا العنصر.
+- أي عدد وهمي أو Mock → **مرفوض**.
+
+### التنفيذ
+
+| ملف | دور |
+|-----|-----|
+| `lib/ui/screens/dashboard_screen.dart` | عدّ الحالات وربط الـ Banner |
+| `lib/ui/widgets/net/net_alert_banner.dart` | العرض |
+| `lib/ui/routing/app_routes.dart` | `openAttentionMessages` |
+| `lib/ui/screens/reports/messages_by_status_screen.dart` | قائمة الرسائل |
+
+---
+
 ## قالب إضافة قرار لاحق
 
 ```markdown
