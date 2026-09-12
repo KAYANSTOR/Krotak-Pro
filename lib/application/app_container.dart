@@ -200,6 +200,7 @@ final class AppContainer {
       transactions: transactions,
       reservedSales: saleService,
       messageSender: messageSender,
+      settings: settings,
     );
 
     final licenseService = LocalLicenseService(
@@ -222,6 +223,7 @@ final class AppContainer {
       parser: parser,
       processor: processor,
       ids: ids,
+      settings: settings,
     );
 
     final mergeService = LocalAccountMergeService(
@@ -244,6 +246,7 @@ final class AppContainer {
       messages: messages,
       parser: parser,
       processor: processor,
+      settings: settings,
     );
 
     return AppContainer._(
@@ -285,6 +288,9 @@ final class AppContainer {
 
   void startBackgroundHandlers() {
     smsHandler.start();
+    // PD-07 Q5: recover messages received while app was stopped (setting gated).
+    // Fire-and-forget; failures are recorded in audit / recovery report.
+    recoveryService.recoverPending();
   }
 
   Future<void> dispose() async {
