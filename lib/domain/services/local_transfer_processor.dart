@@ -216,7 +216,16 @@ final class LocalTransferProcessor implements TransferProcessor {
       return const Failure<Transaction>(failure);
     }
 
-    final deliveryState = await _deliveryState(message.id);
+    final deliveryStateResult = await _deliveryState(message.id);
+    if (deliveryStateResult is Failure<_DeliveryState?>) {
+      await messages.updateStatus(
+        message.id,
+        MessageProcessingStatus.failed,
+      );
+      return Failure<Transaction>(deliveryStateResult.error);
+    }
+    final deliveryState =
+        (deliveryStateResult as Success<_DeliveryState?>).value;
     if (deliveryState != null) {
       final ensured = await _ensureReservation(
         cardId: deliveryState.cardId,
@@ -451,7 +460,9 @@ final class LocalTransferProcessor implements TransferProcessor {
 
   Future<Result<_DeliveryState?>> _deliveryState(String messageId) async {
     final logs = await auditLogs.findByEntity('message', messageId);
-    if (logs is Failure<List<AuditLog>>) return Failure<_DeliveryState?>(logs.error);
+    if (logs is Failure<List<AuditLog>>) {
+      return Failure<_DeliveryState?>(logs.error);
+    }
     final entries = (logs as Success<List<AuditLog>>).value
         .where((log) => log.action == 'sms_delivery_succeeded')
         .toList(growable: false);
