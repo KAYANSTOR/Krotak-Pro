@@ -8,6 +8,7 @@ import '../entities/money.dart';
 import '../entities/transaction.dart';
 import '../repositories/repositories.dart';
 import '../repositories/unit_of_work.dart';
+import 'manual_sale_runner.dart';
 import 'services.dart';
 
 final class LocalSaleService implements SaleService, ReservedSaleService {
@@ -175,6 +176,23 @@ final class LocalSaleService implements SaleService, ReservedSaleService {
       if (audited is Failure<void>) return Failure(audited.error);
       return Success(sale);
     });
+  }
+
+  @override
+  Future<Result<Sale>> sellManual({
+    required String phone,
+    required String displayName,
+    required Money amount,
+    required ManualSaleMethod method,
+    String? operationId,
+  }) {
+    return ManualSaleRunner(this).run(
+      phone: phone,
+      displayName: displayName,
+      amount: amount,
+      method: method,
+      operationId: operationId,
+    );
   }
 
   @override
