@@ -9,6 +9,7 @@ import '../../domain/entities/transaction.dart';
 import '../app_scope.dart';
 import '../routing/app_routes.dart';
 import '../widgets/async_views.dart';
+import '../widgets/dashboard/card_stock_sheet.dart';
 import '../widgets/net/net_alert_banner.dart';
 import '../widgets/net/net_balance_card.dart';
 import '../widgets/net/net_dashboard_header.dart';
@@ -20,12 +21,10 @@ import '../widgets/net/net_section_header.dart';
 /// Production dashboard — real Domain/Repository data only.
 ///
 /// [onNavigateToTab] switches the parent [HomeShell] bottom-nav tab
-/// (e.g. `'accounts'`, `'cards'`, `'reports'`). Required for Balance Card
-/// and metric chips that must change the shell route, not push a new page.
+/// (e.g. `'accounts'`, `'cards'`, `'reports'`).
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key, this.onNavigateToTab});
 
-  /// Callback into [HomeShell] to select a bottom-nav tab by id.
   final ValueChanged<String>? onNavigateToTab;
 
   @override
@@ -70,11 +69,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
       final dailySales = await c.sales.listCompletedBetween(dayStart, now);
       final monthlySales = await c.sales.listCompletedBetween(monthStart, now);
       final recent = await c.transactions.listRecent(limit: 10);
-      final totalBalance = await c.balanceService.getTotalOutstanding(currencyCode: 'YER');
+      // Source of truth: total customer outstanding (ledger) in YER — product decision.
+      final totalBalance =
+          await c.balanceService.getTotalOutstanding(currencyCode: 'YER');
 
       var accounts = 0;
       if (customers is Success<List<Customer>>) {
-        accounts = customers.value.where((e) => e.status == CustomerStatus.active).length;
+        accounts =
+            customers.value.where((e) => e.status == CustomerStatus.active).length;
       }
 
       int sumSales(Result<List<Sale>> r) {
@@ -96,14 +98,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
           _licenseLabel = 'غير مفعّل';
         }
         _smsOk = sms;
-        _customerBalanceMinor = totalBalance is Success<Money> ? totalBalance.value.minorUnits : 0;
+        _customerBalanceMinor =
+            totalBalance is Success<Money> ? totalBalance.value.minorUnits : 0;
         _accountsCount = accounts;
-        _availableCards = available is Success<List<domain.Card>> ? available.value.length : 0;
+        _availableCards =
+            available is Success<List<domain.Card>> ? available.value.length : 0;
         _dailySalesMinor = sumSales(dailySales);
         _dailyCards = countSales(dailySales);
         _monthlySalesMinor = sumSales(monthlySales);
         _monthlyCards = countSales(monthlySales);
-        _recent = recent is Success<List<Transaction>> ? recent.value : const [];
+        _recent =
+            recent is Success<List<Transaction>> ? recent.value : const [];
         if (customers is Failure ||
             available is Failure ||
             dailySales is Failure ||
@@ -122,9 +127,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
+  void _openCardStockSheet() {
+    CardStockSheet.show(
+      context,
+      onGoToCards: () => widget.onNavigateToTab?.call('cards'),
+    );
+  }
+
   String? get _alertMessage {
     if (!_smsOk) return 'إذن SMS غير مفعّل — قد يتوقف استلام التحويلات';
-    if (_licenseLabel == 'غير مفعّل' || _licenseLabel == 'expired' || _licenseLabel == 'invalid') {
+    if (_licenseLabel == 'غير مفعّل' ||
+        _licenseLabel == 'expired' ||
+        _licenseLabel == 'invalid') {
       return 'الترخيص: $_licenseLabel — راجع الإعدادات للتفعيل';
     }
     if (_error != null) return _error;
@@ -134,7 +148,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   Widget build(BuildContext context) {
     if (_loading) {
-      return const SafeArea(child: AsyncLoadingView(message: 'جاري تحميل اللوحة…'));
+      return const SafeArea(
+        child: AsyncLoadingView(message: 'جاري تحميل اللوحة…'),
+      );
     }
     if (_error != null && _accountsCount == 0 && _recent.isEmpty) {
       return SafeArea(child: AsyncErrorView(message: _error!, onRetry: _load));
@@ -151,13 +167,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
           children: [
             NetDashboardHeader(
               title: 'NET',
-              subtitle: 'ترخيص: $_licenseLabel · SMS: ${_smsOk ? 'جاهز' : 'غير مفعّل'}',
+              subtitle:
+                  'ترخيص: $_licenseLabel · SMS: ${_smsOk ? 'جاهز' : 'غير مفعّل'}',
               onSettings: () => AppRoutes.openSettings(context),
             ),
             if (alert != null)
               NetAlertBanner(
                 message: alert,
-                icon: !_smsOk ? Icons.sms_failed_outlined : Icons.warning_amber_outlined,
+                icon: !_smsOk
+                    ? Icons.sms_failed_outlined
+                    : Icons.warning_amber_outlined,
                 onTap: () => AppRoutes.openSettings(context),
               ),
             NetBalanceCard(
@@ -165,23 +184,60 @@ class _DashboardScreenState extends State<DashboardScreen> {
               accountsCount: _accountsCount,
               availableCards: _availableCards,
               onTapAccounts: () => widget.onNavigateToTab?.call('accounts'),
-              onTapCards: () => widget.onNavigateToTab?.call('cards'),
+              onTapCards: _openCardStockSheet,
             ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               child: Column(
                 children: [
-                  Row(children: [
-                    Expanded(child: NetMetricCard(title: 'مبيعات اليوم', value: formatMoneyMinor(_dailySalesMinor), subtitle: '$_dailyCards عملية', icon: Icons.today_outlined, onTap: () => AppRoutes.openTransactionsLog(context))),
-                    const SizedBox(width: 10),
-                    Expanded(child: NetMetricCard(title: 'مبيعات الشهر', value: formatMoneyMinor(_monthlySalesMinor), subtitle: '$_monthlyCards عملية', icon: Icons.calendar_month_outlined, onTap: () => AppRoutes.openTransactionsLog(context))),
-                  ]),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: NetMetricCard(
+                          title: 'مبيعات اليوم',
+                          value: formatMoneyMinor(_dailySalesMinor),
+                          subtitle: '$_dailyCards عملية',
+                          icon: Icons.today_outlined,
+                          onTap: () => AppRoutes.openTransactionsLog(context),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: NetMetricCard(
+                          title: 'مبيعات الشهر',
+                          value: formatMoneyMinor(_monthlySalesMinor),
+                          subtitle: '$_monthlyCards عملية',
+                          icon: Icons.calendar_month_outlined,
+                          onTap: () => AppRoutes.openTransactionsLog(context),
+                        ),
+                      ),
+                    ],
+                  ),
                   const SizedBox(height: 10),
-                  Row(children: [
-                    Expanded(child: NetMetricCard(title: 'كروت متاحة', value: '$_availableCards', subtitle: 'من المخزون', icon: Icons.sim_card_outlined, onTap: () => widget.onNavigateToTab?.call('cards'))),
-                    const SizedBox(width: 10),
-                    Expanded(child: NetMetricCard(title: 'الحسابات النشطة', value: '$_accountsCount', subtitle: 'عملاء', icon: Icons.people_outline, onTap: () => widget.onNavigateToTab?.call('accounts'))),
-                  ]),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: NetMetricCard(
+                          title: 'كروت متاحة',
+                          value: '$_availableCards',
+                          subtitle: 'من المخزون',
+                          icon: Icons.sim_card_outlined,
+                          onTap: _openCardStockSheet,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: NetMetricCard(
+                          title: 'الحسابات النشطة',
+                          value: '$_accountsCount',
+                          subtitle: 'عملاء',
+                          icon: Icons.people_outline,
+                          onTap: () =>
+                              widget.onNavigateToTab?.call('accounts'),
+                        ),
+                      ),
+                    ],
+                  ),
                 ],
               ),
             ),
@@ -192,13 +248,30 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 scrollDirection: Axis.horizontal,
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 children: [
-                  NetQuickActionCard(label: 'بيع مباشر', icon: Icons.point_of_sale_outlined, onTap: () => AppRoutes.openDirectSale(context).then((_) => _load())),
+                  NetQuickActionCard(
+                    label: 'بيع مباشر',
+                    icon: Icons.point_of_sale_outlined,
+                    onTap: () =>
+                        AppRoutes.openDirectSale(context).then((_) => _load()),
+                  ),
                   const SizedBox(width: 10),
-                  NetQuickActionCard(label: 'محافظ / POS', icon: Icons.account_balance_wallet_outlined, onTap: () => AppRoutes.openWalletsAndPos(context)),
+                  NetQuickActionCard(
+                    label: 'محافظ / POS',
+                    icon: Icons.account_balance_wallet_outlined,
+                    onTap: () => AppRoutes.openWalletsAndPos(context),
+                  ),
                   const SizedBox(width: 10),
-                  NetQuickActionCard(label: 'سجل العمليات', icon: Icons.receipt_long_outlined, onTap: () => AppRoutes.openTransactionsLog(context)),
+                  NetQuickActionCard(
+                    label: 'سجل العمليات',
+                    icon: Icons.receipt_long_outlined,
+                    onTap: () => AppRoutes.openTransactionsLog(context),
+                  ),
                   const SizedBox(width: 10),
-                  NetQuickActionCard(label: 'الإعدادات', icon: Icons.settings_outlined, onTap: () => AppRoutes.openSettings(context)),
+                  NetQuickActionCard(
+                    label: 'الإعدادات',
+                    icon: Icons.settings_outlined,
+                    onTap: () => AppRoutes.openSettings(context),
+                  ),
                 ],
               ),
             ),
@@ -213,7 +286,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 child: AsyncEmptyView(message: 'لا توجد عمليات حديثة'),
               )
             else
-              ..._recent.map((tx) => NetRecentTransactionCard(transaction: tx, onTap: () => AppRoutes.openTransactionsLog(context))),
+              ..._recent.map(
+                (tx) => NetRecentTransactionCard(
+                  transaction: tx,
+                  onTap: () => AppRoutes.openTransactionsLog(context),
+                ),
+              ),
           ],
         ),
       ),
