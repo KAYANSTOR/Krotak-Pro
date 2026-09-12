@@ -14,6 +14,7 @@ import '../domain/entities/message.dart';
 import '../domain/services/local_account_merge_service.dart';
 import '../domain/services/local_backup_service.dart';
 import '../domain/services/local_message_recovery_service.dart';
+import '../domain/services/pending_message_review_service.dart';
 import '../domain/services/local_settlement_service.dart';
 import '../domain/services/local_card_inventory_service.dart';
 import '../domain/services/local_catalog_services.dart';
@@ -59,6 +60,7 @@ final class AppContainer {
     required this.mergeService,
     required this.settlementService,
     required this.recoveryService,
+    required this.pendingReview,
     required this.smsBridge,
     required this.smsHandler,
     required this.clock,
@@ -95,6 +97,7 @@ final class AppContainer {
   final LocalAccountMergeService mergeService;
   final LocalSettlementService settlementService;
   final LocalMessageRecoveryService recoveryService;
+  final PendingMessageReviewService pendingReview;
   final SmsBridge smsBridge;
   final IncomingSmsHandler smsHandler;
   final Clock clock;
@@ -249,6 +252,18 @@ final class AppContainer {
       settings: settings,
     );
 
+    final pendingReview = PendingMessageReviewService(
+      messages: messages,
+      parser: parser,
+      customers: customers,
+      customerService: customerService,
+      balances: balanceService,
+      auditLogs: auditLogs,
+      unitOfWork: uow,
+      clock: clock,
+      ids: ids,
+    );
+
     return AppContainer._(
       database: database,
       customers: customers,
@@ -278,6 +293,7 @@ final class AppContainer {
       mergeService: mergeService,
       settlementService: settlementService,
       recoveryService: recoveryService,
+      pendingReview: pendingReview,
       smsBridge: smsBridge,
       smsHandler: smsHandler,
       clock: clock,
