@@ -71,9 +71,22 @@ abstract interface class SaleService {
   Future<Result<Sale>> sellFromBalance({
     required String customerId,
     required String categoryId,
+    String? operationId,
   });
 
   Future<Result<Sale>> reverseSale({required String saleId});
+}
+
+/// Narrow application boundary used after SMS delivery has succeeded.
+/// It completes an already-reserved card without performing a second
+/// reservation, keeping the financial commit separate from delivery.
+abstract interface class ReservedSaleService {
+  Future<Result<Sale>> completeReservedSale({
+    required String customerId,
+    required String cardId,
+    required String reservationId,
+    required String operationId,
+  });
 }
 
 abstract interface class MessageParser {

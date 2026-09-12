@@ -121,6 +121,34 @@ void main() {
         'no_active_template',
       );
     });
+
+    test('rejects a financial template match without an explicit reference', () {
+      final noRefParser = LocalMessageParser(
+        templates: [
+          const TransferTemplate(
+            id: 't-no-ref',
+            name: 'No reference',
+            pattern: 'تم تحويل {amount} ريال الى {phone}',
+            isActive: true,
+          ),
+        ],
+      );
+      final result = noRefParser.parse(
+        IncomingMessage(
+          id: 'm-no-ref',
+          sender: 'bank',
+          body: 'تم تحويل 500 ريال الى 770123456',
+          receivedAt: DateTime.utc(2026, 9, 12),
+          status: MessageProcessingStatus.received,
+        ),
+      );
+
+      expect(result, isA<Failure<ParsedTransfer>>());
+      expect(
+        (result as Failure<ParsedTransfer>).error.code,
+        'message_not_matched',
+      );
+    });
   });
 
   group('LocalCustomerIdentityResolver', () {
@@ -270,7 +298,7 @@ void main() {
       final transfer = ParsedTransfer(
         messageId: 'm2',
         amount: const Money(minorUnits: 1000, currencyCode: 'YER'),
-        customerIdentifier: 'unknown',
+        customerIdentifier: '770123456',
         identifierType: TransferIdentifierType.phone,
         reference: 'REF-2',
       );
@@ -305,8 +333,6 @@ void main() {
     });
   });
 }
-
-// --- fakes ---
 
 final class _PassthroughUnitOfWork implements UnitOfWork {
   const _PassthroughUnitOfWork();
@@ -446,9 +472,5 @@ final class _FakeAudit implements AuditLogRepository {
     String entityType,
     String entityId,
   ) async =>
-      Success(
-        logs
-            .where((l) => l.entityType == entityType && l.entityId == entityId)
-            .toList(),
-      );
+      const Success([]);
 }

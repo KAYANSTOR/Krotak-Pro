@@ -55,15 +55,30 @@ final class IncomingSmsHandler {
   }
 
   Future<Result<Transaction?>> _process(IncomingSmsEvent event) async {
-    final dedupeKey = _dedupeKey(event);
+    final provisional = IncomingMessage(
+      id: ids.next('msg'),
+      sender: event.sender,
+      body: event.body,
+      receivedAt: event.receivedAt,
+      status: MessageProcessingStatus.received,
+    );
+
+    // Parse before persistence so an available bank/reference operation id can
+    // become the stable dedupe key. Malformed messages fall back to a canonical
+    // sender/body key; neither path depends on a process-local hashCode or time.
+    final parseResult = parser.parse(provisional);
+    final dedupeKey = _dedupeKey(event, parseResult);
+
     final existing = await messages.findByExternalReference(dedupeKey);
     if (existing is Success<IncomingMessage?> && existing.value != null) {
       return const Success(null);
     }
+    if (existing is Failure<IncomingMessage?>) {
+      return Failure(existing.error);
+    }
 
-    final messageId = ids.next('msg');
     final message = IncomingMessage(
-      id: messageId,
+      id: provisional.id,
       sender: event.sender,
       body: event.body,
       receivedAt: event.receivedAt,
@@ -73,17 +88,22 @@ final class IncomingSmsHandler {
 
     final saveResult = await messages.save(message);
     if (saveResult is Failure<void>) {
+      // The DB has a unique index on external_reference. Another handler may
+      // have won the race between lookup and insert; treat that as idempotent.
+      final raced = await messages.findByExternalReference(dedupeKey);
+      if (raced is Success<IncomingMessage?> && raced.value != null) {
+        return const Success(null);
+      }
       return Failure(saveResult.error);
     }
 
-    final parseResult = parser.parse(message);
     if (parseResult is Failure<ParsedTransfer>) {
-      await messages.updateStatus(messageId, MessageProcessingStatus.rejected);
+      await messages.updateStatus(message.id, MessageProcessingStatus.rejected);
       return Failure(parseResult.error);
     }
 
     final parsed = (parseResult as Success<ParsedTransfer>).value;
-    await messages.updateStatus(messageId, MessageProcessingStatus.parsed);
+    await messages.updateStatus(message.id, MessageProcessingStatus.parsed);
 
     final processResult = await processor.process(parsed);
     if (processResult is Success<Transaction>) {
@@ -92,9 +112,22 @@ final class IncomingSmsHandler {
     return Failure((processResult as Failure<Transaction>).error);
   }
 
-  String _dedupeKey(IncomingSmsEvent event) {
-    final minute = event.timestampMillis ~/ 60000;
-    final bodyKey = event.body.hashCode.toRadixString(16);
-    return '${event.sender}|$bodyKey|$minute';
+  String _dedupeKey(
+    IncomingSmsEvent event,
+    Result<ParsedTransfer> parseResult,
+  ) {
+    final sender = _canonicalize(event.sender);
+    if (parseResult is Success<ParsedTransfer>) {
+      final reference = _canonicalize(parseResult.value.reference);
+      if (reference.isNotEmpty) {
+        return 'sms:v2:ref:$sender:$reference';
+      }
+    }
+
+    final body = _canonicalize(event.body);
+    return 'sms:v2:body:$sender:$body';
   }
+
+  String _canonicalize(String value) =>
+      value.trim().replaceAll(RegExp(r'\s+'), ' ');
 }

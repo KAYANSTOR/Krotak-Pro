@@ -23,6 +23,7 @@ class _DirectSaleScreenState extends State<DirectSaleScreen> {
   String? _categoryId;
   bool _busy = false;
   String? _status;
+  String? _saleOperationId;
 
   @override
   void initState() {
@@ -66,18 +67,37 @@ class _DirectSaleScreenState extends State<DirectSaleScreen> {
       _status = null;
     });
     final c = AppScope.of(context);
+    final operationId = _saleOperationId ??= c.ids.next('sale-op');
     final r = await c.saleService.sellFromBalance(
       customerId: _customerId!,
       categoryId: _categoryId!,
+      operationId: operationId,
     );
     if (!mounted) return;
     setState(() {
       _busy = false;
       if (r is Success<Sale>) {
         _status = 'تم البيع: ${r.value.id}';
+        _saleOperationId = null;
       } else {
+        // Keep the operation id so a retry of the same user action is
+        // idempotent. Changing either selection below creates a new operation.
         _status = (r as Failure).error.message;
       }
+    });
+  }
+
+  void _selectCustomer(String? value) {
+    setState(() {
+      _customerId = value;
+      _saleOperationId = null;
+    });
+  }
+
+  void _selectCategory(String? value) {
+    setState(() {
+      _categoryId = value;
+      _saleOperationId = null;
     });
   }
 
@@ -102,7 +122,7 @@ class _DirectSaleScreenState extends State<DirectSaleScreen> {
                         for (final cu in _customers)
                           DropdownMenuItem(value: cu.id, child: Text(cu.displayName)),
                       ],
-                      onChanged: (v) => setState(() => _customerId = v),
+                      onChanged: _selectCustomer,
                     ),
                     const SizedBox(height: 12),
                     DropdownButtonFormField<String>(
@@ -120,7 +140,7 @@ class _DirectSaleScreenState extends State<DirectSaleScreen> {
                             ),
                           ),
                       ],
-                      onChanged: (v) => setState(() => _categoryId = v),
+                      onChanged: _selectCategory,
                     ),
                     const SizedBox(height: 20),
                     FilledButton(
