@@ -1,5 +1,6 @@
 import '../../core/result.dart';
 import '../entities/customer.dart';
+import '../phone_normalizer.dart';
 import '../entities/message.dart';
 import '../repositories/repositories.dart';
 
@@ -57,8 +58,9 @@ final class LocalCustomerIdentityResolver {
       );
     }
 
+    var lookupValue = trimmed;
     if (identifierType == TransferIdentifierType.phone) {
-      if (!_looksLikePhone(trimmed)) {
+      if (!PhoneNormalizer.isPhoneLike(trimmed)) {
         return const Success(
           CustomerIdentityResolution.unresolved(
             reasonCode: 'invalid_phone_identifier',
@@ -66,9 +68,10 @@ final class LocalCustomerIdentityResolver {
           ),
         );
       }
+      lookupValue = PhoneNormalizer.canonicalize(trimmed) ?? trimmed;
     }
 
-    final found = await customers.findByIdentifier(trimmed);
+    final found = await customers.findByIdentifier(lookupValue);
     if (found is Failure<Customer?>) {
       return Failure(found.error);
     }
@@ -121,7 +124,9 @@ final class LocalCustomerIdentityResolver {
     final ids = (idsResult as Success<List<CustomerIdentifier>>).value;
     CustomerIdentifier? matched;
     for (final id in ids) {
-      if (id.value == matchedValue) {
+      if (id.value == matchedValue ||
+          (id.type == CustomerIdentifierType.phoneNumber &&
+              PhoneNormalizer.samePhone(id.value, matchedValue))) {
         matched = id;
         break;
       }
@@ -129,15 +134,17 @@ final class LocalCustomerIdentityResolver {
     String? delivery;
     for (final id in ids) {
       if (id.type == CustomerIdentifierType.phoneNumber && id.isPrimary) {
-        delivery = id.value;
+        delivery = PhoneNormalizer.canonicalize(id.value) ?? id.value;
         break;
       }
     }
-    delivery ??= ids
-        .where((id) => id.type == CustomerIdentifierType.phoneNumber)
-        .map((id) => id.value)
-        .cast<String?>()
-        .firstWhere((_) => true, orElse: () => null);
+    delivery ??= () {
+      final phones =
+          ids.where((id) => id.type == CustomerIdentifierType.phoneNumber);
+      if (phones.isEmpty) return null;
+      final v = phones.first.value;
+      return PhoneNormalizer.canonicalize(v) ?? v;
+    }();
 
     return Success(
       CustomerIdentityResolution.resolved(
@@ -146,14 +153,5 @@ final class LocalCustomerIdentityResolver {
         matchedIdentifier: matched,
       ),
     );
-  }
-
-  bool _looksLikePhone(String value) {
-    if (value.startsWith('+')) {
-      final rest = value.substring(1).replaceAll(RegExp(r'\D'), '');
-      return rest.length >= 7 && rest.length <= 15;
-    }
-    final digits = value.replaceAll(RegExp(r'\D'), '');
-    return digits.length >= 7 && digits.length <= 15;
   }
 }
