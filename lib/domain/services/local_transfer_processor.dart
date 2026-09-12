@@ -79,6 +79,17 @@ final class LocalTransferProcessor implements TransferProcessor {
       );
     }
 
+    // The processor itself is an idempotency boundary; callers must not need
+    // the handler to guarantee that an already-processed message is rejected.
+    if (message.status == MessageProcessingStatus.processed) {
+      return const Failure<Transaction>(
+        AppFailure(
+          code: 'message_already_processed',
+          message: 'Message was already processed',
+        ),
+      );
+    }
+
     final operationId = _operationId(transfer);
     final txRepo = transactions;
     if (txRepo != null) {
@@ -135,25 +146,51 @@ final class LocalTransferProcessor implements TransferProcessor {
         );
         return const Failure<Transaction>(failure);
       }
-      final credit = await balances.credit(
-        customerId: resolution.customer!.id,
-        amount: transfer.amount,
-        reference: transfer.reference,
-      );
-      if (credit is Failure<Transaction>) {
-        await _persistTerminalFailure(
-          messageId: message.id,
-          status: MessageProcessingStatus.failed,
-          action: 'transfer_credit_failed',
-          error: credit.error,
-          transfer: transfer,
-          deliveryPhone: resolution.deliveryPhone,
+
+      // Preserve the pre-commercial credit-only path used by existing
+      // isolated callers, including its atomic credit + processed + audit
+      // boundary. Production wires the full commercial flow above.
+      final legacy = await unitOfWork.run(() async {
+        final credit = await balances.credit(
+          customerId: resolution.customer!.id,
+          amount: transfer.amount,
+          reference: transfer.reference,
         );
-        return Failure<Transaction>(credit.error);
+        if (credit is Failure<Transaction>) {
+          return Failure<Transaction>(credit.error);
+        }
+        final tx = (credit as Success<Transaction>).value;
+        await messages.updateStatus(
+          message.id,
+          MessageProcessingStatus.processed,
+        );
+        final delivery = resolution.deliveryPhone ?? '';
+        final audited = await auditLogs.append(
+          AuditLog(
+            id: ids.next('audit'),
+            entityType: 'message',
+            entityId: message.id,
+            action: 'transfer_processed',
+            occurredAt: clock.now(),
+            payloadJson:
+                '{"transactionId":"${tx.id}","reference":"${transfer.reference}","identifierType":"${transfer.identifierType.name}","deliveryPhone":"$delivery"}',
+          ),
+        );
+        if (audited is Failure<void>) {
+          return Failure<Transaction>(audited.error);
+        }
+        return Success<Transaction>(tx);
+      });
+      if (legacy is Failure<Transaction>) {
+        // Keep failure state outside the rollback boundary. Do not attempt a
+        // second audit write when the audit repository itself failed.
+        await messages.updateStatus(
+          message.id,
+          MessageProcessingStatus.failed,
+        );
+        return Failure<Transaction>(legacy.error);
       }
-      final tx = (credit as Success<Transaction>).value;
-      await messages.updateStatus(message.id, MessageProcessingStatus.processed);
-      return Success<Transaction>(tx);
+      return Success<Transaction>((legacy as Success<Transaction>).value);
     }
 
     final categoriesRepo = categories!;
@@ -412,22 +449,31 @@ final class LocalTransferProcessor implements TransferProcessor {
     return ref.isNotEmpty ? ref : 'message:${transfer.messageId}';
   }
 
-  Future<_DeliveryState?> _deliveryState(String messageId) async {
+  Future<Result<_DeliveryState?>> _deliveryState(String messageId) async {
     final logs = await auditLogs.findByEntity('message', messageId);
-    if (logs is Failure<List<AuditLog>>) return null;
+    if (logs is Failure<List<AuditLog>>) return Failure<_DeliveryState?>(logs.error);
     final entries = (logs as Success<List<AuditLog>>).value
         .where((log) => log.action == 'sms_delivery_succeeded')
         .toList(growable: false);
-    if (entries.isEmpty) return null;
+    if (entries.isEmpty) return const Success<_DeliveryState?>(null);
     final payload = entries.last.payloadJson ?? '';
     final cardId = _field(payload, 'cardId');
     final reservationId = _field(payload, 'reservationId');
     final categoryId = _field(payload, 'categoryId');
-    if (cardId == null || reservationId == null || categoryId == null) return null;
-    return _DeliveryState(
-      cardId: cardId,
-      reservationId: reservationId,
-      categoryId: categoryId,
+    if (cardId == null || reservationId == null || categoryId == null) {
+      return const Failure<_DeliveryState?>(
+        AppFailure(
+          code: 'delivery_state_invalid',
+          message: 'Persisted SMS delivery state is invalid',
+        ),
+      );
+    }
+    return Success<_DeliveryState?>(
+      _DeliveryState(
+        cardId: cardId,
+        reservationId: reservationId,
+        categoryId: categoryId,
+      ),
     );
   }
 
