@@ -48,12 +48,19 @@ flutter test           → يمر في CI
 - **لا** ترخيص ولا SMS داخل الـ Header
 - المرجع: [product-decisions.md](product-decisions.md) PD-2026-09-12-02
 
+### Dashboard — Alert Banner (معتمد 2026-09-12)
+- يعرض **عدد الرسائل المرفوضة أو المعلّقة** فقط (يختفي عند 0)
+- مرفوضة = `rejected` · معلّقة = `received` + `parsed` + `failed` من `MessageRepository`
+- الضغط → `AppRoutes.openAttentionMessages` → شاشة القائمة ثم إعادة تحميل العدد
+- **لا** SMS / ترخيص / خطأ تحميل عام في هذا الـ Banner
+- المرجع: [product-decisions.md](product-decisions.md) PD-2026-09-12-03
+
 ### CI
 - `.github/workflows/ci.yml` يشغّل analyze + test على كل push/PR — أخضر على main
 
 ## متبقٍ (بالترتيب الجذري)
 
-1. **إكمال حوار شاشة Dashboard عنصرًا بعنصر** (التالي بعد Header: Alert Banner ثم Metric Cards …) مع تثبيت كل قرار في `product-decisions.md` ثم التنفيذ.
+1. **إكمال حوار شاشة Dashboard عنصرًا بعنصر** (التالي: Metric Cards …) مع تثبيت كل قرار في `product-decisions.md` ثم التنفيذ.
 2. **عينات قوالب SMS حقيقية** من المحافظ المعتمدة (قرار من صاحب المشروع) ثم تثبيت القوالب الافتراضية.
 3. **اختبار جهاز حقيقي** لمسار SMS الكامل (استقبال → معالجة → إرسال → استعادة بعد إعادة التشغيل).
 4. **الترخيص الحقيقي** (Backend / مفتاح / offline grace) بدل المحلي فقط.
