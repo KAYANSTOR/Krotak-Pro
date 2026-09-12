@@ -11,6 +11,7 @@ import '../app_scope.dart';
 import '../routing/app_routes.dart';
 import '../widgets/async_views.dart';
 import '../widgets/dashboard/card_stock_sheet.dart';
+import '../widgets/dashboard/sales_period_sheet.dart';
 import '../widgets/net/net_alert_banner.dart';
 import '../widgets/net/net_balance_card.dart';
 import '../widgets/net/net_dashboard_header.dart';
@@ -162,6 +163,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
+  void _openDailySalesSheet() {
+    SalesPeriodSheet.show(
+      context,
+      period: SalesPeriod.day,
+      onGoToLog: () => AppRoutes.openTransactionsLog(context),
+    );
+  }
+
+  void _openMonthlySalesSheet() {
+    SalesPeriodSheet.show(
+      context,
+      period: SalesPeriod.month,
+      onGoToLog: () => AppRoutes.openTransactionsLog(context),
+    );
+  }
+
   Future<void> _openSettings() async {
     await AppRoutes.openSettings(context);
     if (mounted) await _load();
@@ -236,7 +253,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           value: formatMoneyMinor(_dailySalesMinor),
                           subtitle: '$_dailyCards عملية',
                           icon: Icons.today_outlined,
-                          onTap: () => AppRoutes.openTransactionsLog(context),
+                          onTap: _openDailySalesSheet,
                         ),
                       ),
                       const SizedBox(width: 10),
@@ -246,7 +263,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           value: formatMoneyMinor(_monthlySalesMinor),
                           subtitle: '$_monthlyCards عملية',
                           icon: Icons.calendar_month_outlined,
-                          onTap: () => AppRoutes.openTransactionsLog(context),
+                          onTap: _openMonthlySalesSheet,
                         ),
                       ),
                     ],
