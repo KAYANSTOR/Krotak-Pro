@@ -7,6 +7,7 @@ import 'package:net_app/domain/entities/card.dart' as domain;
 import 'package:net_app/domain/entities/customer.dart' as domain;
 import 'package:net_app/domain/entities/message.dart' as domain;
 import 'package:net_app/domain/entities/money.dart';
+import 'package:net_app/domain/entities/transaction.dart' as tx;
 
 void main() {
   late AppDatabase database;
@@ -95,5 +96,50 @@ void main() {
 
     expect(money.minorUnits, 100);
     expect(money.currencyCode, 'YER');
+  });
+
+  test('listCompleted returns only completed transactions filtered by currency', () async {
+    final repository = LocalTransactionRepository(database);
+    final now = DateTime(2026, 1, 1);
+    await repository.append(
+      tx.Transaction(
+        id: 'tx-1',
+        type: tx.TransactionType.deposit,
+        status: tx.TransactionStatus.completed,
+        amount: const Money(minorUnits: 500, currencyCode: 'YER'),
+        createdAt: now,
+        customerId: 'c1',
+        reference: 'ref-1',
+      ),
+    );
+    await repository.append(
+      tx.Transaction(
+        id: 'tx-2',
+        type: tx.TransactionType.deposit,
+        status: tx.TransactionStatus.pending,
+        amount: const Money(minorUnits: 200, currencyCode: 'YER'),
+        createdAt: now,
+        customerId: 'c1',
+        reference: 'ref-2',
+      ),
+    );
+    await repository.append(
+      tx.Transaction(
+        id: 'tx-3',
+        type: tx.TransactionType.sale,
+        status: tx.TransactionStatus.completed,
+        amount: const Money(minorUnits: 100, currencyCode: 'YER'),
+        createdAt: now,
+        customerId: 'c1',
+        reference: 'ref-3',
+      ),
+    );
+
+    final allCompleted = await repository.listCompleted();
+    expect(allCompleted, isA<Success<List<tx.Transaction>>>());
+    expect((allCompleted as Success<List<tx.Transaction>>).value, hasLength(2));
+
+    final yerOnly = await repository.listCompleted(currencyCode: 'YER');
+    expect((yerOnly as Success<List<tx.Transaction>>).value, hasLength(2));
   });
 }
