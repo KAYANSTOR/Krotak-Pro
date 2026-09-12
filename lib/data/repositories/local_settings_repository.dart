@@ -11,12 +11,9 @@ final class LocalSettingsRepository implements SettingsRepository {
       final row = await (database.select(database.appSettings)
             ..where((table) => table.key.equals(key)))
           .getSingleOrNull();
-      if (row == null) return const Success(null);
-      return Success(
-        domain.AppSetting(key: row.key, value: row.value),
-      );
+      return Success(row == null ? null : _toSetting(row));
     } catch (error) {
-      return Failure(_failure('settings_find_failed', error));
+      return Failure(_failure('setting_find_failed', error));
     }
   }
 
@@ -27,11 +24,20 @@ final class LocalSettingsRepository implements SettingsRepository {
             AppSettingsCompanion.insert(
               key: setting.key,
               value: setting.value,
+              updatedAt: setting.updatedAt,
             ),
           );
       return const Success(null);
     } catch (error) {
-      return Failure(_failure('settings_save_failed', error));
+      return Failure(_failure('setting_save_failed', error));
     }
+  }
+
+  domain.AppSetting _toSetting(AppSetting row) {
+    return domain.AppSetting(
+      key: row.key,
+      value: row.value,
+      updatedAt: row.updatedAt,
+    );
   }
 }
