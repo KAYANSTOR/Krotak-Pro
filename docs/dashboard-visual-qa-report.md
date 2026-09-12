@@ -1,57 +1,82 @@
 # تقرير التحقق البصري والتكامل — Dashboard والثيم
 
-**Commit المرجع السابق:** `610723d` ثم phase 6A حتى `78f5837`  
-**Commit HomeShell:** `234df1d`  
-**Commit إكمال الربط:** يُدفع فوق `234df1d`
+**Commit المرجع:** `26ea5d1dcd47efd7348faaac810befc0e62e73fc`  
+**فرع Hardening:** `hardening/core-flow-p0-20260912`  
+**حالة `main`:** ما زال عند `26ea5d1dcd47efd7348faaac810befc0e62e73fc` ولم يتم الدمج.
 
-## نتيجة التحليل والاختبارات
+## نطاق المرحلة
+
+هذه المرحلة مخصصة لـ Core Reliability فقط. لم يتم تعديل Dashboard Navigation، ولم يبدأ Post-v1.
+
+## حالة التحقق
+
+تم إصلاح مسار Core Business Flow ليعتمد على القرار التجاري المؤكد: مبلغ التحويل يطابق فئة CardCategory الموجودة فعليًا في الـCatalog، ثم يتم حجز كرت، إرسال تفاصيله عبر `MessageSender`/`NativeMessageSender`، وتثبيت حالة التسليم في Audit قبل إكمال الـSale المالي بنفس `operationId`.
+
+التحقق النهائي يجب أن يعتمد على أحدث GitHub Actions Run على رأس الفرع، وليس على نتائج Runs أقدم.
 
 ```text
-flutter test test/widget/           → All tests passed! (22+)
-  - net_components_test.dart
-  - dashboard_navigation_test.dart
-  - p1_navigation_smoke_test.dart
-flutter analyze                     → analysis server OOM في هذه البيئة (exit -9)
-flutter build apk --debug           → غير متاح (لا Android SDK)
+dart analyze lib test             → يجب أن PASS على أحدث HEAD
+flutter analyze --no-fatal-infos  → يجب أن PASS على أحدث HEAD
+flutter test                      → يجب أن PASS على أحدث HEAD
 ```
 
-ملاحظة: فشل بعض اختبارات `test/services/*` (مثل account_merge) موجود مسبقًا وغير ناتج عن تغييرات التنقل في Dashboard.
+وجود معلومات deprecated في التحليل لا يُخفى، لكنها لا تمنع `flutter analyze --no-fatal-infos`.
 
-## الأجهزة / المقاسات
+## اختبارات Core الجديدة
 
-| البيئة | النتيجة |
-|--------|----------|
-| Widget tests — سطح Flutter الافتراضي | ناجح |
-| RTL (`TextDirection.rtl`) | مدعوم |
-| Light / Dark Theme | مدعوم |
-| Android Emulator | **غير متاح** |
-| `flutter build apk` | **No Android SDK** |
+تمت إضافة Drift integration coverage حقيقي لـ:
 
-## التنقل الذي تم إصلاحه (جذريًا)
+- Transfer 200 → matching category 200 → available card → delivery → Sale/Ledger/Audit.
+- عدم وجود Category مطابقة.
+- Category مطابقة بدون مخزون.
+- Retry بنفس `operationId` بدون Sale/Ledger/SMS مكرر.
+- فشل SMS وتحرير الحجز وإعادة المحاولة بنفس العملية.
+- عمليتان متزامنتان لا تستهلكان الكرت نفسه مرتين.
+- Reverse Sale مع ربط Transaction الأصلية.
 
-**Root cause:** `NetBalanceCard` وبطاقات المقاييس (الحسابات / الكروت) لم تكن مربوطة بأي callback من `DashboardScreen`، و`HomeShell` كان يحتفظ بـ `_route` داخليًا دون واجهة للطفل لطلب تبديل التبويب. لا يوجد SnackBar كبديل للتنقل.
+## إثبات سلامة نطاق Dashboard Navigation
 
-**الحل الكامل:**
+لم يتم إدخال أي تغيير في Dashboard Navigation ضمن إصلاح Core الحالي. بقية اختبارات Dashboard والتنقل تظل ضمن نطاقها السابق، ولا يُنسب أي فشل Core إلى Dashboard دون دليل.
 
-1. `DashboardScreen` يقبل `ValueChanged<String>? onNavigateToTab`.
-2. `HomeShell` يمرّر `(id) => setState(() => _route = id)` إلى `DashboardScreen`.
-3. `NetBalanceCard`: `onTapAccounts` → `'accounts'`، `onTapCards` → `'cards'`.
-4. `NetMetricCard` للحسابات النشطة والكروت المتاحة مربوطان بنفس الـ callback.
-5. Quick Actions (بيع مباشر، محافظ/POS، سجل العمليات، الإعدادات) عبر `AppRoutes` كما هي.
-6. لا تغيير على Domain / Database / SMS / Business Logic.
+## Android والـSMS
 
-## الاختبارات المضافة
+المسار الأصلي الموجود في التطبيق هو:
 
-- `test/widget/net_components_test.dart`: callbacks لـ Balance و Metric.
-- `test/widget/dashboard_navigation_test.dart`: chips، metric، BottomNav ids، shell-style switch بدون SnackBar.
+```text
+MessageSender
+  ↓
+NativeMessageSender
+  ↓
+SmsBridge
+  ↓
+MethodChannel com.kayan.net/sms
+  ↓
+MainActivity.kt
+  ↓
+SmsManager.sendTextMessage
+```
 
-## مشاكل متبقية (بسبب البيئة)
+لا يوجد Fake SMS Provider في الإنتاج ولا تم إنشاء Provider تجاري بديل.
 
-- لا Android SDK → لا تحقق بصري على Emulator ولا APK build.
-- لا يُدّعى التطابق البصري الكامل مع Kotlin.
+## Delivery State / Recovery
 
-## ما لم يُمس (حسب النطاق)
+لعدم وجود جدول Delivery مستقل في البنية الحالية، يُستخدم `AuditLogRepository` لحفظ `sms_delivery_succeeded` مع `operationId` و`cardId` و`categoryId` و`reservationId`. في حال نجاح SMS ثم فشل Commit المالي، يستخدم Recovery هذا الحدث لإكمال نفس الحجز/البيع دون إعادة إرسال SMS.
 
-- Domain / Database / SMS / Transfer intelligence (phase 6A)
-- Post-v1
-- مطابقة بكسلية
+## P0 Navigation
+
+**P0 Navigation: مغلق وظيفيًا.**  
+لم يُعدّل ضمن هذه المرحلة.
+
+## Core Business Flow
+
+**P0 Ready: غير مؤكد حتى الآن.** من ناحية التصميم، مسار `Transfer → Matching Category → Reservation → SMS Delivery → Reserved Sale → Sold → Ledger → Audit` أصبح موصولًا داخل الـComposition Root باستخدام الخدمات الأصلية.
+
+لكن لا يجوز إعلان P0 Ready قبل نجاح أحدث دورة كاملة على HEAD النهائي للفرع:
+
+```text
+dart analyze lib test
+flutter analyze --no-fatal-infos
+flutter test
+```
+
+وعندها فقط يمكن تسجيل Commit النهائي كمرشح للدمج. لا يوجد دمج إلى `main` قبل ذلك.

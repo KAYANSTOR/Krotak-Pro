@@ -11,7 +11,9 @@ final class CustomerIdentityResolution {
     required this.customer,
     required this.deliveryPhone,
     required this.matchedIdentifier,
-  }) : isResolved = true;
+  })  : isResolved = true,
+        reasonCode = null,
+        reasonMessage = null;
 
   const CustomerIdentityResolution.unresolved({
     required this.reasonCode,

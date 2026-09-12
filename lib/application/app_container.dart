@@ -23,6 +23,7 @@ import '../domain/services/local_message_parser.dart';
 import '../domain/services/local_sale_service.dart';
 import '../domain/services/local_transfer_processor.dart';
 import '../domain/services/services.dart';
+import '../platform/native_message_sender.dart';
 import '../platform/sms_bridge.dart';
 import 'incoming_sms_handler.dart';
 
@@ -178,6 +179,8 @@ final class AppContainer {
     );
 
     final parser = LocalMessageParser(templates: templates);
+    final smsBridge = SmsBridge();
+    final messageSender = NativeMessageSender(smsBridge);
     final processor = LocalTransferProcessor(
       messages: messages,
       customers: customers,
@@ -186,6 +189,12 @@ final class AppContainer {
       unitOfWork: uow,
       clock: clock,
       ids: ids,
+      categories: categories,
+      cards: cards,
+      inventory: inventoryService,
+      transactions: transactions,
+      reservedSales: saleService,
+      messageSender: messageSender,
     );
 
     final licenseService = LocalLicenseService(
@@ -202,7 +211,6 @@ final class AppContainer {
       backupDirectory: backupDir,
     );
 
-    final smsBridge = SmsBridge();
     final smsHandler = IncomingSmsHandler(
       bridge: smsBridge,
       messages: messages,
@@ -211,7 +219,6 @@ final class AppContainer {
       ids: ids,
     );
 
-    
     final mergeService = LocalAccountMergeService(
       customers: customers,
       transactions: transactions,
