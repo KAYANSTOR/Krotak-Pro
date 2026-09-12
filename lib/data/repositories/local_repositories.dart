@@ -12,6 +12,7 @@ import '../../domain/entities/money.dart';
 import '../../domain/entities/setting.dart' as domain;
 import '../../domain/entities/transaction.dart' as domain;
 import '../../domain/entities/wallet.dart' as domain;
+import '../../domain/phone_normalizer.dart';
 import '../../domain/repositories/repositories.dart';
 import '../database/app_database.dart';
 
