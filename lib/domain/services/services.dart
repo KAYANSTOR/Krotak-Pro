@@ -71,10 +71,26 @@ abstract interface class CardInventoryService {
   });
 }
 
+enum ManualSaleMethod { cash, credit }
+
 abstract interface class SaleService {
   Future<Result<Sale>> sellFromBalance({
     required String customerId,
     required String categoryId,
+    String? operationId,
+  });
+
+  /// Manual direct sale from operator UI (phone + amount + name + cash/credit).
+  ///
+  /// Resolves or creates the customer by phone, matches an active category by
+  /// face value == [amount], sells one FIFO card, and:
+  /// - [ManualSaleMethod.cash]: credits deposit then sale (net debt unchanged)
+  /// - [ManualSaleMethod.credit]: sale only (creates customer debt; no pre-balance required)
+  Future<Result<Sale>> sellManual({
+    required String phone,
+    required String displayName,
+    required Money amount,
+    required ManualSaleMethod method,
     String? operationId,
   });
 
