@@ -5,6 +5,7 @@ import '../screens/customer_detail_screen.dart';
 import '../screens/direct_sale_screen.dart';
 import '../screens/help_center_screen.dart';
 import '../screens/pending_messages_screen.dart';
+import '../screens/rejected_messages_screen.dart';
 import '../screens/reports/messages_by_status_screen.dart';
 import '../screens/settings_screen.dart';
 import '../screens/transactions_log_screen.dart';
@@ -38,13 +39,7 @@ abstract final class AppRoutes {
   }
 
   static Future<void> openRejectedMessages(BuildContext context) {
-    return push(
-      context,
-      const MessagesByStatusScreen(
-        title: 'الرسائل المرفوضة',
-        statuses: [MessageProcessingStatus.rejected],
-      ),
-    );
+    return push(context, const RejectedMessagesScreen());
   }
 
   static Future<void> openCustomerDetail(BuildContext context, String customerId) {
