@@ -4,6 +4,7 @@ import '../../domain/entities/message.dart';
 import '../screens/customer_detail_screen.dart';
 import '../screens/direct_sale_screen.dart';
 import '../screens/help_center_screen.dart';
+import '../screens/pending_messages_screen.dart';
 import '../screens/reports/messages_by_status_screen.dart';
 import '../screens/settings_screen.dart';
 import '../screens/transactions_log_screen.dart';
@@ -25,18 +26,23 @@ abstract final class AppRoutes {
     return push(context, const HelpCenterScreen());
   }
 
-  /// Rejected + suspended (received/parsed/failed) messages — PD-2026-09-12-03.
+  /// الرسائل المعلّقة مع اعتماد/رفض — PD-07 Q4 / B2.
+  static Future<void> openPendingMessages(BuildContext context) {
+    return push(context, const PendingMessagesScreen());
+  }
+
+  /// Banner / attention entry: opens pending review (operator actions).
+  /// Rejected archive remains reachable from Reports.
   static Future<void> openAttentionMessages(BuildContext context) {
+    return openPendingMessages(context);
+  }
+
+  static Future<void> openRejectedMessages(BuildContext context) {
     return push(
       context,
       const MessagesByStatusScreen(
-        title: 'الرسائل المرفوضة والمعلّقة',
-        statuses: [
-          MessageProcessingStatus.rejected,
-          MessageProcessingStatus.received,
-          MessageProcessingStatus.parsed,
-          MessageProcessingStatus.failed,
-        ],
+        title: 'الرسائل المرفوضة',
+        statuses: [MessageProcessingStatus.rejected],
       ),
     );
   }

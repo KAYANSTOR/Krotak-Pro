@@ -36,6 +36,12 @@ flutter test           → يمر في CI
 ### Dashboard — كرت الرصيد / Header / Alert / Metric Cards / بيع يدوي
 - معتمدة PD-01…04 و PD-06 — انظر [product-decisions.md](product-decisions.md)
 
+### الرسائل المعلّقة — B2 منفَّذ (2026-09-12)
+- `PendingMessageReviewService`: اعتماد (parse → resolve/create → credit → processed + audit) · رفض → rejected + audit
+- `PendingMessagesScreen`: عنوان قيد التأكيد · بحث جوال · بطاقات · اعتماد/رفض · فراغ
+- `AppRoutes.openPendingMessages` / Banner → شاشة المعلّقة
+- اختبارات: `test/services/pending_message_review_test.dart`
+
 ### إعدادات — B1 / S3 Domain منفَّذ (2026-09-12)
 - `IncomingSmsHandler`: إن `sms_auto_processing_enabled=false` → حفظ+تحليل فقط (`parsed`) بلا إيداع/بيع/إرسال
 - `LocalTransferProcessor`: إن `process_category_amounts_only=true` (افتراضي) ومبلغ بلا فئة → `parsed` + `unmatched_amount_pending` (معلّقة) لا `rejected`
@@ -50,14 +56,14 @@ flutter test           → يمر في CI
 
 ### قرارات إعدادات النظام (معتمد 2026-09-12)
 - PD-07 / PD-08
-- **خطة التنفيذ المحدّثة (دفعة B):** [ui-build-plan-settings-help.md](ui-build-plan-settings-help.md) — تربط S3 Domain بالمعلّقة والمرفوضة والمخزون
+- **خطة التنفيذ المحدّثة (دفعة B):** [ui-build-plan-settings-help.md](ui-build-plan-settings-help.md)
 
 ### CI
 - `.github/workflows/ci.yml` يشغّل analyze + test على كل push/PR — أخضر على main
 
 ## متبقٍ (بالترتيب الجذري)
 
-1. **الدفعة B** — S0–S2✓ · **B1 S3 Domain ✓ (2026-09-12)**. التالي: **B2 معلّقة** → **B3 مرفوضة** → B4 دفتر → B5–B7 كروت/فئات/استيراد → B8 مساعدة.
+1. **الدفعة B** — S0–S2✓ · B1✓ · **B2 معلّقة ✓ (2026-09-12)**. التالي: **B3 مرفوضة** → B4 دفتر → B5–B7 كروت → B8 مساعدة.
 2. **منهجية مطابقة الواجهة (PD-05)** — مستمر لباقي الشاشات (محافظ، فوسك، محاكاة، قوالب عملاء = دفعة لاحقة).
 3. **عينات قوالب SMS حقيقية** من المحافظ المعتمدة.
 4. **اختبار جهاز حقيقي** لمسار SMS الكامل.
