@@ -8,6 +8,11 @@ import 'local_sale_service.dart';
 import 'services.dart';
 
 /// Domain runner for operator manual sales (phone + amount + cash/credit).
+///
+/// Single [UnitOfWork] boundary — deposit (cash) and sale share one transaction.
+/// - [ManualSaleMethod.cash]: deposit then sale → net ledger unchanged.
+/// - [ManualSaleMethod.credit]: sale only → customer debt increases.
+/// No pre-balance required for either method (product rule for manual sale).
 final class ManualSaleRunner {
   const ManualSaleRunner(this.host);
 
@@ -122,33 +127,34 @@ final class ManualSaleRunner {
       }
       final category = matches.first;
 
-      if (method == ManualSaleMethod.cash) {
-        final credited = await host.balances.credit(
-          customerId: customer.id,
-          amount: amount,
-          reference: stableOperationId == null
-              ? null
-              : 'manual-cash:$stableOperationId',
-        );
-        if (credited is Failure<Transaction>) return Failure(credited.error);
-
-        final balance = await host.balances.getBalance(
-          customerId: customer.id,
-          currencyCode: amount.currencyCode,
-        );
-        if (balance is Failure<Money>) return Failure(balance.error);
-        if ((balance as Success<Money>).value.minorUnits < amount.minorUnits) {
-          return const Failure(
-            AppFailure(
-              code: 'insufficient_balance',
-              message: 'Customer balance is insufficient',
-            ),
-          );
-        }
-      }
-
       final now = host.clock.now();
       final saleId = stableOperationId ?? host.ids.next('sale');
+
+      // Cash: deposit first (same UoW) so net debt is unchanged after sale.
+      // No balance gate — product rule: cash manual sale never requires prior credit.
+      if (method == ManualSaleMethod.cash) {
+        final depositRef = stableOperationId == null
+            ? 'manual-cash:$saleId'
+            : 'manual-cash:$stableOperationId';
+        final existingDeposit =
+            await host.transactions.findByReference(depositRef);
+        if (existingDeposit is Failure<Transaction?>) {
+          return Failure(existingDeposit.error);
+        }
+        if ((existingDeposit as Success<Transaction?>).value == null) {
+          final depositTxn = Transaction(
+            id: host.ids.next('txn'),
+            type: TransactionType.deposit,
+            status: TransactionStatus.completed,
+            amount: amount,
+            createdAt: now,
+            customerId: customer.id,
+            reference: depositRef,
+          );
+          final deposited = await host.transactions.append(depositTxn);
+          if (deposited is Failure<void>) return Failure(deposited.error);
+        }
+      }
 
       final reserved = await host.inventory.reserveAvailableCard(
         categoryId: category.id,
