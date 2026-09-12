@@ -2,8 +2,21 @@ import 'package:flutter/material.dart';
 import '../../theme/net_semantic_colors.dart';
 import '../async_views.dart';
 
+/// Customer outstanding balances card — Dashboard.
+///
+/// Title and semantics fixed by product decision:
+/// إجمالي رصيد العملاء (المعلق) = sum of customer ledger balances (debt),
+/// not network balance. Body has no tap; chips have separate actions.
 class NetBalanceCard extends StatelessWidget {
-  const NetBalanceCard({super.key, required this.balanceMinor, required this.accountsCount, required this.availableCards, this.onTapAccounts, this.onTapCards});
+  const NetBalanceCard({
+    super.key,
+    required this.balanceMinor,
+    required this.accountsCount,
+    required this.availableCards,
+    this.onTapAccounts,
+    this.onTapCards,
+  });
+
   final int balanceMinor;
   final int accountsCount;
   final int availableCards;
@@ -18,27 +31,70 @@ class NetBalanceCard extends StatelessWidget {
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(24),
-        gradient: LinearGradient(colors: [net.balanceGradientStart, net.balanceGradientEnd], begin: Alignment.topRight, end: Alignment.bottomLeft),
-        boxShadow: [BoxShadow(color: net.balanceGradientStart.withOpacity(0.28), blurRadius: 16, offset: const Offset(0, 8))],
+        gradient: LinearGradient(
+          colors: [net.balanceGradientStart, net.balanceGradientEnd],
+          begin: Alignment.topRight,
+          end: Alignment.bottomLeft,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: net.balanceGradientStart.withOpacity(0.28),
+            blurRadius: 16,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Text('أرصدة العملاء', style: TextStyle(fontFamily: 'Tajawal', color: Colors.white70, fontSize: 13)),
+          const Text(
+            'إجمالي رصيد العملاء (المعلق)',
+            style: TextStyle(
+              fontFamily: 'Tajawal',
+              color: Colors.white70,
+              fontSize: 13,
+            ),
+          ),
           const SizedBox(height: 6),
-          Text(formatMoneyMinor(balanceMinor), style: const TextStyle(fontFamily: 'Tajawal', color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold)),
+          Text(
+            formatMoneyMinor(balanceMinor),
+            style: const TextStyle(
+              fontFamily: 'Tajawal',
+              color: Colors.white,
+              fontSize: 28,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
           const SizedBox(height: 16),
-          Row(children: [
-            Expanded(child: _chip(label: 'حسابات', value: '$accountsCount', onTap: onTapAccounts)),
-            const SizedBox(width: 10),
-            Expanded(child: _chip(label: 'كروت متاحة', value: '$availableCards', onTap: onTapCards)),
-          ]),
+          Row(
+            children: [
+              Expanded(
+                child: _chip(
+                  label: 'الحسابات',
+                  value: '$accountsCount',
+                  onTap: onTapAccounts,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _chip(
+                  label: 'كروت متوفرة',
+                  value: '$availableCards',
+                  onTap: onTapCards,
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );
   }
 
-  Widget _chip({required String label, required String value, VoidCallback? onTap}) {
+  Widget _chip({
+    required String label,
+    required String value,
+    VoidCallback? onTap,
+  }) {
     return Material(
       color: Colors.white.withOpacity(0.16),
       borderRadius: BorderRadius.circular(12),
@@ -47,10 +103,28 @@ class NetBalanceCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(label, style: const TextStyle(fontFamily: 'Tajawal', color: Colors.white70, fontSize: 11)),
-            Text(value, style: const TextStyle(fontFamily: 'Tajawal', color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
-          ]),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: const TextStyle(
+                  fontFamily: 'Tajawal',
+                  color: Colors.white70,
+                  fontSize: 11,
+                ),
+              ),
+              Text(
+                value,
+                style: const TextStyle(
+                  fontFamily: 'Tajawal',
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
