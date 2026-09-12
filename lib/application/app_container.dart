@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'dart:io';
 
 import 'package:path/path.dart' as p;
@@ -62,6 +63,7 @@ final class AppContainer {
     required this.smsHandler,
     required this.clock,
     required this.ids,
+    required this.themeModeNotifier,
   });
 
   final AppDatabase database;
@@ -97,6 +99,9 @@ final class AppContainer {
   final IncomingSmsHandler smsHandler;
   final Clock clock;
   final IdGenerator ids;
+
+  /// PD-07 theme: light default; toggled from Settings.
+  final ValueNotifier<ThemeMode> themeModeNotifier;
 
   static Future<AppContainer> bootstrap({
     List<TransferTemplate> templates = const [],
@@ -274,6 +279,7 @@ final class AppContainer {
       smsHandler: smsHandler,
       clock: clock,
       ids: ids,
+      themeModeNotifier: ValueNotifier<ThemeMode>(ThemeMode.light),
     );
   }
 
