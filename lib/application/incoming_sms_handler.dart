@@ -3,12 +3,17 @@ import 'dart:async';
 import '../core/id_generator.dart';
 import '../core/result.dart';
 import '../domain/entities/message.dart';
+import '../domain/entities/setting.dart';
 import '../domain/entities/transaction.dart';
 import '../domain/repositories/repositories.dart';
 import '../domain/services/services.dart';
 import '../platform/sms_bridge.dart';
 
-/// Wires platform SMS events → persist → parse → process transfer.
+/// Wires platform SMS events → persist → parse → (optional) process transfer.
+///
+/// PD-07 gates:
+/// - [SettingKeys.smsAutoProcessingEnabled] false → save + parse only; no
+///   commercial credit / reserve / send. Message stays [MessageProcessingStatus.parsed].
 final class IncomingSmsHandler {
   IncomingSmsHandler({
     required this.bridge,
@@ -16,6 +21,7 @@ final class IncomingSmsHandler {
     required this.parser,
     required this.processor,
     required this.ids,
+    this.settings,
   });
 
   final SmsBridge bridge;
@@ -23,6 +29,7 @@ final class IncomingSmsHandler {
   final MessageParser parser;
   final TransferProcessor processor;
   final IdGenerator ids;
+  final SettingsRepository? settings;
 
   StreamSubscription<IncomingSmsEvent>? _sub;
 
@@ -105,11 +112,30 @@ final class IncomingSmsHandler {
     final parsed = (parseResult as Success<ParsedTransfer>).value;
     await messages.updateStatus(message.id, MessageProcessingStatus.parsed);
 
+    // PD-07 Q3: auto-processing off → keep message for later recovery / manual.
+    final auto = await _autoProcessingEnabled();
+    if (!auto) {
+      return const Success(null);
+    }
+
     final processResult = await processor.process(parsed);
     if (processResult is Success<Transaction>) {
       return Success(processResult.value);
     }
     return Failure((processResult as Failure<Transaction>).error);
+  }
+
+  Future<bool> _autoProcessingEnabled() async {
+    final s = settings;
+    if (s == null) return SettingDefaults.smsAutoProcessingEnabled;
+    final result = await s.find(SettingKeys.smsAutoProcessingEnabled);
+    if (result is! Success<AppSetting?>) {
+      return SettingDefaults.smsAutoProcessingEnabled;
+    }
+    return SettingBool.read(
+      result.value?.value,
+      defaultValue: SettingDefaults.smsAutoProcessingEnabled,
+    );
   }
 
   String _dedupeKey(
