@@ -53,3 +53,14 @@ final class AppSetting {
   final String value;
   final DateTime updatedAt;
 }
+
+/// Shared bool parsing for settings stored as `true`/`false` strings (PD-07).
+abstract final class SettingBool {
+  static bool read(String? raw, {required bool defaultValue}) {
+    if (raw == null) return defaultValue;
+    final v = raw.trim().toLowerCase();
+    if (v == 'true' || v == '1') return true;
+    if (v == 'false' || v == '0') return false;
+    return defaultValue;
+  }
+}
