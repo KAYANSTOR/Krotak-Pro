@@ -6,6 +6,7 @@ import '../../domain/entities/transaction.dart';
 import '../app_scope.dart';
 import '../routing/app_routes.dart';
 import '../widgets/async_views.dart';
+import 'pending_messages_screen.dart';
 import 'reports/messages_by_status_screen.dart';
 import 'reports/pos_report_screen.dart';
 
@@ -128,16 +129,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
           _tile(
             title: 'الرسائل المعلّقة',
             value: '$_suspended (واردة/محللة/فاشلة)',
-            onTap: () => _open(
-              const MessagesByStatusScreen(
-                title: 'الرسائل المعلّقة',
-                statuses: [
-                  MessageProcessingStatus.received,
-                  MessageProcessingStatus.parsed,
-                  MessageProcessingStatus.failed,
-                ],
-              ),
-            ),
+            onTap: () => _open(const PendingMessagesScreen()),
           ),
         ],
       ),
