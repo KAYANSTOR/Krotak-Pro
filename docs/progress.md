@@ -33,65 +33,29 @@ flutter test           → يمر في CI
 - Offers / Help: placeholders صادقة
 - ثيم Kayan + RTL + Bottom Navigation
 
-### Dashboard — كرت الرصيد (معتمد 2026-09-12)
-- عنوان العرض: **إجمالي رصيد العملاء (المعلق)** = دين العملاء من ledger عبر `getTotalOutstanding(YER)`
-- الحسابات → تبويب `accounts`
-- كروت متوفرة → `CardStockSheet` (فئات + متاح/إجمالي + شارة منخفض عند 0) من Repositories الحقيقية ثم زر إلى تبويب `cards`
-- جسم الكرت بلا إجراء
-- المرجع التفصيلي: [product-decisions.md](product-decisions.md) PD-2026-09-12-01
-
-### Dashboard — Header (معتمد 2026-09-12)
-- شعار + **اسم الشبكة** من `SettingKeys.networkName` (افتراضي `NET`) قابل للتعديل من الإعدادات
-- تاريخ واسم اليوم عبر `Clock` + تنسيق عربي
-- أيقونة إعدادات → `AppRoutes.openSettings` (وإعادة تحميل الاسم بعد العودة)
-- أيقونة مساعدة → `AppRoutes.openHelp` → `HelpCenterScreen`
-- **لا** ترخيص ولا SMS داخل الـ Header
-- المرجع: [product-decisions.md](product-decisions.md) PD-2026-09-12-02
-
-### Dashboard — Alert Banner (معتمد 2026-09-12)
-- يعرض **عدد الرسائل المرفوضة أو المعلّقة** فقط (يختفي عند 0)
-- مرفوضة = `rejected` · معلّقة = `received` + `parsed` + `failed` من `MessageRepository`
-- الضغط → `AppRoutes.openAttentionMessages` → شاشة القائمة ثم إعادة تحميل العدد
-- **لا** SMS / ترخيص / خطأ تحميل عام في هذا الـ Banner
-- المرجع: [product-decisions.md](product-decisions.md) PD-2026-09-12-03
-
-### Dashboard — Metric Cards مبيعات اليوم/الشهر (معتمد 2026-09-12)
-- مبيعات اليوم والشهر من `SaleRepository.listCompletedBetween` فقط (مكتملة)
-- الضغط → `SalesPeriodSheet` مطابق للقطة Kotlin: عنوان «تفاصيل مبيعات…»، فراغ «لا توجد مبيعات مسجلة لهذه الفترة»، إجمالي المبيعات `ر.ي (N كرت)`، زر «الذهاب إلى تقرير المبيعات التفصيلي»
-- إجمالي الرصيد المعلق يبقى دين العملاء من الـ ledger (`getTotalOutstanding`)
-- المرجع: [product-decisions.md](product-decisions.md) PD-2026-09-12-04
-
-### بيع مباشر - يدوي (معتمد 2026-09-12)
-- Sheet مطابق للقطة: جوال / مبلغ / اسم / نقدي|آجل / تأكيد
-- `SaleService.sellManual` عبر `ManualSaleRunner` (UnitOfWork واحد)
-- نقدي = deposit + sale (صافي دين ثابت) · آجل = sale فقط (دين)
-- لا فحص رصيد مسبق للنقدي · idempotency بـ operationId
-- اختبارات: `test/services/manual_sale_service_test.dart`
-- المرجع: [product-decisions.md](product-decisions.md) PD-2026-09-12-06
+### Dashboard — كرت الرصيد / Header / Alert / Metric Cards / بيع يدوي
+- معتمدة PD-01…04 و PD-06 — انظر [product-decisions.md](product-decisions.md)
 
 ### إعدادات — S1/S2 منفَّذ (2026-09-12)
 - أقسام PD-07 الستة + كروت + مفاتيح محفوظة محليًا
 - كرت اسم الشبكة + Bottom Sheet (نص SMS المعتمد)
 - المظهر light/dark عبر `themeModeNotifier`
-- التالي: S3 ربط Domain (معالجة تلقائية / فئات / استعادة) + اختبارات
 
 ### قرارات إعدادات النظام (معتمد 2026-09-12)
-- PD-07: إجابات Q1–Q8 — افتراضيات ON للمعالجة/الفئات/القديمة؛ استماع SMS ≠ معالجة تلقائية؛ مبلغ غير مطابق → معلّقة ثم اعتماد/رفض؛ اسم الشبكة Sheet بنص SMS المعتمد؛ أقسام الإعدادات الستة؛ المظهر فاتح افتراضي
-- PD-08: شاشة الرسائل المرفوضة (مراجعة وأرشفة + تصنيفات + بطاقات)
-- خطة التنفيذ: `docs/ui-build-plan-settings-help.md`
-- المرجع: [product-decisions.md](product-decisions.md) PD-07 / PD-08
+- PD-07 / PD-08
+- **خطة التنفيذ المحدّثة (دفعة B):** [ui-build-plan-settings-help.md](ui-build-plan-settings-help.md) — تربط S3 Domain بالمعلّقة والمرفوضة والمخزون
 
 ### CI
 - `.github/workflows/ci.yml` يشغّل analyze + test على كل push/PR — أخضر على main
 
 ## متبقٍ (بالترتيب الجذري)
 
-1. **الإعدادات + المساعدة** — S0✓ S1✓ S2✓. التالي: **S3** ربط Domain للمعالجة التلقائية/الفئات/الاستعادة + اختبارات → H1 المساعدة.
-2. **منهجية مطابقة الواجهة (PD-05)** — مستمر عنصرًا بعنصر لباقي الشاشات.
-3. **عينات قوالب SMS حقيقية** من المحافظ المعتمدة (قرار من صاحب المشروع) ثم تثبيت القوالب الافتراضية.
-4. **اختبار جهاز حقيقي** لمسار SMS الكامل (استقبال → معالجة → إرسال → استعادة بعد إعادة التشغيل).
-5. **الترخيص الحقيقي** (Backend / مفتاح / offline grace) بدل المحلي فقط.
-6. **ميزات Post-v1** (سلفني، إشعارات محافظ، تسوية POS تلقائية، بث جماعي) — بعد استقرار MVP.
+1. **الدفعة B** — S0–S2✓. التالي مترابط: **B1 S3 Domain** → **B2 معلّقة** → **B3 مرفوضة** → B4 دفتر → B5–B7 كروت/فئات/استيراد → B8 مساعدة.
+2. **منهجية مطابقة الواجهة (PD-05)** — مستمر لباقي الشاشات (محافظ، فوسك، محاكاة، قوالب عملاء = دفعة لاحقة).
+3. **عينات قوالب SMS حقيقية** من المحافظ المعتمدة.
+4. **اختبار جهاز حقيقي** لمسار SMS الكامل.
+5. **الترخيص الحقيقي** بدل المحلي فقط.
+6. **ميزات Post-v1** بعد استقرار MVP.
 
 ## ملاحظة عن تقرير التدقيق 2026-09-11
-`docs/progress-audit-2026-09-11.md` يعكس حالة وسيطة قبل hardening التدفق الأساسي وإصلاح العقود. الحالة الحالية في هذا الملف وفي CI و`product-decisions.md` هي المرجع.
+`docs/progress-audit-2026-09-11.md` يعكس حالة وسيطة. الحالة الحالية في هذا الملف وفي CI و`product-decisions.md` هي المرجع.
