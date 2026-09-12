@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../screens/customer_detail_screen.dart';
 import '../screens/direct_sale_screen.dart';
+import '../screens/help_center_screen.dart';
 import '../screens/settings_screen.dart';
 import '../screens/transactions_log_screen.dart';
 import '../screens/wallets_pos_screen.dart';
@@ -16,6 +17,10 @@ abstract final class AppRoutes {
 
   static Future<void> openSettings(BuildContext context) {
     return push(context, const _Subpage(title: 'الإعدادات', child: SettingsScreen()));
+  }
+
+  static Future<void> openHelp(BuildContext context) {
+    return push(context, const HelpCenterScreen());
   }
 
   static Future<void> openCustomerDetail(BuildContext context, String customerId) {
