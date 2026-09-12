@@ -27,6 +27,9 @@ abstract final class SettingKeys {
 
   /// PD-07: `light` | `dark` — mutually exclusive; default light.
   static const themeMode = 'theme_mode';
+
+  /// ISO-8601 UTC timestamp of last open of rejected messages screen (PD-08 «جديد»).
+  static const lastRejectedMessagesViewedAt = 'last_rejected_messages_viewed_at';
 }
 
 /// Defaults when a setting is unset (PD-07 Q1).
