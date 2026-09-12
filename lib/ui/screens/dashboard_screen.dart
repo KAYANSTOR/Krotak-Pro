@@ -5,6 +5,7 @@ import '../../domain/entities/card.dart' as domain;
 import '../../domain/entities/customer.dart';
 import '../../domain/entities/license.dart';
 import '../../domain/entities/money.dart';
+import '../../domain/entities/setting.dart';
 import '../../domain/entities/transaction.dart';
 import '../app_scope.dart';
 import '../routing/app_routes.dart';
@@ -34,6 +35,8 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   bool _loading = true;
   String? _error;
+  String _networkName = SettingDefaults.networkName;
+  String _dateLabel = '';
   String _licenseLabel = '—';
   bool _smsOk = false;
   int _customerBalanceMinor = 0;
@@ -60,6 +63,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final now = c.clock.now();
     final dayStart = DateTime(now.year, now.month, now.day);
     final monthStart = DateTime(now.year, now.month, 1);
+    final dateLabel = formatArabicDashboardDate(now);
 
     try {
       final license = await c.licenseService.current();
@@ -72,6 +76,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       // Source of truth: total customer outstanding (ledger) in YER — product decision.
       final totalBalance =
           await c.balanceService.getTotalOutstanding(currencyCode: 'YER');
+      final networkSetting = await c.settings.find(SettingKeys.networkName);
 
       var accounts = 0;
       if (customers is Success<List<Customer>>) {
@@ -89,9 +94,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
         return r.value.length;
       }
 
+      var networkName = SettingDefaults.networkName;
+      if (networkSetting is Success<AppSetting?>) {
+        final stored = networkSetting.value?.value.trim();
+        if (stored != null && stored.isNotEmpty) {
+          networkName = stored;
+        }
+      }
+
       if (!mounted) return;
       setState(() {
         _loading = false;
+        _networkName = networkName;
+        _dateLabel = dateLabel;
         if (license is Success<License>) {
           _licenseLabel = license.value.status.name;
         } else {
@@ -122,6 +137,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       if (!mounted) return;
       setState(() {
         _loading = false;
+        _dateLabel = dateLabel;
         _error = e.toString();
       });
     }
@@ -132,6 +148,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
       context,
       onGoToCards: () => widget.onNavigateToTab?.call('cards'),
     );
+  }
+
+  Future<void> _openSettings() async {
+    await AppRoutes.openSettings(context);
+    if (mounted) await _load();
+  }
+
+  Future<void> _openHelp() async {
+    await AppRoutes.openHelp(context);
   }
 
   String? get _alertMessage {
@@ -166,10 +191,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
           padding: const EdgeInsets.only(bottom: 28),
           children: [
             NetDashboardHeader(
-              title: 'NET',
-              subtitle:
-                  'ترخيص: $_licenseLabel · SMS: ${_smsOk ? 'جاهز' : 'غير مفعّل'}',
-              onSettings: () => AppRoutes.openSettings(context),
+              networkName: _networkName,
+              dateLabel: _dateLabel.isEmpty
+                  ? formatArabicDashboardDate(DateTime.now())
+                  : _dateLabel,
+              onSettings: _openSettings,
+              onHelp: _openHelp,
             ),
             if (alert != null)
               NetAlertBanner(
@@ -177,7 +204,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 icon: !_smsOk
                     ? Icons.sms_failed_outlined
                     : Icons.warning_amber_outlined,
-                onTap: () => AppRoutes.openSettings(context),
+                onTap: _openSettings,
               ),
             NetBalanceCard(
               balanceMinor: _customerBalanceMinor,
@@ -270,7 +297,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   NetQuickActionCard(
                     label: 'الإعدادات',
                     icon: Icons.settings_outlined,
-                    onTap: () => AppRoutes.openSettings(context),
+                    onTap: _openSettings,
                   ),
                 ],
               ),
