@@ -54,6 +54,9 @@ abstract interface class TransactionRepository {
   Future<Result<List<Transaction>>> findByCustomer(String customerId);
   Future<Result<Transaction?>> findByReference(String reference);
   Future<Result<List<Transaction>>> listRecent({int limit = 50});
+  /// All completed ledger rows, optionally filtered by currency.
+  /// Used for aggregate balances (Dashboard) without N+1 per customer.
+  Future<Result<List<Transaction>>> listCompleted({String? currencyCode});
 }
 
 abstract interface class SaleRepository {
