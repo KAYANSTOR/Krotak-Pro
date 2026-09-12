@@ -3,6 +3,7 @@ import '../../core/id_generator.dart';
 import '../../core/result.dart';
 import '../entities/audit.dart';
 import '../entities/customer.dart';
+import '../phone_normalizer.dart';
 import '../repositories/repositories.dart';
 import '../repositories/unit_of_work.dart';
 import 'services.dart';
@@ -45,8 +46,24 @@ final class LocalCustomerService implements CustomerService {
       );
     }
 
+    final storedValue = PhoneNormalizer.forStorage(
+      value,
+      asPhone: identifierType == CustomerIdentifierType.phoneNumber,
+    );
+    if (identifierType == CustomerIdentifierType.phoneNumber &&
+        !PhoneNormalizer.isPhoneLike(value)) {
+      return Future.value(
+        const Failure(
+          AppFailure(
+            code: 'invalid_phone_identifier',
+            message: 'Phone identifier is not a valid number',
+          ),
+        ),
+      );
+    }
+
     return unitOfWork.run(() async {
-      final existing = await customers.findByIdentifier(value);
+      final existing = await customers.findByIdentifier(storedValue);
       if (existing is Failure<Customer?>) return Failure(existing.error);
       if ((existing as Success<Customer?>).value != null) {
         return const Failure(
@@ -69,7 +86,7 @@ final class LocalCustomerService implements CustomerService {
         id: ids.next('identifier'),
         customerId: customer.id,
         type: identifierType,
-        value: value,
+        value: storedValue,
         isPrimary: true,
       );
       final savedIdentifier = await customers.saveIdentifier(identifier);
@@ -79,7 +96,7 @@ final class LocalCustomerService implements CustomerService {
         entityType: 'customer',
         entityId: customer.id,
         action: 'created',
-        payloadJson: '{"identifier":"$value"}',
+        payloadJson: '{"identifier":"$storedValue"}',
       );
       if (audited is Failure<void>) return Failure(audited.error);
       return Success(customer);
@@ -135,6 +152,21 @@ final class LocalCustomerService implements CustomerService {
         ),
       );
     }
+    if (type == CustomerIdentifierType.phoneNumber &&
+        !PhoneNormalizer.isPhoneLike(trimmed)) {
+      return Future.value(
+        const Failure(
+          AppFailure(
+            code: 'invalid_phone_identifier',
+            message: 'Phone identifier is not a valid number',
+          ),
+        ),
+      );
+    }
+    final storedValue = PhoneNormalizer.forStorage(
+      trimmed,
+      asPhone: type == CustomerIdentifierType.phoneNumber,
+    );
 
     return unitOfWork.run(() async {
       final found = await customers.findById(customerId);
@@ -154,7 +186,7 @@ final class LocalCustomerService implements CustomerService {
         );
       }
 
-      final duplicate = await customers.findByIdentifier(trimmed);
+      final duplicate = await customers.findByIdentifier(storedValue);
       if (duplicate is Failure<Customer?>) return Failure(duplicate.error);
       if ((duplicate as Success<Customer?>).value != null) {
         return const Failure(
@@ -167,7 +199,7 @@ final class LocalCustomerService implements CustomerService {
           id: ids.next('identifier'),
           customerId: customerId,
           type: type,
-          value: trimmed,
+          value: storedValue,
           isPrimary: isPrimary,
         ),
       );
@@ -176,7 +208,7 @@ final class LocalCustomerService implements CustomerService {
         entityType: 'customer',
         entityId: customerId,
         action: 'identifier_added',
-        payloadJson: '{"identifier":"$trimmed"}',
+        payloadJson: '{"identifier":"$storedValue"}',
       );
     });
   }
@@ -193,8 +225,8 @@ final class LocalCustomerService implements CustomerService {
         entityType: entityType,
         entityId: entityId,
         action: action,
-        payloadJson: payloadJson,
         occurredAt: clock.now(),
+        payloadJson: payloadJson,
       ),
     );
   }
