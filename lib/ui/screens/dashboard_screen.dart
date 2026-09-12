@@ -167,7 +167,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     SalesPeriodSheet.show(
       context,
       period: SalesPeriod.day,
-      onGoToLog: () => AppRoutes.openTransactionsLog(context),
+      onGoToReport: () => AppRoutes.openTransactionsLog(context),
     );
   }
 
@@ -175,7 +175,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     SalesPeriodSheet.show(
       context,
       period: SalesPeriod.month,
-      onGoToLog: () => AppRoutes.openTransactionsLog(context),
+      onGoToReport: () => AppRoutes.openTransactionsLog(context),
     );
   }
 
@@ -251,7 +251,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         child: NetMetricCard(
                           title: 'مبيعات اليوم',
                           value: formatMoneyMinor(_dailySalesMinor),
-                          subtitle: '$_dailyCards عملية',
+                          subtitle: '$_dailyCards كرت',
                           icon: Icons.today_outlined,
                           onTap: _openDailySalesSheet,
                         ),
@@ -261,7 +261,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         child: NetMetricCard(
                           title: 'مبيعات الشهر',
                           value: formatMoneyMinor(_monthlySalesMinor),
-                          subtitle: '$_monthlyCards عملية',
+                          subtitle: '$_monthlyCards كرت',
                           icon: Icons.calendar_month_outlined,
                           onTap: _openMonthlySalesSheet,
                         ),
