@@ -37,7 +37,7 @@ abstract final class SettingDefaults {
   static const processOldMessagesOnResume = true;
   static const posBalanceRequestsEnabled = true;
   static const dailyOpsSummaryAutoSend = true;
-  static const themeMode = 'light';
+  static const themeMode = 'system';
   static const autoRetryFailedMessages = true;
   static const retryMaxAttempts = 5;
   static const retryBaseDelaySeconds = 30;
