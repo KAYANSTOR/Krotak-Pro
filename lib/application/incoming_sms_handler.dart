@@ -2,6 +2,7 @@ import 'dart:async';
 
 import '../core/id_generator.dart';
 import '../core/result.dart';
+import '../domain/entities/advance.dart';
 import '../domain/entities/payment_event.dart';
 import '../domain/entities/setting.dart';
 import '../domain/entities/transaction.dart';
