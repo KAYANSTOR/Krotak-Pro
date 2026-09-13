@@ -21,6 +21,11 @@ abstract final class SettingKeys {
   static const salafniAcceptedTemplate = 'salafni_template_accepted';
   static const salafniRejectedTemplate = 'salafni_template_rejected';
   static const salafniSettledTemplate = 'salafni_template_settled';
+  static const autoPosSettlementEnabled = 'auto_pos_settlement_enabled';
+  static const posAccounts = 'pos_accounts';
+  static const posSettlementSuccessTemplate = 'pos_settlement_template_success';
+  static const posSettlementFailedTemplate = 'pos_settlement_template_failed';
+  static const posSettlementUnknownTemplate = 'pos_settlement_template_unknown';
 }
 
 abstract final class SettingDefaults {
@@ -35,6 +40,7 @@ abstract final class SettingDefaults {
   static const retryMaxAttempts = 5;
   static const retryBaseDelaySeconds = 30;
   static const salafniEnabled = false;
+  static const autoPosSettlementEnabled = true;
 }
 
 final class AppSetting {
