@@ -22,57 +22,44 @@ Future<void> main() async {
 
   final container = await AppContainer.bootstrap(templates: defaultTemplates);
   await _loadThemeMode(container);
-  container.startBackgroundHandlers();
+  await container.startBackgroundHandlers();
 
   runApp(NetApp(container: container));
 }
 
 Future<void> _loadThemeMode(AppContainer container) async {
   final result = await container.settings.find(SettingKeys.themeMode);
-  if (result is Success<AppSetting?>) {
-    final value = result.value?.value.trim().toLowerCase();
-    if (value == 'dark') {
-      container.themeModeNotifier.value = ThemeMode.dark;
-    } else {
-      // PD-07: light is default (not system).
-      container.themeModeNotifier.value = ThemeMode.light;
-    }
+  if (result is Success<AppSetting?> && result.value?.value.trim().toLowerCase() == 'dark') {
+    container.themeModeNotifier.value = ThemeMode.dark;
+  } else {
+    container.themeModeNotifier.value = ThemeMode.light;
   }
 }
 
 class NetApp extends StatefulWidget {
   const NetApp({super.key, required this.container});
-
   final AppContainer container;
-
   @override
   State<NetApp> createState() => _NetAppState();
 }
 
 class _NetAppState extends State<NetApp> {
   @override
-  void dispose() {
-    widget.container.dispose();
-    super.dispose();
-  }
+  void dispose() { widget.container.dispose(); super.dispose(); }
 
   @override
-  Widget build(BuildContext context) {
-    return AppScope(
-      container: widget.container,
-      child: ValueListenableBuilder<ThemeMode>(
-        valueListenable: widget.container.themeModeNotifier,
-        builder: (context, mode, _) {
-          return MaterialApp(
-            title: 'NET',
-            debugShowCheckedModeBanner: false,
-            theme: buildKayanLightTheme(),
-            darkTheme: buildKayanDarkTheme(),
-            themeMode: mode,
-            home: const HomeShell(),
-          );
-        },
+  Widget build(BuildContext context) => AppScope(
+    container: widget.container,
+    child: ValueListenableBuilder<ThemeMode>(
+      valueListenable: widget.container.themeModeNotifier,
+      builder: (context, mode, _) => MaterialApp(
+        title: 'NET',
+        debugShowCheckedModeBanner: false,
+        theme: buildKayanLightTheme(),
+        darkTheme: buildKayanDarkTheme(),
+        themeMode: mode,
+        home: const HomeShell(),
       ),
-    );
-  }
+    ),
+  );
 }
