@@ -28,6 +28,7 @@ abstract final class SettingKeys {
   static const posSettlementUnknownTemplate = 'pos_settlement_template_unknown';
   static const broadcastMaxAttempts = 'broadcast_max_attempts';
   static const broadcastRateDelayMs = 'broadcast_rate_delay_ms';
+  static const deviceVerificationGates = 'device_verification_gates';
 }
 
 abstract final class SettingDefaults {
