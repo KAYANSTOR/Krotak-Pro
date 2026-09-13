@@ -1,6 +1,6 @@
 # تقدم تنفيذ خطة NET
 
-## التحقق (2026-09-12)
+## التحقق (2026-09-13)
 
 ```text
 CI على main — analyze + test
@@ -18,11 +18,18 @@ CI على main — analyze + test
 - Merge الموجود: ينقل المعرّفات + Audit؛ التحقق باختبار الصيغ المتعددة
 - اختبارات: `test/domain/phone_normalizer_test.dart` · `test/services/identity_engine_test.dart`
 
+### Phase 2 — Unified Payment Event Engine (2026-09-13) ✅ في المستودع
+- `PaymentEvent` / `PaymentChannel` / `PaymentSource` / `PaymentFingerprint`
+- `PaymentFingerprintService`: بصمة مستقلة عن القناة (SMS ≡ إشعار لنفس المرجع)
+- `UnifiedPaymentEventEngine`: parse → fingerprint → persist → PD-07 → TransferProcessor
+- `IncomingSmsHandler` أصبح محوّل قناة نحو المحرك الموحّد
+- اختبارات: `test/services/unified_payment_event_engine_test.dart`
+- تقرير: [phase-2-unified-payment-event-engine.md](phase-2-unified-payment-event-engine.md)
+
 ## الدفعة B — مغلقة (2026-09-12)
 B1…B8 مكتملة (إعدادات · معلّقة · مرفوضة · دفتر · فئات/كروت · مساعدة)
 
 ## متبقٍ Post-V1 (الترتيب الرسمي)
-2. Unified Payment Event Engine
 3. Wallet Notifications
 4. Pending / Retry / Recovery Hardening
 5. Salafni
