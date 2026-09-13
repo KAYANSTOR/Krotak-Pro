@@ -59,25 +59,9 @@ class _WalletsPosScreenState extends State<WalletsPosScreen>
   }
 
   Future<void> _addWallet() async {
-    final ctrl = TextEditingController();
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('محفظة جديدة'),
-        content: TextField(controller: ctrl, decoration: const InputDecoration(labelText: 'الاسم')),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('إلغاء')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('حفظ')),
-        ],
-      ),
-    );
-    if (ok != true || !mounted) {
-      ctrl.dispose();
-      return;
-    }
-    final c = AppScope.of(context);
-    final r = await c.walletCatalog.saveWallet(name: ctrl.text.trim());
-    ctrl.dispose();
+    final result = await _editWalletDialog();
+    if (result == null || !mounted) return;
+    final r = await AppScope.of(context).walletCatalog.saveWallet(name: result.$1);
     if (r is Failure && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text((r as Failure).error.message)),
@@ -86,32 +70,159 @@ class _WalletsPosScreenState extends State<WalletsPosScreen>
     await _load();
   }
 
-  Future<void> _addPos() async {
-    final ctrl = TextEditingController();
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('نقطة بيع جديدة'),
-        content: TextField(controller: ctrl, decoration: const InputDecoration(labelText: 'الاسم')),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('إلغاء')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('حفظ')),
-        ],
-      ),
-    );
-    if (ok != true || !mounted) {
-      ctrl.dispose();
-      return;
-    }
-    final c = AppScope.of(context);
-    final r = await c.posCatalog.savePointOfSale(name: ctrl.text.trim());
-    ctrl.dispose();
+  Future<void> _editWallet(Wallet wallet) async {
+    final result = await _editWalletDialog(existing: wallet);
+    if (result == null || !mounted) return;
+    final r = await AppScope.of(context).walletCatalog.updateWallet(
+          id: wallet.id,
+          name: result.$1,
+          status: result.$2,
+        );
     if (r is Failure && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text((r as Failure).error.message)),
       );
     }
     await _load();
+  }
+
+  Future<(String, WalletStatus)?> _editWalletDialog({Wallet? existing}) {
+    final ctrl = TextEditingController(text: existing?.name ?? '');
+    var status = existing?.status ?? WalletStatus.active;
+    return showDialog<(String, WalletStatus)>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) => AlertDialog(
+          title: Text(existing == null ? 'محفظة جديدة' : 'تعديل المحفظة'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: ctrl,
+                decoration: const InputDecoration(labelText: 'الاسم'),
+                autofocus: true,
+              ),
+              if (existing != null)
+                DropdownButtonFormField<WalletStatus>(
+                  value: status,
+                  decoration: const InputDecoration(labelText: 'الحالة'),
+                  items: WalletStatus.values
+                      .map((s) => DropdownMenuItem(value: s, child: Text(_walletStatusLabel(s))))
+                      .toList(),
+                  onChanged: (value) {
+                    if (value == null) return;
+                    setLocal(() => status = value);
+                  },
+                ),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, (ctrl.text.trim(), status)),
+              child: const Text('حفظ'),
+            ),
+          ],
+        ),
+      ),
+    ).whenComplete(ctrl.dispose);
+  }
+
+  Future<void> _addPos() async {
+    final result = await _editPosDialog();
+    if (result == null || !mounted) return;
+    final r = await AppScope.of(context).posCatalog.savePointOfSale(name: result.$1);
+    if (r is Failure && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text((r as Failure).error.message)),
+      );
+    }
+    await _load();
+  }
+
+  Future<void> _editPos(PointOfSale pos) async {
+    final result = await _editPosDialog(existing: pos);
+    if (result == null || !mounted) return;
+    final r = await AppScope.of(context).posCatalog.updatePointOfSale(
+          id: pos.id,
+          name: result.$1,
+          status: result.$2,
+        );
+    if (r is Failure && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text((r as Failure).error.message)),
+      );
+    }
+    await _load();
+  }
+
+  Future<(String, PointOfSaleStatus)?> _editPosDialog({PointOfSale? existing}) {
+    final ctrl = TextEditingController(text: existing?.name ?? '');
+    var status = existing?.status ?? PointOfSaleStatus.active;
+    return showDialog<(String, PointOfSaleStatus)>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) => AlertDialog(
+          title: Text(existing == null ? 'نقطة بيع جديدة' : 'تعديل نقطة البيع'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: ctrl,
+                decoration: const InputDecoration(labelText: 'الاسم'),
+                autofocus: true,
+              ),
+              if (existing != null)
+                DropdownButtonFormField<PointOfSaleStatus>(
+                  value: status,
+                  decoration: const InputDecoration(labelText: 'الحالة'),
+                  items: PointOfSaleStatus.values
+                      .map((s) => DropdownMenuItem(value: s, child: Text(_posStatusLabel(s))))
+                      .toList(),
+                  onChanged: (value) {
+                    if (value == null) return;
+                    setLocal(() => status = value);
+                  },
+                ),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, (ctrl.text.trim(), status)),
+              child: const Text('حفظ'),
+            ),
+          ],
+        ),
+      ),
+    ).whenComplete(ctrl.dispose);
+  }
+
+  void _showActions({
+    required String title,
+    required VoidCallback onEdit,
+  }) {
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              title: Text(title, style: const TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.bold)),
+            ),
+            ListTile(
+              leading: const Icon(Icons.edit_outlined),
+              title: const Text('تعديل'),
+              onTap: () {
+                Navigator.pop(ctx);
+                onEdit();
+              },
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -134,16 +245,8 @@ class _WalletsPosScreenState extends State<WalletsPosScreen>
               : TabBarView(
                   controller: _tabs,
                   children: [
-                    _list(
-                      items: _wallets.map((w) => (w.name, w.status.name)).toList(),
-                      empty: 'لا محافظ',
-                      onAdd: _addWallet,
-                    ),
-                    _list(
-                      items: _pos.map((p) => (p.name, p.status.name)).toList(),
-                      empty: 'لا نقاط بيع',
-                      onAdd: _addPos,
-                    ),
+                    _walletList(),
+                    _posList(),
                   ],
                 ),
       floatingActionButton: FloatingActionButton(
@@ -159,31 +262,73 @@ class _WalletsPosScreenState extends State<WalletsPosScreen>
     );
   }
 
-  Widget _list({
-    required List<(String, String)> items,
-    required String empty,
-    required VoidCallback onAdd,
-  }) {
-    if (items.isEmpty) {
-      return AsyncEmptyView(message: empty, actionLabel: 'إضافة', onAction: onAdd);
+  Widget _walletList() {
+    if (_wallets.isEmpty) {
+      return AsyncEmptyView(message: 'لا محافظ', actionLabel: 'إضافة', onAction: _addWallet);
     }
     return RefreshIndicator(
       onRefresh: _load,
       child: ListView.separated(
-        itemCount: items.length,
+        itemCount: _wallets.length,
         separatorBuilder: (_, __) => const Divider(height: 1),
         itemBuilder: (_, i) {
-          final (name, status) = items[i];
+          final wallet = _wallets[i];
           return ListTile(
-            title: Text(name, style: const TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.bold)),
-            subtitle: Text(status, style: const TextStyle(fontFamily: 'Tajawal')),
-            leading: Icon(
-              _tabs.index == 0 ? Icons.account_balance_wallet_outlined : Icons.storefront_outlined,
-              color: KayanColors.primary,
+            title: Text(wallet.name, style: const TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.bold)),
+            subtitle: Text(_walletStatusLabel(wallet.status), style: const TextStyle(fontFamily: 'Tajawal')),
+            leading: const Icon(Icons.account_balance_wallet_outlined, color: KayanColors.primary),
+            trailing: IconButton(
+              tooltip: 'إجراءات المحفظة',
+              icon: const Icon(Icons.more_vert),
+              onPressed: () => _showActions(title: wallet.name, onEdit: () => _editWallet(wallet)),
             ),
+            onLongPress: () => _editWallet(wallet),
           );
         },
       ),
     );
   }
+
+  Widget _posList() {
+    if (_pos.isEmpty) {
+      return AsyncEmptyView(message: 'لا نقاط بيع', actionLabel: 'إضافة', onAction: _addPos);
+    }
+    return RefreshIndicator(
+      onRefresh: _load,
+      child: ListView.separated(
+        itemCount: _pos.length,
+        separatorBuilder: (_, __) => const Divider(height: 1),
+        itemBuilder: (_, i) {
+          final pos = _pos[i];
+          return ListTile(
+            title: Text(pos.name, style: const TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.bold)),
+            subtitle: Text(_posStatusLabel(pos.status), style: const TextStyle(fontFamily: 'Tajawal')),
+            leading: const Icon(Icons.storefront_outlined, color: KayanColors.primary),
+            trailing: IconButton(
+              tooltip: 'إجراءات نقطة البيع',
+              icon: const Icon(Icons.more_vert),
+              onPressed: () => _showActions(title: pos.name, onEdit: () => _editPos(pos)),
+            ),
+            onLongPress: () => _editPos(pos),
+          );
+        },
+      ),
+    );
+  }
+}
+
+String _walletStatusLabel(WalletStatus status) {
+  return switch (status) {
+    WalletStatus.active => 'نشطة',
+    WalletStatus.suspended => 'موقوفة',
+    WalletStatus.archived => 'مؤرشفة',
+  };
+}
+
+String _posStatusLabel(PointOfSaleStatus status) {
+  return switch (status) {
+    PointOfSaleStatus.active => 'نشطة',
+    PointOfSaleStatus.suspended => 'موقوفة',
+    PointOfSaleStatus.archived => 'مؤرشفة',
+  };
 }
