@@ -92,7 +92,13 @@ CI على main — analyze + test + Android debug APK build
 - اختبارات: `test/widget/theme_palette_test.dart`
 - تقرير: [phase-10-ui-ux-dark-light.md](phase-10-ui-ux-dark-light.md)
 
+### Phase 11 — Bottom Sheets Theme + FAB Quick Actions (2026-09-13) ✅ في المستودع
+- أوراق المخزون والمبيعات والبيع المباشر واسم الشبكة تستخدم `KayanPalette` بدل سطح أبيض ثابت.
+- زر `+` في لوحة التحكم يفتح ورقة إجراءات سريعة: البيع المباشر، حسابات نقاط البيع، إضافة عميل.
+- اختبارات: `test/widget/bottom_sheets_theme_test.dart`
+- تقرير: [phase-11-bottom-sheets.md](phase-11-bottom-sheets.md)
+
 ## المتبقي Post-V1 (الترتيب الرسمي)
-لا بنود رسمية متبقية في قائمة Post-V1. المتبقي تحقق جهاز للبوابات الصفراء ومراجعة أوراق Bottom Sheets.
+لا بنود رسمية متبقية في قائمة Post-V1. المتبقي تحقق جهاز للبوابات الصفراء.
 
 مرجع: NET-POST-V1-MASTER-PLAN — GitHub مصدر الحقيقة؛ لا Local Only.
