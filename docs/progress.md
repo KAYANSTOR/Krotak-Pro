@@ -78,8 +78,14 @@ CI على main — analyze + test + Android debug APK build
 - اختبارات: `test/services/broadcast_service_test.dart`
 - توثيق: [phase-8-customer-sms-broadcast.md](phase-8-customer-sms-broadcast.md)
 
+### Phase 9 — Long Press Actions (2026-09-13) ✅ في المستودع
+- ضغط مطول على بطاقة المحفظة أو نقطة البيع يفتح التعديل.
+- بديل وصول: قائمة إجراءات من أيقونة المزيد.
+- تحديث الاسم والحالة عبر خدمات الكتالوج مع Audit.
+- اختبارات: `test/services/wallet_pos_catalog_update_test.dart`
+- تقرير: [phase-9-long-press-actions.md](phase-9-long-press-actions.md)
+
 ## المتبقي Post-V1 (الترتيب الرسمي)
-9. Long Press Actions
 10. UI/UX + Dark/Light Improvements
 
 مرجع: NET-POST-V1-MASTER-PLAN — GitHub مصدر الحقيقة؛ لا Local Only.
