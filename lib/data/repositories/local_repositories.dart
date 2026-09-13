@@ -4,6 +4,7 @@ import 'package:drift/drift.dart';
 
 import '../../core/result.dart';
 import '../../domain/entities/audit.dart' as domain;
+import '../../domain/entities/advance.dart' as domain;
 import '../../domain/entities/card.dart' as domain;
 import '../../domain/entities/customer.dart' as domain;
 import '../../domain/entities/license.dart' as domain;
@@ -28,4 +29,5 @@ part 'local_license_repository.dart';
 part 'local_settings_repository.dart';
 part 'local_audit_log_repository.dart';
 part 'local_transfer_template_repository.dart';
+part 'local_advance_repository.dart';
 part 'local_repo_helpers.dart';
