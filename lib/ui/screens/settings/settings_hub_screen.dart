@@ -9,6 +9,7 @@ import '../../widgets/settings/network_name_edit_sheet.dart';
 import '../../widgets/settings/settings_cards.dart';
 import '../../widgets/settings/settings_section_header.dart';
 import '../help_center_screen.dart';
+import '../failed_messages_screen.dart';
 import 'battery_settings_screen.dart';
 import 'clean_logs_screen.dart';
 import 'export_ledger_screen.dart';
@@ -32,15 +33,22 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
   bool _posBalanceRequests = SettingDefaults.posBalanceRequestsEnabled;
   bool _dailySummary = SettingDefaults.dailyOpsSummaryAutoSend;
   bool _darkTheme = false;
+  bool _autoRetry = SettingDefaults.autoRetryFailedMessages;
   final Set<String> _busyKeys = {};
 
   @override
-  void initState() { super.initState(); WidgetsBinding.instance.addPostFrameCallback((_) => _load()); }
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _load());
+  }
 
   Future<void> _load() async {
     setState(() { _loading = true; _error = null; });
     final c = AppScope.of(context);
-    Future<String?> read(String key) async { final r = await c.settings.find(key); return r is Success<AppSetting?> ? r.value?.value : null; }
+    Future<String?> read(String key) async {
+      final r = await c.settings.find(key);
+      return r is Success<AppSetting?> ? r.value?.value : null;
+    }
     try {
       final network = await read(SettingKeys.networkName);
       final auto = await read(SettingKeys.smsAutoProcessingEnabled);
@@ -49,6 +57,7 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
       final pos = await read(SettingKeys.posBalanceRequestsEnabled);
       final daily = await read(SettingKeys.dailyOpsSummaryAutoSend);
       final theme = await read(SettingKeys.themeMode);
+      final retry = await read(SettingKeys.autoRetryFailedMessages);
       if (!mounted) return;
       setState(() {
         _loading = false;
@@ -59,8 +68,11 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
         _posBalanceRequests = SettingBool.read(pos, defaultValue: SettingDefaults.posBalanceRequestsEnabled);
         _dailySummary = SettingBool.read(daily, defaultValue: SettingDefaults.dailyOpsSummaryAutoSend);
         _darkTheme = (theme ?? SettingDefaults.themeMode) == 'dark';
+        _autoRetry = SettingBool.read(retry, defaultValue: SettingDefaults.autoRetryFailedMessages);
       });
-    } catch (_) { if (mounted) setState(() { _loading = false; _error = 'تعذر تحميل الإعدادات'; }); }
+    } catch (_) {
+      if (mounted) setState(() { _loading = false; _error = 'تعذر تحميل الإعدادات'; });
+    }
   }
 
   Future<void> _saveBool(String key, bool value, void Function(bool) applyLocal) async {
@@ -70,6 +82,7 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
       SettingKeys.processOldMessagesOnResume => _oldMessages,
       SettingKeys.posBalanceRequestsEnabled => _posBalanceRequests,
       SettingKeys.dailyOpsSummaryAutoSend => _dailySummary,
+      SettingKeys.autoRetryFailedMessages => _autoRetry,
       _ => value,
     };
     setState(() { _busyKeys.add(key); applyLocal(value); });
@@ -113,6 +126,8 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
           SettingsSwitchCard(icon: Icons.autorenew, title: 'المعالجة التلقائية للرسائل', subtitle: 'تحليل وإيداع وحجز وإرسال تلقائي — مستقل عن استقبال SMS', value: _autoProcessing, enabled: !_busyKeys.contains(SettingKeys.smsAutoProcessingEnabled), onChanged: (v) => _saveBool(SettingKeys.smsAutoProcessingEnabled, v, (x) => _autoProcessing = x)),
           SettingsSwitchCard(icon: Icons.category_outlined, title: 'معالجة مبالغ الفئات فقط', subtitle: 'المبلغ غير المطابق لفئة يذهب للمعلّقة لاعتماده أو رفضه', value: _categoryOnly, enabled: !_busyKeys.contains(SettingKeys.processCategoryAmountsOnly), onChanged: (v) => _saveBool(SettingKeys.processCategoryAmountsOnly, v, (x) => _categoryOnly = x)),
           SettingsSwitchCard(icon: Icons.history, title: 'معالجة الرسائل القديمة عند التوقف', subtitle: 'استعادة ومعالجة ما وصل أثناء توقف الجهاز أو التطبيق', value: _oldMessages, enabled: !_busyKeys.contains(SettingKeys.processOldMessagesOnResume), onChanged: (v) => _saveBool(SettingKeys.processOldMessagesOnResume, v, (x) => _oldMessages = x)),
+          SettingsSwitchCard(icon: Icons.restart_alt, title: 'إعادة محاولة الرسائل الفاشلة تلقائيًا', subtitle: 'محاولات محدودة مع تأخير تصاعدي؛ النتائج النهائية تبقى قابلة للتدقيق', value: _autoRetry, enabled: !_busyKeys.contains(SettingKeys.autoRetryFailedMessages), onChanged: (v) => _saveBool(SettingKeys.autoRetryFailedMessages, v, (x) => _autoRetry = x)),
+          SettingsNavCard(icon: Icons.error_outline, title: 'الرسائل الفاشلة', subtitle: 'مراجعة الأخطاء القابلة لإعادة المحاولة وتشغيلها يدويًا', onTap: () => _open(const FailedMessagesScreen())),
           const SettingsSectionHeader(title: 'المحافظ والإشعارات'),
           SettingsNavCard(icon: Icons.account_balance_wallet_outlined, title: 'إشعارات المحافظ', subtitle: 'ربط المحافظ الإلكترونية كمصادر دفع عبر Notification Listener', onTap: () => _open(const WalletNotificationSettingsScreen())),
           const SettingsSectionHeader(title: 'الجهاز والرسائل'),
