@@ -121,8 +121,7 @@ final class LocalAdvanceService implements AdvanceService {
       return Failure(send.error);
     }
     await auditLogs.append(AuditLog(id: ids.next('audit'), entityType: 'advance', entityId: advanceId, action: 'delivery_succeeded', occurredAt: clock.now(), payloadJson: '{"destination":"${_escape(destination)}"}'));
-    final created = Advance(id: advanceId, customerId: customerId, cardId: selectedCard.id, amount: selectedCategory.faceValue, outstanding: selectedCategory.faceValue, reference: advanceTx.reference!, createdAt: now, status: AdvanceStatus.open);
-    return Success(AdvanceIssue(advance: created, card: selectedCard));
+    return Success(AdvanceIssue(advance: Advance(id: advanceId, customerId: customerId, cardId: selectedCard.id, amount: selectedCategory.faceValue, outstanding: selectedCategory.faceValue, reference: advanceTx.reference!, createdAt: now, status: AdvanceStatus.open), card: selectedCard));
   }
 
   @override
@@ -140,21 +139,38 @@ final class LocalAdvanceService implements AdvanceService {
     if (amount.minorUnits <= 0) return const Failure(AppFailure(code: 'invalid_amount', message: 'مبلغ السداد يجب أن يكون موجبًا'));
     var remaining = amount.minorUnits;
     var applied = 0;
+    Transaction? lastSettlement;
     final list = await advances.listByCustomer(customerId);
     if (list is Failure<List<Advance>>) return Failure(list.error);
     final open = (list as Success<List<Advance>>).value.where((a) => a.status == AdvanceStatus.open && a.amount.currencyCode == amount.currencyCode);
     for (final advance in open) {
       if (remaining <= 0) break;
       final pay = remaining > advance.outstanding.minorUnits ? advance.outstanding.minorUnits : remaining;
-      final payment = Transaction(id: ids.next('txn'), type: TransactionType.deposit, status: TransactionStatus.completed, amount: Money(minorUnits: pay, currencyCode: amount.currencyCode), createdAt: clock.now(), customerId: customerId, reference: 'salafni-settlement:$reference:${advance.id}', relatedTransactionId: advance.id);
+      final paymentReference = 'salafni-settlement:$reference:${advance.id}';
+      final existing = await transactions.findByReference(paymentReference);
+      if (existing is Failure<Transaction?>) return Failure(existing.error);
+      final existingPayment = (existing as Success<Transaction?>).value;
+      if (existingPayment != null) {
+        if (existingPayment.relatedTransactionId != advance.id) return const Failure(AppFailure(code: 'settlement_reference_conflict', message: 'مرجع السداد مرتبط بسلفة أخرى'));
+        lastSettlement = existingPayment;
+        applied += existingPayment.amount.minorUnits;
+        remaining -= existingPayment.amount.minorUnits;
+        continue;
+      }
+      final payment = Transaction(id: ids.next('txn'), type: TransactionType.deposit, status: TransactionStatus.completed, amount: Money(minorUnits: pay, currencyCode: amount.currencyCode), createdAt: clock.now(), customerId: customerId, reference: paymentReference, relatedTransactionId: advance.id);
       final saved = await transactions.append(payment);
       if (saved is Failure<void>) return Failure(saved.error);
-      final nowRemaining = advance.outstanding.minorUnits - pay;
-      await auditLogs.append(AuditLog(id: ids.next('audit'), entityType: 'advance', entityId: advance.id, action: nowRemaining <= 0 ? 'settled' : 'partially_settled', occurredAt: clock.now(), payloadJson: '{"paymentReference":"${_escape(reference)}","applied":$pay,"remaining":$nowRemaining}'));
+      lastSettlement = payment;
       applied += pay;
       remaining -= pay;
+      final nowRemaining = advance.outstanding.minorUnits - pay;
+      await auditLogs.append(AuditLog(id: ids.next('audit'), entityType: 'advance', entityId: advance.id, action: nowRemaining <= 0 ? 'settled' : 'partially_settled', occurredAt: clock.now(), payloadJson: '{"paymentReference":"${_escape(reference)}","applied":$pay,"remaining":$nowRemaining}'));
+      final destination = await _deliveryPhone(customerId);
+      if (destination.isNotEmpty) {
+        await messageSender.send(destination: destination, body: await _render(settledTemplateKey, defaultSettled, {'amount': _money(Money(minorUnits: pay, currencyCode: amount.currencyCode)), 'remaining': _money(Money(minorUnits: nowRemaining, currencyCode: amount.currencyCode))}));
+      }
     }
-    return Success(AdvancePaymentResult(applied: Money(minorUnits: applied, currencyCode: amount.currencyCode), remaining: Money(minorUnits: remaining, currencyCode: amount.currencyCode)));
+    return Success(AdvancePaymentResult(applied: Money(minorUnits: applied, currencyCode: amount.currencyCode), remaining: Money(minorUnits: remaining, currencyCode: amount.currencyCode), settlementTransaction: lastSettlement));
   }
 
   @override
