@@ -1,9 +1,7 @@
-import 'package:flutter/material.dart';
 import 'dart:io';
-
+import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
-
 import '../core/clock.dart';
 import '../core/id_generator.dart';
 import '../data/database/app_database.dart' hide Customer, Card, Sale, TransferTemplate;
@@ -22,51 +20,19 @@ import '../domain/services/local_customer_balance_service.dart';
 import '../domain/services/local_customer_service.dart';
 import '../domain/services/local_license_service.dart';
 import '../domain/services/local_message_parser.dart';
+import '../domain/services/local_payment_source_registry.dart';
 import '../domain/services/local_sale_service.dart';
 import '../domain/services/local_transfer_processor.dart';
+import '../domain/services/unified_payment_event_engine.dart';
 import '../domain/services/services.dart';
 import '../platform/native_message_sender.dart';
+import '../platform/notification_bridge.dart';
 import '../platform/sms_bridge.dart';
+import 'incoming_notification_handler.dart';
 import 'incoming_sms_handler.dart';
 
-/// Simple composition root. Keeps widgets free of construction logic.
 final class AppContainer {
-  AppContainer._({
-    required this.database,
-    required this.customers,
-    required this.wallets,
-    required this.pointsOfSale,
-    required this.categories,
-    required this.cards,
-    required this.messages,
-    required this.transferTemplates,
-    required this.transactions,
-    required this.sales,
-    required this.auditLogs,
-    required this.licenses,
-    required this.settings,
-    required this.unitOfWork,
-    required this.customerService,
-    required this.balanceService,
-    required this.catalogService,
-    required this.walletCatalog,
-    required this.posCatalog,
-    required this.inventoryService,
-    required this.saleService,
-    required this.messageParser,
-    required this.transferProcessor,
-    required this.licenseService,
-    required this.backupService,
-    required this.mergeService,
-    required this.settlementService,
-    required this.recoveryService,
-    required this.pendingReview,
-    required this.smsBridge,
-    required this.smsHandler,
-    required this.clock,
-    required this.ids,
-    required this.themeModeNotifier,
-  });
+  AppContainer._({required this.database, required this.customers, required this.wallets, required this.pointsOfSale, required this.categories, required this.cards, required this.messages, required this.transferTemplates, required this.transactions, required this.sales, required this.auditLogs, required this.licenses, required this.settings, required this.unitOfWork, required this.customerService, required this.balanceService, required this.catalogService, required this.walletCatalog, required this.posCatalog, required this.inventoryService, required this.saleService, required this.messageParser, required this.transferProcessor, required this.licenseService, required this.backupService, required this.mergeService, required this.settlementService, required this.recoveryService, required this.pendingReview, required this.smsBridge, required this.smsHandler, required this.notificationBridge, required this.notificationSources, required this.notificationHandler, required this.clock, required this.ids, required this.themeModeNotifier});
 
   final AppDatabase database;
   final LocalCustomerRepository customers;
@@ -82,7 +48,6 @@ final class AppContainer {
   final LocalLicenseRepository licenses;
   final LocalSettingsRepository settings;
   final DriftUnitOfWork unitOfWork;
-
   final CustomerService customerService;
   final CustomerBalanceService balanceService;
   final CardCatalogService catalogService;
@@ -100,20 +65,18 @@ final class AppContainer {
   final PendingMessageReviewService pendingReview;
   final SmsBridge smsBridge;
   final IncomingSmsHandler smsHandler;
+  final NotificationBridge notificationBridge;
+  final LocalPaymentSourceRegistry notificationSources;
+  final IncomingNotificationHandler notificationHandler;
   final Clock clock;
   final IdGenerator ids;
-
-  /// PD-07 theme: light default; toggled from Settings.
   final ValueNotifier<ThemeMode> themeModeNotifier;
 
-  static Future<AppContainer> bootstrap({
-    List<TransferTemplate> templates = const [],
-  }) async {
+  static Future<AppContainer> bootstrap({List<TransferTemplate> templates = const []}) async {
     final database = await openAppDatabase();
     final clock = SystemClock();
     final ids = RandomIdGenerator();
     final uow = DriftUnitOfWork(database);
-
     final customers = LocalCustomerRepository(database);
     final wallets = LocalWalletRepository(database);
     final pointsOfSale = LocalPointOfSaleRepository(database);
@@ -127,190 +90,42 @@ final class AppContainer {
     final licenses = LocalLicenseRepository(database);
     final settings = LocalSettingsRepository(database);
 
-    final balanceService = LocalCustomerBalanceService(
-      customers: customers,
-      transactions: transactions,
-      auditLogs: auditLogs,
-      unitOfWork: uow,
-      clock: clock,
-      ids: ids,
-    );
-
-    final customerService = LocalCustomerService(
-      customers: customers,
-      auditLogs: auditLogs,
-      unitOfWork: uow,
-      clock: clock,
-      ids: ids,
-    );
-
-    final walletCatalog = LocalWalletCatalogService(
-      wallets: wallets,
-      auditLogs: auditLogs,
-      clock: clock,
-      ids: ids,
-    );
-    final posCatalog = LocalPointOfSaleCatalogService(
-      pointsOfSale: pointsOfSale,
-      auditLogs: auditLogs,
-      clock: clock,
-      ids: ids,
-    );
-
-    final catalogService = LocalCardCatalogService(
-      categories: categories,
-      cards: cards,
-      auditLogs: auditLogs,
-      unitOfWork: uow,
-      clock: clock,
-      ids: ids,
-    );
-
-    final inventoryService = LocalCardInventoryService(
-      categories: categories,
-      cards: cards,
-      unitOfWork: uow,
-    );
-
-    final saleService = LocalSaleService(
-      customers: customers,
-      categories: categories,
-      cards: cards,
-      sales: sales,
-      transactions: transactions,
-      balances: balanceService,
-      inventory: inventoryService,
-      auditLogs: auditLogs,
-      unitOfWork: uow,
-      clock: clock,
-      ids: ids,
-    );
-
+    final balanceService = LocalCustomerBalanceService(customers: customers, transactions: transactions, auditLogs: auditLogs, unitOfWork: uow, clock: clock, ids: ids);
+    final customerService = LocalCustomerService(customers: customers, auditLogs: auditLogs, unitOfWork: uow, clock: clock, ids: ids);
+    final walletCatalog = LocalWalletCatalogService(wallets: wallets, auditLogs: auditLogs, clock: clock, ids: ids);
+    final posCatalog = LocalPointOfSaleCatalogService(pointsOfSale: pointsOfSale, auditLogs: auditLogs, clock: clock, ids: ids);
+    final catalogService = LocalCardCatalogService(categories: categories, cards: cards, auditLogs: auditLogs, unitOfWork: uow, clock: clock, ids: ids);
+    final inventoryService = LocalCardInventoryService(categories: categories, cards: cards, unitOfWork: uow);
+    final saleService = LocalSaleService(customers: customers, categories: categories, cards: cards, sales: sales, transactions: transactions, balances: balanceService, inventory: inventoryService, auditLogs: auditLogs, unitOfWork: uow, clock: clock, ids: ids);
     final parser = LocalMessageParser(templates: templates);
     final smsBridge = SmsBridge();
     final messageSender = NativeMessageSender(smsBridge);
-    final processor = LocalTransferProcessor(
-      messages: messages,
-      customers: customers,
-      balances: balanceService,
-      auditLogs: auditLogs,
-      unitOfWork: uow,
-      clock: clock,
-      ids: ids,
-      categories: categories,
-      cards: cards,
-      inventory: inventoryService,
-      transactions: transactions,
-      reservedSales: saleService,
-      messageSender: messageSender,
-      settings: settings,
-    );
-
-    final licenseService = LocalLicenseService(
-      licenses: licenses,
-      clock: clock,
-    );
-
+    final processor = LocalTransferProcessor(messages: messages, customers: customers, balances: balanceService, auditLogs: auditLogs, unitOfWork: uow, clock: clock, ids: ids, categories: categories, cards: cards, inventory: inventoryService, transactions: transactions, reservedSales: saleService, messageSender: messageSender, settings: settings);
+    final licenseService = LocalLicenseService(licenses: licenses, clock: clock);
     final docs = await getApplicationDocumentsDirectory();
-    final backupDir = Directory(p.join(docs.path, 'backups'));
-    final backupService = LocalBackupService(
-      settings: settings,
-      clock: clock,
-      ids: ids,
-      backupDirectory: backupDir,
-    );
+    final backupService = LocalBackupService(settings: settings, clock: clock, ids: ids, backupDirectory: Directory(p.join(docs.path, 'backups')));
+    final smsHandler = IncomingSmsHandler(bridge: smsBridge, messages: messages, parser: parser, processor: processor, ids: ids, settings: settings);
+    final mergeService = LocalAccountMergeService(customers: customers, transactions: transactions, auditLogs: auditLogs, unitOfWork: uow, clock: clock, ids: ids);
+    final settlementService = LocalSettlementService(customers: customers, transactions: transactions, auditLogs: auditLogs, unitOfWork: uow, clock: clock, ids: ids);
+    final recoveryService = LocalMessageRecoveryService(messages: messages, parser: parser, processor: processor, settings: settings);
+    final pendingReview = PendingMessageReviewService(messages: messages, parser: parser, customers: customers, customerService: customerService, balances: balanceService, auditLogs: auditLogs, unitOfWork: uow, clock: clock, ids: ids);
+    final notificationBridge = NotificationBridge();
+    final notificationSources = LocalPaymentSourceRegistry(settings: settings, clock: clock);
+    final notificationEngine = UnifiedPaymentEventEngine(messages: messages, parser: parser, processor: processor, ids: ids, settings: settings);
+    final notificationHandler = IncomingNotificationHandler(bridge: notificationBridge, sources: notificationSources, engine: notificationEngine);
 
-    final smsHandler = IncomingSmsHandler(
-      bridge: smsBridge,
-      messages: messages,
-      parser: parser,
-      processor: processor,
-      ids: ids,
-      settings: settings,
-    );
-
-    final mergeService = LocalAccountMergeService(
-      customers: customers,
-      transactions: transactions,
-      auditLogs: auditLogs,
-      unitOfWork: uow,
-      clock: clock,
-      ids: ids,
-    );
-    final settlementService = LocalSettlementService(
-      customers: customers,
-      transactions: transactions,
-      auditLogs: auditLogs,
-      unitOfWork: uow,
-      clock: clock,
-      ids: ids,
-    );
-    final recoveryService = LocalMessageRecoveryService(
-      messages: messages,
-      parser: parser,
-      processor: processor,
-      settings: settings,
-    );
-
-    final pendingReview = PendingMessageReviewService(
-      messages: messages,
-      parser: parser,
-      customers: customers,
-      customerService: customerService,
-      balances: balanceService,
-      auditLogs: auditLogs,
-      unitOfWork: uow,
-      clock: clock,
-      ids: ids,
-    );
-
-    return AppContainer._(
-      database: database,
-      customers: customers,
-      wallets: wallets,
-      pointsOfSale: pointsOfSale,
-      categories: categories,
-      cards: cards,
-      messages: messages,
-      transferTemplates: transferTemplates,
-      transactions: transactions,
-      sales: sales,
-      auditLogs: auditLogs,
-      licenses: licenses,
-      settings: settings,
-      unitOfWork: uow,
-      customerService: customerService,
-      balanceService: balanceService,
-      catalogService: catalogService,
-      walletCatalog: walletCatalog,
-      posCatalog: posCatalog,
-      inventoryService: inventoryService,
-      saleService: saleService,
-      messageParser: parser,
-      transferProcessor: processor,
-      licenseService: licenseService,
-      backupService: backupService,
-      mergeService: mergeService,
-      settlementService: settlementService,
-      recoveryService: recoveryService,
-      pendingReview: pendingReview,
-      smsBridge: smsBridge,
-      smsHandler: smsHandler,
-      clock: clock,
-      ids: ids,
-      themeModeNotifier: ValueNotifier<ThemeMode>(ThemeMode.light),
-    );
+    return AppContainer._(database: database, customers: customers, wallets: wallets, pointsOfSale: pointsOfSale, categories: categories, cards: cards, messages: messages, transferTemplates: transferTemplates, transactions: transactions, sales: sales, auditLogs: auditLogs, licenses: licenses, settings: settings, unitOfWork: uow, customerService: customerService, balanceService: balanceService, catalogService: catalogService, walletCatalog: walletCatalog, posCatalog: posCatalog, inventoryService: inventoryService, saleService: saleService, messageParser: parser, transferProcessor: processor, licenseService: licenseService, backupService: backupService, mergeService: mergeService, settlementService: settlementService, recoveryService: recoveryService, pendingReview: pendingReview, smsBridge: smsBridge, smsHandler: smsHandler, notificationBridge: notificationBridge, notificationSources: notificationSources, notificationHandler: notificationHandler, clock: clock, ids: ids, themeModeNotifier: ValueNotifier<ThemeMode>(ThemeMode.light));
   }
 
-  void startBackgroundHandlers() {
+  Future<void> startBackgroundHandlers() async {
     smsHandler.start();
-    // PD-07 Q5: recover messages received while app was stopped (setting gated).
-    // Fire-and-forget; failures are recorded in audit / recovery report.
+    await notificationHandler.start();
     recoveryService.recoverPending();
   }
 
   Future<void> dispose() async {
     smsHandler.stop();
+    await notificationHandler.stop();
     await database.close();
   }
 }
