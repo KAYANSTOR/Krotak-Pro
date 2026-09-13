@@ -151,11 +151,23 @@ final class LocalAdvanceService implements AdvanceService {
     }
     if (priorApplied > amount.minorUnits) return const Failure(AppFailure(code: 'settlement_reference_conflict', message: 'مرجع السداد استُخدم بمبلغ أكبر سابقًا'));
 
-    var remaining = amount.minorUnits - priorApplied;
-    var applied = priorApplied;
     final list = await advances.listByCustomer(customerId);
     if (list is Failure<List<Advance>>) return Failure(list.error);
-    final open = (list as Success<List<Advance>>).value.where((a) => a.status == AdvanceStatus.open && a.amount.currencyCode == amount.currencyCode);
+    final open = (list as Success<List<Advance>>).value.where((a) => a.status == AdvanceStatus.open && a.amount.currencyCode == amount.currencyCode).toList(growable: false);
+    final outstandingTotal = open.fold<int>(0, (sum, advance) => sum + advance.outstanding.minorUnits);
+    final firstAttemptRemaining = amount.minorUnits - priorApplied;
+    if (priorApplied == 0 && outstandingTotal > 0 && firstAttemptRemaining > outstandingTotal) {
+      final residual = firstAttemptRemaining - outstandingTotal;
+      final categoriesResult = await categories.listAll();
+      if (categoriesResult is Failure<List<CardCategory>>) return Failure(categoriesResult.error);
+      final matches = (categoriesResult as Success<List<CardCategory>>).value.where((c) => c.isActive && c.faceValue.currencyCode == amount.currencyCode && c.faceValue.minorUnits == residual).toList(growable: false);
+      if (matches.length != 1) {
+        return Success(AdvancePaymentResult(applied: const Money(minorUnits: 0, currencyCode: 'YER'), remaining: amount, settlementTransaction: null));
+      }
+    }
+
+    var remaining = firstAttemptRemaining;
+    var applied = priorApplied;
     for (final advance in open) {
       if (remaining <= 0) break;
       final pay = remaining > advance.outstanding.minorUnits ? advance.outstanding.minorUnits : remaining;
