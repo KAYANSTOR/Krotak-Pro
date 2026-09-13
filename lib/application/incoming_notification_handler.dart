@@ -1,7 +1,7 @@
 import 'dart:async';
+
 import '../core/result.dart';
 import '../domain/entities/payment_event.dart';
-import '../domain/repositories/repositories.dart';
 import '../domain/services/local_notification_parser.dart';
 import '../domain/services/local_payment_source_registry.dart';
 import '../domain/services/unified_payment_event_engine.dart';
@@ -35,14 +35,44 @@ final class IncomingNotificationHandler {
     if (result is Failure) return;
     final configured = (result as Success<List<PaymentSource>>).value.where((s) => s.packageName == event.packageName).firstOrNull;
     if (configured == null || !configured.enabled || configured.packageName == null) return;
-    final ingest = await engine.ingest(parser.parse(packageName: event.packageName, sourceKey: configured.id, body: event.body, receivedAt: event.receivedAt, title: event.title));
-    if (ingest is Success || ingest is Failure) await bridge.ackPending([event.id]);
+
+    final ingest = await engine.ingest(
+      parser.parse(
+        packageName: event.packageName,
+        sourceKey: configured.id,
+        body: event.body,
+        receivedAt: event.receivedAt,
+        title: event.title,
+      ),
+    );
+
+    if (ingest is Success) {
+      await bridge.ackPending([event.id]);
+      return;
+    }
+
+    final failure = (ingest as Failure).error;
+    // Transport ACK is forbidden when the unified engine failed before the
+    // inbound message was durably persisted. Keeping the platform event in
+    // the encrypted queue allows the next recovery cycle to retry safely.
+    const unsafeToAck = {
+      'message_reference_find_failed',
+      'message_save_failed',
+    };
+    if (!unsafeToAck.contains(failure.code)) {
+      // From this point failures are expected to be represented by the local
+      // IncomingMessage (failed/rejected/parsed) and can be recovered/reviewed.
+      await bridge.ackPending([event.id]);
+    }
   }
 
   Future<void> _syncPackages() async {
     final result = await sources.list();
     if (result is Failure) return;
-    final packages = (result as Success<List<PaymentSource>>).value.where((s) => s.enabled && s.packageName != null).map((s) => s.packageName!).toSet();
+    final packages = (result as Success<List<PaymentSource>>).value
+        .where((s) => s.enabled && s.packageName != null)
+        .map((s) => s.packageName!)
+        .toSet();
     await bridge.setAllowedPackages(packages);
   }
 
