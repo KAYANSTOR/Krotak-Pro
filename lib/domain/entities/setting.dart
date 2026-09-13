@@ -13,9 +13,10 @@ abstract final class SettingKeys {
   static const dailyOpsSummaryAutoSend = 'daily_ops_summary_auto_send';
   static const themeMode = 'theme_mode';
   static const lastRejectedMessagesViewedAt = 'last_rejected_messages_viewed_at';
-
-  /// JSON list of configured notification payment sources.
   static const notificationSources = 'notification_sources';
+  static const autoRetryFailedMessages = 'auto_retry_failed_messages';
+  static const retryMaxAttempts = 'retry_max_attempts';
+  static const retryBaseDelaySeconds = 'retry_base_delay_seconds';
 }
 
 abstract final class SettingDefaults {
@@ -26,6 +27,9 @@ abstract final class SettingDefaults {
   static const posBalanceRequestsEnabled = true;
   static const dailyOpsSummaryAutoSend = true;
   static const themeMode = 'light';
+  static const autoRetryFailedMessages = true;
+  static const retryMaxAttempts = 5;
+  static const retryBaseDelaySeconds = 30;
 }
 
 final class AppSetting {
