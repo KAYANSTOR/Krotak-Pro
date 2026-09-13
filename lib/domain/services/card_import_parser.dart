@@ -29,7 +29,7 @@ abstract final class CardImportParser {
   static CardImportParseResult parse(String raw) {
     final drafts = <CardImportDraft>[];
     final errors = <String>[];
-    final seenSerials = <String>{};
+    final seen = <String>{};
     final seenSecrets = <String>{};
     final lines = raw.replaceAll('\r\n', '\n').replaceAll('\r', '\n').split('\n');
 
@@ -38,6 +38,7 @@ abstract final class CardImportParser {
       var line = lines[i].trim();
       if (line.isEmpty || line.startsWith('#')) continue;
 
+      // Strip optional CSV header
       if (lineNo == 1 &&
           (line.toLowerCase().contains('serial') ||
               line.contains('تسلسل') ||
@@ -66,7 +67,7 @@ abstract final class CardImportParser {
         errors.add('سطر $lineNo: حقول فارغة');
         continue;
       }
-      if (seenSerials.contains(serial)) {
+      if (seen.contains(serial)) {
         errors.add('سطر $lineNo: تكرار الرقم التسلسلي $serial');
         continue;
       }
@@ -74,7 +75,7 @@ abstract final class CardImportParser {
         errors.add('سطر $lineNo: تكرار الرمز السري');
         continue;
       }
-      seenSerials.add(serial);
+      seen.add(serial);
       seenSecrets.add(secret);
       drafts.add(CardImportDraft(serialNumber: serial, secretCode: secret));
     }
