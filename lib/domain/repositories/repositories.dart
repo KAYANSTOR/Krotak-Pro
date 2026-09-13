@@ -39,10 +39,13 @@ abstract interface class CardCategoryRepository {
 abstract interface class CardRepository {
   Future<Result<Card?>> findById(String id);
   Future<Result<Card?>> findBySerialNumber(String serialNumber);
+  Future<Result<Set<String>>> existingSerialsAmong(Iterable<String> serials);
+  Future<Result<Set<String>>> existingSecretsAmong(Iterable<String> secrets);
   Future<Result<List<Card>>> findByCategory(String categoryId);
   Future<Result<List<Card>>> findAvailableByCategory(String categoryId);
   Future<Result<List<Card>>> listByStatus(CardStatus status);
   Future<Result<void>> save(Card card);
+  Future<Result<void>> saveAll(List<Card> cards);
   Future<Result<int>> expireReservations(DateTime now);
   Future<Result<void>> reserve(String cardId, CardReservation reservation);
   Future<Result<void>> releaseReservation(String cardId, String reservationId);
