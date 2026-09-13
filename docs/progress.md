@@ -40,7 +40,7 @@ CI على main — analyze + test + Android debug APK build
 - تشغيل recovery دوري كل دقيقة مع single-flight guard.
 - إعادة المحاولة اليدوية متاحة حتى بعد الاستنفاد.
 - فشل حفظ الإشعار محليًا يمنع ACK لتجنب فقدان حدث الدفع.
-- شاشة للمشغل لإعادة محاولة الرسائل الفاشلة + إعداد تشغيل/إيقاف auto retry.
+- شاشة للمشغّل لإعادة محاولة الرسائل الفاشلة + إعداد تشغيل/إيقاف auto retry.
 - تقرير: [phase-4-pending-retry-recovery.md](phase-4-pending-retry-recovery.md)
 
 ### Phase 5 — Salafni (2026-09-13) 🟡 منفذة في المستودع / بانتظار إغلاق بوابة التحقق
@@ -62,8 +62,13 @@ CI على main — analyze + test + Android debug APK build
 - اختبارات: `test/services/pos_auto_settlement_test.dart`
 - توثيق: [phase-6-pos-ledger-auto-settlement.md](phase-6-pos-ledger-auto-settlement.md)
 
+### Phase 7 — Bulk Card Import Performance (2026-09-13) 🟡 منفذة في المستودع / بانتظار قياس جهاز
+- تحقق مسبق من الملف ثم إدخال مجمّع بدل حفظ صف-بصف.
+- منع تكرار serial/secret داخل الملف وداخل المخزون قبل الاعتماد.
+- تقدم حقيقي في شاشة الاستيراد + تقرير صفوف مرفوضة.
+- توثيق: [phase-7-bulk-card-import.md](phase-7-bulk-card-import.md)
+
 ## المتبقي Post-V1 (الترتيب الرسمي)
-7. Bulk Card Import Performance
 8. Customer SMS Broadcast
 9. Long Press Actions
 10. UI/UX + Dark/Light Improvements
