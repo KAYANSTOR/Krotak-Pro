@@ -62,8 +62,15 @@ CI على main — analyze + test + Android debug APK build
 - اختبارات: `test/services/pos_auto_settlement_test.dart`
 - توثيق: [phase-6-pos-ledger-auto-settlement.md](phase-6-pos-ledger-auto-settlement.md)
 
+### Phase 7 — Bulk Card Import Performance (2026-09-13) 🟡 منفذة في الفرع / بانتظار الدمج وCI
+- `CardRepository.findExistingSerials` / `findExistingSecrets` باستعلام IN مجزأ.
+- `CardRepository.saveAll` بدفعات 200 داخل معاملة واحدة.
+- `LocalCardCatalogService.importCards` لم يعد يفحص سطرًا سطرًا؛ يتجاهل المكرر ويستورد الجديد، مع `onProgress`.
+- Parser يرفض تكرار الرمز السري داخل نفس الملف.
+- اختبارات: `test/services/bulk_card_import_test.dart`
+- توثيق: [phase-7-bulk-card-import.md](phase-7-bulk-card-import.md)
+
 ## المتبقي Post-V1 (الترتيب الرسمي)
-7. Bulk Card Import Performance
 8. Customer SMS Broadcast
 9. Long Press Actions
 10. UI/UX + Dark/Light Improvements
