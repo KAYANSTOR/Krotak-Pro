@@ -98,7 +98,14 @@ CI على main — analyze + test + Android debug APK build
 - اختبارات: `test/widget/bottom_sheets_theme_test.dart`
 - تقرير: [phase-11-bottom-sheets.md](phase-11-bottom-sheets.md)
 
+### Phase 12 — Device Verification Gate (2026-09-13) ✅ في المستودع / بانتظار جهاز حقيقي
+- كتالوج بوابات صفراء ثابت: SMS، إشعارات، استعادة، سلفني، POS، استيراد، بث.
+- `LocalDeviceVerificationService` يخزن الحالة في إعداد `device_verification_gates`.
+- شاشة من الإعدادات لتسجيل passed / blocked / pending لكل بوابة.
+- اختبارات: `test/services/device_verification_service_test.dart`
+- تقرير: [phase-12-device-verification.md](phase-12-device-verification.md)
+
 ## المتبقي Post-V1 (الترتيب الرسمي)
-لا بنود رسمية متبقية في قائمة Post-V1. المتبقي تحقق جهاز للبوابات الصفراء.
+لا بنود برمجية رسمية متبقية. المتبقي تشغيل بوابات Phase 12 على جهاز Android حقيقي.
 
 مرجع: NET-POST-V1-MASTER-PLAN — GitHub مصدر الحقيقة؛ لا Local Only.
