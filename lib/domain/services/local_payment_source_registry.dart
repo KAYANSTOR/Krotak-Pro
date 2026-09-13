@@ -17,10 +17,10 @@ final class LocalPaymentSourceRegistry {
     if (raw == null || raw.trim().isEmpty) return const Success([]);
     try {
       final decoded = jsonDecode(raw);
-      if (decoded is! List) return const Failure(AppError('notification_sources_invalid'));
+      if (decoded is! List) return const Failure(AppFailure(code: 'notification_sources_invalid', message: 'Invalid notification source configuration'));
       return Success(decoded.whereType<Map>().map(_fromJson).whereType<PaymentSource>().toList(growable: false));
     } catch (_) {
-      return const Failure(AppError('notification_sources_invalid'));
+      return const Failure(AppFailure(code: 'notification_sources_invalid', message: 'Invalid notification source configuration'));
     }
   }
 
@@ -28,7 +28,7 @@ final class LocalPaymentSourceRegistry {
     final name = displayName.trim();
     final package = packageName.trim();
     if (name.isEmpty || package.isEmpty || package.contains(RegExp(r'\s'))) {
-      return const Failure(AppError('notification_source_invalid'));
+      return const Failure(AppFailure(code: 'notification_source_invalid', message: 'Display name and Android package name are required'));
     }
     final current = await list();
     if (current is Failure<List<PaymentSource>>) return Failure(current.error);
