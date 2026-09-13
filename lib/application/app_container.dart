@@ -6,7 +6,7 @@ import 'package:path_provider/path_provider.dart';
 import '../core/clock.dart';
 import '../core/id_generator.dart';
 import '../core/result.dart';
-import '../data/database/app_database.dart' hide Customer, Card, Sale, TransferTemplate;
+import '../data/database/app_database.dart' hide Customer, Card, Sale, TransferTemplate, AppSetting;
 import '../data/database/database_provider.dart';
 import '../data/database/drift_unit_of_work.dart';
 import '../data/repositories/local_repositories.dart';
@@ -127,28 +127,9 @@ final class AppContainer {
     return AppContainer._(database: database, customers: customers, wallets: wallets, pointsOfSale: pointsOfSale, categories: categories, cards: cards, messages: messages, transferTemplates: transferTemplates, transactions: transactions, sales: sales, auditLogs: auditLogs, licenses: licenses, settings: settings, unitOfWork: uow, customerService: customerService, balanceService: balanceService, catalogService: catalogService, walletCatalog: walletCatalog, posCatalog: posCatalog, inventoryService: inventoryService, saleService: saleService, advanceService: advanceService, messageParser: parser, transferProcessor: processor, licenseService: licenseService, backupService: backupService, mergeService: mergeService, settlementService: settlementService, recoveryService: recoveryService, retryService: retryService, pendingReview: pendingReview, smsBridge: smsBridge, smsHandler: smsHandler, notificationBridge: notificationBridge, notificationSources: notificationSources, notificationHandler: notificationHandler, clock: clock, ids: ids, themeModeNotifier: ValueNotifier<ThemeMode>(ThemeMode.light));
   }
 
-  Future<void> startBackgroundHandlers() async {
-    smsHandler.start();
-    await notificationHandler.start();
-    await _runRecovery();
-    _recoveryTimer ??= Timer.periodic(const Duration(minutes: 1), (_) => _runRecovery());
-  }
+  Future<void> startBackgroundHandlers() async { smsHandler.start(); await notificationHandler.start(); await _runRecovery(); _recoveryTimer ??= Timer.periodic(const Duration(minutes: 1), (_) => _runRecovery()); }
 
-  Future<void> _runRecovery() async {
-    if (_recoveryBusy) return;
-    final enabled = await settings.find(SettingKeys.autoRetryFailedMessages);
-    final raw = enabled is Success<AppSetting?> ? enabled.value?.value : null;
-    final autoRetry = SettingBool.read(raw, defaultValue: SettingDefaults.autoRetryFailedMessages);
-    if (!autoRetry) return;
-    _recoveryBusy = true;
-    try { await recoveryService.recoverPending(); } finally { _recoveryBusy = false; }
-  }
+  Future<void> _runRecovery() async { if (_recoveryBusy) return; final enabled = await settings.find(SettingKeys.autoRetryFailedMessages); final raw = enabled is Success<AppSetting?> ? enabled.value?.value : null; final autoRetry = SettingBool.read(raw, defaultValue: SettingDefaults.autoRetryFailedMessages); if (!autoRetry) return; _recoveryBusy = true; try { await recoveryService.recoverPending(); } finally { _recoveryBusy = false; } }
 
-  Future<void> dispose() async {
-    _recoveryTimer?.cancel();
-    _recoveryTimer = null;
-    smsHandler.stop();
-    await notificationHandler.stop();
-    await database.close();
-  }
+  Future<void> dispose() async { _recoveryTimer?.cancel(); _recoveryTimer = null; smsHandler.stop(); await notificationHandler.stop(); await database.close(); }
 }
