@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../core/result.dart';
 import '../../../domain/entities/payment_event.dart';
-import '../../../domain/services/local_payment_source_registry.dart';
 import '../../app_scope.dart';
 
 class WalletNotificationSettingsScreen extends StatefulWidget {
@@ -91,7 +90,7 @@ class _WalletNotificationSettingsScreenState extends State<WalletNotificationSet
               title: Text(source.displayName, style: const TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.bold)),
               subtitle: Text(source.packageName!, style: const TextStyle(fontSize: 12)),
               trailing: Row(mainAxisSize: MainAxisSize.min, children: [Switch(value: source.enabled, onChanged: (v) => _toggle(source, v)), IconButton(onPressed: () => _remove(source), icon: const Icon(Icons.delete_outline))]),
-            )),
+            ))),
           const SizedBox(height: 12),
           const Text('يُحفظ الإشعار مؤقتًا في طابور نقل مشفّر، ثم يُمرر إلى محرك الدفع الموحد. الفشل في المعالجة لا يحذف الحركة من سجل المراجعة.', style: TextStyle(fontFamily: 'Tajawal', fontSize: 12)),
         ]),
