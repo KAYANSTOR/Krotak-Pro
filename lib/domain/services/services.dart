@@ -39,10 +39,20 @@ abstract interface class CardCatalogService {
 
 abstract interface class WalletCatalogService {
   Future<Result<Wallet>> saveWallet({required String name});
+  Future<Result<Wallet>> updateWallet({
+    required String id,
+    required String name,
+    required WalletStatus status,
+  });
 }
 
 abstract interface class PointOfSaleCatalogService {
   Future<Result<PointOfSale>> savePointOfSale({required String name});
+  Future<Result<PointOfSale>> updatePointOfSale({
+    required String id,
+    required String name,
+    required PointOfSaleStatus status,
+  });
 }
 
 abstract interface class CardInventoryService {
