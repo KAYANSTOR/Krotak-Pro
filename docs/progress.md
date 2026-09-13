@@ -27,7 +27,7 @@ CI على main — analyze + test + Android debug APK build
 
 ### Phase 3 — Wallet Notifications (2026-09-13) 🟡 منفذة في المستودع / بانتظار تحقق الجهاز
 - Android `NotificationListenerService` مع allowlist لحزم المصادر.
-- طابور نقل محلي مشفّر عبر Android Keystore مع `peek/ack` واستعادة بعد التوقف.
+- طابور نقل محلي مشفّع عبر Android Keystore مع `peek/ack` واستعادة بعد التوقف.
 - `NotificationBridge` + `IncomingNotificationHandler` → `UnifiedPaymentEventEngine` نفسه.
 - `LocalNotificationParser` مستقل ويخرج `PaymentEvent` موحدًا.
 - `PaymentSource` محفوظ في `AppSettings` مع شاشة إعداد.
@@ -53,8 +53,16 @@ CI على main — analyze + test + Android debug APK build
 - توثيق: [phase-5-salafni.md](phase-5-salafni.md)
 - يلزم CI ناجح + اختبار جهاز Android حقيقي قبل Production Ready.
 
+### Phase 6 — POS Ledger + Auto Settlement (2026-09-13) 🟡 منفذة في المستودع / بانتظار إغلاق بوابة التحقق
+- ربط `PointOfSale` بحساب دفتر عبر `LocalPosAccountRegistry` (`pos_accounts`) دون جدول Drift جديد.
+- `LocalPosSettlementService`: تعرف المعرف، تسوية ذرية (`deposit` + مرجع `pos-settle:`)، حساب المديونية المتبقية، Audit، وSMS تأكيدي.
+- `LocalTransferProcessor` يحوّل الحوالة المطابقة لنقطة بيع إلى مسار التسوية بدل بيع الكرت عندما يكون الإعداد مفعّلًا.
+- إعدادات: تفعيل التسوية التلقائية + قوالب النجاح/الفشل/غير المعروف.
+- واجهة: معرف دفع عند إنشاء نقطة البيع + بطاقة إعداد وشاشة قوالب.
+- اختبارات: `test/services/pos_auto_settlement_test.dart`
+- توثيق: [phase-6-pos-ledger-auto-settlement.md](phase-6-pos-ledger-auto-settlement.md)
+
 ## المتبقي Post-V1 (الترتيب الرسمي)
-6. POS Ledger + Auto Settlement
 7. Bulk Card Import Performance
 8. Customer SMS Broadcast
 9. Long Press Actions
