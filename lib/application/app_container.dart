@@ -110,7 +110,7 @@ final class AppContainer {
     final messageSender = NativeMessageSender(smsBridge);
     final advanceRepository = LocalAdvanceRepository(transactions: transactions, sales: sales);
     final advanceService = LocalAdvanceService(advances: advanceRepository, customers: customers, categories: categories, cards: cards, inventory: inventoryService, transactions: transactions, sales: sales, auditLogs: auditLogs, settings: settings, unitOfWork: uow, messageSender: messageSender, clock: clock, ids: ids);
-    final processor = LocalTransferProcessor(messages: messages, customers: customers, balances: balanceService, auditLogs: auditLogs, unitOfWork: uow, clock: clock, ids: ids, categories: categories, cards: cards, inventory: inventoryService, transactions: transactions, reservedSales: saleService, messageSender: messageSender, settings: settings);
+    final processor = LocalTransferProcessor(messages: messages, customers: customers, balances: balanceService, auditLogs: auditLogs, unitOfWork: uow, clock: clock, ids: ids, categories: categories, cards: cards, inventory: inventoryService, transactions: transactions, reservedSales: saleService, messageSender: messageSender, settings: settings, advanceService: advanceService);
     final licenseService = LocalLicenseService(licenses: licenses, clock: clock);
     final docs = await getApplicationDocumentsDirectory();
     final backupService = LocalBackupService(settings: settings, clock: clock, ids: ids, backupDirectory: Directory(p.join(docs.path, 'backups')));
