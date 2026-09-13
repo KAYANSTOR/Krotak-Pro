@@ -33,7 +33,11 @@ abstract interface class CustomerBalanceService {
 
 abstract interface class CardCatalogService {
   Future<Result<CardCategory>> saveCategory(CardCategory category);
-  Future<Result<int>> importCards({required String categoryId, required List<CardImportDraft> drafts});
+  Future<Result<int>> importCards({
+    required String categoryId,
+    required List<CardImportDraft> drafts,
+    void Function(int processed, int total)? onProgress,
+  });
 }
 
 abstract interface class WalletCatalogService {
