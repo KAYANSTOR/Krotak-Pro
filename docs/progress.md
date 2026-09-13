@@ -20,26 +20,33 @@ CI على main — analyze + test + Android debug APK build
 
 ### Phase 2 — Unified Payment Event Engine (2026-09-13) ✅ في المستودع
 - `PaymentEvent` / `PaymentChannel` / `PaymentSource` / `PaymentFingerprint`
-- `PaymentFingerprintService`: بصمة مستقلة عن القناة (SMS ≡ إشعار لنفس المرجع)
+- `PaymentFingerprintService`: بصمة مستقلة عن القناة
 - `UnifiedPaymentEventEngine`: parse → fingerprint → persist → PD-07 → TransferProcessor
 - `IncomingSmsHandler` أصبح محوّل قناة نحو المحرك الموحّد
 - اختبارات: `test/services/unified_payment_event_engine_test.dart`
-- تقرير: [phase-2-unified-payment-event-engine.md](phase-2-unified-payment-event-engine.md)
 
 ### Phase 3 — Wallet Notifications (2026-09-13) 🟡 منفذة في المستودع / بانتظار تحقق الجهاز
-- `NotificationListenerService` Android مع allowlist لحزم المصادر.
-- طابور نقل محلي مشفّر عبر Android Keystore مع `peek/ack` واستعادة بعد توقف التطبيق.
-- `NotificationBridge` + `IncomingNotificationHandler` → `UnifiedPaymentEventEngine` نفسه، بدون دفتر أو مسار مالي ثانٍ.
+- Android `NotificationListenerService` مع allowlist لحزم المصادر.
+- طابور نقل محلي مشفّر عبر Android Keystore مع `peek/ack` واستعادة بعد التوقف.
+- `NotificationBridge` + `IncomingNotificationHandler` → `UnifiedPaymentEventEngine` نفسه.
 - `LocalNotificationParser` مستقل ويخرج `PaymentEvent` موحدًا.
-- سجل `PaymentSource` محفوظ في `AppSettings` مع شاشة إعداد للتفعيل/التعطيل/الحذف.
-- لا يتم افتراض أسماء حزم المحافظ أو قوالبها؛ يلزم التحقق بعينات حقيقية على جهاز Android.
-- التقرير: [phase-3-wallet-notifications.md](phase-3-wallet-notifications.md)
+- `PaymentSource` محفوظ في `AppSettings` مع شاشة إعداد.
+- يلزم التحقق بعينات حقيقية على جهاز Android.
+
+### Phase 4 — Pending / Retry / Recovery Hardening (2026-09-13) 🟡 منفذة في المستودع / بانتظار إغلاق بوابة التحقق
+- `failed` أصبح جزءًا من مسار recovery.
+- retry policy ثابتة بحد 5 محاولات تلقائية وexponential backoff بحد أعلى 30 دقيقة.
+- حالة retry وموعد المحاولة محفوظان في Audit Log الحالي.
+- تشغيل recovery دوري كل دقيقة مع single-flight guard.
+- إعادة المحاولة اليدوية متاحة حتى بعد الاستنفاد.
+- فشل حفظ الإشعار محليًا يمنع ACK لتجنب فقدان حدث الدفع.
+- شاشة للمشغل لإعادة محاولة الرسائل الفاشلة + إعداد تشغيل/إيقاف auto retry.
+- تقرير: [phase-4-pending-retry-recovery.md](phase-4-pending-retry-recovery.md)
 
 ## الدفعة B — مغلقة (2026-09-12)
 B1…B8 مكتملة (إعدادات · معلّقة · مرفوضة · دفتر · فئات/كروت · مساعدة)
 
 ## المتبقي Post-V1 (الترتيب الرسمي)
-4. Pending / Retry / Recovery Hardening
 5. Salafni
 6. POS Ledger + Auto Settlement
 7. Bulk Card Import Performance
