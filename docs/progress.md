@@ -68,8 +68,17 @@ CI على main — analyze + test + Android debug APK build
 - تقدم حقيقي في شاشة الاستيراد + تقرير صفوف مرفوضة.
 - توثيق: [phase-7-bulk-card-import.md](phase-7-bulk-card-import.md)
 
+### Phase 8 — Customer SMS Broadcast (2026-09-13) 🟡 منفذة في المستودع / بانتظار تحقق الجهاز
+- معاينة المستلمين مع استبعاد المحظور والتالف وغير النشط.
+- تأكيد صريح بكلمة `إرسال` قبل إنشاء المهمة.
+- مهمة قابلة للاستعادة في إعداد `broadcast_jobs` مع نتيجة لكل رقم وAudit.
+- منع تكرار نفس النص ونفس المستلمين.
+- الواجهة من الإعدادات مع تقدم حقيقي.
+- رسائل البث لا تستهلك رصيد ترخيص الكروت.
+- اختبارات: `test/services/broadcast_service_test.dart`
+- توثيق: [phase-8-customer-sms-broadcast.md](phase-8-customer-sms-broadcast.md)
+
 ## المتبقي Post-V1 (الترتيب الرسمي)
-8. Customer SMS Broadcast
 9. Long Press Actions
 10. UI/UX + Dark/Light Improvements
 
