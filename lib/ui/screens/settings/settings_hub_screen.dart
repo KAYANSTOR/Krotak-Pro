@@ -13,6 +13,7 @@ import '../failed_messages_screen.dart';
 import 'battery_settings_screen.dart';
 import 'clean_logs_screen.dart';
 import 'export_ledger_screen.dart';
+import 'salafni_templates_screen.dart';
 import 'sim_settings_screen.dart';
 import 'templates_screen.dart';
 import 'wallet_notification_settings_screen.dart';
@@ -34,6 +35,7 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
   bool _dailySummary = SettingDefaults.dailyOpsSummaryAutoSend;
   bool _darkTheme = false;
   bool _autoRetry = SettingDefaults.autoRetryFailedMessages;
+  bool _salafniEnabled = SettingDefaults.salafniEnabled;
   final Set<String> _busyKeys = {};
 
   @override
@@ -58,6 +60,7 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
       final daily = await read(SettingKeys.dailyOpsSummaryAutoSend);
       final theme = await read(SettingKeys.themeMode);
       final retry = await read(SettingKeys.autoRetryFailedMessages);
+      final salafni = await read(SettingKeys.salafniEnabled);
       if (!mounted) return;
       setState(() {
         _loading = false;
@@ -69,6 +72,7 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
         _dailySummary = SettingBool.read(daily, defaultValue: SettingDefaults.dailyOpsSummaryAutoSend);
         _darkTheme = (theme ?? SettingDefaults.themeMode) == 'dark';
         _autoRetry = SettingBool.read(retry, defaultValue: SettingDefaults.autoRetryFailedMessages);
+        _salafniEnabled = SettingBool.read(salafni, defaultValue: SettingDefaults.salafniEnabled);
       });
     } catch (_) {
       if (mounted) setState(() { _loading = false; _error = 'تعذر تحميل الإعدادات'; });
@@ -83,6 +87,7 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
       SettingKeys.posBalanceRequestsEnabled => _posBalanceRequests,
       SettingKeys.dailyOpsSummaryAutoSend => _dailySummary,
       SettingKeys.autoRetryFailedMessages => _autoRetry,
+      SettingKeys.salafniEnabled => _salafniEnabled,
       _ => value,
     };
     setState(() { _busyKeys.add(key); applyLocal(value); });
@@ -128,6 +133,9 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
           SettingsSwitchCard(icon: Icons.history, title: 'معالجة الرسائل القديمة عند التوقف', subtitle: 'استعادة ومعالجة ما وصل أثناء توقف الجهاز أو التطبيق', value: _oldMessages, enabled: !_busyKeys.contains(SettingKeys.processOldMessagesOnResume), onChanged: (v) => _saveBool(SettingKeys.processOldMessagesOnResume, v, (x) => _oldMessages = x)),
           SettingsSwitchCard(icon: Icons.restart_alt, title: 'إعادة محاولة الرسائل الفاشلة تلقائيًا', subtitle: 'محاولات محدودة مع تأخير تصاعدي؛ النتائج النهائية تبقى قابلة للتدقيق', value: _autoRetry, enabled: !_busyKeys.contains(SettingKeys.autoRetryFailedMessages), onChanged: (v) => _saveBool(SettingKeys.autoRetryFailedMessages, v, (x) => _autoRetry = x)),
           SettingsNavCard(icon: Icons.error_outline, title: 'الرسائل الفاشلة', subtitle: 'مراجعة الأخطاء القابلة لإعادة المحاولة وتشغيلها يدويًا', onTap: () => _open(const FailedMessagesScreen())),
+          const SettingsSectionHeader(title: 'خدمة سلفني'),
+          SettingsSwitchCard(icon: Icons.credit_score_outlined, title: 'تفعيل خدمة سلفني', subtitle: _salafniEnabled ? 'الخدمة مفعلة — تقبل طلبات سلفني عبر SMS' : 'الخدمة متوقفة — فعّلها بعد تجهيز مخزون الكروت', value: _salafniEnabled, enabled: !_busyKeys.contains(SettingKeys.salafniEnabled), onChanged: (v) => _saveBool(SettingKeys.salafniEnabled, v, (x) => _salafniEnabled = x)),
+          SettingsNavCard(icon: Icons.chat_bubble_outline, title: 'قوالب رسائل سلفني', subtitle: 'رسائل القبول والرفض والسداد والمتغيرات الديناميكية', onTap: () => _open(const SalafniTemplatesScreen())),
           const SettingsSectionHeader(title: 'المحافظ والإشعارات'),
           SettingsNavCard(icon: Icons.account_balance_wallet_outlined, title: 'إشعارات المحافظ', subtitle: 'ربط المحافظ الإلكترونية كمصادر دفع عبر Notification Listener', onTap: () => _open(const WalletNotificationSettingsScreen())),
           const SettingsSectionHeader(title: 'الجهاز والرسائل'),
