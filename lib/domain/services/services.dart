@@ -2,6 +2,7 @@ import '../../core/result.dart';
 import '../entities/card.dart';
 import '../entities/customer.dart';
 import '../entities/message.dart';
+import '../entities/payment_event.dart';
 import '../entities/money.dart';
 import '../entities/transaction.dart';
 import '../entities/wallet.dart';
@@ -122,6 +123,11 @@ abstract interface class MessageSender {
 
 abstract interface class TransferProcessor {
   Future<Result<Transaction>> process(ParsedTransfer transfer);
+}
+
+/// Observes a source-agnostic payment event and optionally credits a transfer.
+abstract interface class PaymentEventEngine {
+  Future<Result<Transaction?>> ingest(PaymentEvent event);
 }
 
 abstract interface class LicenseService {
