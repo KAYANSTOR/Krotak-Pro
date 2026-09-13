@@ -11,6 +11,7 @@ import '../entities/transaction.dart';
 import '../phone_normalizer.dart';
 import '../repositories/repositories.dart';
 import '../repositories/unit_of_work.dart';
+import 'services.dart';
 
 final class LocalAdvanceService implements AdvanceService {
   const LocalAdvanceService({required this.advances, required this.customers, required this.categories, required this.cards, required this.inventory, required this.transactions, required this.sales, required this.auditLogs, required this.settings, required this.unitOfWork, required this.messageSender, required this.clock, required this.ids});
@@ -161,9 +162,7 @@ final class LocalAdvanceService implements AdvanceService {
       final categoriesResult = await categories.listAll();
       if (categoriesResult is Failure<List<CardCategory>>) return Failure(categoriesResult.error);
       final matches = (categoriesResult as Success<List<CardCategory>>).value.where((c) => c.isActive && c.faceValue.currencyCode == amount.currencyCode && c.faceValue.minorUnits == residual).toList(growable: false);
-      if (matches.length != 1) {
-        return Success(AdvancePaymentResult(applied: const Money(minorUnits: 0, currencyCode: 'YER'), remaining: amount, settlementTransaction: null));
-      }
+      if (matches.length != 1) return Success(AdvancePaymentResult(applied: Money(minorUnits: 0, currencyCode: amount.currencyCode), remaining: amount, settlementTransaction: null));
     }
 
     var remaining = firstAttemptRemaining;
