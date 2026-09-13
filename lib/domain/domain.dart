@@ -1,4 +1,5 @@
 export 'entities/audit.dart';
+export 'entities/broadcast.dart';
 export 'entities/card.dart';
 export 'entities/customer.dart';
 export 'entities/license.dart';

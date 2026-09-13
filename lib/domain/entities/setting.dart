@@ -26,6 +26,8 @@ abstract final class SettingKeys {
   static const posSettlementSuccessTemplate = 'pos_settlement_template_success';
   static const posSettlementFailedTemplate = 'pos_settlement_template_failed';
   static const posSettlementUnknownTemplate = 'pos_settlement_template_unknown';
+  static const broadcastMaxAttempts = 'broadcast_max_attempts';
+  static const broadcastRateDelayMs = 'broadcast_rate_delay_ms';
 }
 
 abstract final class SettingDefaults {
@@ -41,6 +43,8 @@ abstract final class SettingDefaults {
   static const retryBaseDelaySeconds = 30;
   static const salafniEnabled = false;
   static const autoPosSettlementEnabled = true;
+  static const broadcastMaxAttempts = 3;
+  static const broadcastRateDelayMs = 800;
 }
 
 final class AppSetting {
