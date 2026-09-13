@@ -13,6 +13,7 @@ import '../data/repositories/local_repositories.dart';
 import '../domain/entities/message.dart';
 import '../domain/entities/setting.dart';
 import '../domain/services/local_account_merge_service.dart';
+import '../domain/services/local_advance_service.dart';
 import '../domain/services/local_backup_service.dart';
 import '../domain/services/local_message_recovery_service.dart';
 import '../domain/services/local_message_retry_service.dart';
@@ -36,7 +37,7 @@ import 'incoming_notification_handler.dart';
 import 'incoming_sms_handler.dart';
 
 final class AppContainer {
-  AppContainer._({required this.database, required this.customers, required this.wallets, required this.pointsOfSale, required this.categories, required this.cards, required this.messages, required this.transferTemplates, required this.transactions, required this.sales, required this.auditLogs, required this.licenses, required this.settings, required this.unitOfWork, required this.customerService, required this.balanceService, required this.catalogService, required this.walletCatalog, required this.posCatalog, required this.inventoryService, required this.saleService, required this.messageParser, required this.transferProcessor, required this.licenseService, required this.backupService, required this.mergeService, required this.settlementService, required this.recoveryService, required this.retryService, required this.pendingReview, required this.smsBridge, required this.smsHandler, required this.notificationBridge, required this.notificationSources, required this.notificationHandler, required this.clock, required this.ids, required this.themeModeNotifier});
+  AppContainer._({required this.database, required this.customers, required this.wallets, required this.pointsOfSale, required this.categories, required this.cards, required this.messages, required this.transferTemplates, required this.transactions, required this.sales, required this.auditLogs, required this.licenses, required this.settings, required this.unitOfWork, required this.customerService, required this.balanceService, required this.catalogService, required this.walletCatalog, required this.posCatalog, required this.inventoryService, required this.saleService, required this.advanceService, required this.messageParser, required this.transferProcessor, required this.licenseService, required this.backupService, required this.mergeService, required this.settlementService, required this.recoveryService, required this.retryService, required this.pendingReview, required this.smsBridge, required this.smsHandler, required this.notificationBridge, required this.notificationSources, required this.notificationHandler, required this.clock, required this.ids, required this.themeModeNotifier});
 
   final AppDatabase database;
   final LocalCustomerRepository customers;
@@ -59,6 +60,7 @@ final class AppContainer {
   final LocalPointOfSaleCatalogService posCatalog;
   final CardInventoryService inventoryService;
   final SaleService saleService;
+  final AdvanceService advanceService;
   final MessageParser messageParser;
   final TransferProcessor transferProcessor;
   final LocalLicenseService licenseService;
@@ -96,7 +98,6 @@ final class AppContainer {
     final auditLogs = LocalAuditLogRepository(database);
     final licenses = LocalLicenseRepository(database);
     final settings = LocalSettingsRepository(database);
-
     final balanceService = LocalCustomerBalanceService(customers: customers, transactions: transactions, auditLogs: auditLogs, unitOfWork: uow, clock: clock, ids: ids);
     final customerService = LocalCustomerService(customers: customers, auditLogs: auditLogs, unitOfWork: uow, clock: clock, ids: ids);
     final walletCatalog = LocalWalletCatalogService(wallets: wallets, auditLogs: auditLogs, clock: clock, ids: ids);
@@ -107,11 +108,13 @@ final class AppContainer {
     final parser = LocalMessageParser(templates: templates);
     final smsBridge = SmsBridge();
     final messageSender = NativeMessageSender(smsBridge);
+    final advanceRepository = LocalAdvanceRepository(transactions: transactions, sales: sales);
+    final advanceService = LocalAdvanceService(advances: advanceRepository, customers: customers, categories: categories, cards: cards, inventory: inventoryService, transactions: transactions, sales: sales, auditLogs: auditLogs, settings: settings, unitOfWork: uow, messageSender: messageSender, clock: clock, ids: ids);
     final processor = LocalTransferProcessor(messages: messages, customers: customers, balances: balanceService, auditLogs: auditLogs, unitOfWork: uow, clock: clock, ids: ids, categories: categories, cards: cards, inventory: inventoryService, transactions: transactions, reservedSales: saleService, messageSender: messageSender, settings: settings);
     final licenseService = LocalLicenseService(licenses: licenses, clock: clock);
     final docs = await getApplicationDocumentsDirectory();
     final backupService = LocalBackupService(settings: settings, clock: clock, ids: ids, backupDirectory: Directory(p.join(docs.path, 'backups')));
-    final smsHandler = IncomingSmsHandler(bridge: smsBridge, messages: messages, parser: parser, processor: processor, ids: ids, settings: settings);
+    final smsHandler = IncomingSmsHandler(bridge: smsBridge, messages: messages, parser: parser, processor: processor, ids: ids, settings: settings, advanceService: advanceService);
     final mergeService = LocalAccountMergeService(customers: customers, transactions: transactions, auditLogs: auditLogs, unitOfWork: uow, clock: clock, ids: ids);
     final settlementService = LocalSettlementService(customers: customers, transactions: transactions, auditLogs: auditLogs, unitOfWork: uow, clock: clock, ids: ids);
     final retryService = LocalMessageRetryService(auditLogs: auditLogs, messages: messages, clock: clock, ids: ids);
@@ -121,8 +124,7 @@ final class AppContainer {
     final notificationSources = LocalPaymentSourceRegistry(settings: settings, clock: clock);
     final notificationEngine = UnifiedPaymentEventEngine(messages: messages, parser: parser, processor: processor, ids: ids, settings: settings);
     final notificationHandler = IncomingNotificationHandler(bridge: notificationBridge, sources: notificationSources, engine: notificationEngine);
-
-    return AppContainer._(database: database, customers: customers, wallets: wallets, pointsOfSale: pointsOfSale, categories: categories, cards: cards, messages: messages, transferTemplates: transferTemplates, transactions: transactions, sales: sales, auditLogs: auditLogs, licenses: licenses, settings: settings, unitOfWork: uow, customerService: customerService, balanceService: balanceService, catalogService: catalogService, walletCatalog: walletCatalog, posCatalog: posCatalog, inventoryService: inventoryService, saleService: saleService, messageParser: parser, transferProcessor: processor, licenseService: licenseService, backupService: backupService, mergeService: mergeService, settlementService: settlementService, recoveryService: recoveryService, retryService: retryService, pendingReview: pendingReview, smsBridge: smsBridge, smsHandler: smsHandler, notificationBridge: notificationBridge, notificationSources: notificationSources, notificationHandler: notificationHandler, clock: clock, ids: ids, themeModeNotifier: ValueNotifier<ThemeMode>(ThemeMode.light));
+    return AppContainer._(database: database, customers: customers, wallets: wallets, pointsOfSale: pointsOfSale, categories: categories, cards: cards, messages: messages, transferTemplates: transferTemplates, transactions: transactions, sales: sales, auditLogs: auditLogs, licenses: licenses, settings: settings, unitOfWork: uow, customerService: customerService, balanceService: balanceService, catalogService: catalogService, walletCatalog: walletCatalog, posCatalog: posCatalog, inventoryService: inventoryService, saleService: saleService, advanceService: advanceService, messageParser: parser, transferProcessor: processor, licenseService: licenseService, backupService: backupService, mergeService: mergeService, settlementService: settlementService, recoveryService: recoveryService, retryService: retryService, pendingReview: pendingReview, smsBridge: smsBridge, smsHandler: smsHandler, notificationBridge: notificationBridge, notificationSources: notificationSources, notificationHandler: notificationHandler, clock: clock, ids: ids, themeModeNotifier: ValueNotifier<ThemeMode>(ThemeMode.light));
   }
 
   Future<void> startBackgroundHandlers() async {
@@ -139,11 +141,7 @@ final class AppContainer {
     final autoRetry = SettingBool.read(raw, defaultValue: SettingDefaults.autoRetryFailedMessages);
     if (!autoRetry) return;
     _recoveryBusy = true;
-    try {
-      await recoveryService.recoverPending();
-    } finally {
-      _recoveryBusy = false;
-    }
+    try { await recoveryService.recoverPending(); } finally { _recoveryBusy = false; }
   }
 
   Future<void> dispose() async {
