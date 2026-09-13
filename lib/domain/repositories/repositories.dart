@@ -1,4 +1,5 @@
 import '../../core/result.dart';
+import '../entities/advance.dart';
 import '../entities/audit.dart';
 import '../entities/card.dart';
 import '../entities/customer.dart';
@@ -54,8 +55,6 @@ abstract interface class TransactionRepository {
   Future<Result<List<Transaction>>> findByCustomer(String customerId);
   Future<Result<Transaction?>> findByReference(String reference);
   Future<Result<List<Transaction>>> listRecent({int limit = 50});
-  /// All completed ledger rows, optionally filtered by currency.
-  /// Used for aggregate balances (Dashboard) without N+1 per customer.
   Future<Result<List<Transaction>>> listCompleted({String? currencyCode});
 }
 
@@ -65,6 +64,12 @@ abstract interface class SaleRepository {
   Future<Result<List<Sale>>> findByCustomer(String customerId);
   Future<Result<List<Sale>>> listRecent({int limit = 50});
   Future<Result<List<Sale>>> listCompletedBetween(DateTime from, DateTime to);
+}
+
+abstract interface class AdvanceRepository {
+  Future<Result<Advance?>> findOpenByCustomer({required String customerId, required String currencyCode});
+  Future<Result<List<Advance>>> listByCustomer(String customerId);
+  Future<Result<Advance?>> findById(String id);
 }
 
 abstract interface class MessageRepository {
