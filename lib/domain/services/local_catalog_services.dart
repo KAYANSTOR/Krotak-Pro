@@ -179,6 +179,45 @@ final class LocalWalletCatalogService implements WalletCatalogService {
     if (audited is Failure<void>) return Failure(audited.error);
     return Success(wallet);
   }
+
+  @override
+  Future<Result<Wallet>> updateWallet({
+    required String id,
+    required String name,
+    required WalletStatus status,
+  }) async {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) {
+      return const Failure(
+        AppFailure(code: 'invalid_wallet_name', message: 'Wallet name is required'),
+      );
+    }
+    final found = await wallets.findById(id);
+    if (found is Failure<Wallet?>) return Failure(found.error);
+    final existing = (found as Success<Wallet?>).value;
+    if (existing == null) {
+      return const Failure(AppFailure(code: 'wallet_not_found', message: 'Wallet not found'));
+    }
+    final updated = Wallet(
+      id: existing.id,
+      name: trimmed,
+      status: status,
+      createdAt: existing.createdAt,
+    );
+    final saved = await wallets.save(updated);
+    if (saved is Failure<void>) return Failure(saved.error);
+    final audited = await auditLogs.append(
+      AuditLog(
+        id: ids.next('audit'),
+        entityType: 'wallet',
+        entityId: updated.id,
+        action: 'updated',
+        occurredAt: clock.now(),
+      ),
+    );
+    if (audited is Failure<void>) return Failure(audited.error);
+    return Success(updated);
+  }
 }
 
 final class LocalPointOfSaleCatalogService implements PointOfSaleCatalogService {
@@ -222,5 +261,44 @@ final class LocalPointOfSaleCatalogService implements PointOfSaleCatalogService 
     );
     if (audited is Failure<void>) return Failure(audited.error);
     return Success(pointOfSale);
+  }
+
+  @override
+  Future<Result<PointOfSale>> updatePointOfSale({
+    required String id,
+    required String name,
+    required PointOfSaleStatus status,
+  }) async {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) {
+      return const Failure(
+        AppFailure(code: 'invalid_pos_name', message: 'Point of sale name is required'),
+      );
+    }
+    final found = await pointsOfSale.findById(id);
+    if (found is Failure<PointOfSale?>) return Failure(found.error);
+    final existing = (found as Success<PointOfSale?>).value;
+    if (existing == null) {
+      return const Failure(AppFailure(code: 'pos_not_found', message: 'Point of sale not found'));
+    }
+    final updated = PointOfSale(
+      id: existing.id,
+      name: trimmed,
+      status: status,
+      createdAt: existing.createdAt,
+    );
+    final saved = await pointsOfSale.save(updated);
+    if (saved is Failure<void>) return Failure(saved.error);
+    final audited = await auditLogs.append(
+      AuditLog(
+        id: ids.next('audit'),
+        entityType: 'point_of_sale',
+        entityId: updated.id,
+        action: 'updated',
+        occurredAt: clock.now(),
+      ),
+    );
+    if (audited is Failure<void>) return Failure(audited.error);
+    return Success(updated);
   }
 }
