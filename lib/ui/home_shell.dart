@@ -6,6 +6,7 @@ import 'screens/dashboard_screen.dart';
 import 'screens/inventory_screen.dart';
 import 'screens/offers_screen.dart';
 import 'screens/reports_screen.dart';
+import 'widgets/dashboard/quick_actions_sheet.dart';
 import 'widgets/kayan_bottom_nav.dart';
 
 /// Bottom navigation aligned with Kotlin:
@@ -62,6 +63,20 @@ class _HomeShellState extends State<HomeShell> {
           ],
         ),
         body: _pageFor(_route),
+        floatingActionButton: _route == 'dashboard'
+            ? FloatingActionButton(
+                onPressed: () {
+                  QuickActionsSheet.show(
+                    context,
+                    onDirectSale: () => AppRoutes.openDirectSale(context),
+                    onPosAccounts: () => AppRoutes.openWalletsAndPos(context),
+                    onAddCustomer: () => setState(() => _route = 'accounts'),
+                  );
+                },
+                tooltip: 'إجراءات سريعة',
+                child: const Icon(Icons.add),
+              )
+            : null,
         bottomNavigationBar: KayanBottomNav(
           currentId: _route,
           onSelect: (id) => setState(() => _route = id),
