@@ -3,6 +3,7 @@ export 'entities/card.dart';
 export 'entities/customer.dart';
 export 'entities/license.dart';
 export 'entities/message.dart';
+export 'entities/payment_event.dart';
 export 'entities/money.dart';
 export 'entities/setting.dart';
 export 'entities/transaction.dart';
