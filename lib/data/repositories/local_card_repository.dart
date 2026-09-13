@@ -5,6 +5,9 @@ final class LocalCardRepository implements CardRepository {
 
   final AppDatabase database;
 
+  static const _lookupChunk = 400;
+  static const _insertChunk = 200;
+
   @override
   Future<Result<domain.Card?>> findById(String id) async {
     try {
@@ -63,20 +66,70 @@ final class LocalCardRepository implements CardRepository {
   Future<Result<void>> save(domain.Card card) async {
     try {
       await database.into(database.cards).insertOnConflictUpdate(
-            CardsCompanion.insert(
-              id: card.id,
-              categoryId: card.categoryId,
-              serialNumber: card.serialNumber,
-              secretCode: card.secretCode,
-              status: card.status.name,
-              reservationId: Value(card.reservation.reservationId),
-              reservedAt: Value(card.reservation.reservedAt),
-              reservationExpiresAt: Value(card.reservation.expiresAt),
-            ),
+            _companion(card),
           );
       return const Success(null);
     } catch (error) {
       return Failure(_failure('card_save_failed', error));
+    }
+  }
+
+  @override
+  Future<Result<int>> saveAll(List<domain.Card> cards) async {
+    if (cards.isEmpty) return const Success(0);
+    try {
+      var written = 0;
+      for (var i = 0; i < cards.length; i += _insertChunk) {
+        final end = i + _insertChunk > cards.length ? cards.length : i + _insertChunk;
+        final slice = cards.sublist(i, end);
+        await database.batch((batch) {
+          batch.insertAll(database.cards, slice.map(_companion).toList(growable: false));
+        });
+        written += slice.length;
+      }
+      return Success(written);
+    } catch (error) {
+      return Failure(_failure('card_save_all_failed', error));
+    }
+  }
+
+  @override
+  Future<Result<Set<String>>> findExistingSerials(List<String> serialNumbers) async {
+    if (serialNumbers.isEmpty) return const Success(<String>{});
+    try {
+      final found = <String>{};
+      for (var i = 0; i < serialNumbers.length; i += _lookupChunk) {
+        final end = i + _lookupChunk > serialNumbers.length
+            ? serialNumbers.length
+            : i + _lookupChunk;
+        final slice = serialNumbers.sublist(i, end);
+        final rows = await (database.select(database.cards)
+              ..where((table) => table.serialNumber.isIn(slice)))
+            .get();
+        found.addAll(rows.map((row) => row.serialNumber));
+      }
+      return Success(found);
+    } catch (error) {
+      return Failure(_failure('card_serial_lookup_failed', error));
+    }
+  }
+
+  @override
+  Future<Result<Set<String>>> findExistingSecrets(List<String> secretCodes) async {
+    if (secretCodes.isEmpty) return const Success(<String>{});
+    try {
+      final found = <String>{};
+      for (var i = 0; i < secretCodes.length; i += _lookupChunk) {
+        final end = i + _lookupChunk > secretCodes.length ? secretCodes.length : i + _lookupChunk;
+        final slice = secretCodes.sublist(i, end);
+        final rows = await (database.select(database.cards)
+              ..where((table) => table.secretCode.isIn(slice)))
+            .get();
+        found.addAll(rows.map((row) => row.secretCode));
+      }
+      return Success(found);
+    } catch (error) {
+      return Failure(_failure('card_secret_lookup_failed', error));
     }
   }
 
@@ -232,6 +285,19 @@ final class LocalCardRepository implements CardRepository {
     } catch (error) {
       return Failure(_failure('card_restore_failed', error));
     }
+  }
+
+  CardsCompanion _companion(domain.Card card) {
+    return CardsCompanion.insert(
+      id: card.id,
+      categoryId: card.categoryId,
+      serialNumber: card.serialNumber,
+      secretCode: card.secretCode,
+      status: card.status.name,
+      reservationId: Value(card.reservation.reservationId),
+      reservedAt: Value(card.reservation.reservedAt),
+      reservationExpiresAt: Value(card.reservation.expiresAt),
+    );
   }
 
   domain.Card _toCard(Card row) {

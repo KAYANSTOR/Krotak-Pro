@@ -25,6 +25,8 @@ final class LocalCardCatalogService implements CardCatalogService {
   final Clock clock;
   final IdGenerator ids;
 
+  static const _progressBatch = 200;
+
   @override
   Future<Result<CardCategory>> saveCategory(CardCategory category) {
     final name = category.name.trim();
@@ -71,6 +73,7 @@ final class LocalCardCatalogService implements CardCatalogService {
   Future<Result<int>> importCards({
     required String categoryId,
     required List<CardImportDraft> drafts,
+    void Function(int processed, int total)? onProgress,
   }) {
     return unitOfWork.run(() async {
       final found = await categories.findById(categoryId);
@@ -87,7 +90,11 @@ final class LocalCardCatalogService implements CardCatalogService {
         );
       }
 
-      var imported = 0;
+      if (drafts.isEmpty) {
+        return const Success(0);
+      }
+
+      final prepared = <CardImportDraft>[];
       for (final draft in drafts) {
         final serial = draft.serialNumber.trim();
         final secret = draft.secretCode.trim();
@@ -99,26 +106,57 @@ final class LocalCardCatalogService implements CardCatalogService {
             ),
           );
         }
+        prepared.add(CardImportDraft(serialNumber: serial, secretCode: secret));
+      }
 
-        final existingSerial = await cards.findBySerialNumber(serial);
-        if (existingSerial is Failure<Card?>) return Failure(existingSerial.error);
-        if ((existingSerial as Success<Card?>).value != null) {
-          return const Failure(
-            AppFailure(code: 'duplicate_serial', message: 'Card serial already exists'),
-          );
+      final serials = prepared.map((d) => d.serialNumber).toList(growable: false);
+      final secrets = prepared.map((d) => d.secretCode).toList(growable: false);
+
+      final existingSerialsResult = await cards.findExistingSerials(serials);
+      if (existingSerialsResult is Failure<Set<String>>) {
+        return Failure(existingSerialsResult.error);
+      }
+      final existingSecretsResult = await cards.findExistingSecrets(secrets);
+      if (existingSecretsResult is Failure<Set<String>>) {
+        return Failure(existingSecretsResult.error);
+      }
+      final existingSerials = (existingSerialsResult as Success<Set<String>>).value;
+      final existingSecrets = (existingSecretsResult as Success<Set<String>>).value;
+
+      final toInsert = <Card>[];
+      var skipped = 0;
+      for (final draft in prepared) {
+        if (existingSerials.contains(draft.serialNumber) ||
+            existingSecrets.contains(draft.secretCode)) {
+          skipped += 1;
+          continue;
         }
-
-        final saved = await cards.save(
+        existingSerials.add(draft.serialNumber);
+        existingSecrets.add(draft.secretCode);
+        toInsert.add(
           Card(
             id: ids.next('card'),
             categoryId: categoryId,
-            serialNumber: serial,
-            secretCode: secret,
+            serialNumber: draft.serialNumber,
+            secretCode: draft.secretCode,
             status: CardStatus.available,
           ),
         );
-        if (saved is Failure<void>) return Failure(saved.error);
-        imported += 1;
+      }
+
+      if (toInsert.isEmpty && skipped > 0) {
+        return const Failure(
+          AppFailure(code: 'duplicate_serial', message: 'Card serial already exists'),
+        );
+      }
+
+      onProgress?.call(0, toInsert.length);
+      for (var i = 0; i < toInsert.length; i += _progressBatch) {
+        final end = i + _progressBatch > toInsert.length ? toInsert.length : i + _progressBatch;
+        final slice = toInsert.sublist(i, end);
+        final saved = await cards.saveAll(slice);
+        if (saved is Failure<int>) return Failure(saved.error);
+        onProgress?.call(end, toInsert.length);
       }
 
       final audited = await auditLogs.append(
@@ -127,12 +165,12 @@ final class LocalCardCatalogService implements CardCatalogService {
           entityType: 'card_category',
           entityId: categoryId,
           action: 'cards_imported',
-          payloadJson: '{"count":$imported}',
+          payloadJson: '{"count":${toInsert.length},"skipped":$skipped}',
           occurredAt: clock.now(),
         ),
       );
       if (audited is Failure<void>) return Failure(audited.error);
-      return Success(imported);
+      return Success(toInsert.length);
     });
   }
 }
