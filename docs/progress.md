@@ -43,11 +43,17 @@ CI على main — analyze + test + Android debug APK build
 - شاشة للمشغل لإعادة محاولة الرسائل الفاشلة + إعداد تشغيل/إيقاف auto retry.
 - تقرير: [phase-4-pending-retry-recovery.md](phase-4-pending-retry-recovery.md)
 
-## الدفعة B — مغلقة (2026-09-12)
-B1…B8 مكتملة (إعدادات · معلّقة · مرفوضة · دفتر · فئات/كروت · مساعدة)
+### Phase 5 — Salafni (2026-09-13) 🟡 منفذة في المستودع / بانتظار إغلاق بوابة التحقق
+- كيان `Advance` و`AdvanceRepository` كإسقاط من دفتر الحركات + سجل المبيعات، دون دفتر مالي ثانٍ أو جدول Drift جديد.
+- خدمة `LocalAdvanceService`: التفعيل، طلب سلفني، اختيار أقل فئة نشطة ذات مخزون، الحجز، تسجيل الدين، إرسال الكرت، والتدقيق.
+- Idempotency لطلب السلفة ولتسديد التحويلات.
+- التسديد التلقائي موصول بمحرك `LocalTransferProcessor`؛ يسدد الدين أولًا ثم يعالج فقط المبلغ المتبقي في مسار الكرت المعتاد.
+- رسائل القبول والرفض والسداد قابلة للتخصيص من الإعدادات.
+- إعدادات: بطاقة تفعيل سلفني + شاشة قوالب رسائل سلفني.
+- توثيق: [phase-5-salafni.md](phase-5-salafni.md)
+- يلزم CI ناجح + اختبار جهاز Android حقيقي قبل Production Ready.
 
 ## المتبقي Post-V1 (الترتيب الرسمي)
-5. Salafni
 6. POS Ledger + Auto Settlement
 7. Bulk Card Import Performance
 8. Customer SMS Broadcast
