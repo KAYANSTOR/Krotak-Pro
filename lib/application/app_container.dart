@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
@@ -12,6 +13,7 @@ import '../domain/entities/message.dart';
 import '../domain/services/local_account_merge_service.dart';
 import '../domain/services/local_backup_service.dart';
 import '../domain/services/local_message_recovery_service.dart';
+import '../domain/services/local_message_retry_service.dart';
 import '../domain/services/pending_message_review_service.dart';
 import '../domain/services/local_settlement_service.dart';
 import '../domain/services/local_card_inventory_service.dart';
@@ -32,7 +34,7 @@ import 'incoming_notification_handler.dart';
 import 'incoming_sms_handler.dart';
 
 final class AppContainer {
-  AppContainer._({required this.database, required this.customers, required this.wallets, required this.pointsOfSale, required this.categories, required this.cards, required this.messages, required this.transferTemplates, required this.transactions, required this.sales, required this.auditLogs, required this.licenses, required this.settings, required this.unitOfWork, required this.customerService, required this.balanceService, required this.catalogService, required this.walletCatalog, required this.posCatalog, required this.inventoryService, required this.saleService, required this.messageParser, required this.transferProcessor, required this.licenseService, required this.backupService, required this.mergeService, required this.settlementService, required this.recoveryService, required this.pendingReview, required this.smsBridge, required this.smsHandler, required this.notificationBridge, required this.notificationSources, required this.notificationHandler, required this.clock, required this.ids, required this.themeModeNotifier});
+  AppContainer._({required this.database, required this.customers, required this.wallets, required this.pointsOfSale, required this.categories, required this.cards, required this.messages, required this.transferTemplates, required this.transactions, required this.sales, required this.auditLogs, required this.licenses, required this.settings, required this.unitOfWork, required this.customerService, required this.balanceService, required this.catalogService, required this.walletCatalog, required this.posCatalog, required this.inventoryService, required this.saleService, required this.messageParser, required this.transferProcessor, required this.licenseService, required this.backupService, required this.mergeService, required this.settlementService, required this.recoveryService, required this.retryService, required this.pendingReview, required this.smsBridge, required this.smsHandler, required this.notificationBridge, required this.notificationSources, required this.notificationHandler, required this.clock, required this.ids, required this.themeModeNotifier});
 
   final AppDatabase database;
   final LocalCustomerRepository customers;
@@ -62,6 +64,7 @@ final class AppContainer {
   final LocalAccountMergeService mergeService;
   final LocalSettlementService settlementService;
   final LocalMessageRecoveryService recoveryService;
+  final LocalMessageRetryService retryService;
   final PendingMessageReviewService pendingReview;
   final SmsBridge smsBridge;
   final IncomingSmsHandler smsHandler;
@@ -71,6 +74,8 @@ final class AppContainer {
   final Clock clock;
   final IdGenerator ids;
   final ValueNotifier<ThemeMode> themeModeNotifier;
+  Timer? _recoveryTimer;
+  bool _recoveryBusy = false;
 
   static Future<AppContainer> bootstrap({List<TransferTemplate> templates = const []}) async {
     final database = await openAppDatabase();
@@ -107,23 +112,41 @@ final class AppContainer {
     final smsHandler = IncomingSmsHandler(bridge: smsBridge, messages: messages, parser: parser, processor: processor, ids: ids, settings: settings);
     final mergeService = LocalAccountMergeService(customers: customers, transactions: transactions, auditLogs: auditLogs, unitOfWork: uow, clock: clock, ids: ids);
     final settlementService = LocalSettlementService(customers: customers, transactions: transactions, auditLogs: auditLogs, unitOfWork: uow, clock: clock, ids: ids);
-    final recoveryService = LocalMessageRecoveryService(messages: messages, parser: parser, processor: processor, settings: settings);
+    final retryService = LocalMessageRetryService(auditLogs: auditLogs, messages: messages, clock: clock, ids: ids);
+    final recoveryService = LocalMessageRecoveryService(messages: messages, parser: parser, processor: processor, retryService: retryService, settings: settings);
     final pendingReview = PendingMessageReviewService(messages: messages, parser: parser, customers: customers, customerService: customerService, balances: balanceService, auditLogs: auditLogs, unitOfWork: uow, clock: clock, ids: ids);
     final notificationBridge = NotificationBridge();
     final notificationSources = LocalPaymentSourceRegistry(settings: settings, clock: clock);
     final notificationEngine = UnifiedPaymentEventEngine(messages: messages, parser: parser, processor: processor, ids: ids, settings: settings);
     final notificationHandler = IncomingNotificationHandler(bridge: notificationBridge, sources: notificationSources, engine: notificationEngine);
 
-    return AppContainer._(database: database, customers: customers, wallets: wallets, pointsOfSale: pointsOfSale, categories: categories, cards: cards, messages: messages, transferTemplates: transferTemplates, transactions: transactions, sales: sales, auditLogs: auditLogs, licenses: licenses, settings: settings, unitOfWork: uow, customerService: customerService, balanceService: balanceService, catalogService: catalogService, walletCatalog: walletCatalog, posCatalog: posCatalog, inventoryService: inventoryService, saleService: saleService, messageParser: parser, transferProcessor: processor, licenseService: licenseService, backupService: backupService, mergeService: mergeService, settlementService: settlementService, recoveryService: recoveryService, pendingReview: pendingReview, smsBridge: smsBridge, smsHandler: smsHandler, notificationBridge: notificationBridge, notificationSources: notificationSources, notificationHandler: notificationHandler, clock: clock, ids: ids, themeModeNotifier: ValueNotifier<ThemeMode>(ThemeMode.light));
+    return AppContainer._(database: database, customers: customers, wallets: wallets, pointsOfSale: pointsOfSale, categories: categories, cards: cards, messages: messages, transferTemplates: transferTemplates, transactions: transactions, sales: sales, auditLogs: auditLogs, licenses: licenses, settings: settings, unitOfWork: uow, customerService: customerService, balanceService: balanceService, catalogService: catalogService, walletCatalog: walletCatalog, posCatalog: posCatalog, inventoryService: inventoryService, saleService: saleService, messageParser: parser, transferProcessor: processor, licenseService: licenseService, backupService: backupService, mergeService: mergeService, settlementService: settlementService, recoveryService: recoveryService, retryService: retryService, pendingReview: pendingReview, smsBridge: smsBridge, smsHandler: smsHandler, notificationBridge: notificationBridge, notificationSources: notificationSources, notificationHandler: notificationHandler, clock: clock, ids: ids, themeModeNotifier: ValueNotifier<ThemeMode>(ThemeMode.light));
   }
 
   Future<void> startBackgroundHandlers() async {
     smsHandler.start();
     await notificationHandler.start();
-    recoveryService.recoverPending();
+    await _runRecovery();
+    _recoveryTimer ??= Timer.periodic(const Duration(minutes: 1), (_) => _runRecovery());
+  }
+
+  Future<void> _runRecovery() async {
+    if (_recoveryBusy) return;
+    final enabled = await settings.find('auto_retry_failed_messages');
+    final raw = enabled is Success<AppSetting?> ? enabled.value?.value : null;
+    final autoRetry = SettingBool.read(raw, defaultValue: true);
+    if (!autoRetry) return;
+    _recoveryBusy = true;
+    try {
+      await recoveryService.recoverPending();
+    } finally {
+      _recoveryBusy = false;
+    }
   }
 
   Future<void> dispose() async {
+    _recoveryTimer?.cancel();
+    _recoveryTimer = null;
     smsHandler.stop();
     await notificationHandler.stop();
     await database.close();
