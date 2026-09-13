@@ -4,6 +4,7 @@ import '../../../core/result.dart';
 import '../../../domain/entities/card.dart' as domain;
 import '../../app_scope.dart';
 import '../../theme/kayan_colors.dart';
+import '../../theme/kayan_palette.dart';
 import '../async_views.dart';
 
 class CardStockSheet extends StatefulWidget {
@@ -52,23 +53,24 @@ class _CardStockSheetState extends State<CardStockSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final palette = KayanPalette.of(context);
     final bottom = MediaQuery.paddingOf(context).bottom;
     return Directionality(textDirection: TextDirection.rtl, child: Container(
       constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.72),
-      decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
+      decoration: BoxDecoration(color: palette.surface, borderRadius: const BorderRadius.vertical(top: Radius.circular(28))),
       child: Column(mainAxisSize: MainAxisSize.min, children: [
         const SizedBox(height: 10),
-        Container(width: 48, height: 5, decoration: BoxDecoration(color: Color(0xFFE5E7EB), borderRadius: BorderRadius.circular(50))),
-        const Padding(padding: EdgeInsets.fromLTRB(24, 20, 24, 12), child: Text('مخزون الكروت حسب الفئة', style: TextStyle(fontFamily: 'Tajawal', fontSize: 18, fontWeight: FontWeight.bold, color: KayanColors.textPrimary))),
+        Container(width: 48, height: 5, decoration: BoxDecoration(color: palette.border, borderRadius: BorderRadius.circular(50))),
+        Padding(padding: const EdgeInsets.fromLTRB(24, 20, 24, 12), child: Text('مخزون الكروت حسب الفئة', style: TextStyle(fontFamily: 'Tajawal', fontSize: 18, fontWeight: FontWeight.bold, color: palette.textPrimary))),
         if (_loading) const Padding(padding: EdgeInsets.symmetric(vertical: 48), child: AsyncLoadingView(message: 'جاري تحميل المخزون…'))
         else if (_error != null) Padding(padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 24), child: AsyncErrorView(message: _error!, onRetry: _load))
-        else if (_rows.isEmpty) const Padding(padding: EdgeInsets.symmetric(vertical: 40, horizontal: 24), child: Text('لا توجد فئات مسجلة', textAlign: TextAlign.center, style: TextStyle(fontFamily: 'Tajawal', fontSize: 14, color: KayanColors.textSecondary)))
+        else if (_rows.isEmpty) Padding(padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 24), child: Text('لا توجد فئات مسجلة', textAlign: TextAlign.center, style: TextStyle(fontFamily: 'Tajawal', fontSize: 14, color: palette.textSecondary)))
         else Flexible(child: ListView.separated(shrinkWrap: true, padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8), itemCount: _rows.length, separatorBuilder: (_, __) => const Divider(height: 1), itemBuilder: (context, i) => _CategoryStockTile(row: _rows[i]))),
         const Divider(height: 1),
         Padding(padding: EdgeInsets.fromLTRB(24, 16, 24, 12 + bottom), child: Column(children: [
           Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-            const Text('إجمالي الكروت', style: TextStyle(fontFamily: 'Tajawal', fontSize: 14, color: KayanColors.textSecondary)),
-            Text('${_rows.fold<int>(0, (s, e) => s + e.available)} متوفر من ${_rows.fold<int>(0, (s, e) => s + e.total)}', style: const TextStyle(fontFamily: 'Tajawal', fontSize: 16, fontWeight: FontWeight.bold, color: KayanColors.textPrimary)),
+            Text('إجمالي الكروت', style: TextStyle(fontFamily: 'Tajawal', fontSize: 14, color: palette.textSecondary)),
+            Text('${_rows.fold<int>(0, (s, e) => s + e.available)} متوفر من ${_rows.fold<int>(0, (s, e) => s + e.total)}', style: TextStyle(fontFamily: 'Tajawal', fontSize: 16, fontWeight: FontWeight.bold, color: palette.textPrimary)),
           ]),
           const SizedBox(height: 16),
           SizedBox(width: double.infinity, height: 52, child: FilledButton.icon(
@@ -89,13 +91,14 @@ class _CategoryStockTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = KayanPalette.of(context);
     final faceMajor = row.category.faceValue.minorUnits ~/ 100;
     final label = row.category.name.trim().isNotEmpty ? row.category.name : 'كرت $faceMajor';
     return Padding(padding: const EdgeInsets.symmetric(vertical: 14), child: Row(children: [
       Container(width: 10, height: 10, decoration: BoxDecoration(color: row.isLow ? KayanColors.error : KayanColors.primary, shape: BoxShape.circle)),
       const SizedBox(width: 10),
-      Expanded(child: Text(label, style: const TextStyle(fontFamily: 'Tajawal', fontSize: 15, fontWeight: FontWeight.w600, color: KayanColors.textPrimary))),
-      Text('${row.available} / ${row.total}', style: const TextStyle(fontFamily: 'Tajawal', fontSize: 14, color: KayanColors.textSecondary)),
+      Expanded(child: Text(label, style: TextStyle(fontFamily: 'Tajawal', fontSize: 15, fontWeight: FontWeight.w600, color: palette.textPrimary))),
+      Text('${row.available} / ${row.total}', style: TextStyle(fontFamily: 'Tajawal', fontSize: 14, color: palette.textSecondary)),
       if (row.isLow) ...[const SizedBox(width: 8), Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2), decoration: BoxDecoration(color: KayanColors.errorBackground, borderRadius: BorderRadius.circular(8)), child: const Text('منخفض', style: TextStyle(fontFamily: 'Tajawal', fontSize: 12, fontWeight: FontWeight.bold, color: KayanColors.error)))],
     ]));
   }
