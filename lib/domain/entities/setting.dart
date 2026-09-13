@@ -17,6 +17,10 @@ abstract final class SettingKeys {
   static const autoRetryFailedMessages = 'auto_retry_failed_messages';
   static const retryMaxAttempts = 'retry_max_attempts';
   static const retryBaseDelaySeconds = 'retry_base_delay_seconds';
+  static const salafniEnabled = 'salafni_enabled';
+  static const salafniAcceptedTemplate = 'salafni_template_accepted';
+  static const salafniRejectedTemplate = 'salafni_template_rejected';
+  static const salafniSettledTemplate = 'salafni_template_settled';
 }
 
 abstract final class SettingDefaults {
@@ -30,6 +34,7 @@ abstract final class SettingDefaults {
   static const autoRetryFailedMessages = true;
   static const retryMaxAttempts = 5;
   static const retryBaseDelaySeconds = 30;
+  static const salafniEnabled = false;
 }
 
 final class AppSetting {
