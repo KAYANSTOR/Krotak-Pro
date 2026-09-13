@@ -11,16 +11,7 @@ import '../domain/services/unified_payment_event_engine.dart';
 import '../platform/sms_bridge.dart';
 
 final class IncomingSmsHandler {
-  IncomingSmsHandler({
-    required this.bridge,
-    required this.messages,
-    required this.parser,
-    required this.processor,
-    required this.ids,
-    this.settings,
-    this.advanceService,
-    UnifiedPaymentEventEngine? engine,
-  }) : engine = engine ?? UnifiedPaymentEventEngine(messages: messages, parser: parser, processor: processor, ids: ids, settings: settings);
+  IncomingSmsHandler({required this.bridge, required this.messages, required this.parser, required this.processor, required this.ids, this.settings, this.advanceService, UnifiedPaymentEventEngine? engine}) : engine = engine ?? UnifiedPaymentEventEngine(messages: messages, parser: parser, processor: processor, ids: ids, settings: settings);
 
   final SmsBridge bridge;
   final MessageRepository messages;
@@ -30,36 +21,24 @@ final class IncomingSmsHandler {
   final SettingsRepository? settings;
   final AdvanceService? advanceService;
   final UnifiedPaymentEventEngine engine;
-
   StreamSubscription<IncomingSmsEvent>? _sub;
 
   void start() { _sub ??= bridge.incomingSms.listen(_onEvent, onError: (_) {}); }
-
   void stop() { _sub?.cancel(); _sub = null; }
 
   Future<Result<Transaction?>> handleManual({required String sender, required String body, DateTime? receivedAt}) async {
-    if (_isSalafniCommand(body) && advanceService != null) {
-      final enabled = await _salafniEnabled();
-      if (enabled) {
-        final result = await advanceService!.requestByIdentifier(
-          identifier: sender,
-          currencyCode: await _currencyCode(),
-          operationId: _salafniOperationId(sender, body),
-        );
-        if (result is Success<AdvanceIssue>) return const Success(null);
-        return Failure((result as Failure).error);
-      }
+    final at = receivedAt ?? DateTime.now().toUtc();
+    if (_isSalafniCommand(body) && advanceService != null && await _salafniEnabled()) {
+      final result = await advanceService!.requestByIdentifier(identifier: sender, currencyCode: await _currencyCode(), operationId: _salafniOperationId(sender, body, at));
+      if (result is Success<AdvanceIssue>) return const Success(null);
+      return Failure<Transaction?>((result as Failure).error);
     }
-    return engine.ingest(PaymentEvent(channel: PaymentChannel.manual, sourceKey: sender, body: body, receivedAt: receivedAt ?? DateTime.now().toUtc()));
+    return engine.ingest(PaymentEvent(channel: PaymentChannel.manual, sourceKey: sender, body: body, receivedAt: at));
   }
 
   Future<void> _onEvent(IncomingSmsEvent event) async {
     if (_isSalafniCommand(event.body) && advanceService != null && await _salafniEnabled()) {
-      await advanceService!.requestByIdentifier(
-        identifier: event.sender,
-        currencyCode: await _currencyCode(),
-        operationId: _salafniOperationId(event.sender, event.body),
-      );
+      await advanceService!.requestByIdentifier(identifier: event.sender, currencyCode: await _currencyCode(), operationId: _salafniOperationId(event.sender, event.body, event.receivedAt));
       return;
     }
     await engine.ingest(PaymentEvent(channel: PaymentChannel.sms, sourceKey: event.sender, body: event.body, receivedAt: event.receivedAt));
@@ -70,7 +49,7 @@ final class IncomingSmsHandler {
     return normalized == 'سلفني' || normalized == 'س' || normalized == 's' || normalized == 'salafni';
   }
 
-  String _salafniOperationId(String sender, String body) => 'sms:${sender.trim().toLowerCase()}:${body.trim().toLowerCase()}';
+  String _salafniOperationId(String sender, String body, DateTime receivedAt) => 'sms:${sender.trim().toLowerCase()}:${receivedAt.toUtc().millisecondsSinceEpoch}:${body.trim().toLowerCase()}';
 
   Future<bool> _salafniEnabled() async {
     if (settings == null) return false;
