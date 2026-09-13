@@ -47,45 +47,41 @@ CI على main — analyze + test + Android debug APK build
 - كيان `Advance` و`AdvanceRepository` كإسقاط من دفتر الحركات + سجل المبيعات، دون دفتر مالي ثانٍ أو جدول Drift جديد.
 - خدمة `LocalAdvanceService`: التفعيل، طلب سلفني، اختيار أقل فئة نشطة ذات مخزون، الحجز، تسجيل الدين، إرسال الكرت، والتدقيق.
 - Idempotency لطلب السلفة ولتسديد التحويلات.
-- التسديد التلقائي موصول بمحرك `LocalTransferProcessor`؛ يسدد الدين أولًا ثم يعالج فقط المبلغ المتبقي في مسار الكرت المعتاد.
+- التسديد التلقائي موصول بمحرك `LocalTransferProcessor`.
 - رسائل القبول والرفض والسداد قابلة للتخصيص من الإعدادات.
-- إعدادات: بطاقة تفعيل سلفني + شاشة قوالب رسائل سلفني.
 - توثيق: [phase-5-salafni.md](phase-5-salafni.md)
-- يلزم CI ناجح + اختبار جهاز Android حقيقي قبل Production Ready.
 
 ### Phase 6 — POS Ledger + Auto Settlement (2026-09-13) 🟡 منفذة في المستودع / بانتظار إغلاق بوابة التحقق
 - ربط `PointOfSale` بحساب دفتر عبر `LocalPosAccountRegistry` (`pos_accounts`) دون جدول Drift جديد.
-- `LocalPosSettlementService`: تعرف المعرف، تسوية ذرية (`deposit` + مرجع `pos-settle:`)، حساب المديونية المتبقية، Audit، وSMS تأكيدي.
-- `LocalTransferProcessor` يحوّل الحوالة المطابقة لنقطة بيع إلى مسار التسوية بدل بيع الكرت عندما يكون الإعداد مفعّلًا.
-- إعدادات: تفعيل التسوية التلقائية + قوالب النجاح/الفشل/غير المعروف.
-- واجهة: معرف دفع عند إنشاء نقطة البيع + بطاقة إعداد وشاشة قوالب.
+- `LocalPosSettlementService`: تعرف المعرف، تسوية ذرية، حساب المديونية المتبقية، Audit، وSMS تأكيدي.
 - اختبارات: `test/services/pos_auto_settlement_test.dart`
 - توثيق: [phase-6-pos-ledger-auto-settlement.md](phase-6-pos-ledger-auto-settlement.md)
 
 ### Phase 7 — Bulk Card Import Performance (2026-09-13) 🟡 منفذة في المستودع / بانتظار قياس جهاز
 - تحقق مسبق من الملف ثم إدخال مجمّع بدل حفظ صف-بصف.
 - منع تكرار serial/secret داخل الملف وداخل المخزون قبل الاعتماد.
-- تقدم حقيقي في شاشة الاستيراد + تقرير صفوف مرفوضة.
 - توثيق: [phase-7-bulk-card-import.md](phase-7-bulk-card-import.md)
 
 ### Phase 8 — Customer SMS Broadcast (2026-09-13) 🟡 منفذة في المستودع / بانتظار تحقق الجهاز
 - معاينة المستلمين مع استبعاد المحظور والتالف وغير النشط.
 - تأكيد صريح بكلمة `إرسال` قبل إنشاء المهمة.
-- مهمة قابلة للاستعادة في إعداد `broadcast_jobs` مع نتيجة لكل رقم وAudit.
-- منع تكرار نفس النص ونفس المستلمين.
-- الواجهة من الإعدادات مع تقدم حقيقي.
-- رسائل البث لا تستهلك رصيد ترخيص الكروت.
 - اختبارات: `test/services/broadcast_service_test.dart`
 - توثيق: [phase-8-customer-sms-broadcast.md](phase-8-customer-sms-broadcast.md)
 
 ### Phase 9 — Long Press Actions (2026-09-13) ✅ في المستودع
 - ضغط مطول على بطاقة المحفظة أو نقطة البيع يفتح التعديل.
 - بديل وصول: قائمة إجراءات من أيقونة المزيد.
-- تحديث الاسم والحالة عبر خدمات الكتالوج مع Audit.
 - اختبارات: `test/services/wallet_pos_catalog_update_test.dart`
 - تقرير: [phase-9-long-press-actions.md](phase-9-long-press-actions.md)
 
+### Phase 10 — UI/UX + Dark/Light Improvements (2026-09-13) 🟡 منفذة في المستودع / بانتظار مراجعة بصرية على الجهاز
+- أوضاع المظهر: فاتح / داكن / حسب الجهاز عبر `ThemePreference`.
+- بطاقات الإعدادات والمبيعات والأوراق السفلية تعتمد `ColorScheme` بدل خلفيات بيضاء ثابتة.
+- حالة disabled واضحة لمحدد المظهر.
+- اختبارات: `test/domain/theme_preference_test.dart`
+- تقرير: [phase-10-ui-ux-theme.md](phase-10-ui-ux-theme.md)
+
 ## المتبقي Post-V1 (الترتيب الرسمي)
-10. UI/UX + Dark/Light Improvements
+لا توجد مراحل رسمية متبقية في ترتيب Post-V1 بعد المرحلة 10. المتبقي تحقق جهاز ومراجعة تباين.
 
 مرجع: NET-POST-V1-MASTER-PLAN — GitHub مصدر الحقيقة؛ لا Local Only.
