@@ -6,6 +6,7 @@ import 'domain/entities/message.dart';
 import 'domain/entities/setting.dart';
 import 'ui/app_scope.dart';
 import 'ui/home_shell.dart';
+import 'ui/theme/kayan_palette.dart';
 import 'ui/theme/kayan_theme.dart';
 
 Future<void> main() async {
@@ -29,11 +30,8 @@ Future<void> main() async {
 
 Future<void> _loadThemeMode(AppContainer container) async {
   final result = await container.settings.find(SettingKeys.themeMode);
-  if (result is Success<AppSetting?> && result.value?.value.trim().toLowerCase() == 'dark') {
-    container.themeModeNotifier.value = ThemeMode.dark;
-  } else {
-    container.themeModeNotifier.value = ThemeMode.light;
-  }
+  final raw = result is Success<AppSetting?> ? result.value?.value : null;
+  container.themeModeNotifier.value = ThemeModeCodec.parse(raw);
 }
 
 class NetApp extends StatefulWidget {

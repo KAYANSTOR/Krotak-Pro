@@ -85,7 +85,14 @@ CI على main — analyze + test + Android debug APK build
 - اختبارات: `test/services/wallet_pos_catalog_update_test.dart`
 - تقرير: [phase-9-long-press-actions.md](phase-9-long-press-actions.md)
 
+### Phase 10 — UI/UX + Dark/Light Improvements (2026-09-13) ✅ في المستودع
+- `KayanPalette` تكيّفية حسب Brightness بدل ألوان Light الثابتة في الكروم الأساسي.
+- اختيار المظهر: نظام الجهاز / فاتح / داكن مع تطبيق فوري عبر `themeModeNotifier`.
+- بطاقات الإعدادات والتنقل السفلي وبطاقات المبيعات/الإجراءات السريعة تتبع الثيم.
+- اختبارات: `test/widget/theme_palette_test.dart`
+- تقرير: [phase-10-ui-ux-dark-light.md](phase-10-ui-ux-dark-light.md)
+
 ## المتبقي Post-V1 (الترتيب الرسمي)
-10. UI/UX + Dark/Light Improvements
+لا بنود رسمية متبقية في قائمة Post-V1. المتبقي تحقق جهاز للبوابات الصفراء ومراجعة أوراق Bottom Sheets.
 
 مرجع: NET-POST-V1-MASTER-PLAN — GitHub مصدر الحقيقة؛ لا Local Only.
