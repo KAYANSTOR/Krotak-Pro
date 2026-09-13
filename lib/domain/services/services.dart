@@ -1,5 +1,6 @@
 import '../../core/result.dart';
 import '../entities/advance.dart';
+import '../entities/broadcast.dart';
 import '../entities/card.dart';
 import '../entities/customer.dart';
 import '../entities/message.dart';
@@ -79,6 +80,15 @@ abstract interface class PaymentEventEngine {
 
 abstract interface class LicenseService {
   Future<Result<void>> verifyOnline();
+}
+
+abstract interface class BroadcastService {
+  Future<Result<BroadcastPreview>> preview({required String body});
+  Future<Result<BroadcastJob>> confirm({required String body, required String confirmationPhrase});
+  Future<Result<BroadcastJob>> run(String jobId, {void Function(BroadcastProgress progress)? onProgress});
+  Future<Result<BroadcastJob>> pause(String jobId);
+  Future<Result<BroadcastJob>> cancel(String jobId);
+  Future<Result<List<BroadcastJob>>> listJobs();
 }
 
 abstract interface class AdvanceService {
