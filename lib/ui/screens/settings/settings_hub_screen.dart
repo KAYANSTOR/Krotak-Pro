@@ -16,6 +16,7 @@ import 'export_ledger_screen.dart';
 import 'salafni_templates_screen.dart';
 import 'sim_settings_screen.dart';
 import 'templates_screen.dart';
+import 'device_verification_screen.dart';
 import 'wallet_notification_settings_screen.dart';
 
 class SettingsHubScreen extends StatefulWidget {
@@ -150,6 +151,8 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
           SettingsNavCard(icon: Icons.pattern, title: 'قوالب التحويل', subtitle: 'أنماط تحليل رسائل التحويل الواردة', onTap: () => _open(const TemplatesScreen())),
           SettingsNavCard(icon: Icons.file_upload_outlined, title: 'تصدير السجل', subtitle: 'تصدير حركات الدفتر', onTap: () => _open(const ExportLedgerScreen())),
           SettingsNavCard(icon: Icons.cleaning_services_outlined, title: 'تنظيف السجلات', subtitle: 'استعادة ومعالجة الرسائل المعلّقة', onTap: () => _open(const CleanLogsScreen())),
+          const SettingsSectionHeader(title: 'التحقق والإصدار'),
+          SettingsNavCard(icon: Icons.verified_outlined, title: 'تحقق الجهاز', subtitle: 'بوابات الإنتاج الصفراء التي تتطلب جهاز Android حقيقي', onTap: () => _open(const DeviceVerificationScreen())),
           const SettingsSectionHeader(title: 'المساعدة'),
           SettingsNavCard(icon: Icons.help_outline, title: 'مركز المساعدة', subtitle: 'شرح النظام والسلوك المعتمد', onTap: () => _open(const HelpCenterScreen())),
         ]),
