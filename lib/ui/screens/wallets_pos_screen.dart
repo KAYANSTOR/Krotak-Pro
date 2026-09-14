@@ -5,6 +5,7 @@ import '../../domain/entities/wallet.dart';
 import '../app_scope.dart';
 import '../theme/kayan_colors.dart';
 import '../widgets/async_views.dart';
+import 'settings/templates_screen.dart';
 
 class WalletsPosScreen extends StatefulWidget {
   const WalletsPosScreen({super.key});
@@ -198,10 +199,7 @@ class _WalletsPosScreenState extends State<WalletsPosScreen>
     ).whenComplete(ctrl.dispose);
   }
 
-  void _showActions({
-    required String title,
-    required VoidCallback onEdit,
-  }) {
+  void _showWalletActions(Wallet wallet) {
     showModalBottomSheet<void>(
       context: context,
       builder: (ctx) => SafeArea(
@@ -209,14 +207,53 @@ class _WalletsPosScreenState extends State<WalletsPosScreen>
           mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
-              title: Text(title, style: const TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.bold)),
+              title: Text(wallet.name, style: const TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.bold)),
             ),
             ListTile(
               leading: const Icon(Icons.edit_outlined),
-              title: const Text('تعديل'),
+              title: const Text('تعديل', style: TextStyle(fontFamily: 'Tajawal')),
               onTap: () {
                 Navigator.pop(ctx);
-                onEdit();
+                _editWallet(wallet);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.pattern),
+              title: const Text('إدارة القوالب', style: TextStyle(fontFamily: 'Tajawal')),
+              onTap: () {
+                Navigator.pop(ctx);
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => TemplatesScreen(
+                      walletId: wallet.id,
+                      walletName: wallet.name,
+                    ),
+                  ),
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showPosActions(PointOfSale pos) {
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              title: Text(pos.name, style: const TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.bold)),
+            ),
+            ListTile(
+              leading: const Icon(Icons.edit_outlined),
+              title: const Text('تعديل', style: TextStyle(fontFamily: 'Tajawal')),
+              onTap: () {
+                Navigator.pop(ctx);
+                _editPos(pos);
               },
             ),
           ],
@@ -280,7 +317,7 @@ class _WalletsPosScreenState extends State<WalletsPosScreen>
             trailing: IconButton(
               tooltip: 'إجراءات المحفظة',
               icon: const Icon(Icons.more_vert),
-              onPressed: () => _showActions(title: wallet.name, onEdit: () => _editWallet(wallet)),
+              onPressed: () => _showWalletActions(wallet),
             ),
             onLongPress: () => _editWallet(wallet),
           );
@@ -307,7 +344,7 @@ class _WalletsPosScreenState extends State<WalletsPosScreen>
             trailing: IconButton(
               tooltip: 'إجراءات نقطة البيع',
               icon: const Icon(Icons.more_vert),
-              onPressed: () => _showActions(title: pos.name, onEdit: () => _editPos(pos)),
+              onPressed: () => _showPosActions(pos),
             ),
             onLongPress: () => _editPos(pos),
           );
