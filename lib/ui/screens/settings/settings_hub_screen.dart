@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/result.dart';
 import '../../../domain/entities/setting.dart';
 import '../../app_scope.dart';
 import '../../routing/app_routes.dart';
@@ -32,17 +33,19 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
 
   Future<void> _load() async {
     final c = AppScope.of(context);
-    Future<String?> v(String key) async {
+
+    Future<String?> read(String key) async {
       final r = await c.settings.find(key);
-      return r is Success ? (r as dynamic).value?.value as String? : null;
+      if (r is Success<AppSetting?>) return r.value?.value;
+      return null;
     }
 
-    final name = await v(SettingKeys.networkName);
-    final auto = await v(SettingKeys.smsAutoProcessingEnabled);
-    final cat = await v(SettingKeys.processCategoryAmountsOnly);
-    final old = await v(SettingKeys.processOldMessagesOnResume);
-    final sal = await v(SettingKeys.salafniEnabled);
-    final theme = await v(SettingKeys.themeMode);
+    final name = await read(SettingKeys.networkName);
+    final auto = await read(SettingKeys.smsAutoProcessingEnabled);
+    final cat = await read(SettingKeys.processCategoryAmountsOnly);
+    final old = await read(SettingKeys.processOldMessagesOnResume);
+    final sal = await read(SettingKeys.salafniEnabled);
+    final theme = await read(SettingKeys.themeMode);
 
     if (!mounted) return;
     setState(() {
@@ -73,7 +76,11 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
   Future<void> _saveName(String name) async {
     final c = AppScope.of(context);
     await c.settings.save(
-      AppSetting(key: SettingKeys.networkName, value: name.trim(), updatedAt: c.clock.now()),
+      AppSetting(
+        key: SettingKeys.networkName,
+        value: name.trim(),
+        updatedAt: c.clock.now(),
+      ),
     );
     setState(() => _networkName = name.trim().isEmpty ? SettingDefaults.networkName : name.trim());
   }
@@ -105,7 +112,10 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
           _sectionTitle('النظام'),
           _card([
             ListTile(
-              title: const Text('اسم الشبكة', style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w600)),
+              title: const Text(
+                'اسم الشبكة',
+                style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w600),
+              ),
               subtitle: Text(_networkName, style: const TextStyle(fontFamily: 'Tajawal')),
               trailing: const Icon(Icons.edit_outlined),
               onTap: () async {
@@ -114,10 +124,19 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
                   context: context,
                   builder: (ctx) => AlertDialog(
                     title: const Text('اسم الشبكة', style: TextStyle(fontFamily: 'Tajawal')),
-                    content: TextField(controller: ctrl, style: const TextStyle(fontFamily: 'Tajawal')),
+                    content: TextField(
+                      controller: ctrl,
+                      style: const TextStyle(fontFamily: 'Tajawal'),
+                    ),
                     actions: [
-                      TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('إلغاء', style: TextStyle(fontFamily: 'Tajawal'))),
-                      FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('حفظ', style: TextStyle(fontFamily: 'Tajawal'))),
+                      TextButton(
+                        onPressed: () => Navigator.pop(ctx, false),
+                        child: const Text('إلغاء', style: TextStyle(fontFamily: 'Tajawal')),
+                      ),
+                      FilledButton(
+                        onPressed: () => Navigator.pop(ctx, true),
+                        child: const Text('حفظ', style: TextStyle(fontFamily: 'Tajawal')),
+                      ),
                     ],
                   ),
                 );
@@ -142,7 +161,10 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
               },
             ),
             SwitchListTile.adaptive(
-              title: const Text('معالجة الرسائل القديمة عند الاستئناف', style: TextStyle(fontFamily: 'Tajawal')),
+              title: const Text(
+                'معالجة الرسائل القديمة عند الاستئناف',
+                style: TextStyle(fontFamily: 'Tajawal'),
+              ),
               value: _oldMsgs,
               onChanged: (v) async {
                 setState(() => _oldMsgs = v);
@@ -159,7 +181,10 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
             ),
             ListTile(
               leading: const Icon(Icons.inventory_2_outlined, color: Color(0xFF0F766E)),
-              title: const Text('حد تنبيه انخفاض المخزون', style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w600)),
+              title: const Text(
+                'حد تنبيه انخفاض المخزون',
+                style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w600),
+              ),
               trailing: const Icon(Icons.chevron_left),
               onTap: () => Navigator.of(context).push(
                 MaterialPageRoute(builder: (_) => const LowStockSettingsScreen()),
@@ -167,8 +192,14 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
             ),
             ListTile(
               leading: const Icon(Icons.sim_card_outlined, color: Color(0xFF0F766E)),
-              title: const Text('إعدادات شرائح الاتصال', style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w600)),
-              subtitle: const Text('قراءة / إرسال / Auto-Failover', style: TextStyle(fontFamily: 'Tajawal', fontSize: 12)),
+              title: const Text(
+                'إعدادات شرائح الاتصال',
+                style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w600),
+              ),
+              subtitle: const Text(
+                'قراءة / إرسال / Auto-Failover',
+                style: TextStyle(fontFamily: 'Tajawal', fontSize: 12),
+              ),
               trailing: const Icon(Icons.chevron_left),
               onTap: () => Navigator.of(context).push(
                 MaterialPageRoute(builder: (_) => const SimSettingsScreen()),
@@ -176,8 +207,14 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
             ),
             ListTile(
               leading: const Icon(Icons.health_and_safety_outlined, color: Color(0xFFDC2626)),
-              title: const Text('فحص وتشخيص النظام', style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w700)),
-              subtitle: const Text('صلاحيات حرجة · مستحسنة · اختيارية', style: TextStyle(fontFamily: 'Tajawal', fontSize: 12)),
+              title: const Text(
+                'فحص وتشخيص النظام',
+                style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w700),
+              ),
+              subtitle: const Text(
+                'صلاحيات حرجة · مستحسنة · اختيارية',
+                style: TextStyle(fontFamily: 'Tajawal', fontSize: 12),
+              ),
               trailing: const Icon(Icons.chevron_left),
               onTap: () => Navigator.of(context).push(
                 MaterialPageRoute(builder: (_) => const SystemCheckScreen()),
@@ -191,19 +228,25 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
               title: const Text('فاتح', style: TextStyle(fontFamily: 'Tajawal')),
               value: ThemeMode.light,
               groupValue: _theme,
-              onChanged: (v) => v == null ? null : _saveTheme(v),
+              onChanged: (v) {
+                if (v != null) _saveTheme(v);
+              },
             ),
             RadioListTile<ThemeMode>(
               title: const Text('داكن', style: TextStyle(fontFamily: 'Tajawal')),
               value: ThemeMode.dark,
               groupValue: _theme,
-              onChanged: (v) => v == null ? null : _saveTheme(v),
+              onChanged: (v) {
+                if (v != null) _saveTheme(v);
+              },
             ),
             RadioListTile<ThemeMode>(
               title: const Text('حسب النظام', style: TextStyle(fontFamily: 'Tajawal')),
               value: ThemeMode.system,
               groupValue: _theme,
-              onChanged: (v) => v == null ? null : _saveTheme(v),
+              onChanged: (v) {
+                if (v != null) _saveTheme(v);
+              },
             ),
           ]),
           const SizedBox(height: 16),
@@ -211,36 +254,30 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
           _card([
             ListTile(
               leading: const Icon(Icons.mark_email_unread_outlined),
-              title: const Text('الرسائل المعلّقة', style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w600)),
+              title: const Text(
+                'الرسائل المعلّقة',
+                style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w600),
+              ),
               trailing: const Icon(Icons.chevron_left),
               onTap: () => AppRoutes.openPendingMessages(context),
             ),
             ListTile(
               leading: const Icon(Icons.refresh),
-              title: const Text('الرسائل الفاشلة / إعادة المحاولة', style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w600)),
+              title: const Text(
+                'الرسائل الفاشلة / إعادة المحاولة',
+                style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w600),
+              ),
               trailing: const Icon(Icons.chevron_left),
               onTap: () => AppRoutes.openFailedMessages(context),
             ),
             ListTile(
               leading: const Icon(Icons.block_outlined),
-              title: const Text('الرسائل المرفوضة', style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w600)),
+              title: const Text(
+                'الرسائل المرفوضة',
+                style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w600),
+              ),
               trailing: const Icon(Icons.chevron_left),
               onTap: () => AppRoutes.openRejectedMessages(context),
-            ),
-          ]),
-          const SizedBox(height: 16),
-          _sectionTitle('الترخيص والنسخ'),
-          _card([
-            ListTile(
-              leading: const Icon(Icons.verified_outlined),
-              title: const Text('الترخيص', style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w600)),
-              subtitle: const Text('حالة الترخيص وربط الجهاز', style: TextStyle(fontFamily: 'Tajawal', fontSize: 12)),
-              trailing: const Icon(Icons.chevron_left),
-              onTap: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('شاشة الترخيص متاحة من مسار الترخيص', style: TextStyle(fontFamily: 'Tajawal'))),
-                );
-              },
             ),
           ]),
         ],
@@ -270,6 +307,3 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
         child: Column(children: children),
       );
 }
-
-// local import helper for Result without full path clash
-import '../../../core/result.dart';
