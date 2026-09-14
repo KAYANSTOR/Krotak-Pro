@@ -24,6 +24,12 @@ abstract interface class CustomerService {
     required String value,
     required bool isPrimary,
   });
+
+  /// ربط رقم الجوال الأساسي تلقائيًا عند توفره دون تعارض.
+  Future<Result<void>> bindPrimaryGsm({
+    required String customerId,
+    required String phone,
+  });
 }
 
 abstract interface class CustomerBalanceService {
@@ -60,7 +66,8 @@ abstract interface class CardInventoryService {
   Future<Result<void>> releaseReservation({required String cardId, required String reservationId});
 }
 
-enum ManualSaleMethod { cash, credit }
+/// طرق البيع اليدوي — نقدي / آجل / هدية / نقطة بيع.
+enum ManualSaleMethod { cash, credit, gift, pos }
 
 abstract interface class SaleService {
   Future<Result<Sale>> sellFromBalance({required String customerId, required String categoryId, String? operationId});
@@ -105,7 +112,7 @@ abstract interface class AdvanceService {
   Future<Result<AdvanceIssue>> request({required String customerId, required String currencyCode, required String operationId});
   Future<Result<AdvanceIssue>> requestByIdentifier({required String identifier, required String currencyCode, required String operationId});
   Future<Result<AdvancePaymentResult>> applyPayment({required String customerId, required Money amount, required String reference});
-  Future<Result<List<Advance>>> listCustomerAdvances(String customerId);
+  Future<Result<List<Advance>> listCustomerAdvances(String customerId);
 }
 
 final class CardImportDraft {

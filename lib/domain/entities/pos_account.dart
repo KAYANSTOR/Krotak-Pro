@@ -1,5 +1,14 @@
 import 'wallet.dart';
 
+/// وضع نسبة عمولة نقطة البيع — 1.0.9.
+enum PosPercentageMode {
+  /// اعتماد نسب الفئة الافتراضية.
+  defaultCategory,
+
+  /// عمولة صفرية لكل الفئات.
+  zero,
+}
+
 /// Binding between a catalog [PointOfSale] and the customer ledger account
 /// that carries POS debt. Identifiers are payment-facing keys (phone, account,
 /// name) used to recognize incoming settlements.
@@ -11,6 +20,7 @@ final class PosAccount {
     required this.identifiers,
     this.notifyPhone,
     this.status = PointOfSaleStatus.active,
+    this.percentageMode = PosPercentageMode.defaultCategory,
   });
 
   final String posId;
@@ -19,6 +29,7 @@ final class PosAccount {
   final List<String> identifiers;
   final String? notifyPhone;
   final PointOfSaleStatus status;
+  final PosPercentageMode percentageMode;
 
   PosAccount copyWith({
     String? customerId,
@@ -26,6 +37,7 @@ final class PosAccount {
     List<String>? identifiers,
     String? notifyPhone,
     PointOfSaleStatus? status,
+    PosPercentageMode? percentageMode,
     bool clearNotifyPhone = false,
   }) {
     return PosAccount(
@@ -35,6 +47,7 @@ final class PosAccount {
       identifiers: identifiers ?? this.identifiers,
       notifyPhone: clearNotifyPhone ? null : (notifyPhone ?? this.notifyPhone),
       status: status ?? this.status,
+      percentageMode: percentageMode ?? this.percentageMode,
     );
   }
 
@@ -45,17 +58,26 @@ final class PosAccount {
         'identifiers': identifiers,
         'notifyPhone': notifyPhone,
         'status': status.name,
+        'percentageMode': percentageMode.name,
       };
 
   static PosAccount fromJson(Map<String, Object?> json) {
     final rawIds = json['identifiers'];
+    final modeRaw = json['percentageMode'] as String?;
     return PosAccount(
       posId: json['posId']! as String,
       customerId: json['customerId']! as String,
       name: json['name']! as String,
-      identifiers: rawIds is List ? rawIds.map((e) => e.toString()).toList(growable: false) : const <String>[],
+      identifiers: rawIds is List
+          ? rawIds.map((e) => e.toString()).toList(growable: false)
+          : const <String>[],
       notifyPhone: json['notifyPhone'] as String?,
-      status: PointOfSaleStatus.values.byName((json['status'] as String?) ?? PointOfSaleStatus.active.name),
+      status: PointOfSaleStatus.values.byName(
+        (json['status'] as String?) ?? PointOfSaleStatus.active.name,
+      ),
+      percentageMode: PosPercentageMode.values.byName(
+        modeRaw ?? PosPercentageMode.defaultCategory.name,
+      ),
     );
   }
 }
