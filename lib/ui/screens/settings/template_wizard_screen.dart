@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../core/result.dart';
 import '../../../domain/entities/message.dart';
 import '../../../domain/entities/wallet.dart';
+import '../../../domain/services/local_message_parser.dart';
 import '../../app_scope.dart';
 import '../../theme/kayan_palette.dart';
 
@@ -106,10 +107,6 @@ class _TemplateWizardScreenState extends State<TemplateWizardScreen> {
           _toast('أدخل اسم القالب');
           return false;
         }
-        if (_sampleCtrl.text.trim().isEmpty && _patternCtrl.text.trim().isEmpty) {
-          _toast('أدخل نص الرسالة النموذجية أو النمط');
-          return false;
-        }
         return true;
       case 1:
         final p = _patternCtrl.text.trim();
@@ -125,8 +122,6 @@ class _TemplateWizardScreenState extends State<TemplateWizardScreen> {
           _toast('النمط يجب أن يحتوي على {ref}');
           return false;
         }
-        return true;
-      case 2:
         return true;
       case 3:
         final pr = int.tryParse(_priorityCtrl.text.trim());
@@ -318,13 +313,7 @@ class _TemplateWizardScreenState extends State<TemplateWizardScreen> {
             if (v == null) return;
             setState(() {
               _kind = v;
-              if (widget.existing == null &&
-                  (_patternCtrl.text.isEmpty ||
-                      _patternCtrl.text == _defaultPattern(TemplateIdentifierKind.phone) ||
-                      _patternCtrl.text.startsWith('تم تحويل') ||
-                      _patternCtrl.text.startsWith('ايداع') ||
-                      _patternCtrl.text.startsWith('تحويل') ||
-                      _patternCtrl.text.startsWith('رصيد'))) {
+              if (widget.existing == null) {
                 _patternCtrl.text = _defaultPattern(v);
               }
             });
@@ -494,7 +483,7 @@ class _TemplateWizardScreenState extends State<TemplateWizardScreen> {
         ),
         const SizedBox(height: 6),
         Text(
-          'توليد تلقائي (يمكنك تعديل القيمة يدويًا) — الأقل أولوية أعلى',
+          'الأقل رقمًا = أولوية أعلى عند تطابق أكثر من قالب',
           style: TextStyle(fontFamily: 'Tajawal', fontSize: 12, color: kayan.textTertiary),
         ),
         const SizedBox(height: 16),
@@ -510,25 +499,6 @@ class _TemplateWizardScreenState extends State<TemplateWizardScreen> {
             if (v == null) return;
             setState(() => _isActive = v);
           },
-        ),
-        const SizedBox(height: 20),
-        Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: kayan.surface,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: kayan.border),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('ملخص', style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w700, color: kayan.textPrimary)),
-              const SizedBox(height: 8),
-              Text('الاسم: ${_nameCtrl.text.trim()}', style: TextStyle(fontFamily: 'Tajawal', color: kayan.textSecondary)),
-              Text('النوع: ${_kindLabel(_kind)}', style: TextStyle(fontFamily: 'Tajawal', color: kayan.textSecondary)),
-              Text('النمط: ${_patternCtrl.text.trim()}', style: TextStyle(fontFamily: 'Tajawal', color: kayan.textSecondary, fontSize: 12)),
-            ],
-          ),
         ),
       ],
     );
