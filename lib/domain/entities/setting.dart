@@ -2,6 +2,8 @@ abstract final class SettingKeys {
   static const defaultCurrency = 'default_currency';
   static const reservationMinutes = 'reservation_minutes';
   static const preferredSimSlot = 'preferred_sim_slot';
+  static const preferredSendSimSlot = 'preferred_send_sim_slot';
+  static const simAutoFailover = 'sim_auto_failover';
   static const smsListenEnabled = 'sms_listen_enabled';
   static const batteryOptimizationAcknowledged = 'battery_optimization_acknowledged';
   static const lastExportAt = 'last_export_at';
@@ -29,8 +31,9 @@ abstract final class SettingKeys {
   static const broadcastMaxAttempts = 'broadcast_max_attempts';
   static const broadcastRateDelayMs = 'broadcast_rate_delay_ms';
   static const deviceVerificationGates = 'device_verification_gates';
-  /// Threshold for low card stock alerts (available count per category).
   static const lowStockThreshold = 'low_stock_threshold';
+  /// JSON array of [Promotion] objects.
+  static const promotionsCatalog = 'promotions_catalog';
 }
 
 abstract final class SettingDefaults {
@@ -48,8 +51,10 @@ abstract final class SettingDefaults {
   static const autoPosSettlementEnabled = true;
   static const broadcastMaxAttempts = 3;
   static const broadcastRateDelayMs = 800;
-  /// Matches Z Net video default: alert when category available < 10.
   static const lowStockThreshold = 10;
+  static const preferredSimSlot = '0';
+  static const preferredSendSimSlot = '0';
+  static const simAutoFailover = true;
 }
 
 final class AppSetting {
