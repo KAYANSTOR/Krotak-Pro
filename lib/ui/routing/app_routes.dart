@@ -7,6 +7,7 @@ import '../screens/help_center_screen.dart';
 import '../screens/pending_messages_screen.dart';
 import '../screens/rejected_messages_screen.dart';
 import '../screens/settings_screen.dart';
+import '../screens/system_check_screen.dart';
 import '../screens/transactions_log_screen.dart';
 import '../screens/wallets_pos_screen.dart';
 
@@ -22,6 +23,7 @@ abstract final class AppRoutes {
   }
 
   static Future<void> openHelp(BuildContext context) => push(context, const HelpCenterScreen());
+  static Future<void> openSystemCheck(BuildContext context) => push(context, const SystemCheckScreen());
   static Future<void> openPendingMessages(BuildContext context) => push(context, const PendingMessagesScreen());
   static Future<void> openFailedMessages(BuildContext context) => push(context, const FailedMessagesScreen());
   static Future<void> openAttentionMessages(BuildContext context) => openPendingMessages(context);
