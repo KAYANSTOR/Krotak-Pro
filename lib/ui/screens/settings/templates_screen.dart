@@ -32,6 +32,10 @@ class _TemplatesScreenState extends State<TemplatesScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) => _load());
   }
 
+  Future<void> _reloadParser() async {
+    await AppScope.of(context).reloadTemplates();
+  }
+
   Future<void> _load() async {
     setState(() {
       _loading = true;
@@ -69,15 +73,21 @@ class _TemplatesScreenState extends State<TemplatesScreen> {
         ),
       ),
     );
-    if (saved == true) await _load();
+    if (saved == true) {
+      await _reloadParser();
+      await _load();
+    }
   }
 
   Future<void> _toggle(TransferTemplate t, bool active) async {
-    final r = await AppScope.of(context).transferTemplates.save(t.copyWith(isActive: active));
+    final c = AppScope.of(context);
+    final r = await c.transferTemplates.save(t.copyWith(isActive: active));
     if (r is Failure && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(r.error.message, style: const TextStyle(fontFamily: 'Tajawal'))),
       );
+    } else {
+      await _reloadParser();
     }
     await _load();
   }
@@ -95,11 +105,14 @@ class _TemplatesScreenState extends State<TemplatesScreen> {
       ),
     );
     if (ok != true) return;
-    final r = await AppScope.of(context).transferTemplates.delete(t.id);
+    final c = AppScope.of(context);
+    final r = await c.transferTemplates.delete(t.id);
     if (r is Failure && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(r.error.message, style: const TextStyle(fontFamily: 'Tajawal'))),
       );
+    } else {
+      await _reloadParser();
     }
     await _load();
   }
