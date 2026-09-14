@@ -87,8 +87,10 @@ abstract interface class MessageRepository {
 
 abstract interface class TransferTemplateRepository {
   Future<Result<List<TransferTemplate>>> listAll();
+  Future<Result<List<TransferTemplate>>> listByWallet(String? walletId);
   Future<Result<TransferTemplate?>> findById(String id);
   Future<Result<void>> save(TransferTemplate template);
+  Future<Result<void>> delete(String id);
 }
 
 abstract interface class LicenseRepository {
