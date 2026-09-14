@@ -7,12 +7,11 @@ import '../entities/transaction.dart';
 import 'local_sale_service.dart';
 import 'services.dart';
 
-/// Domain runner for operator manual sales (phone + amount + cash/credit).
+/// Domain runner for operator manual sales.
 ///
-/// Single [UnitOfWork] boundary — deposit (cash) and sale share one transaction.
-/// - [ManualSaleMethod.cash]: deposit then sale → net ledger unchanged.
-/// - [ManualSaleMethod.credit]: sale only → customer debt increases.
-/// No pre-balance required for either method (product rule for manual sale).
+/// - cash: deposit then sale
+/// - credit / pos: sale only (debt)
+/// - gift: sale only, audited as gift (no deposit)
 final class ManualSaleRunner {
   const ManualSaleRunner(this.host);
 
@@ -95,8 +94,7 @@ final class ManualSaleRunner {
             message: 'Customer is not allowed to buy',
           ),
         );
-      } else if (nameTrim.isNotEmpty &&
-          customer.displayName.trim() != nameTrim) {
+      } else if (nameTrim.isNotEmpty && customer.displayName.trim() != nameTrim) {
         final updated = customer.copyWith(
           displayName: nameTrim,
           updatedAt: host.clock.now(),
@@ -130,8 +128,7 @@ final class ManualSaleRunner {
       final now = host.clock.now();
       final saleId = stableOperationId ?? host.ids.next('sale');
 
-      // Cash: deposit first (same UoW) so net debt is unchanged after sale.
-      // No balance gate — product rule: cash manual sale never requires prior credit.
+      // Cash only: pre-deposit so net ledger is neutral after sale.
       if (method == ManualSaleMethod.cash) {
         final depositRef = stableOperationId == null
             ? 'manual-cash:$saleId'
@@ -193,8 +190,7 @@ final class ManualSaleRunner {
       final savedSale = await host.sales.save(sale);
       if (savedSale is Failure<void>) return Failure(savedSale.error);
 
-      final methodLabel =
-          method == ManualSaleMethod.cash ? 'cash' : 'credit';
+      final methodLabel = method.name;
       final audited = await host.auditLogs.append(
         AuditLog(
           id: host.ids.next('audit'),
