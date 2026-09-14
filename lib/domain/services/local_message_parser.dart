@@ -11,13 +11,21 @@ import 'services.dart';
 /// - `{account}` / `%account` → non-phone account/name/code
 /// - `{ref}` / `%ref` → operation reference for idempotency
 ///
+/// Active templates are tried in ascending [TransferTemplate.priority] order.
 /// The parser only produces [ParsedTransfer]. It does not resolve customers,
 /// credit balances, reserve cards, or send SMS.
 final class LocalMessageParser implements MessageParser {
-  const LocalMessageParser({
-    required this.templates,
+  LocalMessageParser({
+    required List<TransferTemplate> templates,
     this.defaultCurrencyCode = 'YER',
-  });
+  }) : templates = List<TransferTemplate>.unmodifiable(
+          List<TransferTemplate>.of(templates)
+            ..sort((a, b) {
+              final byPriority = a.priority.compareTo(b.priority);
+              if (byPriority != 0) return byPriority;
+              return a.name.compareTo(b.name);
+            }),
+        );
 
   final List<TransferTemplate> templates;
   final String defaultCurrencyCode;
