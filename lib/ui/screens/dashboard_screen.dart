@@ -20,10 +20,6 @@ import '../widgets/net/net_quick_action_card.dart';
 import '../widgets/net/net_recent_transaction_card.dart';
 import '../widgets/net/net_section_header.dart';
 
-/// Production dashboard — real Domain/Repository data only.
-///
-/// [onNavigateToTab] switches the parent [HomeShell] bottom-nav tab
-/// (e.g. `'accounts'`, `'cards'`, `'reports'`).
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key, this.onNavigateToTab});
 
@@ -47,8 +43,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
   int _monthlySalesMinor = 0;
   int _monthlyCards = 0;
   List<Transaction> _recent = const [];
+  /// Category name → available count for categories below threshold.
+  List<({String name, int available})> _lowStock = const [];
 
-  /// Same attention set as ReportsScreen (rejected + suspended).
   static const _attentionStatuses = <MessageProcessingStatus>[
     MessageProcessingStatus.rejected,
     MessageProcessingStatus.received,
@@ -79,10 +76,29 @@ class _DashboardScreenState extends State<DashboardScreen> {
       final dailySales = await c.sales.listCompletedBetween(dayStart, now);
       final monthlySales = await c.sales.listCompletedBetween(monthStart, now);
       final recent = await c.transactions.listRecent(limit: 10);
-      // Source of truth: total customer outstanding (ledger) in YER — product decision.
       final totalBalance =
           await c.balanceService.getTotalOutstanding(currencyCode: 'YER');
       final networkSetting = await c.settings.find(SettingKeys.networkName);
+      final thresholdSetting = await c.settings.find(SettingKeys.lowStockThreshold);
+      final thresholdRaw =
+          thresholdSetting is Success<AppSetting?> ? thresholdSetting.value?.value : null;
+      final threshold = SettingInt.read(
+        thresholdRaw,
+        defaultValue: SettingDefaults.lowStockThreshold,
+      );
+
+      // Low stock per category
+      final categories = await c.categories.listAll();
+      final low = <({String name, int available})>[];
+      if (categories is Success<List<domain.CardCategory>>) {
+        for (final cat in categories.value.where((e) => e.isActive)) {
+          final avail = await c.cards.findAvailableByCategory(cat.id);
+          final count = avail is Success<List<domain.Card>> ? avail.value.length : 0;
+          if (count < threshold) {
+            low.add((name: cat.name, available: count));
+          }
+        }
+      }
 
       var attentionCount = 0;
       var attentionFailed = false;
@@ -136,6 +152,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _monthlyCards = countSales(monthlySales);
         _recent =
             recent is Success<List<Transaction>> ? recent.value : const [];
+        _lowStock = low;
         if (customers is Failure ||
             available is Failure ||
             dailySales is Failure ||
@@ -200,6 +217,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return 'لديك $n رسالة مرفوضة أو معلّقة';
   }
 
+  String? get _lowStockBannerMessage {
+    if (_lowStock.isEmpty) return null;
+    final parts = _lowStock
+        .map((e) => 'كرت ${e.name} (${e.available} متبقي)')
+        .join('، ');
+    return 'تنبيه: مخزون بعض الفئات منخفض! $parts';
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_loading) {
@@ -212,6 +237,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
 
     final attentionMessage = _attentionBannerMessage;
+    final lowStockMessage = _lowStockBannerMessage;
 
     return SafeArea(
       child: RefreshIndicator(
@@ -228,6 +254,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
               onSettings: _openSettings,
               onHelp: _openHelp,
             ),
+            if (lowStockMessage != null)
+              NetAlertBanner(
+                message: lowStockMessage,
+                icon: Icons.inventory_2_outlined,
+                onTap: () => widget.onNavigateToTab?.call('cards'),
+              ),
             if (attentionMessage != null)
               NetAlertBanner(
                 message: attentionMessage,
