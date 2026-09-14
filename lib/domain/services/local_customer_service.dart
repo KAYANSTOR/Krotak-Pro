@@ -174,7 +174,10 @@ final class LocalCustomerService implements CustomerService {
       final customer = (found as Success<Customer?>).value;
       if (customer == null) {
         return const Failure(
-          AppFailure(code: 'customer_not_found', message: 'Customer was not found'),
+          AppFailure(
+            code: 'customer_not_found',
+            message: 'Customer was not found',
+          ),
         );
       }
       if (customer.status != CustomerStatus.active) {
@@ -209,6 +212,86 @@ final class LocalCustomerService implements CustomerService {
         entityId: customerId,
         action: 'identifier_added',
         payloadJson: '{"identifier":"$storedValue"}',
+      );
+    });
+  }
+
+  @override
+  Future<Result<void>> bindPrimaryGsm({
+    required String customerId,
+    required String phone,
+  }) {
+    final trimmed = phone.trim();
+    if (!PhoneNormalizer.isPhoneLike(trimmed)) {
+      return Future.value(
+        const Failure(
+          AppFailure(
+            code: 'invalid_phone_identifier',
+            message: 'رقم الجوال غير صالح',
+          ),
+        ),
+      );
+    }
+    final stored = PhoneNormalizer.forStorage(trimmed, asPhone: true);
+
+    return unitOfWork.run(() async {
+      final found = await customers.findById(customerId);
+      if (found is Failure<Customer?>) return Failure(found.error);
+      final customer = (found as Success<Customer?>).value;
+      if (customer == null) {
+        return const Failure(
+          AppFailure(code: 'customer_not_found', message: 'الحساب غير موجود'),
+        );
+      }
+      if (customer.status != CustomerStatus.active) {
+        return const Failure(
+          AppFailure(
+            code: 'customer_not_active',
+            message: 'لا يمكن ربط جوال لحساب غير نشط',
+          ),
+        );
+      }
+
+      final existingIds = await customers.listIdentifiers(customerId);
+      if (existingIds is Failure<List<CustomerIdentifier>>) {
+        return Failure(existingIds.error);
+      }
+      final idsList = (existingIds as Success<List<CustomerIdentifier>>).value;
+      final alreadyHasPhone = idsList.any(
+        (i) => i.type == CustomerIdentifierType.phoneNumber,
+      );
+      if (alreadyHasPhone) {
+        return const Success(null);
+      }
+
+      final conflict = await customers.findByIdentifier(stored);
+      if (conflict is Failure<Customer?>) return Failure(conflict.error);
+      final other = (conflict as Success<Customer?>).value;
+      if (other != null && other.id != customerId) {
+        return const Failure(
+          AppFailure(
+            code: 'gsm_conflict',
+            message: 'رقم الجوال مربوط بحساب آخر — استخدم الدمج يدويًا',
+          ),
+        );
+      }
+
+      final saved = await customers.saveIdentifier(
+        CustomerIdentifier(
+          id: ids.next('identifier'),
+          customerId: customerId,
+          type: CustomerIdentifierType.phoneNumber,
+          value: stored,
+          isPrimary: true,
+        ),
+      );
+      if (saved is Failure<void>) return Failure(saved.error);
+
+      return _audit(
+        entityType: 'customer',
+        entityId: customerId,
+        action: 'bind_primary_gsm',
+        payloadJson: '{"phone":"$stored"}',
       );
     });
   }
