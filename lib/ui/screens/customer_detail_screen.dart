@@ -1,16 +1,18 @@
 import 'package:flutter/material.dart';
 
 import '../../core/result.dart';
+import '../../domain/entities/card.dart';
 import '../../domain/entities/customer.dart';
 import '../../domain/entities/money.dart';
 import '../../domain/entities/transaction.dart';
 import '../../domain/ledger.dart';
+import '../../domain/services/services.dart';
 import '../app_scope.dart';
 import '../theme/kayan_colors.dart';
 import '../theme/net_semantic_colors.dart';
 import '../widgets/async_views.dart';
 
-/// تفاصيل الحساب + ربط الجوال + دمج عند التعارض — مطابق فيديو Z Net.
+/// تفاصيل الحساب — رصيد · ربط جوال · تعديل رصيد · صرف كرت · دفتر.
 class CustomerDetailScreen extends StatefulWidget {
   const CustomerDetailScreen({super.key, required this.customerId});
 
@@ -27,7 +29,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
   Money? _balance;
   List<CustomerIdentifier> _ids = const [];
   List<Transaction> _txs = const [];
-  bool _linking = false;
+  bool _busy = false;
 
   bool get _hasPhone =>
       _ids.any((i) => i.type == CustomerIdentifierType.phoneNumber);
@@ -70,9 +72,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
       return;
     }
 
-    final list = List<Transaction>.of(
-      (txs as Success<List<Transaction>>).value,
-    );
+    final list = List<Transaction>.of((txs as Success<List<Transaction>>).value);
     list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
     setState(() {
@@ -84,95 +84,217 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
     });
   }
 
+  Future<void> _adjustBalance() async {
+    final ctrl = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Text('تعديل الرصيد (إيداع)', style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w800)),
+          content: TextField(
+            controller: ctrl,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            autofocus: true,
+            decoration: InputDecoration(
+              labelText: 'المبلغ (ر.ي)',
+              labelStyle: const TextStyle(fontFamily: 'Tajawal'),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            style: const TextStyle(fontFamily: 'Tajawal'),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('إلغاء', style: TextStyle(fontFamily: 'Tajawal'))),
+            FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: const Color(0xFF0F766E)),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('إيداع', style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w700)),
+            ),
+          ],
+        ),
+      ),
+    );
+    final raw = ctrl.text.trim().replaceAll(',', '');
+    ctrl.dispose();
+    if (ok != true || !mounted) return;
+    final major = num.tryParse(raw);
+    if (major == null || major <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('مبلغ غير صالح', style: TextStyle(fontFamily: 'Tajawal'))),
+      );
+      return;
+    }
+    setState(() => _busy = true);
+    final c = AppScope.of(context);
+    final r = await c.balanceService.credit(
+      customerId: widget.customerId,
+      amount: Money(minorUnits: (major * 100).round(), currencyCode: 'YER'),
+      reference: 'manual-credit:${c.ids.next('adj')}',
+    );
+    if (!mounted) return;
+    setState(() => _busy = false);
+    if (r is Failure) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(r.error.message, style: const TextStyle(fontFamily: 'Tajawal'))),
+      );
+      return;
+    }
+    await _load();
+  }
+
+  Future<void> _issueCard() async {
+    final c = AppScope.of(context);
+    final cats = await c.categories.listAll();
+    if (!mounted) return;
+    final active = cats is Success<List<CardCategory>>
+        ? cats.value.where((e) => e.isActive).toList()
+        : const <CardCategory>[];
+    if (active.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('لا فئات كروت نشطة', style: TextStyle(fontFamily: 'Tajawal'))),
+      );
+      return;
+    }
+    String selected = active.first.id;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: StatefulBuilder(
+          builder: (ctx, setModal) => AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: const Text('صرف كرت من الرصيد', style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w800)),
+            content: DropdownButtonFormField<String>(
+              value: selected,
+              decoration: InputDecoration(
+                labelText: 'الفئة',
+                labelStyle: const TextStyle(fontFamily: 'Tajawal'),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              items: [
+                for (final cat in active)
+                  DropdownMenuItem(
+                    value: cat.id,
+                    child: Text(
+                      '${cat.name} · ${formatMoneyMinor(cat.faceValue.minorUnits)} ر.ي',
+                      style: const TextStyle(fontFamily: 'Tajawal'),
+                    ),
+                  ),
+              ],
+              onChanged: (v) {
+                if (v != null) setModal(() => selected = v);
+              },
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('إلغاء', style: TextStyle(fontFamily: 'Tajawal'))),
+              FilledButton(
+                style: FilledButton.styleFrom(backgroundColor: const Color(0xFF0F766E)),
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('صرف', style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w700)),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (ok != true || !mounted) return;
+    setState(() => _busy = true);
+    final r = await c.saleService.sellFromBalance(
+      customerId: widget.customerId,
+      categoryId: selected,
+      operationId: c.ids.next('sale'),
+    );
+    if (!mounted) return;
+    setState(() => _busy = false);
+    if (r is Failure) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(r.error.message, style: const TextStyle(fontFamily: 'Tajawal'))),
+      );
+      return;
+    }
+    final sale = (r as Success<Sale>).value;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('تم صرف الكرت: ${sale.cardId}', style: const TextStyle(fontFamily: 'Tajawal'))),
+    );
+    await _load();
+  }
+
   Future<void> _showLinkPhoneDialog() async {
     final phoneCtrl = TextEditingController();
     final ok = await showDialog<bool>(
       context: context,
-      builder: (ctx) {
-        return Directionality(
-          textDirection: TextDirection.rtl,
-          child: AlertDialog(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-            title: const Row(
-              children: [
-                Icon(Icons.phone_android, color: Color(0xFF0F766E)),
-                SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'ربط رقم جوال (GSM)',
-                    style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w800),
-                  ),
-                ),
-              ],
+      builder: (ctx) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Text('ربط رقم جوال (GSM)', style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w800)),
+          content: TextField(
+            controller: phoneCtrl,
+            keyboardType: TextInputType.phone,
+            autofocus: true,
+            decoration: InputDecoration(
+              labelText: 'رقم الجوال',
+              hintText: '7xxxxxxxx',
+              labelStyle: const TextStyle(fontFamily: 'Tajawal'),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
             ),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const Text(
-                  'الرجاء إدخال رقم جوال المشترك لإرسال الكروت المعلّقة وتأكيد المعاملات المستقبلية.',
-                  style: TextStyle(fontFamily: 'Tajawal', fontSize: 13, height: 1.4),
-                ),
-                const SizedBox(height: 14),
-                TextField(
-                  controller: phoneCtrl,
-                  keyboardType: TextInputType.phone,
-                  autofocus: true,
-                  decoration: InputDecoration(
-                    labelText: 'رقم الجوال',
-                    hintText: '7xxxxxxxx',
-                    labelStyle: const TextStyle(fontFamily: 'Tajawal'),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  style: const TextStyle(fontFamily: 'Tajawal'),
-                ),
-              ],
-            ),
-            actionsAlignment: MainAxisAlignment.spaceBetween,
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx, false),
-                child: const Text('إلغاء', style: TextStyle(fontFamily: 'Tajawal')),
-              ),
-              FilledButton(
-                style: FilledButton.styleFrom(backgroundColor: const Color(0xFF0F766E)),
-                onPressed: () => Navigator.pop(ctx, true),
-                child: const Text(
-                  'ربط وصرف الكروت',
-                  style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w700),
-                ),
-              ),
-            ],
+            style: const TextStyle(fontFamily: 'Tajawal'),
           ),
-        );
-      },
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('إلغاء', style: TextStyle(fontFamily: 'Tajawal'))),
+            FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: const Color(0xFF0F766E)),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('ربط وصرف الكروت', style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w700)),
+            ),
+          ],
+        ),
+      ),
     );
     final phone = phoneCtrl.text.trim();
     phoneCtrl.dispose();
     if (ok != true || phone.isEmpty || !mounted) return;
-    await _linkPhone(phone);
-  }
-
-  Future<void> _linkPhone(String phone) async {
-    setState(() => _linking = true);
+    setState(() => _busy = true);
     final c = AppScope.of(context);
-
-    // Conflict? another customer already owns this phone → offer merge.
     final existing = await c.customers.findByIdentifier(phone);
     if (!mounted) return;
     if (existing is Success<Customer?> &&
         existing.value != null &&
         existing.value!.id != widget.customerId) {
-      setState(() => _linking = false);
-      await _confirmMerge(
-        sourceId: widget.customerId,
-        targetId: existing.value!.id,
-        target: existing.value!,
-        phone: phone,
+      setState(() => _busy = false);
+      final target = existing.value!;
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('دمج حسابات المشترك', style: TextStyle(fontFamily: 'Tajawal')),
+          content: Text(
+            'الرقم مربوط بحساب «${target.displayName}». دمج الحساب الحالي فيه؟',
+            style: const TextStyle(fontFamily: 'Tajawal'),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('إلغاء', style: TextStyle(fontFamily: 'Tajawal'))),
+            FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('دمج', style: TextStyle(fontFamily: 'Tajawal'))),
+          ],
+        ),
       );
+      if (confirmed != true || !mounted) return;
+      setState(() => _busy = true);
+      final merged = await c.mergeService.merge(
+        sourceCustomerId: widget.customerId,
+        targetCustomerId: target.id,
+      );
+      if (!mounted) return;
+      setState(() => _busy = false);
+      if (merged is Failure) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text((merged as Failure).error.message, style: const TextStyle(fontFamily: 'Tajawal'))),
+        );
+        return;
+      }
+      Navigator.of(context).pop();
       return;
     }
-
     final result = await c.customerService.addIdentifier(
       customerId: widget.customerId,
       type: CustomerIdentifierType.phoneNumber,
@@ -180,123 +302,14 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
       isPrimary: true,
     );
     if (!mounted) return;
-    setState(() => _linking = false);
+    setState(() => _busy = false);
     if (result is Failure) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            result.error.message,
-            style: const TextStyle(fontFamily: 'Tajawal'),
-          ),
-        ),
+        SnackBar(content: Text(result.error.message, style: const TextStyle(fontFamily: 'Tajawal'))),
       );
       return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('تم ربط رقم الجوال بنجاح', style: TextStyle(fontFamily: 'Tajawal')),
-      ),
-    );
     await _load();
-  }
-
-  Future<void> _confirmMerge({
-    required String sourceId,
-    required String targetId,
-    required Customer target,
-    required String phone,
-  }) async {
-    final reasonCtrl = TextEditingController(text: 'نفس المشترك برقم بديل');
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) {
-        return Directionality(
-          textDirection: TextDirection.rtl,
-          child: AlertDialog(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-            title: const Text(
-              'دمج حسابات المشترك',
-              style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w800),
-            ),
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text(
-                    'الرقم $phone مربوط مسبقًا بحساب «${target.displayName}».\n'
-                    'سيتم دمج الحساب الحالي في الحساب الرئيسي ونقل المعرّفات.',
-                    style: const TextStyle(fontFamily: 'Tajawal', fontSize: 13, height: 1.45),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: reasonCtrl,
-                    decoration: InputDecoration(
-                      labelText: 'سبب الدمج (إلزامي)',
-                      labelStyle: const TextStyle(fontFamily: 'Tajawal'),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                    style: const TextStyle(fontFamily: 'Tajawal'),
-                  ),
-                ],
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx, false),
-                child: const Text('إلغاء', style: TextStyle(fontFamily: 'Tajawal')),
-              ),
-              FilledButton.icon(
-                style: FilledButton.styleFrom(backgroundColor: const Color(0xFF0F766E)),
-                onPressed: () {
-                  if (reasonCtrl.text.trim().isEmpty) return;
-                  Navigator.pop(ctx, true);
-                },
-                icon: const Icon(Icons.check_circle_outline, size: 18),
-                label: const Text(
-                  'تأكيد الدمج والصرف',
-                  style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w700),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-    final reason = reasonCtrl.text.trim();
-    reasonCtrl.dispose();
-    if (confirmed != true || !mounted) return;
-
-    setState(() => _linking = true);
-    final c = AppScope.of(context);
-    // Merge current (source / alternate) INTO the phone owner (target).
-    final merged = await c.mergeService.merge(
-      sourceCustomerId: sourceId,
-      targetCustomerId: targetId,
-    );
-    if (!mounted) return;
-    setState(() => _linking = false);
-    if (merged is Failure) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            (merged as Failure).error.message,
-            style: const TextStyle(fontFamily: 'Tajawal'),
-          ),
-        ),
-      );
-      return;
-    }
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'تم الدمج: $reason',
-          style: const TextStyle(fontFamily: 'Tajawal'),
-        ),
-      ),
-    );
-    if (!mounted) return;
-    Navigator.of(context).pop(); // leave merged account detail
   }
 
   @override
@@ -315,20 +328,12 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
               Text(
                 _customer?.displayName ?? 'تفاصيل الحساب',
                 textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontFamily: 'Tajawal',
-                  fontWeight: FontWeight.w800,
-                  fontSize: 17,
-                ),
+                style: const TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w800, fontSize: 17),
               ),
               const Text(
                 'كشف حساب المشترك والعمليات',
                 textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontFamily: 'Tajawal',
-                  fontSize: 12,
-                  color: Color(0xFF64748B),
-                ),
+                style: TextStyle(fontFamily: 'Tajawal', fontSize: 12, color: Color(0xFF64748B)),
               ),
             ],
           ),
@@ -345,22 +350,54 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                           padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
                           children: [
                             _BalanceHero(balance: _balance),
+                            const SizedBox(height: 10),
+                            // Video action row: تعديل الرصيد | العروض | صرف كرت
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: _ActionChip(
+                                    icon: Icons.tune,
+                                    label: 'تعديل الرصيد',
+                                    onTap: _busy ? null : _adjustBalance,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: _ActionChip(
+                                    icon: Icons.local_offer_outlined,
+                                    label: 'العروض',
+                                    onTap: () {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(
+                                          content: Text(
+                                            'العروض من تبويب العروض الرئيسي',
+                                            style: TextStyle(fontFamily: 'Tajawal'),
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: _ActionChip(
+                                    icon: Icons.sim_card_outlined,
+                                    label: 'صرف كرت',
+                                    onTap: _busy ? null : _issueCard,
+                                  ),
+                                ),
+                              ],
+                            ),
                             const SizedBox(height: 12),
                             if (!_hasPhone) ...[
-                              _UnlinkedBanner(
-                                onLink: _linking ? null : _showLinkPhoneDialog,
-                              ),
+                              _UnlinkedBanner(onLink: _busy ? null : _showLinkPhoneDialog),
                               const SizedBox(height: 12),
                             ],
-                            _IdentityHeader(customer: _customer!, ids: _ids),
+                            _IdentityHeader(ids: _ids),
                             const SizedBox(height: 20),
                             const Text(
                               'دفتر الحركات',
-                              style: TextStyle(
-                                fontFamily: 'Tajawal',
-                                fontWeight: FontWeight.w700,
-                                fontSize: 16,
-                              ),
+                              style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w700, fontSize: 16),
                             ),
                             const SizedBox(height: 8),
                             if (_txs.isEmpty)
@@ -381,13 +418,49 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                           ],
                         ),
                       ),
-                      if (_linking)
+                      if (_busy)
                         Container(
                           color: Colors.black26,
                           child: const Center(child: CircularProgressIndicator()),
                         ),
                     ],
                   ),
+      ),
+    );
+  }
+}
+
+class _ActionChip extends StatelessWidget {
+  const _ActionChip({required this.icon, required this.label, this.onTap});
+  final IconData icon;
+  final String label;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFFE2E8F0)),
+          ),
+          child: Column(
+            children: [
+              Icon(icon, size: 18, color: const Color(0xFF0F766E)),
+              const SizedBox(height: 4),
+              Text(
+                label,
+                style: const TextStyle(fontFamily: 'Tajawal', fontSize: 11, fontWeight: FontWeight.w600),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -410,23 +483,11 @@ class _BalanceHero extends StatelessWidget {
       ),
       child: Column(
         children: [
-          const Text(
-            'الرصيد الحالي',
-            style: TextStyle(
-              fontFamily: 'Tajawal',
-              fontSize: 13,
-              color: Color(0xFF047857),
-            ),
-          ),
+          const Text('الرصيد الحالي', style: TextStyle(fontFamily: 'Tajawal', fontSize: 13, color: Color(0xFF047857))),
           const SizedBox(height: 4),
           Text(
             balance == null ? '—' : '${formatMoneyMinor(units.abs())} ر.ي',
-            style: const TextStyle(
-              fontFamily: 'Tajawal',
-              fontWeight: FontWeight.w900,
-              fontSize: 28,
-              color: Color(0xFF065F46),
-            ),
+            style: const TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w900, fontSize: 28, color: Color(0xFF065F46)),
           ),
         ],
       ),
@@ -450,45 +511,21 @@ class _UnlinkedBanner extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Row(
-            children: [
-              Icon(Icons.info_outline, size: 18, color: Color(0xFF0F766E)),
-              SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  'مشترك غير مربوط برقم جوال',
-                  style: TextStyle(
-                    fontFamily: 'Tajawal',
-                    fontWeight: FontWeight.w700,
-                    fontSize: 14,
-                  ),
-                ),
-              ),
-            ],
+          const Text(
+            'مشترك غير مربوط برقم جوال',
+            style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w700, fontSize: 14),
           ),
           const SizedBox(height: 6),
           Text(
-            'هذا العميل معرّف بهوية خصوصية (اسم أو رقم بديل). اربط رقم جوال يدوي لتفعيل إرسال الكروت اليدوية أو الآلية له.',
-            style: TextStyle(
-              fontFamily: 'Tajawal',
-              fontSize: 12,
-              height: 1.4,
-              color: Colors.grey.shade700,
-            ),
+            'اربط رقم جوال لتفعيل إرسال الكروت اليدوية أو الآلية.',
+            style: TextStyle(fontFamily: 'Tajawal', fontSize: 12, color: Colors.grey.shade700),
           ),
           const SizedBox(height: 12),
           FilledButton.icon(
             onPressed: onLink,
-            style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFF0F766E),
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            ),
+            style: FilledButton.styleFrom(backgroundColor: const Color(0xFF0F766E)),
             icon: const Icon(Icons.link, size: 18),
-            label: const Text(
-              'ربط رقم جوال الآن',
-              style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w700),
-            ),
+            label: const Text('ربط رقم جوال الآن', style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w700)),
           ),
         ],
       ),
@@ -497,9 +534,7 @@ class _UnlinkedBanner extends StatelessWidget {
 }
 
 class _IdentityHeader extends StatelessWidget {
-  const _IdentityHeader({required this.customer, required this.ids});
-
-  final Customer customer;
+  const _IdentityHeader({required this.ids});
   final List<CustomerIdentifier> ids;
 
   @override
@@ -515,20 +550,10 @@ class _IdentityHeader extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'المعرّفات',
-              style: TextStyle(
-                fontFamily: 'Tajawal',
-                fontWeight: FontWeight.w700,
-                color: Colors.grey.shade800,
-              ),
-            ),
+            const Text('المعرّفات', style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w700)),
             const SizedBox(height: 8),
             if (ids.isEmpty)
-              Text(
-                'لا معرّفات',
-                style: TextStyle(fontFamily: 'Tajawal', color: Colors.grey.shade600),
-              )
+              const Text('لا معرّفات', style: TextStyle(fontFamily: 'Tajawal'))
             else
               ...ids.map((id) {
                 final label = switch (id.type) {
@@ -536,22 +561,11 @@ class _IdentityHeader extends StatelessWidget {
                   CustomerIdentifierType.username => 'اسم',
                   CustomerIdentifierType.externalReference => 'رقم بديل',
                 };
-                final icon = switch (id.type) {
-                  CustomerIdentifierType.phoneNumber => Icons.phone_android,
-                  CustomerIdentifierType.username => Icons.alternate_email,
-                  CustomerIdentifierType.externalReference => Icons.tag,
-                };
                 return Padding(
-                  padding: const EdgeInsets.only(bottom: 6),
-                  child: Row(
-                    children: [
-                      Icon(icon, size: 16, color: KayanColors.primary),
-                      const SizedBox(width: 8),
-                      Text(
-                        '$label: ${id.value}${id.isPrimary ? ' · أساسي' : ''}',
-                        style: const TextStyle(fontFamily: 'Tajawal', fontSize: 13),
-                      ),
-                    ],
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Text(
+                    '$label: ${id.value}${id.isPrimary ? ' · أساسي' : ''}',
+                    style: const TextStyle(fontFamily: 'Tajawal', fontSize: 13),
                   ),
                 );
               }),
@@ -564,7 +578,6 @@ class _IdentityHeader extends StatelessWidget {
 
 class _LedgerRow extends StatelessWidget {
   const _LedgerRow({required this.tx});
-
   final Transaction tx;
 
   static String typeLabel(TransactionType t) {
@@ -586,28 +599,13 @@ class _LedgerRow extends StatelessWidget {
     }
   }
 
-  String _fmtTime(DateTime t) {
-    final local = t.toLocal();
-    return '${local.year}/${local.month.toString().padLeft(2, '0')}/${local.day.toString().padLeft(2, '0')} '
-        '${local.hour.toString().padLeft(2, '0')}:${local.minute.toString().padLeft(2, '0')}';
-  }
-
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final semantic = Theme.of(context).extension<NetSemanticColors>();
     final dir = ledgerDirection(tx.type);
-    final isReversal = tx.type == TransactionType.reversal;
-    final Color tone;
-    if (isReversal) {
-      tone = semantic?.warning ?? Colors.orange;
-    } else if (dir > 0) {
-      tone = semantic?.success ?? Colors.green;
-    } else {
-      tone = semantic?.rejected ?? cs.error;
-    }
+    final tone = dir > 0 ? (semantic?.success ?? Colors.green) : (semantic?.rejected ?? cs.error);
     final sign = dir > 0 ? '+' : '−';
-
     return Material(
       color: Colors.white,
       shape: RoundedRectangleBorder(
@@ -626,52 +624,16 @@ class _LedgerRow extends StatelessWidget {
               ),
               child: Text(
                 '$sign${formatMoneyMinor(tx.amount.minorUnits)}',
-                style: TextStyle(
-                  fontFamily: 'Tajawal',
-                  fontWeight: FontWeight.w800,
-                  fontSize: 13,
-                  color: tone,
-                ),
+                style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w800, color: tone),
               ),
             ),
             const SizedBox(width: 10),
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(
-                    typeLabel(tx.type),
-                    style: const TextStyle(
-                      fontFamily: 'Tajawal',
-                      fontWeight: FontWeight.w700,
-                      fontSize: 14,
-                    ),
-                  ),
-                  Text(
-                    _fmtTime(tx.createdAt),
-                    style: TextStyle(
-                      fontFamily: 'Tajawal',
-                      fontSize: 11,
-                      color: cs.onSurfaceVariant,
-                    ),
-                  ),
-                  if (tx.reference != null && tx.reference!.isNotEmpty)
-                    Text(
-                      'مرجع: ${tx.reference}',
-                      style: TextStyle(
-                        fontFamily: 'Tajawal',
-                        fontSize: 11,
-                        color: cs.onSurfaceVariant,
-                      ),
-                    ),
-                ],
+              child: Text(
+                typeLabel(tx.type),
+                textAlign: TextAlign.right,
+                style: const TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w700),
               ),
-            ),
-            const SizedBox(width: 8),
-            Icon(
-              dir > 0 ? Icons.arrow_downward : Icons.arrow_upward,
-              size: 18,
-              color: tone,
             ),
           ],
         ),
