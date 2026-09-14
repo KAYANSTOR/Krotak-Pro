@@ -20,6 +20,7 @@ import '../domain/services/local_backup_service.dart';
 import '../domain/services/local_message_recovery_service.dart';
 import '../domain/services/local_message_retry_service.dart';
 import '../domain/services/local_promotion_catalog.dart';
+import '../domain/services/local_system_health_service.dart';
 import '../domain/services/pending_message_review_service.dart';
 import '../domain/services/local_settlement_service.dart';
 import '../domain/services/local_card_inventory_service.dart';
@@ -36,6 +37,7 @@ import '../domain/services/services.dart';
 import '../platform/native_message_sender.dart';
 import '../platform/notification_bridge.dart';
 import '../platform/sms_bridge.dart';
+import '../platform/system_diagnostics_bridge.dart';
 import 'incoming_notification_handler.dart';
 import 'incoming_sms_handler.dart';
 
@@ -65,6 +67,7 @@ final class AppContainer {
     required this.advanceService,
     required this.broadcastService,
     required this.promotions,
+    required this.systemHealth,
     required LocalMessageParser messageParser,
     required this.transferProcessor,
     required this.licenseService,
@@ -108,6 +111,7 @@ final class AppContainer {
   final AdvanceService advanceService;
   final BroadcastService broadcastService;
   final LocalPromotionCatalog promotions;
+  final LocalSystemHealthService systemHealth;
   final LocalMessageParser _messageParser;
   MessageParser get messageParser => _messageParser;
   final TransferProcessor transferProcessor;
@@ -164,6 +168,10 @@ final class AppContainer {
     final inventoryService = LocalCardInventoryService(categories: categories, cards: cards, unitOfWork: uow);
     final saleService = LocalSaleService(customers: customers, categories: categories, cards: cards, sales: sales, transactions: transactions, balances: balanceService, inventory: inventoryService, auditLogs: auditLogs, unitOfWork: uow, clock: clock, ids: ids);
     final promotions = LocalPromotionCatalog(settings: settings, clock: clock, ids: ids);
+    final systemHealth = LocalSystemHealthService(
+      bridge: SystemDiagnosticsBridge(),
+      clock: clock,
+    );
     final listed = await transferTemplates.listAll();
     final live = listed is Success<List<TransferTemplate>> ? listed.value : const <TransferTemplate>[];
     final parser = LocalMessageParser(templates: live.isNotEmpty ? live : templates);
@@ -221,6 +229,7 @@ final class AppContainer {
       advanceService: advanceService,
       broadcastService: broadcastService,
       promotions: promotions,
+      systemHealth: systemHealth,
       messageParser: parser,
       transferProcessor: processor,
       licenseService: licenseService,
