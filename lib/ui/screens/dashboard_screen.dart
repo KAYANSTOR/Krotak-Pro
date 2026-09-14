@@ -6,6 +6,7 @@ import '../../domain/entities/customer.dart';
 import '../../domain/entities/message.dart';
 import '../../domain/entities/money.dart';
 import '../../domain/entities/setting.dart';
+import '../../domain/entities/system_capability.dart';
 import '../../domain/entities/transaction.dart';
 import '../app_scope.dart';
 import '../routing/app_routes.dart';
@@ -43,8 +44,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
   int _monthlySalesMinor = 0;
   int _monthlyCards = 0;
   List<Transaction> _recent = const [];
-  /// Category name → available count for categories below threshold.
   List<({String name, int available})> _lowStock = const [];
+  SystemHealthSnapshot? _health;
 
   static const _attentionStatuses = <MessageProcessingStatus>[
     MessageProcessingStatus.rejected,
@@ -87,7 +88,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
         defaultValue: SettingDefaults.lowStockThreshold,
       );
 
-      // Low stock per category
+      final healthResult = await c.systemHealth.check();
+
       final categories = await c.categories.listAll();
       final low = <({String name, int available})>[];
       if (categories is Success<List<domain.CardCategory>>) {
@@ -153,6 +155,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _recent =
             recent is Success<List<Transaction>> ? recent.value : const [];
         _lowStock = low;
+        _health = healthResult is Success<SystemHealthSnapshot>
+            ? healthResult.value
+            : null;
         if (customers is Failure ||
             available is Failure ||
             dailySales is Failure ||
@@ -210,6 +215,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (mounted) await _load();
   }
 
+  Future<void> _openSystemCheck() async {
+    await AppRoutes.openSystemCheck(context);
+    if (mounted) await _load();
+  }
+
   String? get _attentionBannerMessage {
     final n = _attentionMessagesCount;
     if (n <= 0) return null;
@@ -225,6 +235,26 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return 'تنبيه: مخزون بعض الفئات منخفض! $parts';
   }
 
+  String? get _healthBannerMessage {
+    final h = _health;
+    if (h == null) return null;
+    if (h.level == SystemHealthLevel.ready) return null;
+    return h.bannerMessage;
+  }
+
+  IconData get _healthBannerIcon {
+    final h = _health;
+    if (h == null) return Icons.health_and_safety_outlined;
+    switch (h.level) {
+      case SystemHealthLevel.critical:
+        return Icons.error_outline;
+      case SystemHealthLevel.warning:
+        return Icons.warning_amber_rounded;
+      case SystemHealthLevel.ready:
+        return Icons.verified_user_outlined;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_loading) {
@@ -238,6 +268,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     final attentionMessage = _attentionBannerMessage;
     final lowStockMessage = _lowStockBannerMessage;
+    final healthMessage = _healthBannerMessage;
 
     return SafeArea(
       child: RefreshIndicator(
@@ -254,6 +285,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
               onSettings: _openSettings,
               onHelp: _openHelp,
             ),
+            if (healthMessage != null)
+              NetAlertBanner(
+                message: healthMessage,
+                icon: _healthBannerIcon,
+                onTap: _openSystemCheck,
+              ),
             if (lowStockMessage != null)
               NetAlertBanner(
                 message: lowStockMessage,
@@ -352,6 +389,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     label: 'سجل العمليات',
                     icon: Icons.receipt_long_outlined,
                     onTap: () => AppRoutes.openTransactionsLog(context),
+                  ),
+                  const SizedBox(width: 10),
+                  NetQuickActionCard(
+                    label: 'فحص النظام',
+                    icon: Icons.health_and_safety_outlined,
+                    onTap: _openSystemCheck,
                   ),
                   const SizedBox(width: 10),
                   NetQuickActionCard(
