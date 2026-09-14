@@ -29,6 +29,8 @@ abstract final class SettingKeys {
   static const broadcastMaxAttempts = 'broadcast_max_attempts';
   static const broadcastRateDelayMs = 'broadcast_rate_delay_ms';
   static const deviceVerificationGates = 'device_verification_gates';
+  /// Threshold for low card stock alerts (available count per category).
+  static const lowStockThreshold = 'low_stock_threshold';
 }
 
 abstract final class SettingDefaults {
@@ -46,6 +48,8 @@ abstract final class SettingDefaults {
   static const autoPosSettlementEnabled = true;
   static const broadcastMaxAttempts = 3;
   static const broadcastRateDelayMs = 800;
+  /// Matches Z Net video default: alert when category available < 10.
+  static const lowStockThreshold = 10;
 }
 
 final class AppSetting {
@@ -62,5 +66,12 @@ abstract final class SettingBool {
     if (v == 'true' || v == '1') return true;
     if (v == 'false' || v == '0') return false;
     return defaultValue;
+  }
+}
+
+abstract final class SettingInt {
+  static int read(String? raw, {required int defaultValue}) {
+    if (raw == null) return defaultValue;
+    return int.tryParse(raw.trim()) ?? defaultValue;
   }
 }

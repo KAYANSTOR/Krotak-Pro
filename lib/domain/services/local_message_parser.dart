@@ -12,23 +12,33 @@ import 'services.dart';
 /// - `{ref}` / `%ref` → operation reference for idempotency
 ///
 /// Active templates are tried in ascending [TransferTemplate.priority] order.
-/// The parser only produces [ParsedTransfer]. It does not resolve customers,
-/// credit balances, reserve cards, or send SMS.
+/// Call [replaceTemplates] after saving templates so SMS path picks them up
+/// without restarting the app.
 final class LocalMessageParser implements MessageParser {
   LocalMessageParser({
     required List<TransferTemplate> templates,
     this.defaultCurrencyCode = 'YER',
-  }) : templates = List<TransferTemplate>.unmodifiable(
-          List<TransferTemplate>.of(templates)
-            ..sort((a, b) {
-              final byPriority = a.priority.compareTo(b.priority);
-              if (byPriority != 0) return byPriority;
-              return a.name.compareTo(b.name);
-            }),
-        );
+  }) : _templates = _sorted(templates);
 
-  final List<TransferTemplate> templates;
+  List<TransferTemplate> _templates;
   final String defaultCurrencyCode;
+
+  List<TransferTemplate> get templates => List.unmodifiable(_templates);
+
+  /// Hot-reload templates from the repository without recreating the parser graph.
+  void replaceTemplates(List<TransferTemplate> templates) {
+    _templates = _sorted(templates);
+  }
+
+  static List<TransferTemplate> _sorted(List<TransferTemplate> templates) {
+    final list = List<TransferTemplate>.of(templates);
+    list.sort((a, b) {
+      final byPriority = a.priority.compareTo(b.priority);
+      if (byPriority != 0) return byPriority;
+      return a.name.compareTo(b.name);
+    });
+    return List<TransferTemplate>.unmodifiable(list);
+  }
 
   static final Set<String> _regexMeta = <String>{
     '.',
@@ -49,7 +59,7 @@ final class LocalMessageParser implements MessageParser {
 
   @override
   Result<ParsedTransfer> parse(IncomingMessage message) {
-    final active = templates.where((t) => t.isActive).toList(growable: false);
+    final active = _templates.where((t) => t.isActive).toList(growable: false);
     if (active.isEmpty) {
       return const Failure(
         AppFailure(
