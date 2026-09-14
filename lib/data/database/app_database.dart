@@ -173,7 +173,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase(super.e);
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -199,9 +199,41 @@ class AppDatabase extends _$AppDatabase {
             'CREATE UNIQUE INDEX IF NOT EXISTS idx_transactions_reference '
             'ON transactions (reference)',
           );
+          // Template meta columns (wallet link + priority + wizard fields).
+          await customStatement(
+            'ALTER TABLE transfer_templates ADD COLUMN wallet_id TEXT',
+          );
+          await customStatement(
+            'ALTER TABLE transfer_templates ADD COLUMN priority INTEGER NOT NULL DEFAULT 0',
+          );
+          await customStatement(
+            'ALTER TABLE transfer_templates ADD COLUMN sample_body TEXT',
+          );
+          await customStatement(
+            'ALTER TABLE transfer_templates ADD COLUMN sender_code TEXT',
+          );
+          await customStatement(
+            'ALTER TABLE transfer_templates ADD COLUMN identifier_kind TEXT NOT NULL DEFAULT \'phone\'',
+          );
         },
         onUpgrade: (Migrator migrator, int from, int to) async {
-          // Future schema changes must be added as explicit, tested migrations.
+          if (from < 2) {
+            await customStatement(
+              'ALTER TABLE transfer_templates ADD COLUMN wallet_id TEXT',
+            );
+            await customStatement(
+              'ALTER TABLE transfer_templates ADD COLUMN priority INTEGER NOT NULL DEFAULT 0',
+            );
+            await customStatement(
+              'ALTER TABLE transfer_templates ADD COLUMN sample_body TEXT',
+            );
+            await customStatement(
+              'ALTER TABLE transfer_templates ADD COLUMN sender_code TEXT',
+            );
+            await customStatement(
+              'ALTER TABLE transfer_templates ADD COLUMN identifier_kind TEXT NOT NULL DEFAULT \'phone\'',
+            );
+          }
         },
       );
 }

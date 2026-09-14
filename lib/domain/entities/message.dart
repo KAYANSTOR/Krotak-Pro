@@ -6,12 +6,26 @@ enum MessageProcessingStatus { received, parsed, processed, rejected, failed }
 /// delivery never treat an account/name/reference as a phone number.
 enum TransferIdentifierType { phone, account, reference, name, unknown }
 
+/// How the customer is identified in the sample SMS for this template.
+enum TemplateIdentifierKind {
+  phone,
+  alternativeNumber,
+  account,
+  senderNameOnly,
+  balanceRequestCode,
+}
+
 final class TransferTemplate {
   const TransferTemplate({
     required this.id,
     required this.name,
     required this.pattern,
     required this.isActive,
+    this.walletId,
+    this.priority = 0,
+    this.sampleBody,
+    this.senderCode,
+    this.identifierKind = TemplateIdentifierKind.phone,
   });
 
   final String id;
@@ -26,6 +40,46 @@ final class TransferTemplate {
   /// [TransferIdentifierType.phone], otherwise account/ref map to account/reference.
   final String pattern;
   final bool isActive;
+
+  /// Optional link to a [Wallet] so templates can be managed per wallet.
+  final String? walletId;
+
+  /// Lower value = higher precedence when multiple templates match.
+  final int priority;
+
+  /// Optional sample SMS body used in the wizard preview step.
+  final String? sampleBody;
+
+  /// Optional sender / source code shown in the wizard (e.g. JAIB).
+  final String? senderCode;
+
+  /// Preferred identifier kind chosen in the wizard (drives default placeholders).
+  final TemplateIdentifierKind identifierKind;
+
+  TransferTemplate copyWith({
+    String? id,
+    String? name,
+    String? pattern,
+    bool? isActive,
+    String? walletId,
+    int? priority,
+    String? sampleBody,
+    String? senderCode,
+    TemplateIdentifierKind? identifierKind,
+    bool clearWalletId = false,
+  }) {
+    return TransferTemplate(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      pattern: pattern ?? this.pattern,
+      isActive: isActive ?? this.isActive,
+      walletId: clearWalletId ? null : (walletId ?? this.walletId),
+      priority: priority ?? this.priority,
+      sampleBody: sampleBody ?? this.sampleBody,
+      senderCode: senderCode ?? this.senderCode,
+      identifierKind: identifierKind ?? this.identifierKind,
+    );
+  }
 }
 
 final class IncomingMessage {
