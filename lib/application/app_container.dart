@@ -20,7 +20,11 @@ import '../domain/services/local_backup_service.dart';
 import '../domain/services/local_message_recovery_service.dart';
 import '../domain/services/local_message_retry_service.dart';
 import '../domain/services/local_promotion_catalog.dart';
+import '../domain/services/local_promotion_progress_service.dart';
+import '../domain/services/local_pos_account_registry.dart';
 import '../domain/services/local_system_health_service.dart';
+import '../domain/services/local_voucher_ops_service.dart';
+import '../domain/services/pending_attention_alarm_service.dart';
 import '../domain/services/pending_message_review_service.dart';
 import '../domain/services/local_settlement_service.dart';
 import '../domain/services/local_card_inventory_service.dart';
@@ -62,12 +66,16 @@ final class AppContainer {
     required this.catalogService,
     required this.walletCatalog,
     required this.posCatalog,
+    required this.posRegistry,
     required this.inventoryService,
     required this.saleService,
     required this.advanceService,
     required this.broadcastService,
     required this.promotions,
+    required this.promotionProgress,
     required this.systemHealth,
+    required this.voucherOps,
+    required this.pendingAlarm,
     required LocalMessageParser messageParser,
     required this.transferProcessor,
     required this.licenseService,
@@ -106,12 +114,16 @@ final class AppContainer {
   final CardCatalogService catalogService;
   final LocalWalletCatalogService walletCatalog;
   final LocalPointOfSaleCatalogService posCatalog;
+  final LocalPosAccountRegistry posRegistry;
   final CardInventoryService inventoryService;
   final SaleService saleService;
   final AdvanceService advanceService;
   final BroadcastService broadcastService;
   final LocalPromotionCatalog promotions;
+  final LocalPromotionProgressService promotionProgress;
   final LocalSystemHealthService systemHealth;
+  final LocalVoucherOpsService voucherOps;
+  final PendingAttentionAlarmService pendingAlarm;
   final LocalMessageParser _messageParser;
   MessageParser get messageParser => _messageParser;
   final TransferProcessor transferProcessor;
@@ -164,14 +176,15 @@ final class AppContainer {
     final customerService = LocalCustomerService(customers: customers, auditLogs: auditLogs, unitOfWork: uow, clock: clock, ids: ids);
     final walletCatalog = LocalWalletCatalogService(wallets: wallets, auditLogs: auditLogs, clock: clock, ids: ids);
     final posCatalog = LocalPointOfSaleCatalogService(pointsOfSale: pointsOfSale, auditLogs: auditLogs, clock: clock, ids: ids);
+    final posRegistry = LocalPosAccountRegistry(settings: settings, clock: clock);
     final catalogService = LocalCardCatalogService(categories: categories, cards: cards, auditLogs: auditLogs, unitOfWork: uow, clock: clock, ids: ids);
     final inventoryService = LocalCardInventoryService(categories: categories, cards: cards, unitOfWork: uow);
     final saleService = LocalSaleService(customers: customers, categories: categories, cards: cards, sales: sales, transactions: transactions, balances: balanceService, inventory: inventoryService, auditLogs: auditLogs, unitOfWork: uow, clock: clock, ids: ids);
     final promotions = LocalPromotionCatalog(settings: settings, clock: clock, ids: ids);
-    final systemHealth = LocalSystemHealthService(
-      bridge: SystemDiagnosticsBridge(),
-      clock: clock,
-    );
+    final promotionProgress = LocalPromotionProgressService(promotions: promotions, transactions: transactions);
+    final systemHealth = LocalSystemHealthService(bridge: SystemDiagnosticsBridge(), clock: clock);
+    final voucherOps = LocalVoucherOpsService(cards: cards, sales: sales, transactions: transactions, balances: balanceService, auditLogs: auditLogs, unitOfWork: uow, clock: clock, ids: ids);
+    final pendingAlarm = PendingAttentionAlarmService();
     final listed = await transferTemplates.listAll();
     final live = listed is Success<List<TransferTemplate>> ? listed.value : const <TransferTemplate>[];
     final parser = LocalMessageParser(templates: live.isNotEmpty ? live : templates);
@@ -179,18 +192,26 @@ final class AppContainer {
     final messageSender = NativeMessageSender(smsBridge);
     final advanceRepository = LocalAdvanceRepository(transactions: transactions, sales: sales);
     final broadcastJobs = LocalBroadcastRepository(settings: settings);
-    final broadcastService = LocalBroadcastService(
+    final broadcastService = LocalBroadcastService(customers: customers, jobs: broadcastJobs, settings: settings, auditLogs: auditLogs, messageSender: messageSender, clock: clock, ids: ids, sendDelay: Duration.zero);
+    final advanceService = LocalAdvanceService(advances: advanceRepository, customers: customers, categories: categories, cards: cards, inventory: inventoryService, transactions: transactions, sales: sales, auditLogs: auditLogs, settings: settings, unitOfWork: uow, messageSender: messageSender, clock: clock, ids: ids);
+    final processor = LocalTransferProcessor(
+      messages: messages,
       customers: customers,
-      jobs: broadcastJobs,
-      settings: settings,
+      balances: balanceService,
       auditLogs: auditLogs,
-      messageSender: messageSender,
+      unitOfWork: uow,
       clock: clock,
       ids: ids,
-      sendDelay: Duration.zero,
+      categories: categories,
+      cards: cards,
+      inventory: inventoryService,
+      transactions: transactions,
+      reservedSales: saleService,
+      messageSender: messageSender,
+      settings: settings,
+      advanceService: advanceService,
+      customerService: customerService,
     );
-    final advanceService = LocalAdvanceService(advances: advanceRepository, customers: customers, categories: categories, cards: cards, inventory: inventoryService, transactions: transactions, sales: sales, auditLogs: auditLogs, settings: settings, unitOfWork: uow, messageSender: messageSender, clock: clock, ids: ids);
-    final processor = LocalTransferProcessor(messages: messages, customers: customers, balances: balanceService, auditLogs: auditLogs, unitOfWork: uow, clock: clock, ids: ids, categories: categories, cards: cards, inventory: inventoryService, transactions: transactions, reservedSales: saleService, messageSender: messageSender, settings: settings, advanceService: advanceService);
     final licenseService = LocalLicenseService(licenses: licenses, clock: clock);
     final docs = await getApplicationDocumentsDirectory();
     final backupService = LocalBackupService(settings: settings, clock: clock, ids: ids, backupDirectory: Directory(p.join(docs.path, 'backups')));
@@ -204,6 +225,20 @@ final class AppContainer {
     final notificationSources = LocalPaymentSourceRegistry(settings: settings, clock: clock);
     final notificationEngine = UnifiedPaymentEventEngine(messages: messages, parser: parser, processor: processor, ids: ids, settings: settings);
     final notificationHandler = IncomingNotificationHandler(bridge: notificationBridge, sources: notificationSources, engine: notificationEngine);
+
+    ThemeMode theme = ThemeMode.system;
+    final themeSetting = await settings.find(SettingKeys.themeMode);
+    if (themeSetting is Success<AppSetting?>) {
+      switch ((themeSetting.value?.value ?? 'system').toLowerCase()) {
+        case 'dark':
+          theme = ThemeMode.dark;
+        case 'light':
+          theme = ThemeMode.light;
+        default:
+          theme = ThemeMode.system;
+      }
+    }
+
     return AppContainer._(
       database: database,
       customers: customers,
@@ -224,12 +259,16 @@ final class AppContainer {
       catalogService: catalogService,
       walletCatalog: walletCatalog,
       posCatalog: posCatalog,
+      posRegistry: posRegistry,
       inventoryService: inventoryService,
       saleService: saleService,
       advanceService: advanceService,
       broadcastService: broadcastService,
       promotions: promotions,
+      promotionProgress: promotionProgress,
       systemHealth: systemHealth,
+      voucherOps: voucherOps,
+      pendingAlarm: pendingAlarm,
       messageParser: parser,
       transferProcessor: processor,
       licenseService: licenseService,
@@ -246,7 +285,7 @@ final class AppContainer {
       notificationHandler: notificationHandler,
       clock: clock,
       ids: ids,
-      themeModeNotifier: ValueNotifier<ThemeMode>(ThemeMode.light),
+      themeModeNotifier: ValueNotifier<ThemeMode>(theme),
     );
   }
 
@@ -274,6 +313,7 @@ final class AppContainer {
   Future<void> dispose() async {
     _recoveryTimer?.cancel();
     _recoveryTimer = null;
+    pendingAlarm.dispose();
     smsHandler.stop();
     await notificationHandler.stop();
     await database.close();
