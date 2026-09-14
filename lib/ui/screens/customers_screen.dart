@@ -5,7 +5,6 @@ import '../../domain/entities/customer.dart';
 import '../../domain/entities/money.dart';
 import '../app_scope.dart';
 import '../routing/app_routes.dart';
-import '../theme/kayan_colors.dart';
 import '../widgets/async_views.dart';
 
 enum _AccountFilter { all, debtor, creditor, unlinked }
@@ -250,9 +249,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
                                   });
                                   return;
                                 }
-                                final display = name.isNotEmpty
-                                    ? name
-                                    : 'رقم بديل $alt';
+                                final display = name.isNotEmpty ? name : 'رقم بديل $alt';
                                 final r = await c.customerService.create(
                                   displayName: display,
                                   identifierType: CustomerIdentifierType.externalReference,
@@ -277,7 +274,8 @@ class _CustomersScreenState extends State<CustomersScreen> {
                                   if (add is Failure && ctx.mounted) {
                                     setModal(() {
                                       busy = false;
-                                      status = 'الحساب أُنشئ لكن فشل ربط الجوال: ${(add as Failure).error.message}';
+                                      status =
+                                          'الحساب أُنشئ لكن فشل ربط الجوال: ${(add as Failure).error.message}';
                                     });
                                     return;
                                   }
@@ -397,7 +395,10 @@ class _CustomersScreenState extends State<CustomersScreen> {
                 ),
                 _roundIcon(Icons.person_add_alt_1, _showCreateSheet),
                 const SizedBox(width: 8),
-                _roundIcon(Icons.link_off, () => setState(() => _filter = _AccountFilter.unlinked)),
+                _roundIcon(
+                  Icons.link_off,
+                  () => setState(() => _filter = _AccountFilter.unlinked),
+                ),
               ],
             ),
           ),
@@ -411,7 +412,11 @@ class _CustomersScreenState extends State<CustomersScreen> {
               },
               decoration: InputDecoration(
                 hintText: 'ابحث بالاسم أو رقم الجوال (GSM)...',
-                hintStyle: TextStyle(fontFamily: 'Tajawal', color: Colors.grey.shade500, fontSize: 13),
+                hintStyle: TextStyle(
+                  fontFamily: 'Tajawal',
+                  color: Colors.grey.shade500,
+                  fontSize: 13,
+                ),
                 prefixIcon: Icon(Icons.search, color: Colors.grey.shade500),
                 filled: true,
                 fillColor: Colors.white,
@@ -541,22 +546,30 @@ class _VideoAccountCard extends StatelessWidget {
     final n = row.customer.displayName.trim();
     if (n.isEmpty) return '؟';
     final parts = n.split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
-    if (parts.length >= 2) {
-      return '${parts[0].characters.first}${parts[1].characters.first}';
+    String firstChar(String s) {
+      final runes = s.runes;
+      if (runes.isEmpty) return '؟';
+      return String.fromCharCode(runes.first);
     }
-    return n.characters.take(2).toString();
+
+    if (parts.length >= 2) {
+      return '${firstChar(parts[0])}${firstChar(parts[1])}';
+    }
+    final runes = n.runes.toList();
+    if (runes.length >= 2) {
+      return String.fromCharCodes(runes.take(2));
+    }
+    return firstChar(n);
   }
 
   @override
   Widget build(BuildContext context) {
     final units = row.balance?.minorUnits ?? 0;
-    final amountText = row.balance == null
-        ? '—'
-        : formatMoneyMinor(units.abs());
+    final amountText = row.balance == null ? '—' : formatMoneyMinor(units.abs());
 
     final title = row.customer.displayName;
-    String subtitle;
-    IconData subIcon;
+    late final String subtitle;
+    late final IconData subIcon;
     if (row.hasPhone) {
       subtitle = row.phone!;
       subIcon = Icons.phone_android;
@@ -583,7 +596,6 @@ class _VideoAccountCard extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
           child: Row(
             children: [
-              // balance pill (start in RTL = visual left)
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
