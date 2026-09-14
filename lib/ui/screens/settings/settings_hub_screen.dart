@@ -15,6 +15,7 @@ import 'clean_logs_screen.dart';
 import 'export_ledger_screen.dart';
 import 'salafni_templates_screen.dart';
 import 'sim_settings_screen.dart';
+import 'template_simulation_screen.dart';
 import 'templates_screen.dart';
 import 'device_verification_screen.dart';
 import 'wallet_notification_settings_screen.dart';
@@ -148,7 +149,8 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
           SettingsSwitchCard(icon: Icons.point_of_sale_outlined, title: 'طلبات الرصيد لنقاط البيع', subtitle: 'التعامل مع طلبات الرصيد الواردة من نقاط البيع', value: _posBalanceRequests, enabled: !_busyKeys.contains(SettingKeys.posBalanceRequestsEnabled), onChanged: (v) => _saveBool(SettingKeys.posBalanceRequestsEnabled, v, (x) => _posBalanceRequests = x)),
           SettingsSwitchCard(icon: Icons.summarize_outlined, title: 'إرسال ملخص العمليات اليومية تلقائيًا', subtitle: 'ملخص يومي تلقائي — تفاصيل الوقت والجهة لاحقًا', value: _dailySummary, enabled: !_busyKeys.contains(SettingKeys.dailyOpsSummaryAutoSend), onChanged: (v) => _saveBool(SettingKeys.dailyOpsSummaryAutoSend, v, (x) => _dailySummary = x)),
           const SettingsSectionHeader(title: 'البيانات والقوالب'),
-          SettingsNavCard(icon: Icons.pattern, title: 'قوالب التحويل', subtitle: 'أنماط تحليل رسائل التحويل الواردة', onTap: () => _open(const TemplatesScreen())),
+          SettingsNavCard(icon: Icons.pattern, title: 'قوالب التحويل', subtitle: 'أنماط تحليل رسائل التحويل — معالج 4 مراحل', onTap: () => _open(const TemplatesScreen())),
+          SettingsNavCard(icon: Icons.science_outlined, title: 'محاكاة القوالب', subtitle: 'اختبار استخراج البيانات من رسالة SMS', onTap: () => _open(const TemplateSimulationScreen())),
           SettingsNavCard(icon: Icons.file_upload_outlined, title: 'تصدير السجل', subtitle: 'تصدير حركات الدفتر', onTap: () => _open(const ExportLedgerScreen())),
           SettingsNavCard(icon: Icons.cleaning_services_outlined, title: 'تنظيف السجلات', subtitle: 'استعادة ومعالجة الرسائل المعلّقة', onTap: () => _open(const CleanLogsScreen())),
           const SettingsSectionHeader(title: 'التحقق والإصدار'),
