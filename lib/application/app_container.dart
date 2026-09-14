@@ -108,7 +108,10 @@ final class AppContainer {
     final catalogService = LocalCardCatalogService(categories: categories, cards: cards, auditLogs: auditLogs, unitOfWork: uow, clock: clock, ids: ids);
     final inventoryService = LocalCardInventoryService(categories: categories, cards: cards, unitOfWork: uow);
     final saleService = LocalSaleService(customers: customers, categories: categories, cards: cards, sales: sales, transactions: transactions, balances: balanceService, inventory: inventoryService, auditLogs: auditLogs, unitOfWork: uow, clock: clock, ids: ids);
-    final parser = LocalMessageParser(templates: templates);
+    // Prefer templates persisted in DB (wizard); fall back to seed list for tests.
+    final listed = await transferTemplates.listAll();
+    final live = listed is Success<List<TransferTemplate>> ? listed.value : const <TransferTemplate>[];
+    final parser = LocalMessageParser(templates: live.isNotEmpty ? live : templates);
     final smsBridge = SmsBridge();
     final messageSender = NativeMessageSender(smsBridge);
     final advanceRepository = LocalAdvanceRepository(transactions: transactions, sales: sales);
