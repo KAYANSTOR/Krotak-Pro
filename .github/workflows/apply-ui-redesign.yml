@@ -1,0 +1,26 @@
+name: Apply UI redesign
+on:
+  push:
+    paths:
+      - 'tools/apply_ui_fixes.py'
+      - 'tools/inv_part0.b64'
+      - 'tools/wal_part0.b64'
+  workflow_dispatch:
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - run: python3 tools/apply_ui_fixes.py
+      - run: |
+          set -e
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add lib/ui/screens/inventory_widgets.dart lib/ui/screens/wallets_pos_screen.dart lib/domain/services/local_catalog_services.dart
+          git commit -m "Apply: cards header RTL + wallets full redesign + jawali package" || echo nochange
+          git pull --rebase origin main || true
+          git push origin HEAD:main
