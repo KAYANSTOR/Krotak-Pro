@@ -58,29 +58,50 @@ class _InventoryScreenState extends State<InventoryScreen> {
   }
 
   Future<void> _load() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
+    if (mounted) {
+      setState(() {
+        _loading = true;
+        _error = null;
+      });
+    }
     final c = AppScope.of(context);
-    final cats = await c.categories.listAll();
-    final avail = await c.cards.listByStatus(domain.CardStatus.available);
-    final reserved = await c.cards.listByStatus(domain.CardStatus.reserved);
-    final sold = await c.cards.listByStatus(domain.CardStatus.sold);
-    final disabled = await c.cards.listByStatus(domain.CardStatus.disabled);
+    final results = await Future.wait<dynamic>([
+      c.categories.listAll(),
+      c.cards.listByStatus(domain.CardStatus.available),
+      c.cards.listByStatus(domain.CardStatus.reserved),
+      c.cards.listByStatus(domain.CardStatus.sold),
+      c.cards.listByStatus(domain.CardStatus.disabled),
+      c.cards.listByStatus(domain.CardStatus.expired),
+    ]);
+    final cats = results[0];
+    final avail = results[1];
+    final reserved = results[2];
+    final sold = results[3];
+    final disabled = results[4];
+    final expired = results[5];
     if (!mounted) return;
-    if (cats is Failure) {
+
+    final failures = <String>[];
+    if (cats is Failure) failures.add('الفئات');
+    if (avail is Failure) failures.add('المتوفرة');
+    if (reserved is Failure) failures.add('المحجوزة');
+    if (sold is Failure) failures.add('المباعة');
+    if (disabled is Failure) failures.add('المعطلة');
+    if (expired is Failure) failures.add('المنتهية');
+    if (failures.isNotEmpty) {
       setState(() {
         _loading = false;
-        _error = (cats as Failure).error.message;
+        _error = 'تعذر تحميل: ${failures.join('، ')}';
       });
       return;
     }
+
     final list = <domain.Card>[
-      if (avail is Success<List<domain.Card>>) ...avail.value,
-      if (reserved is Success<List<domain.Card>>) ...reserved.value,
-      if (sold is Success<List<domain.Card>>) ...sold.value,
-      if (disabled is Success<List<domain.Card>>) ...disabled.value,
+      ...(avail as Success<List<domain.Card>>).value,
+      ...(reserved as Success<List<domain.Card>>).value,
+      ...(sold as Success<List<domain.Card>>).value,
+      ...(disabled as Success<List<domain.Card>>).value,
+      ...(expired as Success<List<domain.Card>>).value,
     ];
     setState(() {
       _loading = false;
@@ -181,6 +202,62 @@ class _InventoryScreenState extends State<InventoryScreen> {
     if (mounted) await _load();
   }
 
+  void _openMenu() {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => SafeArea(
+        child: Directionality(
+          textDirection: TextDirection.rtl,
+          child: Material(
+            color: KayanColors.appBackground,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const SizedBox(height: 10),
+                ListTile(
+                  leading: const Icon(Icons.category_outlined),
+                  title: const Text('إدارة الفئات', style: TextStyle(fontFamily: 'Tajawal')),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _openCategories();
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.inventory_2_outlined),
+                  title: const Text('الكروت المتاحة للبيع', style: TextStyle(fontFamily: 'Tajawal')),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    setState(() => _statusFilter = _StatusFilter.available);
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.inventory_outlined),
+                  title: const Text('الكروت المستخدمة والمنتهية', style: TextStyle(fontFamily: 'Tajawal')),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    setState(() => _statusFilter = _StatusFilter.used);
+                  },
+                ),
+                const SizedBox(height: 8),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showUsedCards() {
+    setState(() => _statusFilter = _StatusFilter.used);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('تم فتح الكروت المستخدمة والمنتهية', style: TextStyle(fontFamily: 'Tajawal')),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Directionality(
@@ -190,18 +267,9 @@ class _InventoryScreenState extends State<InventoryScreen> {
         child: Column(
           children: [
             _Header(
-              onMenu: () {},
+              onMenu: _openMenu,
               onAdd: _openAddCards,
-              onDelete: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text(
-                      'لحذف كرت: افتح الكروت المستخدمة واختر العملية المناسبة',
-                      style: TextStyle(fontFamily: 'Tajawal'),
-                    ),
-                  ),
-                );
-              },
+              onDelete: _showUsedCards,
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 4, 16, 10),
