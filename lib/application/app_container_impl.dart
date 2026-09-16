@@ -147,9 +147,7 @@ final class AppContainer {
 
   Future<Result<void>> reloadTemplates() async {
     final listed = await transferTemplates.listAll();
-    if (listed is Failure<List<TransferTemplate>>) {
-      return Failure(listed.error);
-    }
+    if (listed is Failure<List<TransferTemplate>>) return Failure(listed.error);
     final live = (listed as Success<List<TransferTemplate>>).value;
     _messageParser.replaceTemplates(live);
     return const Success(null);
@@ -176,7 +174,7 @@ final class AppContainer {
     final customerService = LocalCustomerService(customers: customers, auditLogs: auditLogs, unitOfWork: uow, clock: clock, ids: ids);
     final walletCatalog = LocalWalletCatalogService(wallets: wallets, auditLogs: auditLogs, settings: settings, clock: clock, ids: ids);
     final posCatalog = LocalPointOfSaleCatalogService(pointsOfSale: pointsOfSale, auditLogs: auditLogs, clock: clock, ids: ids);
-    final posRegistry = LocalPosAccountRegistry(settings: settings, clock: clock);
+    final posRegistry = LocalPosAccountRegistry(settings: settings, clock: clock, customers: customers, customerService: customerService, pointsOfSale: pointsOfSale, ids: ids);
     final catalogService = LocalCardCatalogService(categories: categories, cards: cards, auditLogs: auditLogs, unitOfWork: uow, clock: clock, ids: ids);
     final inventoryService = LocalCardInventoryService(categories: categories, cards: cards, unitOfWork: uow);
     final saleService = LocalSaleService(customers: customers, categories: categories, cards: cards, sales: sales, transactions: transactions, balances: balanceService, inventory: inventoryService, auditLogs: auditLogs, unitOfWork: uow, clock: clock, ids: ids);
@@ -194,24 +192,7 @@ final class AppContainer {
     final broadcastJobs = LocalBroadcastRepository(settings: settings);
     final broadcastService = LocalBroadcastService(customers: customers, jobs: broadcastJobs, settings: settings, auditLogs: auditLogs, messageSender: messageSender, clock: clock, ids: ids, sendDelay: Duration.zero);
     final advanceService = LocalAdvanceService(advances: advanceRepository, customers: customers, categories: categories, cards: cards, inventory: inventoryService, transactions: transactions, sales: sales, auditLogs: auditLogs, settings: settings, unitOfWork: uow, messageSender: messageSender, clock: clock, ids: ids);
-    final processor = LocalTransferProcessor(
-      messages: messages,
-      customers: customers,
-      balances: balanceService,
-      auditLogs: auditLogs,
-      unitOfWork: uow,
-      clock: clock,
-      ids: ids,
-      categories: categories,
-      cards: cards,
-      inventory: inventoryService,
-      transactions: transactions,
-      reservedSales: saleService,
-      messageSender: messageSender,
-      settings: settings,
-      advanceService: advanceService,
-      customerService: customerService,
-    );
+    final processor = LocalTransferProcessor(messages: messages, customers: customers, balances: balanceService, auditLogs: auditLogs, unitOfWork: uow, clock: clock, ids: ids, categories: categories, cards: cards, inventory: inventoryService, transactions: transactions, reservedSales: saleService, messageSender: messageSender, settings: settings, advanceService: advanceService, customerService: customerService);
     final licenseService = LocalLicenseService(licenses: licenses, clock: clock);
     final docs = await getApplicationDocumentsDirectory();
     final backupService = LocalBackupService(settings: settings, clock: clock, ids: ids, backupDirectory: Directory(p.join(docs.path, 'backups')));
