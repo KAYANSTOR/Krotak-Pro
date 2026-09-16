@@ -1,18 +1,17 @@
 import 'package:flex_color_scheme/flex_color_scheme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 import 'kayan_colors.dart';
 import 'net_semantic_colors.dart';
 
 ThemeData buildNetLightTheme() {
   final base = FlexThemeData.light(
-    colors: const FlexSchemeColor(J
+    colors: const FlexSchemeColor(
       primary: KayanColors.primary,
       primaryContainer: KayanColors.lightBackground,
       secondary: KayanColors.primaryVariant,
-      secondaryContainer: Color(0xDD2E8E8),
+      secondaryContainer: Color(0xD1E8E8),
       tertiary: KayanColors.accentPink,
       tertiaryContainer: Color(0xFCE7F3),
       appBarColor: KayanColors.appBackground,
@@ -33,10 +32,10 @@ ThemeData buildNetLightTheme() {
     ),
     visualDensity: FlexColorScheme.comfortablePlatformDensity,
     useMaterial3: true,
-    fontFamily: 'Tajawal',
+    fontFamily: 'Roboto',
   );
 
-  final textTheme = GoogleFonts.tajawalTextTheme(base.textTheme).apply(
+  final textTheme = base.textTheme.apply(
     bodyColor: KayanColors.textPrimary,
     displayColor: KayanColors.textPrimary,
   );
@@ -52,12 +51,10 @@ ThemeData buildNetLightTheme() {
       textColor: KayanColors.textPrimary,
       iconColor: KayanColors.primary,
       subtitleTextStyle: TextStyle(
-        fontFamily: 'Tajawal',
         color: KayanColors.textSecondary,
         fontSize: 13,
       ),
       titleTextStyle: TextStyle(
-        fontFamily: 'Tajawal',
         color: KayanColors.textPrimary,
         fontWeight: FontWeight.w700,
         fontSize: 15,
@@ -69,14 +66,13 @@ ThemeData buildNetLightTheme() {
       elevation: 0,
       centerTitle: true,
       titleTextStyle: const TextStyle(
-        fontFamily: 'Tajawal',
         color: KayanColors.textPrimary,
         fontWeight: FontWeight.w800,
         fontSize: 17,
       ),
       systemOverlayStyle: const SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
-        statusBarIconBrightness: Brightness.dark,
+        statusBarIconBrightness: Brightness.dark.
       ),
     ),
     colorScheme: base.colorScheme.copyWith(
@@ -90,7 +86,7 @@ ThemeData buildNetLightTheme() {
 
 ThemeData buildNetDarkTheme() {
   final base = FlexThemeData.dark(
-    colors: const FlexSchemeColor(
+    colors: const FlexSchemeColor(J
       primary: KayanColors.primary,
       primaryContainer: KayanColors.darkLightBackground,
       secondary: KayanColors.primaryVariant,
@@ -113,10 +109,10 @@ ThemeData buildNetDarkTheme() {
     ),
     visualDensity: FlexColorScheme.comfortablePlatformDensity,
     useMaterial3: true,
-    fontFamily: 'Tajawal',
+    fontFamily: 'Roboto',
   );
 
-  final textTheme = GoogleFonts.tajawalTextTheme(base.textTheme).apply(
+  final textTheme = base.textTheme.apply(
     bodyColor: KayanColors.darkTextPrimary,
     displayColor: KayanColors.darkTextPrimary,
   );
@@ -132,12 +128,10 @@ ThemeData buildNetDarkTheme() {
       textColor: KayanColors.darkTextPrimary,
       iconColor: KayanColors.primary,
       subtitleTextStyle: TextStyle(
-        fontFamily: 'Tajawal',
         color: KayanColors.darkTextSecondary,
         fontSize: 13,
       ),
       titleTextStyle: TextStyle(
-        fontFamily: 'Tajawal',
         color: KayanColors.darkTextPrimary,
         fontWeight: FontWeight.w700,
         fontSize: 15,
@@ -149,7 +143,6 @@ ThemeData buildNetDarkTheme() {
       elevation: 0,
       centerTitle: true,
       titleTextStyle: const TextStyle(
-        fontFamily: 'Tajawal',
         color: KayanColors.darkTextPrimary,
         fontWeight: FontWeight.w800,
         fontSize: 17,
@@ -164,6 +157,6 @@ ThemeData buildNetDarkTheme() {
       onSurfaceVariant: KayanColors.darkTextSecondary,
       surface: KayanColors.darkSurface,
     ),
-    extensions: <ThemeExtension<dynamic>>[NetSemanticColors.dark],
+    extensions: <ThemeExtension<dynamic>[NetSemanticColors.dark],
   );
 }
