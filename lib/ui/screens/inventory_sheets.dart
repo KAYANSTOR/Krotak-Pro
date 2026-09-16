@@ -99,11 +99,11 @@ class _CategoriesSheetState extends State<_CategoriesSheet> {
     nameCtrl.dispose();
     valueCtrl.dispose();
     if (name.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Name required', style: TextStyle(fontFamily: 'Tajawal'))));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('أدخل اسم الفئة', style: TextStyle(fontFamily: 'Tajawal'))));
       return;
     }
     if (major == null || major <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Value must be > 0', style: TextStyle(fontFamily: 'Tajawal'))));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('أدخل قيمة اسمية صحيحة أكبر من صفر', style: TextStyle(fontFamily: 'Tajawal'))));
       return;
     }
     final c = AppScope.of(context);
@@ -113,7 +113,7 @@ class _CategoriesSheetState extends State<_CategoriesSheet> {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text((r as Failure).error.message, style: const TextStyle(fontFamily: 'Tajawal'))));
       return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Category saved', style: TextStyle(fontFamily: 'Tajawal'))));
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم إنشاء الفئة', style: TextStyle(fontFamily: 'Tajawal'))));
     await widget.onChanged();
   }
 }

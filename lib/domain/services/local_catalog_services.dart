@@ -148,9 +148,9 @@ final class LocalWalletCatalogService implements WalletCatalogService {
   final IdGenerator ids;
   static const _defaults = [
     (name: 'جيب', senderId: 'JAIB', sourceMode: WalletSourceMode.notification, packageName: 'com.ahd.jaib'),
-    (name: 'جوالي', senderId: 'JAWALI', sourceMode: WalletSourceMode.sms, packageName: 'com.ama.wecashmobileapp'),
-    (name: 'ون كاش', senderId: 'ONE CASH', sourceMode: WalletSourceMode.sms, packageName: 'com.one.onecustomer'),
-    (name: 'فلوسك', senderId: 'FLOOSAK', sourceMode: WalletSourceMode.sms, packageName: 'co.ysys.floosak'),
+    (name: 'جوالي', senderId: 'JAWALI', sourceMode: WalletSourceMode.notification, packageName: 'com.ama.wecashmobileapp'),
+    (name: 'ون كاش', senderId: 'ONE CASH', sourceMode: WalletSourceMode.notification, packageName: 'com.one.onecustomer'),
+    (name: 'فلوسك', senderId: 'FLOOSAK', sourceMode: WalletSourceMode.notification, packageName: 'co.ysys.floosak'),
   ];
   @override
   Future<Result<List<Wallet>>> listEnriched() async {
