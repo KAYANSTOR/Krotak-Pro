@@ -1,0 +1,30 @@
+name: Apply settings phase-2
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'tools/settings_*.b64'
+      - '.github/workflows/apply-settings-phase2.yml'
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Decode and apply settings phase-2
+        run: |
+          set -euo pipefail
+          cat tools/settings_cards_*.b64 | tr -d '\n' | base64 -d | gunzip > lib/ui/widgets/settings/settings_cards.dart
+          cat tools/settings_hub_*.b64 | tr -d '\n' | base64 -d | gunzip > lib/ui/screens/settings/settings_hub_screen.dart
+          wc -l lib/ui/widgets/settings/settings_cards.dart lib/ui/screens/settings/settings_hub_screen.dart
+          head -3 lib/ui/screens/settings/settings_hub_screen.dart
+          git config user.name "kayan-bot"
+          git config user.email "bot@kayan.local"
+          git add lib/ui/widgets/settings/settings_cards.dart lib/ui/screens/settings/settings_hub_screen.dart
+          if git diff --cached --quiet; then
+            echo "No changes"
+          else
+            git commit -m "feat(settings): phase-2 hub grouped cards matching Z Net video"
+            git push
+          fi
