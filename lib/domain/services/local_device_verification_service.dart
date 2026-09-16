@@ -6,22 +6,69 @@ import '../device_verification_gate.dart';
 import '../entities/setting.dart';
 import '../repositories/repositories.dart';
 
+final class DeviceGateEvidence {
+  const DeviceGateEvidence({
+    required this.status,
+    this.note,
+    this.metrics = const {},
+    this.recordedAt,
+  });
+
+  final DeviceVerificationStatus status;
+  final String? note;
+  final Map<String, num> metrics;
+  final DateTime? recordedAt;
+
+  bool get hasOperatorNote => note != null && note!.trim().isNotEmpty;
+}
+
 final class DeviceVerificationSnapshot {
-  const DeviceVerificationSnapshot({required this.statuses});
+  const DeviceVerificationSnapshot({
+    this.gates = const {},
+    Map<String, DeviceVerificationStatus>? statuses,
+  }) : _legacyStatuses = statuses;
 
-  final Map<String, DeviceVerificationStatus> statuses;
+  final Map<String, Object> gates;
+  final Map<String, DeviceVerificationStatus>? _legacyStatuses;
 
-  DeviceVerificationStatus of(String id) =>
-      statuses[id] ?? DeviceVerificationStatus.pending;
+  DeviceVerificationStatus of(String id) {
+    final legacy = _legacyStatuses?[id];
+    if (legacy != null) return legacy;
+    final raw = gates[id];
+    if (raw is DeviceVerificationStatus) return raw;
+    if (raw is DeviceGateEvidence) return raw.status;
+    return DeviceVerificationStatus.pending;
+  }
 
-  int get passedCount => statuses.values
-      .where((s) => s == DeviceVerificationStatus.passed)
+  DeviceGateEvidence evidenceOf(String id) {
+    final raw = gates[id];
+    if (raw is DeviceGateEvidence) return raw;
+    if (raw is DeviceVerificationStatus) {
+      return DeviceGateEvidence(status: raw);
+    }
+    return const DeviceGateEvidence(status: DeviceVerificationStatus.pending);
+  }
+
+  Map<String, DeviceVerificationStatus> get statuses => {
+        for (final item in DeviceVerificationCatalog.items) item.id: of(item.id),
+      };
+
+  int get passedCount => DeviceVerificationCatalog.items
+      .where((item) => of(item.id) == DeviceVerificationStatus.passed)
       .length;
 
   int get total => DeviceVerificationCatalog.items.length;
 
-  bool get allPassed =>
-      DeviceVerificationCatalog.items.every((item) => of(item.id) == DeviceVerificationStatus.passed);
+  bool get allPassed => DeviceVerificationCatalog.items
+      .every((item) => of(item.id) == DeviceVerificationStatus.passed);
+
+  bool get measurementGatesHaveEvidence {
+    for (final id in DeviceVerificationCatalog.measurementGateIds) {
+      if (of(id) != DeviceVerificationStatus.passed) continue;
+      if (!evidenceOf(id).hasOperatorNote) return false;
+    }
+    return true;
+  }
 }
 
 final class LocalDeviceVerificationService {
@@ -33,6 +80,9 @@ final class LocalDeviceVerificationService {
 
   final SettingsRepository _settings;
   final Clock _clock;
+
+  static const _measurementRequiredNote =
+      'قياس الجهاز إلزامي لهذه البوابة: أدخل ملاحظة المشغّل قبل التأكيد.';
 
   Future<Result<DeviceVerificationSnapshot>> load() async {
     final result = await _settings.find(DeviceVerificationCatalog.settingKey);
@@ -46,18 +96,86 @@ final class LocalDeviceVerificationService {
   Future<Result<DeviceVerificationSnapshot>> mark({
     required String gateId,
     required DeviceVerificationStatus status,
+    String? note,
+    Map<String, num> metrics = const {},
   }) async {
     if (DeviceVerificationCatalog.byId(gateId) == null) {
-      return const Failure(AppFailure(code: 'unknown_verification_gate', message: 'بوابة غير معروفة'));
+      return const Failure(
+        AppFailure(code: 'unknown_verification_gate', message: 'بوابة غير معروفة'),
+      );
     }
+    if (status == DeviceVerificationStatus.passed &&
+        DeviceVerificationCatalog.measurementGateIds.contains(gateId) &&
+        (note == null || note.trim().isEmpty)) {
+      return const Failure(
+        AppFailure(code: 'measurement_evidence_required', message: _measurementRequiredNote),
+      );
+    }
+
     final current = await load();
     if (current is Failure<DeviceVerificationSnapshot>) return current;
-    final map = Map<String, DeviceVerificationStatus>.from(
-      (current as Success<DeviceVerificationSnapshot>).value.statuses,
+    final snap = (current as Success<DeviceVerificationSnapshot>).value;
+    final next = Map<String, DeviceGateEvidence>.from({
+      for (final item in DeviceVerificationCatalog.items) item.id: snap.evidenceOf(item.id),
+    });
+    next[gateId] = DeviceGateEvidence(
+      status: status,
+      note: note?.trim().isEmpty == true ? null : note?.trim(),
+      metrics: metrics,
+      recordedAt: _clock.now(),
     );
-    map[gateId] = status;
+    return _persist(next);
+  }
+
+  Future<Result<DeviceVerificationSnapshot>> recordImportMeasurement({
+    required int acceptedRows,
+    required int rejectedRows,
+    required int durationMs,
+    String? note,
+  }) {
+    return mark(
+      gateId: 'bulk_import',
+      status: DeviceVerificationStatus.passed,
+      note: note ?? 'استيراد دفعة: مقبول $acceptedRows / مرفوض $rejectedRows',
+      metrics: {
+        'acceptedRows': acceptedRows,
+        'rejectedRows': rejectedRows,
+        'durationMs': durationMs,
+      },
+    );
+  }
+
+  Future<Result<DeviceVerificationSnapshot>> recordBroadcastMeasurement({
+    required int recipients,
+    required int sent,
+    required int failed,
+    required int durationMs,
+    String? note,
+  }) {
+    return mark(
+      gateId: 'broadcast_rate',
+      status: DeviceVerificationStatus.passed,
+      note: note ?? 'بث: $sent نجح / $failed فشل من $recipients',
+      metrics: {
+        'recipients': recipients,
+        'sent': sent,
+        'failed': failed,
+        'durationMs': durationMs,
+      },
+    );
+  }
+
+  Future<Result<DeviceVerificationSnapshot>> _persist(
+    Map<String, DeviceGateEvidence> gates,
+  ) async {
     final encoded = jsonEncode({
-      for (final e in map.entries) e.key: e.value.name,
+      for (final e in gates.entries)
+        e.key: {
+          'status': e.value.status.name,
+          if (e.value.note != null) 'note': e.value.note,
+          if (e.value.metrics.isNotEmpty) 'metrics': e.value.metrics,
+          if (e.value.recordedAt != null) 'recordedAt': e.value.recordedAt!.toIso8601String(),
+        },
     });
     final saved = await _settings.save(
       AppSetting(
@@ -69,29 +187,55 @@ final class LocalDeviceVerificationService {
     if (saved is Failure<void>) {
       return Failure((saved as Failure).error);
     }
-    return Success(DeviceVerificationSnapshot(statuses: map));
+    return Success(DeviceVerificationSnapshot(gates: gates));
   }
 
   DeviceVerificationSnapshot _decode(String? raw) {
-    final map = <String, DeviceVerificationStatus>{};
+    final map = <String, DeviceGateEvidence>{};
     if (raw == null || raw.trim().isEmpty) {
-      return DeviceVerificationSnapshot(statuses: map);
+      return const DeviceVerificationSnapshot(gates: {});
     }
     try {
       final decoded = jsonDecode(raw);
       if (decoded is Map) {
         for (final entry in decoded.entries) {
           final key = entry.key.toString();
-          final name = entry.value.toString();
-          map[key] = DeviceVerificationStatus.values.firstWhere(
-            (v) => v.name == name,
-            orElse: () => DeviceVerificationStatus.pending,
-          );
+          final value = entry.value;
+          if (value is String) {
+            map[key] = DeviceGateEvidence(status: _parseStatus(value));
+          } else if (value is Map) {
+            final metricsRaw = value['metrics'];
+            final metrics = <String, num>{};
+            if (metricsRaw is Map) {
+              for (final m in metricsRaw.entries) {
+                final n = m.value;
+                if (n is num) metrics[m.key.toString()] = n;
+              }
+            }
+            DateTime? recordedAt;
+            final at = value['recordedAt']?.toString();
+            if (at != null && at.isNotEmpty) {
+              recordedAt = DateTime.tryParse(at);
+            }
+            map[key] = DeviceGateEvidence(
+              status: _parseStatus(value['status']?.toString() ?? ''),
+              note: value['note']?.toString(),
+              metrics: metrics,
+              recordedAt: recordedAt,
+            );
+          }
         }
       }
     } catch (_) {
       // Treat corrupt payload as empty pending snapshot.
     }
-    return DeviceVerificationSnapshot(statuses: map);
+    return DeviceVerificationSnapshot(gates: map);
+  }
+
+  DeviceVerificationStatus _parseStatus(String name) {
+    return DeviceVerificationStatus.values.firstWhere(
+      (v) => v.name == name,
+      orElse: () => DeviceVerificationStatus.pending,
+    );
   }
 }
