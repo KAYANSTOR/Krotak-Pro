@@ -43,12 +43,26 @@ abstract interface class CardCatalogService {
 }
 
 abstract interface class WalletCatalogService {
-  Future<Result<Wallet>> saveWallet({required String name});
+  Future<Result<List<Wallet>>> listEnriched();
+
+  Future<Result<Wallet>> saveWallet({
+    required String name,
+    String? senderId,
+    WalletSourceMode sourceMode = WalletSourceMode.sms,
+    String? packageName,
+  });
+
   Future<Result<Wallet>> updateWallet({
     required String id,
     required String name,
     required WalletStatus status,
+    String? senderId,
+    WalletSourceMode? sourceMode,
+    String? packageName,
   });
+
+  /// Seeds the four standard Yemen wallets with correct packages/modes.
+  Future<Result<void>> ensureDefaultWallets();
 }
 
 abstract interface class PointOfSaleCatalogService {
@@ -79,14 +93,14 @@ abstract interface class SaleService {
   Future<Result<Sale>> sellFromBalance({
     required String customerId,
     required String categoryId,
-    String? operationId,
+    required String operationId,
   });
   Future<Result<Sale>> sellManual({
-    required String phone,
-    required String displayName,
-    required Money amount,
+    required String customerId,
+    required String categoryId,
     required ManualSaleMethod method,
-    String? operationId,
+    required String operationId,
+    String? posId,
   });
   Future<Result<Sale>> reverseSale({required String saleId});
 }
