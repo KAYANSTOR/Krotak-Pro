@@ -1,13 +1,16 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:net_app/application/incoming_sms_handler.dart';
+import 'package:net_app/core/clock.dart';
 import 'package:net_app/core/id_generator.dart';
 import 'package:net_app/core/result.dart';
+import 'package:net_app/domain/entities/audit.dart';
 import 'package:net_app/domain/entities/message.dart';
 import 'package:net_app/domain/entities/money.dart';
 import 'package:net_app/domain/entities/setting.dart';
 import 'package:net_app/domain/entities/transaction.dart';
 import 'package:net_app/domain/repositories/repositories.dart';
 import 'package:net_app/domain/services/local_message_recovery_service.dart';
+import 'package:net_app/domain/services/local_message_retry_service.dart';
 import 'package:net_app/domain/services/services.dart';
 import 'package:net_app/platform/sms_bridge.dart';
 
@@ -45,10 +48,7 @@ void main() {
       expect(result, isA<Success<Transaction?>>());
       expect(processor.calls, 0);
       expect(messages.store, hasLength(1));
-      expect(
-        messages.store.values.single.status,
-        MessageProcessingStatus.parsed,
-      );
+      expect(messages.store.values.single.status, MessageProcessingStatus.parsed);
     });
 
     test('auto-processing ON (default) invokes processor', () async {
@@ -82,15 +82,16 @@ void main() {
     });
 
     test('process_old_messages_on_resume OFF skips recovery', () async {
+      final messages = _FakeMessages()
+        ..store['m1'] = IncomingMessage(
+          id: 'm1',
+          sender: 'bank',
+          body: 'body',
+          receivedAt: DateTime.utc(2026, 9, 12),
+          status: MessageProcessingStatus.received,
+        );
       final recovery = LocalMessageRecoveryService(
-        messages: _FakeMessages()
-          ..store['m1'] = IncomingMessage(
-            id: 'm1',
-            sender: 'bank',
-            body: 'body',
-            receivedAt: DateTime.utc(2026, 9, 12),
-            status: MessageProcessingStatus.received,
-          ),
+        messages: messages,
         parser: _FakeParser(
           const ParsedTransfer(
             messageId: 'm1',
@@ -101,6 +102,12 @@ void main() {
           ),
         ),
         processor: _FakeProcessor(),
+        retryService: LocalMessageRetryService(
+          auditLogs: _FakeAuditLogs(),
+          messages: messages,
+          clock: FixedClock(DateTime(2026, 9, 12)),
+          ids: SequentialIdGenerator(),
+        ),
         settings: _FakeSettings({
           SettingKeys.processOldMessagesOnResume: 'false',
         }),
@@ -123,9 +130,7 @@ final class _FakeSettings implements SettingsRepository {
   Future<Result<AppSetting?>> find(String key) async {
     final v = values[key];
     if (v == null) return const Success(null);
-    return Success(
-      AppSetting(key: key, value: v, updatedAt: DateTime.utc(2026, 9, 12)),
-    );
+    return Success(AppSetting(key: key, value: v, updatedAt: DateTime.utc(2026, 9, 12)));
   }
 
   @override
@@ -135,6 +140,20 @@ final class _FakeSettings implements SettingsRepository {
   }
 }
 
+final class _FakeAuditLogs implements AuditLogRepository {
+  final List<AuditLog> logs = [];
+
+  @override
+  Future<Result<void>> append(AuditLog log) async {
+    logs.add(log);
+    return const Success(null);
+  }
+
+  @override
+  Future<Result<List<AuditLog>>> findByEntity(String entityType, String entityId) async =>
+      Success(logs.where((l) => l.entityType == entityType && l.entityId == entityId).toList(growable: false));
+}
+
 final class _FakeMessages implements MessageRepository {
   final store = <String, IncomingMessage>{};
   final seenExternalReferences = <String>[];
@@ -142,20 +161,15 @@ final class _FakeMessages implements MessageRepository {
   @override
   Future<Result<void>> save(IncomingMessage message) async {
     store[message.id] = message;
-    if (message.externalReference != null) {
-      seenExternalReferences.add(message.externalReference!);
-    }
+    if (message.externalReference != null) seenExternalReferences.add(message.externalReference!);
     return const Success(null);
   }
 
   @override
-  Future<Result<IncomingMessage?>> findById(String id) async =>
-      Success(store[id]);
+  Future<Result<IncomingMessage?>> findById(String id) async => Success(store[id]);
 
   @override
-  Future<Result<IncomingMessage?>> findByExternalReference(
-    String reference,
-  ) async {
+  Future<Result<IncomingMessage?>> findByExternalReference(String reference) async {
     seenExternalReferences.add(reference);
     for (final m in store.values) {
       if (m.externalReference == reference) return Success(m);
@@ -164,40 +178,24 @@ final class _FakeMessages implements MessageRepository {
   }
 
   @override
-  Future<Result<List<IncomingMessage>>> pendingProcessing() async {
-    final list = store.values
-        .where(
-          (m) =>
-              m.status == MessageProcessingStatus.received ||
-              m.status == MessageProcessingStatus.parsed,
-        )
-        .toList(growable: false);
-    return Success(list);
-  }
+  Future<Result<List<IncomingMessage>>> pendingProcessing() async => Success(
+        store.values
+            .where((m) => m.status == MessageProcessingStatus.received || m.status == MessageProcessingStatus.parsed)
+            .toList(growable: false),
+      );
 
   @override
-  Future<Result<List<IncomingMessage>>> listByStatus(
-    MessageProcessingStatus status,
-  ) async =>
-      Success(
-        store.values.where((m) => m.status == status).toList(growable: false),
-      );
+  Future<Result<List<IncomingMessage>>> listByStatus(MessageProcessingStatus status) async =>
+      Success(store.values.where((m) => m.status == status).toList(growable: false));
 
   @override
   Future<Result<List<IncomingMessage>>> listRecent({int limit = 100}) async =>
       Success(store.values.take(limit).toList(growable: false));
 
   @override
-  Future<Result<void>> updateStatus(
-    String id,
-    MessageProcessingStatus status,
-  ) async {
+  Future<Result<void>> updateStatus(String id, MessageProcessingStatus status) async {
     final current = store[id];
-    if (current == null) {
-      return const Failure(
-        AppFailure(code: 'missing', message: 'missing'),
-      );
-    }
+    if (current == null) return const Failure(AppFailure(code: 'missing', message: 'missing'));
     store[id] = IncomingMessage(
       id: current.id,
       sender: current.sender,
