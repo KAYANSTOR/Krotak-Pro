@@ -8,10 +8,16 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Restore dashboard
+      - name: Restore dashboard from gzip b64
         run: |
-          python3 -c "import base64,pathlib; p1=pathlib.Path('tools/dash_p1.b64').read_text().strip(); p2=pathlib.Path('tools/dash_p2.b64').read_text().strip(); pathlib.Path('lib/ui/screens/dashboard_screen.dart').write_bytes(base64.b64decode(p1+p2)); print('ok', pathlib.Path('lib/ui/screens/dashboard_screen.dart').stat().st_size)"
-      - name: Commit and push
+          python3 - <<'PY'
+          import base64, gzip, pathlib
+          b64 = pathlib.Path('tools/dashboard_phase1.dart.gz.b64').read_text().strip()
+          data = gzip.decompress(base64.b64decode(b64))
+          pathlib.Path('lib/ui/screens/dashboard_screen.dart').write_bytes(data)
+          print('written', len(data))
+          PY
+      - name: Commit
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
