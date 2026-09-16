@@ -119,7 +119,14 @@ CI على main — analyze + test + Android debug APK build
 - اختبارات: `test/services/voucher_ops_and_promotion_progress_test.dart`
 - تقرير: [phase-14-promotion-reward-fulfillment.md](phase-14-promotion-reward-fulfillment.md)
 
+### Phase 15 — Promotion Auto Fulfillment (2026-09-16) ✅ في المستودع
+- ربط `LocalPromotionFulfillmentService` بـ `LocalSaleService` بعد اكتمال البيع اليدوي ومن الرصيد ومن الحجز.
+- التحويل عبر SMS يستفيد تلقائياً لأن `completeReservedSale` هو مسار الإكمال.
+- فشل صرف المكافأة لا يراجع البيع المكتمل.
+- اختبارات: `test/services/voucher_ops_and_promotion_progress_test.dart`
+- تقرير: [phase-15-promotion-auto-fulfill.md](phase-15-promotion-auto-fulfill.md)
+
 ## المتبقي Post-V1 (الترتيب الرسمي)
-لا بنود برمجية رسمية متبقية بعد Phase 14. المتبقي التشغيلي: تشغيل بوابات Phase 12 على جهاز Android حقيقي، ثم قياس الاستيراد والبث على الجهاز.
+لا بنود برمجية رسمية متبقية بعد Phase 15 سوى التشغيل على جهاز: بوابات Phase 12، قياس الاستيراد والبث، وقالب SMS للمكافأة إن اعتُمد.
 
 مرجع: NET-POST-V1-MASTER-PLAN — GitHub مصدر الحقيقة؛ لا Local Only.
