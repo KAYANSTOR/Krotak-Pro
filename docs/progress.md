@@ -112,7 +112,14 @@ CI على main — analyze + test + Android debug APK build
 - اختبارات: `test/services/voucher_ops_and_promotion_progress_test.dart`
 - تقرير: [phase-13-1.0.9-hardening.md](phase-13-1.0.9-hardening.md)
 
+### Phase 14 — Promotion Reward Fulfillment (2026-09-16) ✅ في المستودع
+- `LocalPromotionFulfillmentService`: صرف كرت مكافأة عند بلوغ عتبة العرض.
+- Idempotency بالمرجع `promo-reward:{promoId}:{customerId}:{cycle}`.
+- حركة `TransactionType.reward` لا تدخل تراكم المبيعات.
+- اختبارات: `test/services/voucher_ops_and_promotion_progress_test.dart`
+- تقرير: [phase-14-promotion-reward-fulfillment.md](phase-14-promotion-reward-fulfillment.md)
+
 ## المتبقي Post-V1 (الترتيب الرسمي)
-لا بنود برمجية رسمية متبقية بعد Phase 13. المتبقي التشغيلي: تشغيل بوابات Phase 12 على جهاز Android حقيقي، ثم قياس الاستيراد والبث على الجهاز.
+لا بنود برمجية رسمية متبقية بعد Phase 14. المتبقي التشغيلي: تشغيل بوابات Phase 12 على جهاز Android حقيقي، ثم قياس الاستيراد والبث على الجهاز.
 
 مرجع: NET-POST-V1-MASTER-PLAN — GitHub مصدر الحقيقة؛ لا Local Only.
