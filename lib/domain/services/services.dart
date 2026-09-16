@@ -96,11 +96,11 @@ abstract interface class SaleService {
     required String operationId,
   });
   Future<Result<Sale>> sellManual({
-    required String customerId,
-    required String categoryId,
+    required String phone,
+    required String displayName,
+    required Money amount,
     required ManualSaleMethod method,
-    required String operationId,
-    String? posId,
+    String? operationId,
   });
   Future<Result<Sale>> reverseSale({required String saleId});
 }
