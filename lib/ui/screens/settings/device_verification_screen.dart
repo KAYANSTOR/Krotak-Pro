@@ -1,4 +1,7 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../../core/result.dart';
 import '../../../domain/device_verification_gate.dart';
@@ -66,6 +69,21 @@ class _DeviceVerificationScreenState extends State<DeviceVerificationScreen> {
     }
   }
 
+  Future<void> _copyPack() async {
+    final pack = _service().exportEvidencePack(_snapshot);
+    await Clipboard.setData(ClipboardData(text: const JsonEncoder.withIndent('  ').convert(pack)));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          _snapshot.readyForRelease
+              ? 'تم نسخ حزمة الأدلة — جاهزة الإصدار مكتملة على الجهاز'
+              : 'تم نسخ حزمة الأدلة (البوابات غير مكتملة بعد)',
+        ),
+      ),
+    );
+  }
+
   Future<String?> _askNote(String id) async {
     final controller = TextEditingController();
     final title = id == 'bulk_import' ? 'قياس الاستيراد' : 'قياس البث';
@@ -105,6 +123,13 @@ class _DeviceVerificationScreenState extends State<DeviceVerificationScreen> {
           backgroundColor: palette.appBackground,
           foregroundColor: palette.textPrimary,
           elevation: 0,
+          actions: [
+            IconButton(
+              tooltip: 'نسخ حزمة الأدلة',
+              onPressed: _loading ? null : _copyPack,
+              icon: const Icon(Icons.copy_all_outlined),
+            ),
+          ],
         ),
         body: _loading
             ? const AsyncLoadingView()
@@ -117,6 +142,14 @@ class _DeviceVerificationScreenState extends State<DeviceVerificationScreen> {
                         'بوابات الإنتاج الصفراء — ${_snapshot.passedCount}/${_snapshot.total} مؤكدة على جهاز حقيقي',
                         style: TextStyle(fontFamily: 'Tajawal', fontSize: 14, color: palette.textSecondary),
                       ),
+                      if (_snapshot.readyForRelease)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: Text(
+                            'جاهز للإصدار: كل البوابات مررة مع أدلة قياس.',
+                            style: TextStyle(fontFamily: 'Tajawal', fontSize: 13, color: palette.textPrimary),
+                          ),
+                        ),
                       const SettingsSectionHeader(title: 'البوابات'),
                       for (final item in DeviceVerificationCatalog.items)
                         _GateCard(
