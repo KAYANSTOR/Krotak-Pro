@@ -32,6 +32,7 @@ void main() {
     final snap = (loaded as Success<DeviceVerificationSnapshot>).value;
     expect(snap.passedCount, 0);
     expect(snap.allPassed, isFalse);
+    expect(snap.readyForRelease, isFalse);
     expect(snap.of('sms_send_receive'), DeviceVerificationStatus.pending);
   });
 
@@ -99,6 +100,23 @@ void main() {
     final snap = (result as Success<DeviceVerificationSnapshot>).value;
     expect(snap.of('broadcast_rate'), DeviceVerificationStatus.passed);
     expect(snap.evidenceOf('broadcast_rate').metrics['sent'], 11);
+  });
+
+  test('exportEvidencePack includes schema and gate rows', () async {
+    await service.recordImportMeasurement(
+      acceptedRows: 10,
+      rejectedRows: 0,
+      durationMs: 500,
+    );
+    final loaded = await service.load();
+    final snap = (loaded as Success<DeviceVerificationSnapshot>).value;
+    final pack = service.exportEvidencePack(snap);
+    expect(pack['phase'], 19);
+    expect(pack['schema'], 'net.device_verification.v1');
+    expect(pack['readyForRelease'], isFalse);
+    final gates = pack['gates'] as Map;
+    expect(gates.containsKey('bulk_import'), isTrue);
+    expect((gates['bulk_import'] as Map)['status'], 'passed');
   });
 
   test('legacy string payload still decodes', () async {
