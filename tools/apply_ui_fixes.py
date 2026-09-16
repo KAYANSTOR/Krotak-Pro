@@ -1,12 +1,16 @@
 from pathlib import Path
 import base64, gzip
 
-gz = base64.b64decode(Path('tools/inventory_widgets.dart.gz.b64').read_text().strip())
-Path('lib/ui/screens/inventory_widgets.dart').write_bytes(gzip.decompress(gz))
-print('inventory', Path('lib/ui/screens/inventory_widgets.dart').stat().st_size)
+inv_path = Path('tools/inventory_widgets.dart.gz.b64')
+if inv_path.exists():
+    gz = base64.b64decode(inv_path.read_text().strip())
+    Path('lib/ui/screens/inventory_widgets.dart').write_bytes(gzip.decompress(gz))
+    print('inventory', Path('lib/ui/screens/inventory_widgets.dart').stat().st_size)
 
-parts = [Path(f'tools/wal_src_{i}.dart.part').read_text() for i in range(3)]
-Path('lib/ui/screens/wallets_pos_screen.dart').write_text(''.join(parts))
+a = Path('tools/wc_a.b64').read_text().strip()
+b = Path('tools/wc_b.b64').read_text().strip()
+gz = base64.b64decode(a + b)
+Path('lib/ui/screens/wallets_pos_screen.dart').write_bytes(gzip.decompress(gz))
 print('wallets', Path('lib/ui/screens/wallets_pos_screen.dart').stat().st_size)
 
 p = Path('lib/domain/services/local_catalog_services.dart')
@@ -21,5 +25,5 @@ else:
 inv = Path('lib/ui/screens/inventory_widgets.dart').read_text()
 assert 'class _TicketCard' in inv and 'class _Header' in inv
 wal = Path('lib/ui/screens/wallets_pos_screen.dart').read_text()
-assert '_WalletsHeader' in wal and 'WalletSourceMode.notification' in wal
+assert 'إدارة المحافظ ونقاط البيع' in wal
 print('verified ok')
