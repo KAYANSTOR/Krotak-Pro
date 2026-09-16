@@ -3,7 +3,6 @@ on:
   push:
     paths:
       - 'tools/apply_ui_fixes.py'
-      - 'tools/wallets_pos.dart.gz.b64'
       - 'tools/inventory_widgets.dart.gz.b64'
   workflow_dispatch:
 jobs:
@@ -20,7 +19,7 @@ jobs:
           set -e
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add lib/ui/screens/inventory_widgets.dart lib/ui/screens/wallets_pos_screen.dart lib/domain/services/local_catalog_services.dart
-          git commit -m "Apply: cards header RTL + wallets full redesign + jawali package" || echo nochange
+          git add lib/ui/screens/inventory_widgets.dart lib/domain/services/local_catalog_services.dart
+          git commit -m "Restore inventory_widgets full + RTL header + jawali package" || echo nochange
           git pull --rebase origin main || true
           git push origin HEAD:main
