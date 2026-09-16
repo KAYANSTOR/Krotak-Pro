@@ -1,7 +1,5 @@
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:net_app/core/clock.dart';
-import 'package:net_app/core/id_generator.dart';
 import 'package:net_app/core/result.dart';
 import 'package:net_app/data/database/app_database.dart'
     hide Customer, Card, Sale, TransferTemplate, CardCategory, Transaction;
@@ -35,7 +33,7 @@ void main() {
   late LocalCardInventoryService inventoryService;
   late LocalSaleService saleService;
 
-  const face = Money(minorUnits: 50000, currencyCode: 'YER'); // 500 ر.ي
+  const face = Money(minorUnits: 50000, currencyCode: 'YER');
 
   setUp(() {
     database = AppDatabase(NativeDatabase.memory());
@@ -105,6 +103,7 @@ void main() {
       ),
     );
     expect(cat, isA<Success<CardCategory>>());
+
     final drafts = [
       for (var i = 0; i < count)
         CardImportDraft(
@@ -119,8 +118,7 @@ void main() {
     expect(imported, isA<Success<int>>());
   }
 
-  test('cash manual sale creates customer, deposit+sale, net balance zero',
-      () async {
+  test('cash manual sale creates customer, deposit+sale, net balance zero', () async {
     await seedCategoryWithCards();
 
     final sold = await saleService.sellManual(
@@ -208,12 +206,10 @@ void main() {
       customerId: customer.id,
       currencyCode: 'YER',
     );
-    // Net still the prior debt (cash deposit cancels the new sale)
     expect((after as Success<Money>).value.minorUnits, -face.minorUnits);
   });
 
-  test('idempotent sellManual returns same sale for same operationId',
-      () async {
+  test('idempotent sellManual returns same sale for same operationId', () async {
     await seedCategoryWithCards();
     final first = await saleService.sellManual(
       phone: '733777888',
