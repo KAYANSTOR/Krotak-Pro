@@ -1,5 +1,10 @@
 import base64
 from pathlib import Path
-b64 = open('tools/net_theme.b64').read().strip()
-Path('lib/ui/theme/net_theme.dart').write_bytes(base64.b64decode(b64))
-print('wrote', Path('lib/ui/theme/net_theme.dart').stat().st_size)
+a = Path('tools/net_theme_a.b64').read_text().strip()
+b = Path('tools/net_theme_b.b64').read_text().strip()
+data = base64.b64decode(a + b)
+Path('lib/ui/theme/net_theme.dart').write_bytes(data)
+text = data.decode()
+assert 'FlexSchemeColor(J' not in text
+assert 'google_fonts' not in text
+print('wrote', len(data), 'ok')
