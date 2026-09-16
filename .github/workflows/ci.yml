@@ -26,6 +26,8 @@ jobs:
 
   build-apk:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
@@ -43,6 +45,7 @@ jobs:
           if-no-files-found: error
       - name: Publish GitHub Release
         if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+        continue-on-error: true
         uses: softprops/action-gh-release@v2
         with:
           tag_name: apk-${{ github.run_number }}
