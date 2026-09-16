@@ -43,10 +43,11 @@ void main() {
   testWidgets('NetDashboardHeader settings callback', (tester) async {
     var tapped = false;
     await tester.pumpWidget(
-      _wrap(const NetDashboardHeader(
+      _wrap(NetDashboardHeader(
         networkName: 'NET',
         dateLabel: 'اليوم',
-      ).copyWith(onSettings: () => tapped = true)),
+        onSettings: () => tapped = true,
+      )),
     );
     await tester.tap(find.byIcon(Icons.settings_outlined));
     expect(tapped, isTrue);
