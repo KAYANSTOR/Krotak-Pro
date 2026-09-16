@@ -11,8 +11,7 @@ import 'widgets/kayan_bottom_nav.dart';
 import 'widgets/permissions_onboarding.dart';
 
 /// Bottom navigation: dashboard | reports | offers | accounts | cards
-/// Uses [IndexedStack] so tab state is preserved and screens do not rebuild
-/// on every switch (eliminates flicker / "shaking").
+/// Uses [IndexedStack] so tab state is preserved (no flicker).
 class HomeShell extends StatefulWidget {
   const HomeShell({super.key});
 
@@ -68,24 +67,17 @@ class _HomeShellState extends State<HomeShell> {
 
   @override
   Widget build(BuildContext context) {
-    final hideAppBar = _currentId == 'cards';
+    // Dashboard and cards use their own headers (match Z Net video).
+    final hideAppBar = _currentId == 'dashboard' || _currentId == 'cards';
     return Scaffold(
       backgroundColor: const Color(0xFFF6F8F9),
       appBar: hideAppBar
           ? null
           : AppBar(
               title: Text(_titles[_currentId] ?? 'NET'),
-              actions: [
-                if (_currentId == 'dashboard')
-                  IconButton(
-                    icon: const Icon(Icons.settings_outlined),
-                    onPressed: () => AppRoutes.openSettings(context),
-                  ),
-              ],
             ),
       body: SafeArea(
         top: hideAppBar,
-        // IndexedStack keeps all tabs alive → no flicker on switch
         child: IndexedStack(
           index: _index,
           sizing: StackFit.expand,
