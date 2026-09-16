@@ -32,10 +32,11 @@ ThemeData buildNetLightTheme() {
     ),
     visualDensity: FlexColorScheme.comfortablePlatformDensity,
     useMaterial3: true,
-    fontFamily: 'Roboto',
+    fontFamily: 'Tajawal',
   );
 
   final textTheme = base.textTheme.apply(
+    fontFamily: 'Tajawal',
     bodyColor: KayanColors.textPrimary,
     displayColor: KayanColors.textPrimary,
   );
@@ -51,10 +52,12 @@ ThemeData buildNetLightTheme() {
       textColor: KayanColors.textPrimary,
       iconColor: KayanColors.primary,
       subtitleTextStyle: TextStyle(
+        fontFamily: 'Tajawal',
         color: KayanColors.textSecondary,
         fontSize: 13,
       ),
       titleTextStyle: TextStyle(
+        fontFamily: 'Tajawal',
         color: KayanColors.textPrimary,
         fontWeight: FontWeight.w700,
         fontSize: 15,
@@ -66,6 +69,7 @@ ThemeData buildNetLightTheme() {
       elevation: 0,
       centerTitle: true,
       titleTextStyle: const TextStyle(
+        fontFamily: 'Tajawal',
         color: KayanColors.textPrimary,
         fontWeight: FontWeight.w800,
         fontSize: 17,
@@ -109,10 +113,11 @@ ThemeData buildNetDarkTheme() {
     ),
     visualDensity: FlexColorScheme.comfortablePlatformDensity,
     useMaterial3: true,
-    fontFamily: 'Roboto',
+    fontFamily: 'Tajawal',
   );
 
   final textTheme = base.textTheme.apply(
+    fontFamily: 'Tajawal',
     bodyColor: KayanColors.darkTextPrimary,
     displayColor: KayanColors.darkTextPrimary,
   );
@@ -128,10 +133,12 @@ ThemeData buildNetDarkTheme() {
       textColor: KayanColors.darkTextPrimary,
       iconColor: KayanColors.primary,
       subtitleTextStyle: TextStyle(
+        fontFamily: 'Tajawal',
         color: KayanColors.darkTextSecondary,
         fontSize: 13,
       ),
       titleTextStyle: TextStyle(
+        fontFamily: 'Tajawal',
         color: KayanColors.darkTextPrimary,
         fontWeight: FontWeight.w700,
         fontSize: 15,
@@ -143,6 +150,7 @@ ThemeData buildNetDarkTheme() {
       elevation: 0,
       centerTitle: true,
       titleTextStyle: const TextStyle(
+        fontFamily: 'Tajawal',
         color: KayanColors.darkTextPrimary,
         fontWeight: FontWeight.w800,
         fontSize: 17,
