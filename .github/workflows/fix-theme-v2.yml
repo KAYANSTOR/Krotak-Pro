@@ -2,7 +2,8 @@ name: Fix theme v2
 on:
   push:
     paths:
-      - 'tools/net_theme.b64'
+      - 'tools/net_theme_a.b64'
+      - 'tools/net_theme_b.b64'
       - 'tools/fix_theme.py'
   workflow_dispatch:
 jobs:
@@ -20,6 +21,6 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add lib/ui/theme/net_theme.dart
-          git commit -m "Fix high-contrast theme (no google_fonts)" || echo nochange
+          git commit -m "Fix high-contrast theme (clean, no google_fonts)" || echo nochange
           git pull --rebase origin main || true
           git push origin HEAD:main
