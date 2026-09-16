@@ -27,7 +27,7 @@ class _WalletsPosScreenState extends State<WalletsPosScreen>
   void initState() {
     super.initState();
     _tabs = TabController(length: 2, vsync: this);
-    WidgetsBinding.instance.addPostFrameCallback((_) => _load());
+    WidgetsBinding.instance.addPostFrameCallback((_) async { await AppScope.of(context).walletCatalog.ensureDefaultWallets(); await _load(); });
   }
 
   @override
@@ -42,7 +42,7 @@ class _WalletsPosScreenState extends State<WalletsPosScreen>
       _error = null;
     });
     final c = AppScope.of(context);
-    final wallets = await c.wallets.listAll();
+    final wallets = await c.walletCatalog.listEnriched();
     final posResult = await c.pointsOfSale.listAll();
     if (!mounted) return;
     setState(() {
@@ -278,7 +278,7 @@ class _WalletsPosScreenState extends State<WalletsPosScreen>
           mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
-              title: Text(wallet.name, style: const TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.bold)),
+              title: Text('${wallet.name}${wallet.packageName != null ? '\n${wallet.packageName}' : ''}', style: const TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.bold)),
             ),
             ListTile(
               leading: const Icon(Icons.edit_outlined),
@@ -382,7 +382,7 @@ class _WalletsPosScreenState extends State<WalletsPosScreen>
         itemBuilder: (_, i) {
           final wallet = _wallets[i];
           return ListTile(
-            title: Text(wallet.name, style: const TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.bold)),
+            title: Text('${wallet.name}${wallet.packageName != null ? '\n${wallet.packageName}' : ''}', style: const TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.bold)),
             subtitle: Text(_walletStatusLabel(wallet.status), style: const TextStyle(fontFamily: 'Tajawal')),
             leading: const Icon(Icons.account_balance_wallet_outlined, color: KayanColors.primary),
             trailing: IconButton(
