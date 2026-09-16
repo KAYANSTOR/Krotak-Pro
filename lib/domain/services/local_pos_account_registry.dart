@@ -51,14 +51,7 @@ final class LocalPosAccountRegistry {
     }
     for (final account in rows) {
       if (account.posId == posId && account.customerId.trim().isEmpty) {
-        return _ensureBinding(
-          posId: account.posId,
-          name: account.name,
-          identifiers: account.identifiers,
-          notifyPhone: account.notifyPhone,
-          status: account.status,
-          percentageMode: account.percentageMode,
-        );
+        return _ensureBinding(posId: account.posId, name: account.name, identifiers: account.identifiers, notifyPhone: account.notifyPhone, status: account.status, percentageMode: account.percentageMode);
       }
     }
 
@@ -68,12 +61,7 @@ final class LocalPosAccountRegistry {
     if (foundPos is Failure<PointOfSale?>) return Failure(foundPos.error);
     final pos = (foundPos as Success<PointOfSale?>).value;
     if (pos == null) return const Success(null);
-    return _ensureBinding(
-      posId: pos.id,
-      name: pos.name,
-      identifiers: <String>[pos.name],
-      status: pos.status,
-    );
+    return _ensureBinding(posId: pos.id, name: pos.name, identifiers: <String>[pos.name], status: pos.status);
   }
 
   Future<Result<PosAccount?>> findByIdentifier(String raw) async {
@@ -86,9 +74,7 @@ final class LocalPosAccountRegistry {
       if (account.status != PointOfSaleStatus.active || account.customerId.trim().isEmpty) continue;
       final keys = <String>{_normalize(account.name), ...account.identifiers.map(_normalize)};
       if (keys.contains(needle)) {
-        if (hit != null && hit.posId != account.posId) {
-          return const Failure(AppFailure(code: 'pos_identifier_ambiguous', message: 'Identifier matches more than one point of sale'));
-        }
+        if (hit != null && hit.posId != account.posId) return const Failure(AppFailure(code: 'pos_identifier_ambiguous', message: 'Identifier matches more than one point of sale'));
         hit = account;
       }
     }
@@ -96,28 +82,17 @@ final class LocalPosAccountRegistry {
   }
 
   Future<Result<void>> save(PosAccount account) async {
-    if (account.posId.trim().isEmpty) {
-      return const Failure(AppFailure(code: 'pos_id_required', message: 'Point of sale id is required'));
-    }
+    if (account.posId.trim().isEmpty) return const Failure(AppFailure(code: 'pos_id_required', message: 'Point of sale id is required'));
     final customerId = account.customerId.trim();
     if (customerId.isEmpty) return _saveWithAutomaticLedgerBinding(account);
     return _saveBound(account.copyWith(customerId: customerId));
   }
 
   Future<Result<void>> _saveWithAutomaticLedgerBinding(PosAccount account) async {
-    final ensured = await _ensureBinding(
-      posId: account.posId,
-      name: account.name,
-      identifiers: account.identifiers,
-      notifyPhone: account.notifyPhone,
-      status: account.status,
-      percentageMode: account.percentageMode,
-    );
+    final ensured = await _ensureBinding(posId: account.posId, name: account.name, identifiers: account.identifiers, notifyPhone: account.notifyPhone, status: account.status, percentageMode: account.percentageMode);
     if (ensured is Failure<PosAccount?>) return Failure(ensured.error);
     final resolved = (ensured as Success<PosAccount?>).value;
-    if (resolved == null || resolved.customerId.trim().isEmpty) {
-      return const Failure(AppFailure(code: 'pos_customer_binding_required', message: 'Point of sale must be linked to a customer ledger account'));
-    }
+    if (resolved == null || resolved.customerId.trim().isEmpty) return const Failure(AppFailure(code: 'pos_customer_binding_required', message: 'Point of sale must be linked to a customer ledger account'));
     return _saveBound(account.copyWith(customerId: resolved.customerId));
   }
 
@@ -134,47 +109,35 @@ final class LocalPosAccountRegistry {
     final customerRepo = customers;
     final creator = customerService;
     final idGenerator = ids;
-    if (customerRepo == null || creator == null || idGenerator == null) {
-      return const Failure(AppFailure(code: 'pos_customer_binding_required', message: 'Point of sale must be linked to a customer ledger account'));
-    }
+    if (customerRepo == null || creator == null || idGenerator == null) return const Failure(AppFailure(code: 'pos_customer_binding_required', message: 'Point of sale must be linked to a customer ledger account'));
 
     final stableIdentifier = 'pos:$posId';
     final found = await customerRepo.findByIdentifier(stableIdentifier);
     if (found is Failure<Customer?>) return Failure(found.error);
     Customer? customer = (found as Success<Customer?>).value;
     if (customer == null) {
-      final created = await creator.create(
-        displayName: trimmedName,
-        identifierType: CustomerIdentifierType.externalReference,
-        identifierValue: stableIdentifier,
-      );
+      final created = await creator.create(displayName: trimmedName, identifierType: CustomerIdentifierType.externalReference, identifierValue: stableIdentifier);
       if (created is Failure<Customer>) return Failure(created.error);
       customer = (created as Success<Customer>).value;
     }
 
     final normalizedIdentifiers = <String>{trimmedName, ...identifiers.map((e) => e.trim()).where((e) => e.isNotEmpty)}.toList(growable: false);
-    final bound = PosAccount(
-      posId: posId,
-      customerId: customer.id,
-      name: trimmedName,
-      identifiers: normalizedIdentifiers,
-      notifyPhone: notifyPhone,
-      status: status,
-      percentageMode: percentageMode,
-    );
+    final bound = PosAccount(posId: posId, customerId: customer.id, name: trimmedName, identifiers: normalizedIdentifiers, notifyPhone: notifyPhone, status: status, percentageMode: percentageMode);
     final saved = await _saveBound(bound);
     if (saved is Failure<void>) return Failure(saved.error);
     return Success(bound);
   }
 
   Future<Result<void>> _saveBound(PosAccount account) async {
+    final customerRepo = customers;
+    if (customerRepo != null) {
+      final found = await customerRepo.findById(account.customerId);
+      if (found is Failure<Customer?>) return Failure(found.error);
+      if ((found as Success<Customer?>).value == null) return const Failure(AppFailure(code: 'pos_customer_not_found', message: 'POS ledger customer was not found'));
+    }
     final all = await listAll();
     if (all is Failure<List<PosAccount>>) return Failure(all.error);
-    final next = [
-      for (final existing in (all as Success<List<PosAccount>>).value)
-        if (existing.posId != account.posId) existing,
-      account,
-    ];
+    final next = [for (final existing in (all as Success<List<PosAccount>>).value) if (existing.posId != account.posId) existing, account];
     return settings.save(AppSetting(key: SettingKeys.posAccounts, value: jsonEncode(next.map((e) => e.toJson()).toList()), updatedAt: clock.now()));
   }
 
