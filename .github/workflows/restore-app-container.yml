@@ -1,0 +1,25 @@
+name: Restore app_container
+
+on:
+  workflow_dispatch:
+
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Restore app_container from good commit and apply settings wire
+        run: |
+          set -e
+          git show 854d9c7:lib/application/app_container.dart > lib/application/app_container_impl.dart
+          sed -i 's/LocalWalletCatalogService(wallets: wallets, auditLogs: auditLogs, clock: clock, ids: ids)/LocalWalletCatalogService(wallets: wallets, auditLogs: auditLogs, settings: settings, clock: clock, ids: ids)/' lib/application/app_container_impl.dart
+          printf "%s\n" "export 'app_container_impl.dart';" > lib/application/app_container.dart
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add lib/application/app_container.dart lib/application/app_container_impl.dart
+          git commit -m "Restore full app_container with settings-wired walletCatalog" || echo "no change"
+          git push origin HEAD:main
