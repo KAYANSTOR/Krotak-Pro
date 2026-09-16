@@ -65,6 +65,9 @@ abstract final class DeviceVerificationCatalog {
     ),
   ];
 
+  /// Gates that cannot be marked passed without operator measurement notes.
+  static const measurementGateIds = {'bulk_import', 'broadcast_rate'};
+
   static DeviceVerificationItem? byId(String id) {
     for (final item in items) {
       if (item.id == id) return item;
