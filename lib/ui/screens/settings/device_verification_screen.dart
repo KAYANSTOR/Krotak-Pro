@@ -52,11 +52,45 @@ class _DeviceVerificationScreenState extends State<DeviceVerificationScreen> {
   }
 
   Future<void> _set(String id, DeviceVerificationStatus status) async {
-    final result = await _service().mark(gateId: id, status: status);
+    String? note;
+    if (status == DeviceVerificationStatus.passed &&
+        DeviceVerificationCatalog.measurementGateIds.contains(id)) {
+      note = await _askNote(id);
+      if (!mounted) return;
+      if (note == null || note.trim().isEmpty) return;
+    }
+    final result = await _service().mark(gateId: id, status: status, note: note);
     if (!mounted) return;
     if (result is Success<DeviceVerificationSnapshot>) {
       setState(() => _snapshot = result.value);
     }
+  }
+
+  Future<String?> _askNote(String id) async {
+    final controller = TextEditingController();
+    final title = id == 'bulk_import' ? 'قياس الاستيراد' : 'قياس البث';
+    return showDialog<String>(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          title: Text(title, style: const TextStyle(fontFamily: 'Tajawal')),
+          content: TextField(
+            controller: controller,
+            maxLines: 3,
+            decoration: const InputDecoration(
+              hintText: 'مثال: 80 صف مقبول في 1.4 ثانية / 11 رسالة في 9 ثوان',
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+              child: const Text('حفظ'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   @override
@@ -88,6 +122,7 @@ class _DeviceVerificationScreenState extends State<DeviceVerificationScreen> {
                         _GateCard(
                           item: item,
                           status: _snapshot.of(item.id),
+                          evidence: _snapshot.evidenceOf(item.id),
                           onPassed: () => _set(item.id, DeviceVerificationStatus.passed),
                           onBlocked: () => _set(item.id, DeviceVerificationStatus.blocked),
                           onReset: () => _set(item.id, DeviceVerificationStatus.pending),
@@ -103,6 +138,7 @@ class _GateCard extends StatelessWidget {
   const _GateCard({
     required this.item,
     required this.status,
+    required this.evidence,
     required this.onPassed,
     required this.onBlocked,
     required this.onReset,
@@ -110,6 +146,7 @@ class _GateCard extends StatelessWidget {
 
   final DeviceVerificationItem item;
   final DeviceVerificationStatus status;
+  final DeviceGateEvidence evidence;
   final VoidCallback onPassed;
   final VoidCallback onBlocked;
   final VoidCallback onReset;
@@ -155,6 +192,13 @@ class _GateCard extends StatelessWidget {
               Text(item.detail, style: TextStyle(fontFamily: 'Tajawal', fontSize: 13, color: palette.textSecondary)),
               const SizedBox(height: 4),
               Text(item.phaseRef, style: TextStyle(fontFamily: 'Tajawal', fontSize: 12, color: palette.textTertiary)),
+              if (evidence.hasOperatorNote) ...[
+                const SizedBox(height: 6),
+                Text(
+                  evidence.note!,
+                  style: TextStyle(fontFamily: 'Tajawal', fontSize: 12, color: palette.textPrimary),
+                ),
+              ],
               const SizedBox(height: 10),
               Wrap(
                 spacing: 8,
