@@ -54,15 +54,16 @@ final class LocalPromotionProgressService {
         .where((t) => t.status == TransactionStatus.completed)
         .toList(growable: false);
 
-    // تراكم مبيعات مكتملة (sale) بالعملة — مبسّط ومطابق للمحاسبة المحلية.
+    // تراكم مبيعات مكتملة (sale) بالعملة — يُخصم عكس البيع فقط.
     final byCurrency = <String, int>{};
     for (final t in completed) {
-      if (t.type != TransactionType.sale) continue;
-      byCurrency.update(
-        t.amount.currencyCode,
-        (v) => v + t.amount.minorUnits,
-        ifAbsent: () => t.amount.minorUnits,
-      );
+      final code = t.amount.currencyCode;
+      if (t.type == TransactionType.sale) {
+        byCurrency.update(code, (v) => v + t.amount.minorUnits, ifAbsent: () => t.amount.minorUnits);
+      } else if (t.type == TransactionType.reversal &&
+          (t.reference ?? '').startsWith('reversal:')) {
+        byCurrency.update(code, (v) => v - t.amount.minorUnits, ifAbsent: () => -t.amount.minorUnits);
+      }
     }
 
     return Success([
