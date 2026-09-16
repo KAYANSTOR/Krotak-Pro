@@ -30,7 +30,7 @@ class _BroadcastScreenState extends State<BroadcastScreen> {
     super.dispose();
   }
 
-  Future<void> _preview() async {
+  Future<void> _loadPreview() async {
     setState(() {
       _loadingPreview = true;
       _error = null;
@@ -117,7 +117,7 @@ class _BroadcastScreenState extends State<BroadcastScreen> {
             ),
             const SizedBox(height: 12),
             FilledButton(
-              onPressed: _loadingPreview || _running ? null : _preview,
+              onPressed: _loadingPreview || _running ? null : _loadPreview,
               child: const Text('حساب المستلمين'),
             ),
             if (_loadingPreview) const Padding(padding: EdgeInsets.all(16), child: AsyncLoadingView()),

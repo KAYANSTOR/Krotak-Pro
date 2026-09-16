@@ -114,18 +114,18 @@ final class LocalBroadcastService implements BroadcastService {
   }) async {
     final found = await jobs.findById(jobId);
     if (found is Failure<BroadcastJob?>) return Failure(found.error);
-    var job = (found as Success<BroadcastJob?>).value;
-    if (job == null) {
+    final foundJob = (found as Success<BroadcastJob?>).value;
+    if (foundJob == null) {
       return const Failure(AppFailure(code: 'broadcast_not_found', message: 'المهمة غير موجودة'));
     }
-    if (job.status == BroadcastJobStatus.cancelled) {
+    if (foundJob.status == BroadcastJobStatus.cancelled) {
       return const Failure(AppFailure(code: 'broadcast_cancelled', message: 'المهمة ملغاة'));
     }
-    if (job.status == BroadcastJobStatus.completed || job.status == BroadcastJobStatus.partiallyFailed) {
-      return Success(job);
+    if (foundJob.status == BroadcastJobStatus.completed || foundJob.status == BroadcastJobStatus.partiallyFailed) {
+      return Success(foundJob);
     }
 
-    job = job.copyWith(status: BroadcastJobStatus.running);
+    var job = foundJob.copyWith(status: BroadcastJobStatus.running);
     await jobs.save(job);
     onProgress?.call(BroadcastProgress(jobId: job.id, done: job.sentCount + job.failedCount + job.skippedCount, total: job.total, status: job.status));
 
