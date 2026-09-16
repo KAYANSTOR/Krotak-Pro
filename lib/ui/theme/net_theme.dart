@@ -86,7 +86,7 @@ ThemeData buildNetLightTheme() {
 
 ThemeData buildNetDarkTheme() {
   final base = FlexThemeData.dark(
-    colors: const FlexSchemeColor(J
+    colors: const FlexSchemeColor(
       primary: KayanColors.primary,
       primaryContainer: KayanColors.darkLightBackground,
       secondary: KayanColors.primaryVariant,
