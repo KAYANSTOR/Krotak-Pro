@@ -8,7 +8,7 @@ import '../entities/setting.dart';
 import '../phone_normalizer.dart';
 import '../repositories/repositories.dart';
 
-/// Persists POS\u2194ledger bindings in [SettingKeys.posAccounts] as JSON.
+/// Persists POS↔ledger bindings in [SettingKeys.posAccounts] as JSON.
 /// No extra Drift table: the customer ledger remains the single financial book.
 final class LocalPosAccountRegistry {
   const LocalPosAccountRegistry({required this.settings, required this.clock});
@@ -64,14 +64,38 @@ final class LocalPosAccountRegistry {
   }
 
   Future<Result<void>> save(PosAccount account) async {
+    final customerId = account.customerId.trim();
+    if (customerId.isEmpty) {
+      return const Failure(
+        AppFailure(
+          code: 'pos_customer_binding_required',
+          message: 'Point of sale must be linked to a customer ledger account',
+        ),
+      );
+    }
+    if (account.posId.trim().isEmpty) {
+      return const Failure(
+        AppFailure(
+          code: 'pos_id_required',
+          message: 'Point of sale id is required',
+        ),
+      );
+    }
+
     final all = await listAll();
     if (all is Failure<List<PosAccount>>) return Failure(all.error);
     final next = [
       for (final existing in (all as Success<List<PosAccount>>).value)
         if (existing.posId != account.posId) existing,
-      account,
+      account.copyWith(customerId: customerId),
     ];
-    return settings.save(AppSetting(key: SettingKeys.posAccounts, value: jsonEncode(next.map((e) => e.toJson()).toList()), updatedAt: clock.now()));
+    return settings.save(
+      AppSetting(
+        key: SettingKeys.posAccounts,
+        value: jsonEncode(next.map((e) => e.toJson()).toList()),
+        updatedAt: clock.now(),
+      ),
+    );
   }
 
   static String _normalize(String raw) {
