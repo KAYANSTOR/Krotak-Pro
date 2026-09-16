@@ -35,6 +35,12 @@ abstract final class SettingKeys {
   /// JSON array of [Promotion] objects.
   static const promotionsCatalog = 'promotions_catalog';
   static const promotionRewardSmsTemplate = 'promotion_reward_sms_template';
+
+  /// JSON map: walletId → {senderId, sourceMode, packageName}.
+  static const walletExtras = 'wallet_extras';
+
+  /// Flag once default Yemen wallets (JAIB/JAWALI/ONE CASH/FLOOSAK) are seeded.
+  static const defaultWalletsSeeded = 'default_wallets_seeded';
 }
 
 abstract final class SettingDefaults {
