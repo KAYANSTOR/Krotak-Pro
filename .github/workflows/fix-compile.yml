@@ -1,0 +1,84 @@
+name: Fix compile errors
+on:
+  workflow_dispatch:
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fix
+        run: |
+          python3 << 'PY'
+          from pathlib import Path
+
+          # 1) Fix Failure cast in catalog
+          p = Path('lib/domain/services/local_catalog_services.dart')
+          t = p.read_text()
+          t = t.replace('if (r is Failure) return Failure(r.error);', 'if (r is Failure) return Failure((r as Failure).error);')
+          p.write_text(t)
+          print('catalog fixed', 'as Failure' in t)
+
+          # 2) Align SaleService.sellManual in services.dart with local_sale_service
+          # Read local_sale signature
+          ls = Path('lib/domain/services/local_sale_service.dart').read_text()
+          # Find sellManual in local
+          import re
+          m = re.search(r'Future<Result<Sale>> sellManual\(\{([^}]+)\}\)', ls, re.S)
+          print('local sellManual params snippet:', (m.group(1)[:200] if m else 'NOT FOUND'))
+
+          # Read services interface sellManual - restore categoryId optional matching implementation
+          s = Path('lib/domain/services/services.dart').read_text()
+          # Replace sellManual interface to match common pattern used by local_sale
+          old = '''  Future<Result<Sale>> sellManual({
+    required String customerId,
+    required String categoryId,
+    required ManualSaleMethod method,
+    required String operationId,
+    String? posId,
+  });'''
+          # Check what local has
+          if 'categoryId' not in (m.group(0) if m else ''):
+              # local doesn't have categoryId required - make interface match local
+              new = '''  Future<Result<Sale>> sellManual({
+    required String customerId,
+    required ManualSaleMethod method,
+    required String operationId,
+    String? categoryId,
+    String? posId,
+    String? phone,
+  });'''
+              if old in s:
+                  s = s.replace(old, new)
+                  Path('lib/domain/services/services.dart').write_text(s)
+                  print('services sellManual updated')
+              else:
+                  print('old sellManual not found exact; dumping interface region')
+                  idx = s.find('sellManual')
+                  print(repr(s[idx:idx+250]))
+          else:
+              print('local has categoryId')
+
+          # 3) Fix direct_sale_sheet phone if needed - make it pass only valid params
+          ds = Path('lib/ui/widgets/dashboard/direct_sale_sheet.dart')
+          if ds.exists():
+              dt = ds.read_text()
+              # If phone is not accepted, remove it from the call
+              if 'phone: _phoneCtrl' in dt:
+                  # Check local_sale for phone param
+                  if 'phone' not in (m.group(0) if m else ''):
+                      dt2 = dt.replace('phone: _phoneCtrl.text.trim(),', '')
+                      ds.write_text(dt2)
+                      print('removed phone from direct_sale_sheet call')
+                  else:
+                      print('phone is valid param')
+          print('done')
+          PY
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Fix compile: Failure cast + sellManual signature + phone param" || echo nochange
+          git push origin HEAD:main
