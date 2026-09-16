@@ -9,7 +9,7 @@ import '../theme/kayan_colors.dart';
 
 /// يطلب الصلاحيات الحرجة عند أول تشغيل عبر نوافذ منبثقة متسلسلة.
 abstract final class PermissionsOnboarding {
-  static const doneKey = 'permissions_onboarding_done_v1';
+  static const doneKey = 'permissions_onboarding_done_v2';
 
   static Future<void> maybeRun(BuildContext context) async {
     final c = AppScope.of(context);
@@ -36,8 +36,12 @@ abstract final class PermissionsOnboarding {
             'يحتاج التطبيق إلى قراءة واستقبال وإرسال رسائل SMS لمعالجة التحويلات تلقائياً وإرسال كروت العملاء.',
         actionLabel: 'موافق — منح الصلاحية',
         onAllow: () async {
-          await sms.requestPermissions();
-          await diag.requestSmsPermissions();
+          try {
+            await sms.requestPermissions();
+          } catch (_) {}
+          try {
+            await diag.requestSmsPermissions();
+          } catch (_) {}
         },
       ),
       _PermStep(
