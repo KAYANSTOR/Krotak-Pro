@@ -5,21 +5,16 @@ import '../../core/id_generator.dart';
 import '../../core/result.dart';
 import '../entities/customer.dart';
 import '../entities/pos_account.dart';
+import '../entities/setting.dart';
 import '../entities/wallet.dart';
+import '../phone_normalizer.dart';
 import '../repositories/repositories.dart';
 import 'services.dart';
 
 /// Persists POS↔ledger bindings in [SettingKeys.posAccounts] as JSON.
 /// The customer ledger remains the single financial book for POS balances.
 final class LocalPosAccountRegistry {
-  LocalPosAccountRegistry({
-    required this.settings,
-    required this.clock,
-    this.customers,
-    this.customerService,
-    this.pointsOfSale,
-    this.ids,
-  });
+  LocalPosAccountRegistry({required this.settings, required this.clock, this.customers, this.customerService, this.pointsOfSale, this.ids});
 
   final SettingsRepository settings;
   final Clock clock;
@@ -54,7 +49,6 @@ final class LocalPosAccountRegistry {
         return _ensureBinding(posId: account.posId, name: account.name, identifiers: account.identifiers, notifyPhone: account.notifyPhone, status: account.status, percentageMode: account.percentageMode);
       }
     }
-
     final posRepo = pointsOfSale;
     if (posRepo == null) return const Success(null);
     final foundPos = await posRepo.findById(posId);
@@ -96,21 +90,12 @@ final class LocalPosAccountRegistry {
     return _saveBound(account.copyWith(customerId: resolved.customerId));
   }
 
-  Future<Result<PosAccount?>> _ensureBinding({
-    required String posId,
-    required String name,
-    required List<String> identifiers,
-    String? notifyPhone,
-    PointOfSaleStatus status = PointOfSaleStatus.active,
-    PosPercentageMode percentageMode = PosPercentageMode.defaultCategory,
-  }) async {
+  Future<Result<PosAccount?>> _ensureBinding({required String posId, required String name, required List<String> identifiers, String? notifyPhone, PointOfSaleStatus status = PointOfSaleStatus.active, PosPercentageMode percentageMode = PosPercentageMode.defaultCategory}) async {
     final trimmedName = name.trim();
     if (trimmedName.isEmpty) return const Failure(AppFailure(code: 'pos_name_required', message: 'Point of sale name is required'));
     final customerRepo = customers;
     final creator = customerService;
-    final idGenerator = ids;
-    if (customerRepo == null || creator == null || idGenerator == null) return const Failure(AppFailure(code: 'pos_customer_binding_required', message: 'Point of sale must be linked to a customer ledger account'));
-
+    if (customerRepo == null || creator == null || ids == null) return const Failure(AppFailure(code: 'pos_customer_binding_required', message: 'Point of sale must be linked to a customer ledger account'));
     final stableIdentifier = 'pos:$posId';
     final found = await customerRepo.findByIdentifier(stableIdentifier);
     if (found is Failure<Customer?>) return Failure(found.error);
@@ -120,7 +105,6 @@ final class LocalPosAccountRegistry {
       if (created is Failure<Customer>) return Failure(created.error);
       customer = (created as Success<Customer>).value;
     }
-
     final normalizedIdentifiers = <String>{trimmedName, ...identifiers.map((e) => e.trim()).where((e) => e.isNotEmpty)}.toList(growable: false);
     final bound = PosAccount(posId: posId, customerId: customer.id, name: trimmedName, identifiers: normalizedIdentifiers, notifyPhone: notifyPhone, status: status, percentageMode: percentageMode);
     final saved = await _saveBound(bound);
