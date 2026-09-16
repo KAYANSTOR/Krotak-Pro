@@ -3,8 +3,8 @@ on:
   push:
     paths:
       - 'tools/apply_ui_fixes.py'
-      - 'tools/inv_part0.b64'
-      - 'tools/wal_part0.b64'
+      - 'tools/wallets_pos.dart.gz.b64'
+      - 'tools/inventory_widgets.dart.gz.b64'
   workflow_dispatch:
 jobs:
   apply:
