@@ -98,7 +98,14 @@ class _CategoriesSheetState extends State<_CategoriesSheet> {
     final major = num.tryParse(valueCtrl.text.trim());
     nameCtrl.dispose();
     valueCtrl.dispose();
-    if (name.isEmpty || major == null || major <= 0) return;
+    if (name.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Name required', style: TextStyle(fontFamily: 'Tajawal'))));
+      return;
+    }
+    if (major == null || major <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Value must be > 0', style: TextStyle(fontFamily: 'Tajawal'))));
+      return;
+    }
     final c = AppScope.of(context);
     final r = await c.catalogService.saveCategory(domain.CardCategory(id: '', name: name, faceValue: Money(minorUnits: (major * 100).round(), currencyCode: 'YER'), isActive: true));
     if (!context.mounted) return;
@@ -106,8 +113,8 @@ class _CategoriesSheetState extends State<_CategoriesSheet> {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text((r as Failure).error.message, style: const TextStyle(fontFamily: 'Tajawal'))));
       return;
     }
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Category saved', style: TextStyle(fontFamily: 'Tajawal'))));
     await widget.onChanged();
-    if (context.mounted) Navigator.pop(context);
   }
 }
 
