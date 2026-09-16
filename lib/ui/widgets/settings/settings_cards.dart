@@ -172,7 +172,7 @@ class SettingsSwitchCard extends StatelessWidget {
           Switch.adaptive(
             value: value,
             onChanged: enabled ? onChanged : null,
-            activeColor: KayanColors.primary,
+            activeTrackColor: KayanColors.primary,
           ),
         ],
       ),
