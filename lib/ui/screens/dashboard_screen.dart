@@ -61,10 +61,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Future<void> _load() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
+    if (mounted) {
+      setState(() {
+        _loading = true;
+        _error = null;
+      });
+    }
     final c = AppScope.of(context);
     final now = c.clock.now();
     final dayStart = DateTime(now.year, now.month, now.day);
@@ -81,8 +83,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
           await c.balanceService.getTotalOutstanding(currencyCode: 'YER');
       final networkSetting = await c.settings.find(SettingKeys.networkName);
       final thresholdSetting = await c.settings.find(SettingKeys.lowStockThreshold);
-      final thresholdRaw =
-          thresholdSetting is Success<AppSetting?> ? thresholdSetting.value?.value : null;
+      final thresholdRaw = thresholdSetting is Success<AppSetting?>
+          ? thresholdSetting.value?.value
+          : null;
       final threshold = SettingInt.read(
         thresholdRaw,
         defaultValue: SettingDefaults.lowStockThreshold,
@@ -115,8 +118,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
       var accounts = 0;
       if (customers is Success<List<Customer>>) {
-        accounts =
-            customers.value.where((e) => e.status == CustomerStatus.active).length;
+        accounts = customers.value
+            .where((e) => e.status == CustomerStatus.active)
+            .length;
       }
 
       int sumSales(Result<List<Sale>> r) {
@@ -132,9 +136,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       var networkName = SettingDefaults.networkName;
       if (networkSetting is Success<AppSetting?>) {
         final stored = networkSetting.value?.value.trim();
-        if (stored != null && stored.isNotEmpty) {
-          networkName = stored;
-        }
+        if (stored != null && stored.isNotEmpty) networkName = stored;
       }
 
       if (!mounted) return;
@@ -152,8 +154,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _dailyCards = countSales(dailySales);
         _monthlySalesMinor = sumSales(monthlySales);
         _monthlyCards = countSales(monthlySales);
-        _recent =
-            recent is Success<List<Transaction>> ? recent.value : const [];
+        _recent = recent is Success<List<Transaction>> ? recent.value : const [];
         _lowStock = low;
         _health = healthResult is Success<SystemHealthSnapshot>
             ? healthResult.value
@@ -165,7 +166,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             recent is Failure ||
             totalBalance is Failure ||
             attentionFailed) {
-          _error = 'تعذر تحميل بعض بيانات اللوحة';
+          _error = 'تعذر تحميل بعض بيانات اللوحة؛ راجع الحالة ثم أعد المحاولة.';
         }
       });
     } catch (e) {
@@ -173,7 +174,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       setState(() {
         _loading = false;
         _dateLabel = dateLabel;
-        _error = e.toString();
+        _error = 'حدث خطأ غير متوقع أثناء تحميل اللوحة: $e';
       });
     }
   }
@@ -223,8 +224,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
   String? get _attentionBannerMessage {
     final n = _attentionMessagesCount;
     if (n <= 0) return null;
-    if (n == 1) return 'لديك رسالة واحدة مرفوضة أو معلّقة';
-    return 'لديك $n رسالة مرفوضة أو معلّقة';
+    if (n == 1) return 'لديك رسالة واحدة تحتاج مراجعة أو إجراء';
+    return 'لديك $n رسالة تحتاج مراجعة أو إجراء';
   }
 
   String? get _lowStockBannerMessage {
@@ -320,7 +321,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         child: NetMetricCard(
                           title: 'مبيعات اليوم',
                           value: formatMoneyMinor(_dailySalesMinor),
-                          subtitle: '$_dailyCards كرت',
+                          subtitle: '$_dailyCards عملية',
                           icon: Icons.today_outlined,
                           onTap: _openDailySalesSheet,
                         ),
@@ -330,7 +331,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         child: NetMetricCard(
                           title: 'مبيعات الشهر',
                           value: formatMoneyMinor(_monthlySalesMinor),
-                          subtitle: '$_monthlyCards كرت',
+                          subtitle: '$_monthlyCards عملية',
                           icon: Icons.calendar_month_outlined,
                           onTap: _openMonthlySalesSheet,
                         ),
@@ -344,7 +345,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         child: NetMetricCard(
                           title: 'كروت متاحة',
                           value: '$_availableCards',
-                          subtitle: 'من المخزون',
+                          subtitle: 'قابلة للبيع',
                           icon: Icons.sim_card_outlined,
                           onTap: _openCardStockSheet,
                         ),
@@ -356,8 +357,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           value: '$_accountsCount',
                           subtitle: 'عملاء',
                           icon: Icons.people_outline,
-                          onTap: () =>
-                              widget.onNavigateToTab?.call('accounts'),
+                          onTap: () => widget.onNavigateToTab?.call('accounts'),
                         ),
                       ),
                     ],
