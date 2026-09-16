@@ -1,17 +1,17 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 import '../../core/result.dart';
 import '../../domain/entities/setting.dart';
-import '../../platform/sms_bridge.dart';
 import '../../platform/system_diagnostics_bridge.dart';
 import '../app_scope.dart';
 import '../theme/kayan_colors.dart';
 
-/// يطلب **كل** الصلاحيات الحرجة عند أول دخول للتطبيق — نوافذ متسلسلة غير قابلة للإغلاق بالضغط خارجها.
+/// يطلب كل الصلاحيات الحرجة عند أول دخول — منطق كامل بـ Dart عبر permission_handler.
+/// فتح إعدادات النظام (إشعارات المحافظ / البطارية) يستخدم الجسر الموجود فقط.
 abstract final class PermissionsOnboarding {
-  /// ارفع الإصدار عند تغيير خطوات الصلاحيات لإعادة العرض للمستخدمين الحاليين.
-  static const doneKey = 'permissions_onboarding_done_v3';
+  /// ارفع الإصدار عند تغيير الخطوات لإعادة العرض للمستخدمين الحاليين.
+  static const doneKey = 'permissions_onboarding_done_v4';
 
   static Future<void> maybeRun(BuildContext context) async {
     final c = AppScope.of(context);
@@ -28,7 +28,6 @@ abstract final class PermissionsOnboarding {
   }
 
   static Future<void> _showSequence(BuildContext context) async {
-    final sms = SmsBridge();
     final diag = SystemDiagnosticsBridge();
 
     final steps = <_PermStep>[
@@ -38,12 +37,11 @@ abstract final class PermissionsOnboarding {
             'يحتاج التطبيق إلى قراءة واستقبال وإرسال رسائل SMS لمعالجة التحويلات تلقائياً وإرسال كروت العملاء.',
         actionLabel: 'موافق — منح الصلاحية',
         onAllow: () async {
-          try {
-            await sms.requestPermissions();
-          } catch (_) {}
-          try {
-            await diag.requestSmsPermissions();
-          } catch (_) {}
+          // طلب صلاحيات SMS بالكامل عبر permission_handler (Dart)
+          await [
+            Permission.sms,
+            Permission.phone, // يساعد بعض الأجهزة على وصول SMS
+          ].request();
         },
       ),
       _PermStep(
@@ -52,11 +50,8 @@ abstract final class PermissionsOnboarding {
             'للتنبيه عند الرسائل المعلّقة والتنبيهات التشغيلية يحتاج التطبيق إذن عرض الإشعارات.',
         actionLabel: 'موافق — منح الصلاحية',
         onAllow: () async {
-          // Android 13+ POST_NOTIFICATIONS عبر قناة التشخيص إن وُجدت، وإلا نتجاهل بهدوء.
-          try {
-            const ch = MethodChannel('com.kayan.net/diagnostics');
-            await ch.invokeMethod<bool>('requestPostNotifications');
-          } catch (_) {}
+          // POST_NOTIFICATIONS على Android 13+ عبر permission_handler
+          await Permission.notification.request();
         },
       ),
       _PermStep(
@@ -79,10 +74,7 @@ abstract final class PermissionsOnboarding {
             'يُستخدم لمعرفة حالة الشبكة والشرائح عند تشخيص النظام. يمكنك التخطي إن رغبت.',
         actionLabel: 'موافق',
         onAllow: () async {
-          try {
-            const ch = MethodChannel('com.kayan.net/diagnostics');
-            await ch.invokeMethod<bool>('requestPhoneState');
-          } catch (_) {}
+          await Permission.phone.request();
         },
       ),
     ];
@@ -120,7 +112,10 @@ abstract final class PermissionsOnboarding {
                 onPressed: () => Navigator.pop(ctx, false),
                 child: const Text(
                   'لاحقاً',
-                  style: TextStyle(fontFamily: 'Tajawal', color: KayanColors.textSecondary),
+                  style: TextStyle(
+                    fontFamily: 'Tajawal',
+                    color: KayanColors.textSecondary,
+                  ),
                 ),
               ),
               FilledButton(
@@ -131,7 +126,10 @@ abstract final class PermissionsOnboarding {
                 onPressed: () => Navigator.pop(ctx, true),
                 child: Text(
                   step.actionLabel,
-                  style: const TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w700),
+                  style: const TextStyle(
+                    fontFamily: 'Tajawal',
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
             ],
