@@ -1,5 +1,8 @@
 name: Fix category create
 on:
+  push:
+    paths:
+      - '.github/workflows/fix-category-create.yml'
   workflow_dispatch:
 jobs:
   apply:
@@ -16,45 +19,30 @@ jobs:
           from pathlib import Path
           p = Path('lib/ui/screens/inventory_sheets.dart')
           t = p.read_text()
-          # Fix silent validation failure
-          if "if (name.isEmpty || major == null || major <= 0) return;" in t:
-              t = t.replace(
-                  "if (name.isEmpty || major == null || major <= 0) return;",
-                  """if (name.isEmpty) {
+          old = 'if (name.isEmpty || major == null || major <= 0) return;'
+          if old in t:
+              t = t.replace(old, """if (name.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('أدخل اسم الفئة', style: TextStyle(fontFamily: 'Tajawal'))));
       return;
     }
     if (major == null || major <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('أدخل قيمة اسمية صحيحة أكبر من صفر', style: TextStyle(fontFamily: 'Tajawal'))));
       return;
-    }""",
-              )
+    }""")
               print('validation fixed')
-          # Don't pop categories sheet after create — keep it open
-          old_pop = """    await widget.onChanged();
-    if (context.mounted) Navigator.pop(context);
-  }
-}"""
-          new_pop = """    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('تم إنشاء الفئة «$name»', style: const TextStyle(fontFamily: 'Tajawal'))),
-    );
-    await widget.onChanged();
-  }
-}"""
-          if old_pop in t:
-              t = t.replace(old_pop, new_pop, 1)
-              print('keep sheet open fixed')
-          else:
-              print('pop pattern not found')
-              idx = t.find('await widget.onChanged()')
-              print(repr(t[idx:idx+120]))
-          # High-contrast dialog colors
-          t = t.replace(
-              "title: const Text('فئة جديدة', style: TextStyle(fontFamily: 'Tajawal')),",
-              "title: const Text('فئة جديدة', style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w800, color: Color(0xFF1A202C))),",
+          # Keep sheet open after create
+          t2 = t.replace(
+              'await widget.onChanged();\n    if (context.mounted) Navigator.pop(context);',
+              "ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('تم إنشاء الفئة', style: const TextStyle(fontFamily: 'Tajawal'))));\n    await widget.onChanged();",
+              1,
           )
+          if t2 != t:
+              print('pop fixed')
+              t = t2
+          else:
+              print('pop pattern missing')
           p.write_text(t)
-          print('done', p.stat().st_size)
+          print('size', p.stat().st_size)
           PY
       - name: Commit
         run: |
@@ -62,6 +50,6 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add lib/ui/screens/inventory_sheets.dart
-          git commit -m "Fix: category create validation + keep sheet + contrast" || echo nochange
+          git commit -m "Fix: category create validation and keep sheet open" || echo nochange
           git pull --rebase origin main || true
           git push origin HEAD:main
