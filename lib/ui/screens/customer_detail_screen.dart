@@ -61,7 +61,10 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
     }
 
     final idsR = await c.customers.listIdentifiers(widget.customerId);
-    final balR = await c.balanceService.getBalance(widget.customerId, currencyCode: 'YER');
+    final balR = await c.balanceService.getBalance(
+      customerId: widget.customerId,
+      currencyCode: 'YER',
+    );
     final txR = await c.transactions.findByCustomer(widget.customerId);
     final promoR = await c.promotionProgress.forCustomer(widget.customerId);
 
@@ -72,14 +75,19 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
       _ids = idsR is Success<List<CustomerIdentifier>> ? idsR.value : const [];
       _balance = balR is Success<Money> ? balR.value : null;
       _recent = txR is Success<List<Transaction>>
-          ? (txR.value.toList()..sort((a, b) => b.createdAt.compareTo(a.createdAt))).take(20).toList()
+          ? (txR.value.toList()
+                ..sort((a, b) => b.createdAt.compareTo(a.createdAt)))
+              .take(20)
+              .toList()
           : const [];
-      _promos = promoR is Success<List<PromotionProgress>> ? promoR.value : const [];
+      _promos =
+          promoR is Success<List<PromotionProgress>> ? promoR.value : const [];
     });
   }
 
-  bool get _hasPrimaryPhone =>
-      _ids.any((e) => e.type == CustomerIdentifierType.phoneNumber && e.isPrimary);
+  bool get _hasPrimaryPhone => _ids.any(
+        (e) => e.type == CustomerIdentifierType.phoneNumber && e.isPrimary,
+      );
 
   Future<void> _linkPhone() async {
     final ctrl = TextEditingController();
@@ -120,7 +128,9 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
     if (ok != true || !mounted) return;
     if (!RegExp(r'^7\d{8}$').hasMatch(phone)) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('رقم غير صالح', style: TextStyle(fontFamily: 'Tajawal'))),
+        const SnackBar(
+          content: Text('رقم غير صالح', style: TextStyle(fontFamily: 'Tajawal')),
+        ),
       );
       return;
     }
@@ -131,7 +141,9 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
     if (!mounted) return;
     if (r is Failure) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(r.error.message, style: const TextStyle(fontFamily: 'Tajawal'))),
+        SnackBar(
+          content: Text(r.error.message, style: const TextStyle(fontFamily: 'Tajawal')),
+        ),
       );
       return;
     }
@@ -192,21 +204,26 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
     if (major == null || major <= 0) return;
     final amount = Money(minorUnits: (major * 100).round(), currencyCode: 'YER');
     final c = AppScope.of(context);
-    final r = credit
-        ? await c.balanceService.credit(
-            customerId: widget.customerId,
-            amount: amount,
-            reference: 'manual-credit:${c.ids.next('adj')}',
-          )
-        : await c.balanceService.debit(
-            customerId: widget.customerId,
-            amount: amount,
-            reference: 'manual-debit:${c.ids.next('adj')}',
-          );
+    final Result<Transaction> r;
+    if (credit) {
+      r = await c.balanceService.credit(
+        customerId: widget.customerId,
+        amount: amount,
+        reference: 'manual-credit:${c.ids.next('adj')}',
+      );
+    } else {
+      r = await c.settlementService.settle(
+        customerId: widget.customerId,
+        amount: amount,
+        reference: 'manual-debit:${c.ids.next('adj')}',
+      );
+    }
     if (!mounted) return;
     if (r is Failure) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(r.error.message, style: const TextStyle(fontFamily: 'Tajawal'))),
+        SnackBar(
+          content: Text(r.error.message, style: const TextStyle(fontFamily: 'Tajawal')),
+        ),
       );
       return;
     }
@@ -266,8 +283,14 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                             ),
                             OutlinedButton.icon(
                               onPressed: _adjustBalance,
-                              icon: const Icon(Icons.account_balance_wallet_outlined, size: 18),
-                              label: const Text('تعديل الرصيد', style: TextStyle(fontFamily: 'Tajawal')),
+                              icon: const Icon(
+                                Icons.account_balance_wallet_outlined,
+                                size: 18,
+                              ),
+                              label: const Text(
+                                'تعديل الرصيد',
+                                style: TextStyle(fontFamily: 'Tajawal'),
+                              ),
                             ),
                           ],
                         ),
@@ -284,7 +307,10 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                         if (_ids.isEmpty)
                           const Text(
                             'لا معرّفات',
-                            style: TextStyle(fontFamily: 'Tajawal', color: Color(0xFF64748B)),
+                            style: TextStyle(
+                              fontFamily: 'Tajawal',
+                              color: Color(0xFF64748B),
+                            ),
                           )
                         else
                           ..._ids.map(
@@ -304,7 +330,10 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                               ),
                               subtitle: Text(
                                 '${id.type.name}${id.isPrimary ? ' · أساسي' : ''}',
-                                style: const TextStyle(fontFamily: 'Tajawal', fontSize: 12),
+                                style: const TextStyle(
+                                  fontFamily: 'Tajawal',
+                                  fontSize: 12,
+                                ),
                               ),
                             ),
                           ),
@@ -329,7 +358,10 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                         if (_recent.isEmpty)
                           const Text(
                             'لا عمليات',
-                            style: TextStyle(fontFamily: 'Tajawal', color: Color(0xFF64748B)),
+                            style: TextStyle(
+                              fontFamily: 'Tajawal',
+                              color: Color(0xFF64748B),
+                            ),
                           )
                         else
                           ..._recent.map((tx) {
@@ -339,11 +371,17 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                               dense: true,
                               title: Text(
                                 '${tx.type.name} · ${_fmtMoney(tx.amount)}',
-                                style: const TextStyle(fontFamily: 'Tajawal', fontSize: 13),
+                                style: const TextStyle(
+                                  fontFamily: 'Tajawal',
+                                  fontSize: 13,
+                                ),
                               ),
                               subtitle: Text(
                                 '${tx.status.name} · ${t.year}/${t.month.toString().padLeft(2, '0')}/${t.day.toString().padLeft(2, '0')}',
-                                style: const TextStyle(fontFamily: 'Tajawal', fontSize: 11),
+                                style: const TextStyle(
+                                  fontFamily: 'Tajawal',
+                                  fontSize: 11,
+                                ),
                               ),
                             );
                           }),
