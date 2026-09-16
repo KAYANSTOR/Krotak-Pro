@@ -1,14 +1,13 @@
-import base64, gzip
 from pathlib import Path
+import base64, gzip
 
-def write_gz_b64(b64path, dest):
-    gz = base64.b64decode(Path(b64path).read_text().strip())
-    data = gzip.decompress(gz)
-    Path(dest).write_bytes(data)
-    print(dest, len(data))
+gz = base64.b64decode(Path('tools/inventory_widgets.dart.gz.b64').read_text().strip())
+Path('lib/ui/screens/inventory_widgets.dart').write_bytes(gzip.decompress(gz))
+print('inventory', Path('lib/ui/screens/inventory_widgets.dart').stat().st_size)
 
-write_gz_b64('tools/inventory_widgets.dart.gz.b64', 'lib/ui/screens/inventory_widgets.dart')
-write_gz_b64('tools/wallets_pos.dart.gz.b64', 'lib/ui/screens/wallets_pos_screen.dart')
+parts = [Path(f'tools/wal_src_{i}.dart.part').read_text() for i in range(3)]
+Path('lib/ui/screens/wallets_pos_screen.dart').write_text(''.join(parts))
+print('wallets', Path('lib/ui/screens/wallets_pos_screen.dart').stat().st_size)
 
 p = Path('lib/domain/services/local_catalog_services.dart')
 t = p.read_text()
