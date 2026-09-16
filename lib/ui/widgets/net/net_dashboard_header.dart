@@ -1,63 +1,62 @@
 import 'package:flutter/material.dart';
 
+import '../../theme/kayan_colors.dart';
 import 'net_app_logo.dart';
 
-/// Dashboard top bar — product decision PD-2026-09-12-02.
-///
-/// Shows only: logo + network name, weekday/date, settings, help.
-/// No license, SMS, or other operational subtitle.
+/// ترويسة لوحة التحكم — مطابقة لفيديو Z Net.
 class NetDashboardHeader extends StatelessWidget {
   const NetDashboardHeader({
     super.key,
     required this.networkName,
     required this.dateLabel,
+    this.greeting,
     this.onSettings,
     this.onHelp,
   });
 
-  /// Display name of the network (from settings, default NET).
   final String networkName;
-
-  /// Pre-formatted Arabic date with weekday (e.g. السبت، 12 سبتمبر).
   final String dateLabel;
-
+  final String? greeting;
   final VoidCallback? onSettings;
   final VoidCallback? onHelp;
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    final displayName =
+        networkName.trim().isEmpty ? 'NET' : networkName.trim();
+    final greet = greeting ?? _defaultGreeting(DateTime.now());
+
     return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
             children: [
-              const NetAppLogo(size: 40),
-              const SizedBox(width: 10),
+              const NetAppLogo(size: 36),
+              const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  networkName,
+                  'شبكة $displayName',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontFamily: 'Tajawal',
-                    fontWeight: FontWeight.bold,
+                    fontWeight: FontWeight.w800,
                     fontSize: 18,
-                    color: cs.primary,
+                    color: KayanColors.primary,
                   ),
                 ),
               ),
               if (onHelp != null)
-                _HeaderIconButton(
-                  icon: Icons.help_outline,
+                _RoundHeaderButton(
+                  icon: Icons.help_outline_rounded,
                   tooltip: 'المساعدة',
                   onPressed: onHelp!,
                 ),
               if (onSettings != null) ...[
-                const SizedBox(width: 4),
-                _HeaderIconButton(
+                const SizedBox(width: 8),
+                _RoundHeaderButton(
                   icon: Icons.settings_outlined,
                   tooltip: 'الإعدادات',
                   onPressed: onSettings!,
@@ -65,23 +64,30 @@ class NetDashboardHeader extends StatelessWidget {
               ],
             ],
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 10),
           Text(
-            dateLabel,
-            style: TextStyle(
+            '$greet — $dateLabel',
+            style: const TextStyle(
               fontFamily: 'Tajawal',
               fontSize: 13,
-              color: cs.onSurfaceVariant,
+              color: KayanColors.textSecondary,
+              fontWeight: FontWeight.w500,
             ),
           ),
         ],
       ),
     );
   }
+
+  static String _defaultGreeting(DateTime now) {
+    final h = now.hour;
+    if (h >= 5 && h < 12) return 'صباح الخير';
+    return 'مساء الخير';
+  }
 }
 
-class _HeaderIconButton extends StatelessWidget {
-  const _HeaderIconButton({
+class _RoundHeaderButton extends StatelessWidget {
+  const _RoundHeaderButton({
     required this.icon,
     required this.tooltip,
     required this.onPressed,
@@ -93,21 +99,29 @@ class _HeaderIconButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     return Material(
-      color: cs.surfaceContainerHighest.withOpacity(0.65),
-      borderRadius: BorderRadius.circular(12),
-      child: IconButton(
-        onPressed: onPressed,
-        tooltip: tooltip,
-        visualDensity: VisualDensity.compact,
-        icon: Icon(icon, color: cs.onSurface, size: 22),
+      color: Colors.white,
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: const BorderSide(color: KayanColors.borderGray),
+      ),
+      child: InkWell(
+        onTap: onPressed,
+        borderRadius: BorderRadius.circular(12),
+        child: Tooltip(
+          message: tooltip,
+          child: SizedBox(
+            width: 40,
+            height: 40,
+            child: Icon(icon, size: 22, color: KayanColors.textPrimary),
+          ),
+        ),
       ),
     );
   }
 }
 
-/// Formats [date] as Arabic weekday + day + month (no intl dependency).
 String formatArabicDashboardDate(DateTime date) {
   const weekdays = <String>[
     'الإثنين',
