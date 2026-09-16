@@ -126,7 +126,19 @@ CI على main — analyze + test + Android debug APK build
 - اختبارات: `test/services/voucher_ops_and_promotion_progress_test.dart`
 - تقرير: [phase-15-promotion-auto-fulfill.md](phase-15-promotion-auto-fulfill.md)
 
+### Phase 16 — Promotion Reward SMS (2026-09-16) ✅ في المستودع
+- قالب `SettingKeys.promotionRewardSmsTemplate` وإرسال بعد صرف المكافأة.
+- فشل SMS أو غياب الرقم لا يلغي الصرف؛ Audit: `reward_sms_sent` / `reward_sms_failed` / `reward_sms_skipped`.
+- تقرير: [phase-16-promotion-reward-sms.md](phase-16-promotion-reward-sms.md)
+
+### Phase 17 — Promotion Reward Reversal (2026-09-16) ✅ في المستودع
+- تقدّم العرض يخصم `reversal:` المرتبطة بالبيع حتى يسقط التراكم بعد `reverseSale`.
+- `revokeExcessRewards` يعيد كرت المكافأة الزائد ويسجّل `promo-reward-reversal` و`reward_reversed`.
+- العكس يتم داخل معاملة `reverseSale`؛ إعادة الاستدعاء لا تكرر العكس.
+- اختبارات: `test/services/promotion_fulfillment_test.dart`
+- تقرير: [phase-17-promotion-reward-reversal.md](phase-17-promotion-reward-reversal.md)
+
 ## المتبقي Post-V1 (الترتيب الرسمي)
-لا بنود برمجية رسمية متبقية بعد Phase 15 سوى التشغيل على جهاز: بوابات Phase 12، قياس الاستيراد والبث، وقالب SMS للمكافأة إن اعتُمد.
+لا بنود برمجية رسمية متبقية بعد Phase 17 سوى التشغيل على جهاز: بوابات Phase 12، وقياس الاستيراد والبث.
 
 مرجع: NET-POST-V1-MASTER-PLAN — GitHub مصدر الحقيقة؛ لا Local Only.
