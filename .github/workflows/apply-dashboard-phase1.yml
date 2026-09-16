@@ -1,1 +1,21 @@
-PLACEHOLDER
+name: Apply dashboard phase1
+on:
+  workflow_dispatch:
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Restore dashboard
+        run: |
+          python3 -c "import base64,pathlib; p1=pathlib.Path('tools/dash_p1.b64').read_text().strip(); p2=pathlib.Path('tools/dash_p2.b64').read_text().strip(); pathlib.Path('lib/ui/screens/dashboard_screen.dart').write_bytes(base64.b64decode(p1+p2)); print('ok', pathlib.Path('lib/ui/screens/dashboard_screen.dart').stat().st_size)"
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add lib/ui/screens/dashboard_screen.dart
+          git commit -m "feat(dashboard): phase-1 full screen matched to Z Net video" || exit 0
+          git pull --rebase origin main || true
+          git push origin HEAD:main
