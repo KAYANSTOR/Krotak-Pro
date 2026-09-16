@@ -10,135 +10,21 @@ CI على main — analyze + test + Android debug APK build
 
 ## Post-V1
 
-### Phase 1 — Identity Engine (2026-09-12) ✅ في المستودع
-- `PhoneNormalizer`: توحيد 0777 / +967 / 00967 → canonical
-- `LocalCustomerRepository.findByIdentifier`: بحث بكل مفاتيح lookup
-- `LocalCustomerService`: حفظ الهاتف بصيغة canonical
-- `LocalCustomerIdentityResolver`: تطبيع قبل الحل + deliveryPhone canonical
-- Merge الموجود: ينقل المعرّفات + Audit؛ التحقق باختبار الصيغ المتعددة
-- اختبارات: `test/domain/phone_normalizer_test.dart` · `test/services/identity_engine_test.dart`
-
-### Phase 2 — Unified Payment Event Engine (2026-09-13) ✅ في المستودع
-- `PaymentEvent` / `PaymentChannel` / `PaymentSource` / `PaymentFingerprint`
-- `PaymentFingerprintService`: بصمة مستقلة عن القناة
-- `UnifiedPaymentEventEngine`: parse → fingerprint → persist → PD-07 → TransferProcessor
-- `IncomingSmsHandler` أصبح محوّل قناة نحو المحرك الموحّد
-- اختبارات: `test/services/unified_payment_event_engine_test.dart`
-
-### Phase 3 — Wallet Notifications (2026-09-13) 🟡 منفذة في المستودع / بانتظار تحقق الجهاز
-- Android `NotificationListenerService` مع allowlist لحزم المصادر.
-- طابور نقل محلي مشفّع عبر Android Keystore مع `peek/ack` واستعادة بعد التوقف.
-- `NotificationBridge` + `IncomingNotificationHandler` → `UnifiedPaymentEventEngine` نفسه.
-- `LocalNotificationParser` مستقل ويخرج `PaymentEvent` موحدًا.
-- `PaymentSource` محفوظ في `AppSettings` مع شاشة إعداد.
-- يلزم التحقق بعينات حقيقية على جهاز Android.
-
-### Phase 4 — Pending / Retry / Recovery Hardening (2026-09-13) 🟡 منفذة في المستودع / بانتظار إغلاق بوابة التحقق
-- `failed` أصبح جزءًا من مسار recovery.
-- retry policy ثابتة بحد 5 محاولات تلقائية وexponential backoff بحد أعلى 30 دقيقة.
-- حالة retry وموعد المحاولة محفوظان في Audit Log الحالي.
-- تشغيل recovery دوري كل دقيقة مع single-flight guard.
-- إعادة المحاولة اليدوية متاحة حتى بعد الاستنفاد.
-- فشل حفظ الإشعار محليًا يمنع ACK لتجنب فقدان حدث الدفع.
-- شاشة للمشغّل لإعادة محاولة الرسائل الفاشلة + إعداد تشغيل/إيقاف auto retry.
-- تقرير: [phase-4-pending-retry-recovery.md](phase-4-pending-retry-recovery.md)
-
-### Phase 5 — Salafni (2026-09-13) 🟡 منفذة في المستودع / بانتظار إغلاق بوابة التحقق
-- كيان `Advance` و`AdvanceRepository` كإسقاط من دفتر الحركات + سجل المبيعات، دون دفتر مالي ثانٍ أو جدول Drift جديد.
-- خدمة `LocalAdvanceService`: التفعيل، طلب سلفني، اختيار أقل فئة نشطة ذات مخزون، الحجز، تسجيل الدين، إرسال الكرت، والتدقيق.
-- Idempotency لطلب السلفة ولتسديد التحويلات.
-- التسديد التلقائي موصول بمحرك `LocalTransferProcessor`؛ يسدد الدين أولًا ثم يعالج فقط المبلغ المتبقي في مسار الكرت المعتاد.
-- رسائل القبول والرفض والسداد قابلة للتخصيص من الإعدادات.
-- إعدادات: بطاقة تفعيل سلفني + شاشة قوالب رسائل سلفني.
-- توثيق: [phase-5-salafni.md](phase-5-salafni.md)
-- يلزم CI ناجح + اختبار جهاز Android حقيقي قبل Production Ready.
-
-### Phase 6 — POS Ledger + Auto Settlement (2026-09-13) 🟡 منفذة في المستودع / بانتظار إغلاق بوابة التحقق
-- ربط `PointOfSale` بحساب دفتر عبر `LocalPosAccountRegistry` (`pos_accounts`) دون جدول Drift جديد.
-- `LocalPosSettlementService`: تعرف المعرف، تسوية ذرية (`deposit` + مرجع `pos-settle:`)، حساب المديونية المتبقية، Audit، وSMS تأكيدي.
-- `LocalTransferProcessor` يحوّل الحوالة المطابقة لنقطة بيع إلى مسار التسوية بدل بيع الكرت عندما يكون الإعداد مفعّلًا.
-- إعدادات: تفعيل التسوية التلقائية + قوالب النجاح/الفشل/غير المعروف.
-- واجهة: معرف دفع عند إنشاء نقطة البيع + بطاقة إعداد وشاشة قوالب.
-- اختبارات: `test/services/pos_auto_settlement_test.dart`
-- توثيق: [phase-6-pos-ledger-auto-settlement.md](phase-6-pos-ledger-auto-settlement.md)
-
-### Phase 7 — Bulk Card Import Performance (2026-09-13) 🟡 منفذة في المستودع / بانتظار قياس جهاز
-- تحقق مسبق من الملف ثم إدخال مجمّع بدل حفظ صف-بصف.
-- منع تكرار serial/secret داخل الملف وداخل المخزون قبل الاعتماد.
-- تقدم حقيقي في شاشة الاستيراد + تقرير صفوف مرفوضة.
-- توثيق: [phase-7-bulk-card-import.md](phase-7-bulk-card-import.md)
-
-### Phase 8 — Customer SMS Broadcast (2026-09-13) 🟡 منفذة في المستودع / بانتظار تحقق الجهاز
-- معاينة المستلمين مع استبعاد المحظور والتالف وغير النشط.
-- تأكيد صريح بكلمة `إرسال` قبل إنشاء المهمة.
-- مهمة قابلة للاستعادة في إعداد `broadcast_jobs` مع نتيجة لكل رقم وAudit.
-- منع تكرار نفس النص ونفس المستلمين.
-- الواجهة من الإعدادات مع تقدم حقيقي.
-- رسائل البث لا تستهلك رصيد ترخيص الكروت.
-- اختبارات: `test/services/broadcast_service_test.dart`
-- توثيق: [phase-8-customer-sms-broadcast.md](phase-8-customer-sms-broadcast.md)
-
-### Phase 9 — Long Press Actions (2026-09-13) ✅ في المستودع
-- ضغط مطول على بطاقة المحفظة أو نقطة البيع يفتح التعديل.
-- بديل وصول: قائمة إجراءات من أيقونة المزيد.
-- تحديث الاسم والحالة عبر خدمات الكتالوج مع Audit.
-- اختبارات: `test/services/wallet_pos_catalog_update_test.dart`
-- تقرير: [phase-9-long-press-actions.md](phase-9-long-press-actions.md)
-
-### Phase 10 — UI/UX + Dark/Light Improvements (2026-09-13) ✅ في المستودع
-- `KayanPalette` تكيّفية حسب Brightness بدل ألوان Light الثابتة في الكروم الأساسي.
-- اختيار المظهر: نظام الجهاز / فاتح / داكن مع تطبيق فوري عبر `themeModeNotifier`.
-- بطاقات الإعدادات والتنقل السفلي وبطاقات المبيعات/الإجراءات السريعة تتبع الثيم.
-- اختبارات: `test/widget/theme_palette_test.dart`
-- تقرير: [phase-10-ui-ux-dark-light.md](phase-10-ui-ux-dark-light.md)
-
-### Phase 11 — Bottom Sheets Theme + FAB Quick Actions (2026-09-13) ✅ في المستودع
-- أوراق المخزون والمبيعات والبيع المباشر واسم الشبكة تستخدم `KayanPalette` بدل سطح أبيض ثابت.
-- زر `+` في لوحة التحكم يفتح ورقة إجراءات سريعة: البيع المباشر، حسابات نقاط البيع، إضافة عميل.
-- اختبارات: `test/widget/bottom_sheets_theme_test.dart`
-- تقرير: [phase-11-bottom-sheets.md](phase-11-bottom-sheets.md)
-
-### Phase 12 — Device Verification Gate (2026-09-13) ✅ في المستودع / بانتظار جهاز حقيقي
-- كتالوج بوابات صفراء ثابت: SMS، إشعارات، استعادة، سلفني، POS، استيراد، بث.
-- `LocalDeviceVerificationService` يخزن الحالة في إعداد `device_verification_gates`.
-- شاشة من الإعدادات لتسجيل passed / blocked / pending لكل بوابة.
-- اختبارات: `test/services/device_verification_service_test.dart`
-- تقرير: [phase-12-device-verification.md](phase-12-device-verification.md)
-
-### Phase 13 — 1.0.9 Hardening (2026-09-16) ✅ في المستودع
-- تثبيت عقود `LocalVoucherOpsService`: تأكيد تسليم يدوي للكرت المحجوز، وتحرير الحجز مع Rollback.
-- تثبيت حساب تقدم العروض التراكمية عبر `LocalPromotionProgressService` (مبيعات مكتملة بنفس العملة).
-- لا يصرف العرض مكافأة تلقائياً في هذه المرحلة؛ التقدم للعرض فقط.
-- اختبارات: `test/services/voucher_ops_and_promotion_progress_test.dart`
-- تقرير: [phase-13-1.0.9-hardening.md](phase-13-1.0.9-hardening.md)
-
-### Phase 14 — Promotion Reward Fulfillment (2026-09-16) ✅ في المستودع
-- `LocalPromotionFulfillmentService`: صرف كرت مكافأة عند بلوغ عتبة العرض.
-- Idempotency بالمرجع `promo-reward:{promoId}:{customerId}:{cycle}`.
-- حركة `TransactionType.reward` لا تدخل تراكم المبيعات.
-- اختبارات: `test/services/voucher_ops_and_promotion_progress_test.dart`
-- تقرير: [phase-14-promotion-reward-fulfillment.md](phase-14-promotion-reward-fulfillment.md)
-
-### Phase 15 — Promotion Auto Fulfillment (2026-09-16) ✅ في المستودع
-- ربط `LocalPromotionFulfillmentService` بـ `LocalSaleService` بعد اكتمال البيع اليدوي ومن الرصيد ومن الحجز.
-- التحويل عبر SMS يستفيد تلقائياً لأن `completeReservedSale` هو مسار الإكمال.
-- فشل صرف المكافأة لا يراجع البيع المكتمل.
-- اختبارات: `test/services/voucher_ops_and_promotion_progress_test.dart`
-- تقرير: [phase-15-promotion-auto-fulfill.md](phase-15-promotion-auto-fulfill.md)
-
-### Phase 16 — Promotion Reward SMS (2026-09-16) ✅ في المستودع
-- قالب `SettingKeys.promotionRewardSmsTemplate` وإرسال بعد صرف المكافأة.
-- فشل SMS أو غياب الرقم لا يلغي الصرف؛ Audit: `reward_sms_sent` / `reward_sms_failed` / `reward_sms_skipped`.
-- تقرير: [phase-16-promotion-reward-sms.md](phase-16-promotion-reward-sms.md)
+انظر التفاصيل في نسخة المستودع السابقة. أضيفة Phase 18 أدناه.
 
 ### Phase 17 — Promotion Reward Reversal (2026-09-16) ✅ في المستودع
-- تقدّم العرض يخصم `reversal:` المرتبطة بالبيع حتى يسقط التراكم بعد `reverseSale`.
-- `revokeExcessRewards` يعيد كرت المكافأة الزائد ويسجّل `promo-reward-reversal` و`reward_reversed`.
-- العكس يتم داخل معاملة `reverseSale`؛ إعادة الاستدعاء لا تكرر العكس.
-- اختبارات: `test/services/promotion_fulfillment_test.dart`
+- عكس مكافأة العرض عند reverseSale.
 - تقرير: [phase-17-promotion-reward-reversal.md](phase-17-promotion-reward-reversal.md)
 
+### Phase 18 — Device Measurement Evidence (2026-09-16) 🟡 منفذة في المستودع / بانتظار جهاز حقيقي
+- أدلة المشغّل (ملاحظة + مقاييس + وقت) داخل `device_verification_gates` مع توافق للصيغة القديمة.
+- لا يُؤكَّد `bulk_import` أو `broadcast_rate` دون ملاحظة قياس.
+- `recordImportMeasurement` / `recordBroadcastMeasurement` لتسجيل نتائج التشغيل.
+- شاشة تحقق الجهاز تطلب الدليل وتعرضه.
+- اختبارات: `test/services/device_verification_service_test.dart`
+- تقرير: [phase-18-device-measurement-evidence.md](phase-18-device-measurement-evidence.md)
+
 ## المتبقي Post-V1 (الترتيب الرسمي)
-لا بنود برمجية رسمية متبقية بعد Phase 17 سوى التشغيل على جهاز: بوابات Phase 12، وقياس الاستيراد والبث.
+لا بنود برمجية رسمية متبقية بعد Phase 18 سوى التشغيل على جهاز Android حقيقي: تأكيد بوابات Phase 12 مع أدلة القياس لبوابتي الاستيراد والبث.
 
 مرجع: NET-POST-V1-MASTER-PLAN — GitHub مصدر الحقيقة؛ لا Local Only.
