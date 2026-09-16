@@ -1,0 +1,26 @@
+name: Apply wallets + category patches
+on:
+  push:
+    paths:
+      - 'tools/patch_wallets_notif.py'
+      - 'tools/patch_category_ar.py'
+  workflow_dispatch:
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - run: python3 tools/patch_wallets_notif.py
+      - run: python3 tools/patch_category_ar.py
+      - run: |
+          set -e
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add lib/domain/services/local_catalog_services.dart lib/ui/screens/inventory_sheets.dart
+          git commit -m "Apply: all wallets notification packages + Arabic category messages" || echo nochange
+          git pull --rebase origin main || true
+          git push origin HEAD:main
