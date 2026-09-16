@@ -105,7 +105,14 @@ CI على main — analyze + test + Android debug APK build
 - اختبارات: `test/services/device_verification_service_test.dart`
 - تقرير: [phase-12-device-verification.md](phase-12-device-verification.md)
 
+### Phase 13 — 1.0.9 Hardening (2026-09-16) ✅ في المستودع
+- تثبيت عقود `LocalVoucherOpsService`: تأكيد تسليم يدوي للكرت المحجوز، وتحرير الحجز مع Rollback.
+- تثبيت حساب تقدم العروض التراكمية عبر `LocalPromotionProgressService` (مبيعات مكتملة بنفس العملة).
+- لا يصرف العرض مكافأة تلقائياً في هذه المرحلة؛ التقدم للعرض فقط.
+- اختبارات: `test/services/voucher_ops_and_promotion_progress_test.dart`
+- تقرير: [phase-13-1.0.9-hardening.md](phase-13-1.0.9-hardening.md)
+
 ## المتبقي Post-V1 (الترتيب الرسمي)
-لا بنود برمجية رسمية متبقية. المتبقي تشغيل بوابات Phase 12 على جهاز Android حقيقي.
+لا بنود برمجية رسمية متبقية بعد Phase 13. المتبقي التشغيلي: تشغيل بوابات Phase 12 على جهاز Android حقيقي، ثم قياس الاستيراد والبث على الجهاز.
 
 مرجع: NET-POST-V1-MASTER-PLAN — GitHub مصدر الحقيقة؛ لا Local Only.
