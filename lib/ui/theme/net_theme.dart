@@ -11,9 +11,9 @@ ThemeData buildNetLightTheme() {
       primary: KayanColors.primary,
       primaryContainer: KayanColors.lightBackground,
       secondary: KayanColors.primaryVariant,
-      secondaryContainer: Color(0xD1E8E8),
+      secondaryContainer: Color(0xFFD1E8E8),
       tertiary: KayanColors.accentPink,
-      tertiaryContainer: Color(0xFCE7F3),
+      tertiaryContainer: Color(0xFFFCE7F3),
       appBarColor: KayanColors.appBackground,
       error: KayanColors.error,
     ),
@@ -72,7 +72,7 @@ ThemeData buildNetLightTheme() {
       ),
       systemOverlayStyle: const SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
-        statusBarIconBrightness: Brightness.dark.
+        statusBarIconBrightness: Brightness.dark,
       ),
     ),
     colorScheme: base.colorScheme.copyWith(
@@ -90,9 +90,9 @@ ThemeData buildNetDarkTheme() {
       primary: KayanColors.primary,
       primaryContainer: KayanColors.darkLightBackground,
       secondary: KayanColors.primaryVariant,
-      secondaryContainer: Color(0x1E3A3A),
+      secondaryContainer: Color(0xFF1E3A3A),
       tertiary: KayanColors.accentPink,
-      tertiaryContainer: Color(0x4A1D36),
+      tertiaryContainer: Color(0xFF4A1D36),
       appBarColor: KayanColors.darkAppBackground,
       error: KayanColors.error,
     ),
@@ -157,6 +157,6 @@ ThemeData buildNetDarkTheme() {
       onSurfaceVariant: KayanColors.darkTextSecondary,
       surface: KayanColors.darkSurface,
     ),
-    extensions: <ThemeExtension<dynamic>[NetSemanticColors.dark],
+    extensions: <ThemeExtension<dynamic>>[NetSemanticColors.dark],
   );
 }
