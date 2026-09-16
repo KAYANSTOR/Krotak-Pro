@@ -30,6 +30,38 @@ final class LocalCardRepository implements CardRepository {
   }
 
   @override
+  Future<Result<Set<String>>> existingSerialsAmong(Iterable<String> serials) async {
+    try {
+      final needles = serials.map((e) => e.trim()).where((e) => e.isNotEmpty).toSet();
+      if (needles.isEmpty) return const Success(<String>{});
+      final rows = await database.select(database.cards).get();
+      final hit = <String>{};
+      for (final row in rows) {
+        if (needles.contains(row.serialNumber)) hit.add(row.serialNumber);
+      }
+      return Success(hit);
+    } catch (error) {
+      return Failure(_failure('card_existing_serials_failed', error));
+    }
+  }
+
+  @override
+  Future<Result<Set<String>>> existingSecretsAmong(Iterable<String> secrets) async {
+    try {
+      final needles = secrets.map((e) => e.trim()).where((e) => e.isNotEmpty).toSet();
+      if (needles.isEmpty) return const Success(<String>{});
+      final rows = await database.select(database.cards).get();
+      final hit = <String>{};
+      for (final row in rows) {
+        if (needles.contains(row.secretCode)) hit.add(row.secretCode);
+      }
+      return Success(hit);
+    } catch (error) {
+      return Failure(_failure('card_existing_secrets_failed', error));
+    }
+  }
+
+  @override
   Future<Result<List<domain.Card>>> findByCategory(String categoryId) async {
     try {
       final rows = await (database.select(database.cards)
@@ -78,6 +110,15 @@ final class LocalCardRepository implements CardRepository {
     } catch (error) {
       return Failure(_failure('card_save_failed', error));
     }
+  }
+
+  @override
+  Future<Result<void>> saveAll(List<domain.Card> cards) async {
+    for (final card in cards) {
+      final r = await save(card);
+      if (r is Failure<void>) return r;
+    }
+    return const Success(null);
   }
 
   @override
