@@ -1,8 +1,5 @@
 name: Fix Failure cast
 on:
-  push:
-    paths:
-      - '.github/workflows/fix-failure-cast.yml'
   workflow_dispatch:
 jobs:
   fix:
@@ -11,10 +8,14 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - run: |
-          sed -i 's/if (r is Failure) return Failure(r.error);/if (r is Failure) return Failure((r as Failure).error);/' lib/domain/services/local_catalog_services.dart
+          set -e
+          sed -i 's/if (r is Failure) return Failure(r.error);/if (r is Failure) return Failure((r as Failure).error);/g' lib/domain/services/local_catalog_services.dart
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add lib/domain/services/local_catalog_services.dart
           git commit -m "Fix Failure cast in ensureDefaultWallets" || echo nochange
+          git pull --rebase origin main || true
           git push origin HEAD:main
