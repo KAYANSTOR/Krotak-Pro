@@ -53,7 +53,7 @@ class MainActivity : FlutterActivity(), SmsListener {
                         } else {
                             @Suppress("DEPRECATION") SmsManager.getDefault()
                         }
-                        manager?.sendTextMessage(to, null, body, null, null)
+                        manager.sendTextMessage(to, null, body, null, null)
                         result.success(true)
                     } catch (e: Exception) {
                         result.error("send_failed", e.message, null)
@@ -67,36 +67,23 @@ class MainActivity : FlutterActivity(), SmsListener {
             object : EventChannel.StreamHandler {
                 override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
                     eventSink = events
-                    SmsReceiver.listener = this@MainActivity
+                    SmsEventBus.listener = this@MainActivity
                 }
 
                 override fun onCancel(arguments: Any?) {
                     eventSink = null
-                    if (SmsReceiver.listener === this@MainActivity) SmsReceiver.listener = null
+                    if (SmsEventBus.listener === this@MainActivity) SmsEventBus.listener = null
                 }
             },
         )
 
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, notificationMethodChannelName).setMethodCallHandler { call, result ->
             when (call.method) {
-                "isAccessGranted" -> result.success(isNotificationAccessGranted())
-                "openAccessSettings" -> try {
-                    startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
-                    result.success(true)
-                } catch (e: Exception) {
-                    result.error("settings_failed", e.message, null)
+                "getPending" -> {
+                    val items = NotificationInboxStore(applicationContext).pending()
+                    result.success(items)
                 }
-                "setAllowedPackages" -> {
-                    val packages = call.argument<List<String>>("packages")?.toSet() ?: emptySet()
-                    getSharedPreferences(NotificationListener.PREFS, MODE_PRIVATE)
-                        .edit()
-                        .putStringSet(NotificationListener.ALLOWED_PACKAGES, packages)
-                        .apply()
-                    result.success(true)
-                }
-                "peekPendingNotifications" ->
-                    result.success(NotificationInboxStore(applicationContext).peek().map { it.toMap() })
-                "ackPendingNotifications" -> {
+                "ack" -> {
                     val ids = call.argument<List<String>>("ids")?.toSet() ?: emptySet()
                     NotificationInboxStore(applicationContext).ack(ids)
                     result.success(true)
@@ -137,6 +124,14 @@ class MainActivity : FlutterActivity(), SmsListener {
                 } catch (e: Exception) {
                     result.error("settings_failed", e.message, null)
                 }
+                "requestPostNotifications" -> {
+                    val granted = requestPostNotificationsPermission()
+                    result.success(granted)
+                }
+                "requestPhoneState" -> {
+                    val granted = requestPhoneStatePermission()
+                    result.success(granted)
+                }
                 "openAppSettings" -> try {
                     val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
                         data = Uri.parse("package:$packageName")
@@ -150,7 +145,6 @@ class MainActivity : FlutterActivity(), SmsListener {
                     openOemAutostartSettings()
                     result.success(true)
                 } catch (e: Exception) {
-                    // Fallback to app settings
                     try {
                         startActivity(
                             Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
@@ -218,77 +212,40 @@ class MainActivity : FlutterActivity(), SmsListener {
     }
 
     private fun hasContactsPermission(): Boolean =
-        ContextCompat.checkSelfPermission(this, Manifest.permission.READ_CONTACTS) ==
-            PackageManager.PERMISSION_GRANTED
+        ContextCompat.checkSelfPermission(this, Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED
 
-    /** Best-effort OEM auto-start screens (Xiaomi / Huawei / Oppo / Samsung). */
     private fun openOemAutostartSettings() {
-        val candidates = listOf(
-            Intent().setComponent(
-                ComponentName(
-                    "com.miui.securitycenter",
-                    "com.miui.permcenter.autostart.AutoStartManagementActivity",
-                ),
-            ),
-            Intent().setComponent(
-                ComponentName(
-                    "com.huawei.systemmanager",
-                    "com.huawei.systemmanager.startupmgr.ui.StartupNormalAppListActivity",
-                ),
-            ),
-            Intent().setComponent(
-                ComponentName(
-                    "com.coloros.safecenter",
-                    "com.coloros.safecenter.permission.startup.StartupAppListActivity",
-                ),
-            ),
-            Intent().setComponent(
-                ComponentName(
-                    "com.samsung.android.lool",
-                    "com.samsung.android.sm.ui.battery.BatteryActivity",
-                ),
-            ),
+        val intents = listOf(
+            Intent().setComponent(ComponentName("com.miui.securitycenter", "com.miui.permcenter.autostart.AutoStartManagementActivity")),
+            Intent().setComponent(ComponentName("com.letv.android.letvsafe", "com.letv.android.letvsafe.AutobootManageActivity")),
+            Intent().setComponent(ComponentName("com.huawei.systemmanager", "com.huawei.systemmanager.startupmgr.ui.StartupNormalAppListActivity")),
+            Intent().setComponent(ComponentName("com.huawei.systemmanager", "com.huawei.systemmanager.optimize.process.ProtectActivity")),
+            Intent().setComponent(ComponentName("com.oppo.safe", "com.oppo.safe.permission.startup.StartupAppListActivity")),
+            Intent().setComponent(ComponentName("com.coloros.safecenter", "com.coloros.safecenter.permission.startup.StartupAppListActivity")),
+            Intent().setComponent(ComponentName("com.vivo.permissionmanager", "com.vivo.permissionmanager.activity.BgStartUpManagerActivity")),
+            Intent().setComponent(ComponentName("com.iqoo.secure", "com.iqoo.secure.ui.phoneoptimize.AddWhiteListActivity")),
+            Intent().setComponent(ComponentName("com.iqoo.secure", "com.iqoo.secure.ui.phoneoptimize.BgStartUpManager")),
+            Intent().setComponent(ComponentName("com.samsung.android.lool", "com.samsung.android.sm.ui.battery.BatteryActivity")),
+            Intent().setComponent(ComponentName("com.asus.mobilemanager", "com.asus.mobilemanager.autostart.AutoStartActivity")),
         )
-        for (intent in candidates) {
+        for (intent in intents) {
             try {
                 intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                packageManager.resolveActivity(intent, PackageManager.MATCH_DEFAULT_ONLY) ?: continue
                 startActivity(intent)
                 return
             } catch (_: Exception) {
-                // try next OEM
             }
         }
-        throw IllegalStateException("No OEM autostart activity found")
+        throw Exception("No OEM autostart settings found")
     }
 
-    private fun PendingNotification.toMap(): Map<String, Any?> =
-        mapOf(
-            "id" to id,
-            "packageName" to packageName,
-            "title" to title,
-            "body" to body,
-            "timestampMillis" to timestampMillis,
-        )
-
-    override fun onSmsReceived(sender: String, body: String, timestampMillis: Long) {
-        runOnUiThread {
-            eventSink?.success(
-                mapOf(
-                    "sender" to sender,
-                    "body" to body,
-                    "timestampMillis" to timestampMillis,
-                ),
-            )
-        }
-    }
-
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        SmsReceiver.listener = this
+    override fun onSmsReceived(payload: Map<String, Any?>) {
+        runOnUiThread { eventSink?.success(payload) }
     }
 
     override fun onDestroy() {
-        if (SmsReceiver.listener === this) SmsReceiver.listener = null
+        if (SmsEventBus.listener === this) SmsEventBus.listener = null
         if (NotificationEventBus.sink != null) NotificationEventBus.sink = null
         super.onDestroy()
     }
@@ -317,7 +274,42 @@ class MainActivity : FlutterActivity(), SmsListener {
         )
     }
 
+    /** Android 13+ POST_NOTIFICATIONS runtime permission. */
+    private fun requestPostNotificationsPermission(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+            return true
+        }
+        val granted = ContextCompat.checkSelfPermission(
+            this,
+            Manifest.permission.POST_NOTIFICATIONS,
+        ) == PackageManager.PERMISSION_GRANTED
+        if (granted) return true
+        ActivityCompat.requestPermissions(
+            this,
+            arrayOf(Manifest.permission.POST_NOTIFICATIONS),
+            REQUEST_POST_NOTIFICATIONS,
+        )
+        return false
+    }
+
+    /** READ_PHONE_STATE for dual-SIM / network diagnostics. */
+    private fun requestPhoneStatePermission(): Boolean {
+        val granted = ContextCompat.checkSelfPermission(
+            this,
+            Manifest.permission.READ_PHONE_STATE,
+        ) == PackageManager.PERMISSION_GRANTED
+        if (granted) return true
+        ActivityCompat.requestPermissions(
+            this,
+            arrayOf(Manifest.permission.READ_PHONE_STATE),
+            REQUEST_PHONE_STATE,
+        )
+        return false
+    }
+
     companion object {
         private const val REQUEST_SMS = 1001
+        private const val REQUEST_POST_NOTIFICATIONS = 1002
+        private const val REQUEST_PHONE_STATE = 1003
     }
 }
