@@ -1,0 +1,25 @@
+name: Fix theme v2
+on:
+  push:
+    paths:
+      - 'tools/net_theme.b64'
+      - 'tools/fix_theme.py'
+  workflow_dispatch:
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - run: python3 tools/fix_theme.py
+      - run: |
+          set -e
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add lib/ui/theme/net_theme.dart
+          git commit -m "Fix high-contrast theme (no google_fonts)" || echo nochange
+          git pull --rebase origin main || true
+          git push origin HEAD:main
