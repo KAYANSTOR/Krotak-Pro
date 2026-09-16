@@ -16,12 +16,7 @@ class _Header extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(12, 10, 16, 6),
       child: Row(
         children: [
-          _RoundIcon(icon: Icons.more_horiz, onTap: onMenu),
-          const SizedBox(width: 8),
-          _RoundIcon(icon: Icons.add, onTap: onAdd),
-          const SizedBox(width: 8),
-          _RoundIcon(icon: Icons.delete_outline, onTap: onDelete),
-          const Spacer(),
+          // RTL: first child = right side → title on the right
           const Text(
             'إدارة الكروت',
             style: TextStyle(
@@ -31,6 +26,13 @@ class _Header extends StatelessWidget {
               color: KayanColors.textPrimary,
             ),
           ),
+          const Spacer(),
+          // From right to left after title: archive, add, menu
+          _RoundIcon(icon: Icons.delete_outline, onTap: onDelete),
+          const SizedBox(width: 8),
+          _RoundIcon(icon: Icons.add, onTap: onAdd),
+          const SizedBox(width: 8),
+          _RoundIcon(icon: Icons.more_horiz, onTap: onMenu),
         ],
       ),
     );
