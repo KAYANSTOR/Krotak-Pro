@@ -1,0 +1,24 @@
+name: Apply wallets redesign
+on:
+  workflow_dispatch:
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply wallets_pos_screen.dart
+        run: |
+          python3 << 'PY'
+          import base64, gzip, pathlib
+          b64 = open('/dev/stdin').read() if False else '''PLACEHOLDER'''
+          data = gzip.decompress(base64.b64decode(b64))
+          pathlib.Path('lib/ui/screens/wallets_pos_screen.dart').write_bytes(data)
+          print('Wrote', len(data), 'bytes')
+          PY
+      - name: Commit
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add lib/ui/screens/wallets_pos_screen.dart
+          git diff --cached --quiet || git commit -m "feat(ui): complete WalletsPosScreen redesign matching Z Net reference"
+          git push
