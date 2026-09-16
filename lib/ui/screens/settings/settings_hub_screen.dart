@@ -9,15 +9,19 @@ import '../../widgets/settings/settings_cards.dart';
 import '../../widgets/settings/settings_section_header.dart';
 import '../system_check_screen.dart';
 import '../wallets_pos_screen.dart';
+import 'clean_logs_screen.dart';
+import 'export_ledger_screen.dart';
 import 'low_stock_settings_screen.dart';
 import 'network_name_settings_screen.dart';
 import 'renew_subscription_screen.dart';
+import 'salafni_templates_screen.dart';
 import 'sim_settings_screen.dart';
 import 'template_simulation_screen.dart';
 import 'templates_screen.dart';
 import 'wallet_notification_settings_screen.dart';
 
-/// مركز الإعدادات — تصميم مطابق حرفياً لفيديو Z Net (كروت منفصلة + أقسام).
+/// مركز الإعدادات — مطابق حرفياً لإطارات فيديو Z Net
+/// (أقسام مجمّعة + أيقونات شارة + مفاتيح Domain حقيقية).
 class SettingsHubScreen extends StatefulWidget {
   const SettingsHubScreen({super.key});
 
@@ -126,7 +130,7 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
               _Header(onBack: () => Navigator.of(context).maybePop()),
               Expanded(
                 child: _loading
-                    ? const Center(child: CircularProgressIndicator())
+                    ? const Center(child: CircularProgressIndicator(color: KayanColors.primary))
                     : RefreshIndicator(
                         onRefresh: _load,
                         color: KayanColors.primary,
@@ -134,178 +138,233 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
                           padding: const EdgeInsets.fromLTRB(16, 4, 16, 40),
                           children: [
                             const SettingsSectionHeader(title: 'النظام'),
-                            SettingsNavCard(
-                              icon: Icons.badge_outlined,
-                              title: 'اسم الشبكة',
-                              subtitle: 'الاسم الحالي: $_networkName',
-                              onTap: _openNetworkName,
-                            ),
-                            SettingsSwitchCard(
-                              icon: Icons.check_circle_outline,
-                              title: 'المعالجة التلقائية للرسائل',
-                              subtitle:
-                                  'الخدمة تعمل — يتم استقبال ومعالجة الرسائل تلقائياً',
-                              value: _autoSms,
-                              onChanged: (v) async {
-                                setState(() => _autoSms = v);
-                                await _saveBool(SettingKeys.smsAutoProcessingEnabled, v);
-                              },
-                            ),
-                            SettingsSwitchCard(
-                              icon: Icons.filter_alt_outlined,
-                              title: 'معالجة مبالغ الفئات فقط',
-                              subtitle:
-                                  'عند التفعيل، سيتم فقط معالجة رسائل المحافظ التي تطابق مبالغ الفئات المعرفة في النظام',
-                              value: _categoryOnly,
-                              onChanged: (v) async {
-                                setState(() => _categoryOnly = v);
-                                await _saveBool(SettingKeys.processCategoryAmountsOnly, v);
-                              },
-                            ),
-                            SettingsSwitchCard(
-                              icon: Icons.history,
-                              title: 'معالجة الرسائل القديمة (عند التوقف)',
-                              subtitle:
-                                  'تفعيل لمعالجة رسائل SMS التي وصلت أثناء إغلاق أو توقف التطبيق عند فتحه مجدداً',
-                              value: _oldMsgs,
-                              onChanged: (v) async {
-                                setState(() => _oldMsgs = v);
-                                await _saveBool(SettingKeys.processOldMessagesOnResume, v);
-                              },
-                            ),
-                            SettingsSwitchCard(
-                              icon: Icons.card_giftcard_outlined,
-                              title: 'خدمة سلفني',
-                              subtitle:
-                                  'الميزة مفعلة — يتم استقبال ومعالجة طلبات سلفني آلياً للعملاء المؤهلين',
-                              value: _salafni,
-                              onChanged: (v) async {
-                                setState(() => _salafni = v);
-                                await _saveBool(SettingKeys.salafniEnabled, v);
-                              },
-                            ),
-                            SettingsNavCard(
-                              icon: Icons.notifications_active_outlined,
-                              title: 'تنبيهات انخفاض مخزون الكروت',
-                              subtitle:
-                                  'سيتم تنبيهك عندما يقل مخزون أي فئة عن $_lowStock كرت',
-                              onTap: _openLowStock,
-                            ),
-                            SettingsNavCard(
-                              icon: Icons.sim_card_outlined,
-                              title: 'إعدادات شرائح الاتصال',
-                              subtitle: 'إدارة شرائح القراءة والإرسال و Failover',
-                              onTap: () => Navigator.of(context).push(
-                                MaterialPageRoute(builder: (_) => const SimSettingsScreen()),
-                              ),
-                            ),
-                            SettingsNavCard(
-                              icon: Icons.health_and_safety_outlined,
-                              title: 'فحص النظام',
-                              subtitle:
-                                  'التحقق من جاهزية أذونات النظام والتشغيل في الخلفية',
-                              onTap: () => Navigator.of(context).push(
-                                MaterialPageRoute(builder: (_) => const SystemCheckScreen()),
-                              ),
+                            SettingsGroupCard(
+                              children: [
+                                SettingsGroupNavRow(
+                                  icon: Icons.badge_outlined,
+                                  title: 'اسم الشبكة',
+                                  subtitle: 'الاسم الحالي: $_networkName',
+                                  onTap: _openNetworkName,
+                                ),
+                                SettingsGroupSwitchRow(
+                                  icon: Icons.check_circle_outline,
+                                  title: 'المعالجة التلقائية للرسائل',
+                                  subtitle:
+                                      'الخدمة تعمل — يتم استقبال ومعالجة الرسائل تلقائياً',
+                                  value: _autoSms,
+                                  onChanged: (v) async {
+                                    setState(() => _autoSms = v);
+                                    await _saveBool(SettingKeys.smsAutoProcessingEnabled, v);
+                                  },
+                                ),
+                                SettingsGroupSwitchRow(
+                                  icon: Icons.filter_alt_outlined,
+                                  title: 'معالجة مبالغ الفئات فقط',
+                                  subtitle:
+                                      'عند التفعيل، سيتم فقط معالجة رسائل المحافظ التي تطابق مبالغ الفئات المعرفة في النظام',
+                                  value: _categoryOnly,
+                                  onChanged: (v) async {
+                                    setState(() => _categoryOnly = v);
+                                    await _saveBool(SettingKeys.processCategoryAmountsOnly, v);
+                                  },
+                                ),
+                                SettingsGroupSwitchRow(
+                                  icon: Icons.history,
+                                  title: 'معالجة الرسائل القديمة (عند التوقف)',
+                                  subtitle:
+                                      'تفعيل لمعالجة رسائل SMS التي وصلت أثناء إغلاق أو توقف التطبيق عند فتحه مجدداً',
+                                  value: _oldMsgs,
+                                  onChanged: (v) async {
+                                    setState(() => _oldMsgs = v);
+                                    await _saveBool(SettingKeys.processOldMessagesOnResume, v);
+                                  },
+                                ),
+                                SettingsGroupSwitchRow(
+                                  icon: Icons.card_giftcard_outlined,
+                                  title: 'خدمة سلفني',
+                                  subtitle: _salafni
+                                      ? 'الميزة مفعلة — يتم استقبال ومعالجة طلبات سلفني آلياً للعملاء المؤهلين'
+                                      : 'الميزة معطلة',
+                                  value: _salafni,
+                                  onChanged: (v) async {
+                                    setState(() => _salafni = v);
+                                    await _saveBool(SettingKeys.salafniEnabled, v);
+                                  },
+                                ),
+                                if (_salafni)
+                                  SettingsGroupNavRow(
+                                    icon: Icons.sms_outlined,
+                                    title: 'قوالب رسائل سلفني',
+                                    subtitle: 'قبول / رفض / سداد',
+                                    onTap: () => Navigator.of(context).push(
+                                      MaterialPageRoute(
+                                        builder: (_) => const SalafniTemplatesScreen(),
+                                      ),
+                                    ),
+                                  ),
+                                SettingsGroupNavRow(
+                                  icon: Icons.notifications_active_outlined,
+                                  title: 'تنبيهات انخفاض مخزون الكروت',
+                                  subtitle:
+                                      'سيتم تنبيهك عندما يقل مخزون أي فئة عن $_lowStock كرت',
+                                  onTap: _openLowStock,
+                                ),
+                                SettingsGroupNavRow(
+                                  icon: Icons.sim_card_outlined,
+                                  title: 'إعدادات شرائح الاتصال',
+                                  subtitle: 'إدارة شرائح القراءة والإرسال و Failover',
+                                  onTap: () => Navigator.of(context).push(
+                                    MaterialPageRoute(builder: (_) => const SimSettingsScreen()),
+                                  ),
+                                ),
+                                SettingsGroupNavRow(
+                                  icon: Icons.health_and_safety_outlined,
+                                  title: 'فحص النظام',
+                                  subtitle:
+                                      'التحقق من جاهزية أذونات النظام والتشغيل في الخلفية',
+                                  onTap: () => Navigator.of(context).push(
+                                    MaterialPageRoute(builder: (_) => const SystemCheckScreen()),
+                                  ),
+                                ),
+                              ],
                             ),
                             const SettingsSectionHeader(title: 'الترخيص'),
-                            SettingsNavCard(
-                              icon: Icons.workspace_premium_outlined,
-                              title: 'تجديد الاشتراك',
-                              subtitle:
-                                  'تجديد الترخيص أو إضافة رصيد SMS قبل انتهاء الباقة الحالية',
-                              onTap: () => Navigator.of(context).push(
-                                MaterialPageRoute(
-                                  builder: (_) => const RenewSubscriptionScreen(),
+                            SettingsGroupCard(
+                              children: [
+                                SettingsGroupNavRow(
+                                  icon: Icons.workspace_premium_outlined,
+                                  title: 'تجديد الاشتراك',
+                                  subtitle:
+                                      'تجديد الترخيص أو إضافة رصيد SMS قبل انتهاء الباقة الحالية',
+                                  onTap: () => Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (_) => const RenewSubscriptionScreen(),
+                                    ),
+                                  ),
                                 ),
-                              ),
+                              ],
                             ),
                             const SettingsSectionHeader(title: 'المظهر'),
-                            SettingsSwitchCard(
-                              icon: Icons.dark_mode_outlined,
-                              title: 'الوضع الداكن',
-                              subtitle: _darkMode ? 'المظهر الداكن مفعل' : 'المظهر الفاتح مفعل',
-                              value: _darkMode,
-                              onChanged: _setDarkMode,
+                            SettingsGroupCard(
+                              children: [
+                                SettingsGroupSwitchRow(
+                                  icon: Icons.dark_mode_outlined,
+                                  title: 'الوضع الداكن',
+                                  subtitle: _darkMode
+                                      ? 'المظهر الداكن مفعل'
+                                      : 'المظهر الفاتح مفعل',
+                                  value: _darkMode,
+                                  onChanged: _setDarkMode,
+                                ),
+                              ],
                             ),
                             const SettingsSectionHeader(title: 'إعدادات المحافظ ونقاط البيع'),
-                            SettingsNavCard(
-                              icon: Icons.account_balance_wallet_outlined,
-                              title: 'إدارة المحافظ ونقاط البيع',
-                              subtitle: 'إضافة وتعديل المحافظ ونقاط البيع',
-                              onTap: () => Navigator.of(context).push(
-                                MaterialPageRoute(builder: (_) => const WalletsPosScreen()),
-                              ),
-                            ),
-                            SettingsNavCard(
-                              icon: Icons.science_outlined,
-                              title: 'محاكاة القوالب',
-                              subtitle: 'اختبار ومحاكاة استخراج بيانات الرسائل',
-                              onTap: () => Navigator.of(context).push(
-                                MaterialPageRoute(
-                                  builder: (_) => const TemplateSimulationScreen(),
+                            SettingsGroupCard(
+                              children: [
+                                SettingsGroupNavRow(
+                                  icon: Icons.account_balance_wallet_outlined,
+                                  title: 'إدارة المحافظ ونقاط البيع',
+                                  subtitle: 'إضافة وتعديل المحافظ ونقاط البيع',
+                                  onTap: () => Navigator.of(context).push(
+                                    MaterialPageRoute(builder: (_) => const WalletsPosScreen()),
+                                  ),
                                 ),
-                              ),
-                            ),
-                            SettingsNavCard(
-                              icon: Icons.receipt_long_outlined,
-                              title: 'قوالب التحويل',
-                              subtitle: 'إدارة قوالب رسائل المحافظ وترتيبها',
-                              onTap: () => Navigator.of(context).push(
-                                MaterialPageRoute(builder: (_) => const TemplatesScreen()),
-                              ),
-                            ),
-                            SettingsNavCard(
-                              icon: Icons.notifications_outlined,
-                              title: 'إعدادات طلبات الرصيد لنقاط البيع',
-                              subtitle: 'تخصيص رمز طلب الرصيد، الحد اليومي وقالب الرد',
-                              onTap: () => Navigator.of(context).push(
-                                MaterialPageRoute(
-                                  builder: (_) => const WalletNotificationSettingsScreen(),
+                                SettingsGroupNavRow(
+                                  icon: Icons.science_outlined,
+                                  title: 'محاكاة القوالب',
+                                  subtitle: 'اختبار ومحاكاة استخراج بيانات الرسائل',
+                                  onTap: () => Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (_) => const TemplateSimulationScreen(),
+                                    ),
+                                  ),
                                 ),
-                              ),
-                            ),
-                            SettingsSwitchCard(
-                              icon: Icons.summarize_outlined,
-                              title: 'إرسال ملخص العمليات اليومي تلقائياً',
-                              subtitle: _dailySummary
-                                  ? 'ميزة رسالة الملخص اليومي مفعلة'
-                                  : 'ميزة رسالة الملخص اليومي معطلة',
-                              value: _dailySummary,
-                              onChanged: (v) async {
-                                setState(() => _dailySummary = v);
-                                await _saveBool(SettingKeys.dailyOpsSummaryAutoSend, v);
-                              },
-                            ),
-                            SettingsSwitchCard(
-                              icon: Icons.sync_alt,
-                              title: 'التسوية التلقائية لنقاط البيع',
-                              subtitle:
-                                  'تسجيل تسوية مالية تلقائياً عند استلام إشعار من نقطة البيع',
-                              value: _autoPosSettlement,
-                              onChanged: (v) async {
-                                setState(() => _autoPosSettlement = v);
-                                await _saveBool(SettingKeys.autoPosSettlementEnabled, v);
-                              },
+                                SettingsGroupNavRow(
+                                  icon: Icons.receipt_long_outlined,
+                                  title: 'قوالب التحويل',
+                                  subtitle: 'إدارة قوالب رسائل المحافظ وترتيبها',
+                                  onTap: () => Navigator.of(context).push(
+                                    MaterialPageRoute(builder: (_) => const TemplatesScreen()),
+                                  ),
+                                ),
+                                SettingsGroupNavRow(
+                                  icon: Icons.notifications_outlined,
+                                  title: 'إعدادات طلبات الرصيد لنقاط البيع',
+                                  subtitle: 'تخصيص رمز طلب الرصيد، الحد اليومي وقالب الرد',
+                                  onTap: () => Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (_) => const WalletNotificationSettingsScreen(),
+                                    ),
+                                  ),
+                                ),
+                                SettingsGroupSwitchRow(
+                                  icon: Icons.summarize_outlined,
+                                  title: 'إرسال ملخص العمليات اليومي تلقائياً',
+                                  subtitle: _dailySummary
+                                      ? 'ميزة رسالة الملخص اليومي مفعلة'
+                                      : 'ميزة رسالة الملخص اليومي معطلة',
+                                  value: _dailySummary,
+                                  onChanged: (v) async {
+                                    setState(() => _dailySummary = v);
+                                    await _saveBool(SettingKeys.dailyOpsSummaryAutoSend, v);
+                                  },
+                                ),
+                                SettingsGroupSwitchRow(
+                                  icon: Icons.sync_alt,
+                                  title: 'التسوية التلقائية لنقاط البيع',
+                                  subtitle:
+                                      'تسجيل تسوية مالية تلقائياً عند استلام إشعار من نقطة البيع',
+                                  value: _autoPosSettlement,
+                                  onChanged: (v) async {
+                                    setState(() => _autoPosSettlement = v);
+                                    await _saveBool(SettingKeys.autoPosSettlementEnabled, v);
+                                  },
+                                ),
+                              ],
                             ),
                             const SettingsSectionHeader(title: 'العمليات والمراجعة'),
-                            SettingsNavCard(
-                              icon: Icons.mark_email_unread_outlined,
-                              title: 'الرسائل المعلّقة',
-                              subtitle: 'رسائل تحتاج تأكيداً يدوياً قبل المعالجة',
-                              onTap: () => AppRoutes.openPendingMessages(context),
+                            SettingsGroupCard(
+                              children: [
+                                SettingsGroupNavRow(
+                                  icon: Icons.mark_email_unread_outlined,
+                                  title: 'الرسائل المعلّقة',
+                                  subtitle: 'رسائل تحتاج تأكيداً يدوياً قبل المعالجة',
+                                  onTap: () => AppRoutes.openPendingMessages(context),
+                                ),
+                                SettingsGroupNavRow(
+                                  icon: Icons.refresh,
+                                  title: 'الرسائل الفاشلة / إعادة المحاولة',
+                                  subtitle: 'إعادة محاولة الرسائل التي فشل إرسالها أو معالجتها',
+                                  onTap: () => AppRoutes.openFailedMessages(context),
+                                ),
+                                SettingsGroupNavRow(
+                                  icon: Icons.block_outlined,
+                                  title: 'الرسائل المرفوضة',
+                                  subtitle: 'سجل الرسائل التي رُفضت وفق قواعد النظام',
+                                  onTap: () => AppRoutes.openRejectedMessages(context),
+                                ),
+                              ],
                             ),
-                            SettingsNavCard(
-                              icon: Icons.refresh,
-                              title: 'الرسائل الفاشلة / إعادة المحاولة',
-                              subtitle: 'إعادة محاولة الرسائل التي فشل إرسالها أو معالجتها',
-                              onTap: () => AppRoutes.openFailedMessages(context),
-                            ),
-                            SettingsNavCard(
-                              icon: Icons.block_outlined,
-                              title: 'الرسائل المرفوضة',
-                              subtitle: 'سجل الرسائل التي رُفضت وفق قواعد النظام',
-                              onTap: () => AppRoutes.openRejectedMessages(context),
+                            const SettingsSectionHeader(title: 'بيانات وصيانة'),
+                            SettingsGroupCard(
+                              children: [
+                                SettingsGroupNavRow(
+                                  icon: Icons.file_download_outlined,
+                                  title: 'تصدير السجل',
+                                  subtitle: 'تصدير دفتر العمليات والنسخ الاحتياطي',
+                                  onTap: () => Navigator.of(context).push(
+                                    MaterialPageRoute(builder: (_) => const ExportLedgerScreen()),
+                                  ),
+                                ),
+                                SettingsGroupNavRow(
+                                  icon: Icons.cleaning_services_outlined,
+                                  title: 'تنظيف السجلات',
+                                  subtitle: 'حذف السجلات القديمة وتحرير مساحة التخزين',
+                                  onTap: () => Navigator.of(context).push(
+                                    MaterialPageRoute(builder: (_) => const CleanLogsScreen()),
+                                  ),
+                                ),
+                              ],
                             ),
                           ],
                         ),

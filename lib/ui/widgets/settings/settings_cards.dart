@@ -2,7 +2,192 @@ import 'package:flutter/material.dart';
 
 import '../../theme/kayan_colors.dart';
 
-/// Shared card chrome for settings rows (reference-style).
+/// بطاقة قسم مجمّعة — صفوف داخل حاوية بيضاء واحدة مع فواصل (مطابق لإطارات الفيديو).
+class SettingsGroupCard extends StatelessWidget {
+  const SettingsGroupCard({
+    super.key,
+    required this.children,
+    this.margin = const EdgeInsets.only(bottom: 4),
+  });
+
+  final List<Widget> children;
+  final EdgeInsetsGeometry margin;
+
+  @override
+  Widget build(BuildContext context) {
+    if (children.isEmpty) return const SizedBox.shrink();
+    final rows = <Widget>[];
+    for (var i = 0; i < children.length; i++) {
+      rows.add(children[i]);
+      if (i < children.length - 1) {
+        rows.add(const Divider(
+          height: 1,
+          thickness: 1,
+          indent: 14,
+          endIndent: 14,
+          color: KayanColors.borderGray,
+        ));
+      }
+    }
+    return Padding(
+      padding: margin,
+      child: Container(
+        decoration: BoxDecoration(
+          color: KayanColors.surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: KayanColors.borderGray),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: rows,
+        ),
+      ),
+    );
+  }
+}
+
+/// صف تنقّل داخل مجموعة: أيقونة يمين + عنوان/وصف + شيفرون يسار.
+class SettingsGroupNavRow extends StatelessWidget {
+  const SettingsGroupNavRow({
+    super.key,
+    required this.icon,
+    required this.title,
+    this.subtitle,
+    this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final String? subtitle;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+          child: Row(
+            children: [
+              _IconBadge(icon: icon),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontFamily: 'Tajawal',
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        color: KayanColors.textPrimary,
+                      ),
+                    ),
+                    if (subtitle != null && subtitle!.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        subtitle!,
+                        style: const TextStyle(
+                          fontFamily: 'Tajawal',
+                          fontSize: 12,
+                          height: 1.35,
+                          color: KayanColors.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              if (onTap != null) ...[
+                const SizedBox(width: 4),
+                const Icon(Icons.chevron_left, color: KayanColors.textTertiary, size: 22),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// صف مفتاح داخل مجموعة: أيقونة يمين + عنوان/وصف + Switch يسار.
+class SettingsGroupSwitchRow extends StatelessWidget {
+  const SettingsGroupSwitchRow({
+    super.key,
+    required this.icon,
+    required this.title,
+    this.subtitle,
+    required this.value,
+    required this.onChanged,
+    this.enabled = true,
+  });
+
+  final IconData icon;
+  final String title;
+  final String? subtitle;
+  final bool value;
+  final ValueChanged<bool>? onChanged;
+  final bool enabled;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: enabled && onChanged != null ? () => onChanged!(!value) : null,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          child: Row(
+            children: [
+              _IconBadge(icon: icon),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontFamily: 'Tajawal',
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        color: KayanColors.textPrimary,
+                      ),
+                    ),
+                    if (subtitle != null && subtitle!.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        subtitle!,
+                        style: const TextStyle(
+                          fontFamily: 'Tajawal',
+                          fontSize: 12,
+                          height: 1.35,
+                          color: KayanColors.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Switch.adaptive(
+                value: value,
+                onChanged: enabled ? onChanged : null,
+                activeTrackColor: KayanColors.primary,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// بطاقة منفصلة (للتوافق مع شاشات فرعية).
 class SettingsCardShell extends StatelessWidget {
   const SettingsCardShell({
     super.key,
@@ -36,7 +221,6 @@ class SettingsCardShell extends StatelessWidget {
   }
 }
 
-/// Navigation / value card: icon + title + subtitle + trailing value/chevron.
 class SettingsNavCard extends StatelessWidget {
   const SettingsNavCard({
     super.key,
@@ -70,7 +254,7 @@ class SettingsNavCard extends StatelessWidget {
                   style: const TextStyle(
                     fontFamily: 'Tajawal',
                     fontSize: 15,
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.w700,
                     color: KayanColors.textPrimary,
                   ),
                 ),
@@ -115,7 +299,6 @@ class SettingsNavCard extends StatelessWidget {
   }
 }
 
-/// Switch card with independent busy/disabled handling.
 class SettingsSwitchCard extends StatelessWidget {
   const SettingsSwitchCard({
     super.key,
@@ -151,7 +334,7 @@ class SettingsSwitchCard extends StatelessWidget {
                   style: const TextStyle(
                     fontFamily: 'Tajawal',
                     fontSize: 15,
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.w700,
                     color: KayanColors.textPrimary,
                   ),
                 ),
