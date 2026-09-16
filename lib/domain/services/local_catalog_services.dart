@@ -129,7 +129,7 @@ final class LocalCardCatalogService implements CardCatalogService {
           entityType: 'card_category',
           entityId: categoryId,
           action: 'cards_imported',
-          payloadJson: '{"count":$imported}',
+          payloadJson: '{\"count\":$imported}',
           occurredAt: clock.now(),
         ),
       );
@@ -148,7 +148,7 @@ final class LocalWalletCatalogService implements WalletCatalogService {
   final IdGenerator ids;
   static const _defaults = [
     (name: 'جيب', senderId: 'JAIB', sourceMode: WalletSourceMode.notification, packageName: 'com.ahd.jaib'),
-    (name: 'جوالي', senderId: 'JAWALI', sourceMode: WalletSourceMode.notification, packageName: 'com.ama.wecashmobileapp'),
+    (name: 'جوالي', senderId: 'JAWALI', sourceMode: WalletSourceMode.notification, packageName: 'com.wecash.jawali'),
     (name: 'ون كاش', senderId: 'ONE CASH', sourceMode: WalletSourceMode.notification, packageName: 'com.one.onecustomer'),
     (name: 'فلوسك', senderId: 'FLOOSAK', sourceMode: WalletSourceMode.notification, packageName: 'co.ysys.floosak'),
   ];
