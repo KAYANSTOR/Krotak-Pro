@@ -56,6 +56,14 @@ class _NetAppState extends State<NetApp> {
         theme: buildKayanLightTheme(),
         darkTheme: buildKayanDarkTheme(),
         themeMode: mode,
+        locale: const Locale('ar'),
+        supportedLocales: const [Locale('ar'), Locale('en')],
+        builder: (context, child) {
+          return Directionality(
+            textDirection: TextDirection.rtl,
+            child: child ?? const SizedBox.shrink(),
+          );
+        },
         home: const HomeShell(),
       ),
     ),
