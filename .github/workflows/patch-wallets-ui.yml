@@ -1,0 +1,46 @@
+name: Patch wallets UI
+on:
+  workflow_dispatch:
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch WalletsPosScreen
+        run: |
+          python3 << 'PY'
+          from pathlib import Path
+          # Minimal targeted patch of existing screen to call ensureDefaultWallets + listEnriched + show packageName
+          path = Path('lib/ui/screens/wallets_pos_screen.dart')
+          text = path.read_text()
+          # Ensure Directionality RTL wrapper exists in build
+          if 'ensureDefaultWallets' not in text:
+              text = text.replace(
+                  'WidgetsBinding.instance.addPostFrameCallback((_) => _load());',
+                  "WidgetsBinding.instance.addPostFrameCallback((_) async { await AppScope.of(context).walletCatalog.ensureDefaultWallets(); await _load(); });",
+              )
+          if 'listEnriched' not in text:
+              text = text.replace(
+                  'final wallets = await c.wallets.listAll();',
+                  'final wallets = await c.walletCatalog.listEnriched();',
+              )
+          # Add package name display if missing
+          if 'packageName' not in text and 'wallet.name' in text:
+              text = text.replace(
+                  'Text(wallet.name',
+                  "Text('${wallet.name}${wallet.packageName != null ? '\\n${wallet.packageName}' : ''}'",
+              )
+          path.write_text(text)
+          print('patched size', path.stat().st_size)
+          print('has ensure', 'ensureDefaultWallets' in text)
+          print('has listEnriched', 'listEnriched' in text)
+          PY
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add lib/ui/screens/wallets_pos_screen.dart
+          git commit -m "WalletsPosScreen: seed defaults + listEnriched + packages" || echo nochange
+          git push origin HEAD:main
