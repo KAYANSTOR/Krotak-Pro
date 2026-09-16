@@ -5,6 +5,7 @@ import 'package:net_app/core/result.dart';
 import 'package:net_app/data/database/app_database.dart';
 import 'package:net_app/data/repositories/local_repositories.dart';
 import 'package:net_app/domain/device_verification_gate.dart';
+import 'package:net_app/domain/entities/setting.dart';
 import 'package:net_app/domain/services/local_device_verification_service.dart';
 
 void main() {
@@ -59,5 +60,59 @@ void main() {
     );
     expect(result, isA<Failure<DeviceVerificationSnapshot>>());
     expect((result as Failure<DeviceVerificationSnapshot>).error.code, 'unknown_verification_gate');
+  });
+
+  test('bulk import passed requires operator note', () async {
+    final result = await service.mark(
+      gateId: 'bulk_import',
+      status: DeviceVerificationStatus.passed,
+    );
+    expect(result, isA<Failure<DeviceVerificationSnapshot>>());
+    expect(
+      (result as Failure<DeviceVerificationSnapshot>).error.code,
+      'measurement_evidence_required',
+    );
+  });
+
+  test('recordImportMeasurement stores metrics and note', () async {
+    final result = await service.recordImportMeasurement(
+      acceptedRows: 80,
+      rejectedRows: 2,
+      durationMs: 1400,
+    );
+    expect(result, isA<Success<DeviceVerificationSnapshot>>());
+    final snap = (result as Success<DeviceVerificationSnapshot>).value;
+    expect(snap.of('bulk_import'), DeviceVerificationStatus.passed);
+    expect(snap.evidenceOf('bulk_import').metrics['acceptedRows'], 80);
+    expect(snap.evidenceOf('bulk_import').hasOperatorNote, isTrue);
+    expect(snap.measurementGatesHaveEvidence, isTrue);
+  });
+
+  test('recordBroadcastMeasurement stores rate evidence', () async {
+    final result = await service.recordBroadcastMeasurement(
+      recipients: 12,
+      sent: 11,
+      failed: 1,
+      durationMs: 9000,
+    );
+    expect(result, isA<Success<DeviceVerificationSnapshot>>());
+    final snap = (result as Success<DeviceVerificationSnapshot>).value;
+    expect(snap.of('broadcast_rate'), DeviceVerificationStatus.passed);
+    expect(snap.evidenceOf('broadcast_rate').metrics['sent'], 11);
+  });
+
+  test('legacy string payload still decodes', () async {
+    await settings.save(
+      AppSetting(
+        key: DeviceVerificationCatalog.settingKey,
+        value: '{"salafni":"passed"}',
+        updatedAt: DateTime(2026, 9, 13),
+      ),
+    );
+    final loaded = await service.load();
+    expect(
+      (loaded as Success<DeviceVerificationSnapshot>).value.of('salafni'),
+      DeviceVerificationStatus.passed,
+    );
   });
 }
