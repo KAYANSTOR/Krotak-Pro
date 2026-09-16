@@ -19,7 +19,8 @@ abstract final class AppRoutes {
   }
 
   static Future<void> openSettings(BuildContext context) {
-    return push(context, const _Subpage(title: 'الإعدادات', child: SettingsScreen()));
+    // SettingsHubScreen owns its own Scaffold + header (matches Z Net video).
+    return push(context, const SettingsScreen());
   }
 
   static Future<void> openHelp(BuildContext context) => push(context, const HelpCenterScreen());

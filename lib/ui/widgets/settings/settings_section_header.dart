@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../theme/kayan_colors.dart';
 
-/// Section title used inside Settings hub (PD-07 Q7).
+/// Section title used inside Settings hub (matches Z Net video teal labels).
 class SettingsSectionHeader extends StatelessWidget {
   const SettingsSectionHeader({super.key, required this.title});
 
@@ -11,14 +11,14 @@ class SettingsSectionHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(4, 20, 4, 10),
+      padding: const EdgeInsets.fromLTRB(4, 18, 4, 10),
       child: Text(
         title,
         style: const TextStyle(
           fontFamily: 'Tajawal',
-          fontSize: 15,
-          fontWeight: FontWeight.bold,
-          color: KayanColors.textPrimary,
+          fontSize: 14,
+          fontWeight: FontWeight.w800,
+          color: KayanColors.primary,
         ),
       ),
     );
