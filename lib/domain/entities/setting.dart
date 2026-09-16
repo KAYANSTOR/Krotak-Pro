@@ -34,6 +34,7 @@ abstract final class SettingKeys {
   static const lowStockThreshold = 'low_stock_threshold';
   /// JSON array of [Promotion] objects.
   static const promotionsCatalog = 'promotions_catalog';
+  static const promotionRewardSmsTemplate = 'promotion_reward_sms_template';
 }
 
 abstract final class SettingDefaults {
@@ -52,6 +53,7 @@ abstract final class SettingDefaults {
   static const broadcastMaxAttempts = 3;
   static const broadcastRateDelayMs = 800;
   static const lowStockThreshold = 10;
+  static const promotionRewardSmsTemplate = 'مكافأة عرض {title}\nالرقم: {serial}\nالرمز: {secret}';
   static const preferredSimSlot = '0';
   static const preferredSendSimSlot = '0';
   static const simAutoFailover = true;
