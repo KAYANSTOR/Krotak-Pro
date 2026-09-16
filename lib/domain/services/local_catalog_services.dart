@@ -212,7 +212,7 @@ final class LocalWalletCatalogService implements WalletCatalogService {
         continue;
       }
       final r = await saveWallet(name: spec.name, senderId: spec.senderId, sourceMode: spec.sourceMode, packageName: spec.packageName);
-      if (r is Failure) return Failure(r.error);
+      if (r is Failure) return Failure((r as Failure).error);
     }
     await settings.save(AppSetting(key: SettingKeys.defaultWalletsSeeded, value: 'true', updatedAt: clock.now()));
     return const Success(null);
