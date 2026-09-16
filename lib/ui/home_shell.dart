@@ -10,8 +10,9 @@ import 'widgets/dashboard/quick_actions_sheet.dart';
 import 'widgets/kayan_bottom_nav.dart';
 import 'widgets/permissions_onboarding.dart';
 
-/// Bottom navigation aligned with Kotlin:
-/// dashboard | reports | offers | accounts | cards
+/// Bottom navigation: dashboard | reports | offers | accounts | cards
+/// Uses [IndexedStack] so tab state is preserved and screens do not rebuild
+/// on every switch (eliminates flicker / "shaking").
 class HomeShell extends StatefulWidget {
   const HomeShell({super.key});
 
@@ -20,9 +21,15 @@ class HomeShell extends StatefulWidget {
 }
 
 class _HomeShellState extends State<HomeShell> {
-  String _route = 'dashboard';
+  static const _ids = <String>[
+    'dashboard',
+    'reports',
+    'offers',
+    'accounts',
+    'cards',
+  ];
 
-  static const _titles = {
+  static const _titles = <String, String>{
     'dashboard': 'لوحة التحكم',
     'reports': 'التقارير',
     'offers': 'العروض',
@@ -30,74 +37,78 @@ class _HomeShellState extends State<HomeShell> {
     'cards': 'الكروت',
   };
 
+  int _index = 0;
+  bool _permissionsStarted = false;
+
+  late final List<Widget> _pages = [
+    DashboardScreen(onNavigateToTab: _goToId),
+    const ReportsScreen(),
+    const OffersScreen(),
+    const CustomersScreen(),
+    const InventoryScreen(),
+  ];
+
+  String get _currentId => _ids[_index];
+
+  void _goToId(String id) {
+    final i = _ids.indexOf(id);
+    if (i < 0 || i == _index) return;
+    setState(() => _index = i);
+  }
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
+      if (!mounted || _permissionsStarted) return;
+      _permissionsStarted = true;
       PermissionsOnboarding.maybeRun(context);
     });
   }
 
-  Widget _pageFor(String route) {
-    switch (route) {
-      case 'accounts':
-        return const CustomersScreen();
-      case 'cards':
-        return const InventoryScreen();
-      case 'reports':
-        return const ReportsScreen();
-      case 'offers':
-        return const OffersScreen();
-      case 'dashboard':
-      default:
-        return DashboardScreen(
-          onNavigateToTab: (id) => setState(() => _route = id),
-        );
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    final hideAppBar = _route == 'cards';
-    return Directionality(
-      textDirection: TextDirection.rtl,
-      child: Scaffold(
-        backgroundColor: const Color(0xFFF6F8F9),
-        appBar: hideAppBar
-            ? null
-            : AppBar(
-                title: Text(_titles[_route] ?? 'NET'),
-                actions: [
-                  if (_route == 'dashboard')
-                    IconButton(
-                      icon: const Icon(Icons.settings_outlined),
-                      onPressed: () => AppRoutes.openSettings(context),
-                    ),
-                ],
-              ),
-        body: SafeArea(
-          top: hideAppBar,
-          child: _pageFor(_route),
+    final hideAppBar = _currentId == 'cards';
+    return Scaffold(
+      backgroundColor: const Color(0xFFF6F8F9),
+      appBar: hideAppBar
+          ? null
+          : AppBar(
+              title: Text(_titles[_currentId] ?? 'NET'),
+              actions: [
+                if (_currentId == 'dashboard')
+                  IconButton(
+                    icon: const Icon(Icons.settings_outlined),
+                    onPressed: () => AppRoutes.openSettings(context),
+                  ),
+              ],
+            ),
+      body: SafeArea(
+        top: hideAppBar,
+        // IndexedStack keeps all tabs alive → no flicker on switch
+        child: IndexedStack(
+          index: _index,
+          sizing: StackFit.expand,
+          children: _pages,
         ),
-        floatingActionButton: _route == 'dashboard'
-            ? FloatingActionButton(
-                onPressed: () {
-                  QuickActionsSheet.show(
-                    context,
-                    onDirectSale: () => AppRoutes.openDirectSale(context),
-                    onPosAccounts: () => AppRoutes.openWalletsAndPos(context),
-                    onAddCustomer: () => setState(() => _route = 'accounts'),
-                  );
-                },
-                tooltip: 'إجراءات سريعة',
-                child: const Icon(Icons.add),
-              )
-            : null,
-        bottomNavigationBar: KayanBottomNav(
-          currentId: _route,
-          onSelect: (id) => setState(() => _route = id),
-        ),
+      ),
+      floatingActionButton: _currentId == 'dashboard'
+          ? FloatingActionButton(
+              onPressed: () {
+                QuickActionsSheet.show(
+                  context,
+                  onDirectSale: () => AppRoutes.openDirectSale(context),
+                  onPosAccounts: () => AppRoutes.openWalletsAndPos(context),
+                  onAddCustomer: () => _goToId('accounts'),
+                );
+              },
+              tooltip: 'إجراءات سريعة',
+              child: const Icon(Icons.add),
+            )
+          : null,
+      bottomNavigationBar: KayanBottomNav(
+        currentId: _currentId,
+        onSelect: _goToId,
       ),
     );
   }
