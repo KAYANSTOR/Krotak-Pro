@@ -69,6 +69,9 @@ final class DeviceVerificationSnapshot {
     }
     return true;
   }
+
+  /// Release is software-ready only when every gate passed and measurement notes exist.
+  bool get readyForRelease => allPassed && measurementGatesHaveEvidence;
 }
 
 final class LocalDeviceVerificationService {
@@ -163,6 +166,30 @@ final class LocalDeviceVerificationService {
         'durationMs': durationMs,
       },
     );
+  }
+
+  Map<String, Object?> exportEvidencePack(DeviceVerificationSnapshot snap) {
+    return {
+      'phase': 19,
+      'schema': 'net.device_verification.v1',
+      'exportedAt': _clock.now().toIso8601String(),
+      'passedCount': snap.passedCount,
+      'total': snap.total,
+      'allPassed': snap.allPassed,
+      'measurementGatesHaveEvidence': snap.measurementGatesHaveEvidence,
+      'readyForRelease': snap.readyForRelease,
+      'gates': {
+        for (final item in DeviceVerificationCatalog.items)
+          item.id: {
+            'title': item.title,
+            'phaseRef': item.phaseRef,
+            'status': snap.of(item.id).name,
+            'note': snap.evidenceOf(item.id).note,
+            'metrics': snap.evidenceOf(item.id).metrics,
+            'recordedAt': snap.evidenceOf(item.id).recordedAt?.toIso8601String(),
+          },
+      },
+    };
   }
 
   Future<Result<DeviceVerificationSnapshot>> _persist(
