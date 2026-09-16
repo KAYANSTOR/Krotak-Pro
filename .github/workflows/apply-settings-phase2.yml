@@ -18,7 +18,6 @@ jobs:
           cat tools/settings_cards_*.b64 | tr -d '\n' | base64 -d | gunzip > lib/ui/widgets/settings/settings_cards.dart
           cat tools/settings_hub_*.b64 | tr -d '\n' | base64 -d | gunzip > lib/ui/screens/settings/settings_hub_screen.dart
           wc -l lib/ui/widgets/settings/settings_cards.dart lib/ui/screens/settings/settings_hub_screen.dart
-          head -3 lib/ui/screens/settings/settings_hub_screen.dart
           git config user.name "kayan-bot"
           git config user.email "bot@kayan.local"
           git add lib/ui/widgets/settings/settings_cards.dart lib/ui/screens/settings/settings_hub_screen.dart
