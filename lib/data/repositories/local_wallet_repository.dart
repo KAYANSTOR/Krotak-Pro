@@ -1,3 +1,13 @@
+import 'dart:convert';
+
+import 'package:drift/drift.dart';
+
+import '../../../core/result.dart';
+import '../../../domain/entities/setting.dart';
+import '../../../domain/entities/wallet.dart' as domain;
+import '../../../domain/repositories/repositories.dart';
+import '../database/app_database.dart';
+
 part of local_repositories;
 
 final class LocalWalletRepository implements WalletRepository {
@@ -11,7 +21,9 @@ final class LocalWalletRepository implements WalletRepository {
       final row = await (database.select(database.wallets)
             ..where((table) => table.id.equals(id)))
           .getSingleOrNull();
-      return Success(row == null ? null : _toWallet(row));
+      if (row == null) return const Success(null);
+      final extras = await _readExtras();
+      return Success(_toWallet(row, extras[id]));
     } catch (error) {
       return Failure(_failure('wallet_find_failed', error));
     }
@@ -23,7 +35,12 @@ final class LocalWalletRepository implements WalletRepository {
       final rows = await (database.select(database.wallets)
             ..orderBy([(table) => OrderingTerm(expression: table.name)]))
           .get();
-      return Success(rows.map(_toWallet).toList(growable: false));
+      final extras = await _readExtras();
+      return Success(
+        rows
+            .map((row) => _toWallet(row, extras[row.id]))
+            .toList(growable: false),
+      );
     } catch (error) {
       return Failure(_failure('wallet_list_failed', error));
     }
@@ -32,26 +49,75 @@ final class LocalWalletRepository implements WalletRepository {
   @override
   Future<Result<void>> save(domain.Wallet wallet) async {
     try {
-      await database.into(database.wallets).insertOnConflictUpdate(
-            WalletsCompanion.insert(
-              id: wallet.id,
-              name: wallet.name,
-              status: wallet.status.name,
-              createdAt: wallet.createdAt,
-            ),
-          );
+      await database.transaction(() async {
+        await database.into(database.wallets).insertOnConflictUpdate(
+              WalletsCompanion.insert(
+                id: wallet.id,
+                name: wallet.name,
+                status: wallet.status.name,
+                createdAt: wallet.createdAt,
+              ),
+            );
+
+        final extras = await _readExtras();
+        extras[wallet.id] = <String, dynamic>{
+          'senderId': wallet.senderId,
+          'sourceMode': wallet.sourceMode.name,
+          'packageName': wallet.packageName,
+        };
+        await database.into(database.appSettings).insertOnConflictUpdate(
+              AppSettingsCompanion.insert(
+                key: SettingKeys.walletExtras,
+                value: jsonEncode(extras),
+                updatedAt: wallet.createdAt,
+              ),
+            );
+      });
       return const Success(null);
     } catch (error) {
       return Failure(_failure('wallet_save_failed', error));
     }
   }
 
-  domain.Wallet _toWallet(Wallet row) {
+  Future<Map<String, Map<String, dynamic>>> _readExtras() async {
+    final row = await (database.select(database.appSettings)
+          ..where((table) => table.key.equals(SettingKeys.walletExtras)))
+        .getSingleOrNull();
+    if (row == null || row.value.trim().isEmpty) {
+      return <String, Map<String, dynamic>>{};
+    }
+    try {
+      final decoded = jsonDecode(row.value);
+      if (decoded is! Map) return <String, Map<String, dynamic>>{};
+      final result = <String, Map<String, dynamic>>{};
+      for (final entry in decoded.entries) {
+        if (entry.key is! String || entry.value is! Map) continue;
+        result[entry.key as String] =
+            Map<String, dynamic>.from(entry.value as Map);
+      }
+      return result;
+    } catch (_) {
+      return <String, Map<String, dynamic>>{};
+    }
+  }
+
+  domain.Wallet _toWallet(
+    Wallet row,
+    Map<String, dynamic>? extra,
+  ) {
+    final sourceModeRaw = extra?['sourceMode']?.toString();
+    final sourceMode = WalletSourceMode.values.firstWhere(
+      (mode) => mode.name == sourceModeRaw,
+      orElse: () => WalletSourceMode.sms,
+    );
     return domain.Wallet(
       id: row.id,
       name: row.name,
       status: domain.WalletStatus.values.byName(row.status),
       createdAt: row.createdAt,
+      senderId: extra?['senderId']?.toString(),
+      sourceMode: sourceMode,
+      packageName: extra?['packageName']?.toString(),
     );
   }
 }
