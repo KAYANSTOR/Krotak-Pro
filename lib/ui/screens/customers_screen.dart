@@ -393,11 +393,27 @@ class _CustomersScreenState extends State<CustomersScreen> {
                     ],
                   ),
                 ),
+                // أيقونات الهيدر مطابقة لإطار acc_390 / acc_405
                 _roundIcon(Icons.person_add_alt_1, _showCreateSheet),
                 const SizedBox(width: 8),
                 _roundIcon(
-                  Icons.link_off,
+                  Icons.shield_outlined,
                   () => setState(() => _filter = _AccountFilter.unlinked),
+                ),
+                const SizedBox(width: 8),
+                _roundIcon(
+                  Icons.volume_up_outlined,
+                  () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          'تنبيهات الحسابات مرتبطة بتنبيه الرسائل المعلّقة',
+                          style: TextStyle(fontFamily: 'Tajawal'),
+                        ),
+                        duration: Duration(seconds: 2),
+                      ),
+                    );
+                  },
                 ),
               ],
             ),
