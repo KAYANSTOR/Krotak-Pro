@@ -1,5 +1,4 @@
 import '../../core/result.dart';
-import '../entities/money.dart';
 import '../entities/promotion.dart';
 import '../entities/transaction.dart';
 import '../repositories/repositories.dart';
