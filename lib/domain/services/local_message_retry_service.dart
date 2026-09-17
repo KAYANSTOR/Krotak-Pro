@@ -144,7 +144,7 @@ final class LocalMessageRetryService implements MessageRetryServicePort {
         payloadJson: jsonEncode({'attempts': previous.attempts, 'errorCode': error.code}),
       ));
       if (audit is Failure<void>) return Failure(audit.error);
-      await messages.updateStatus(messageId, MessageProcessingStatus.failed);
+      await messages.updateStatus(messageId, MessageProcessingStatus.failedMaxAttempts);
       return Success(MessageRetryState(attempts: previous.attempts, nextRetryAt: null, lastErrorCode: error.code, exhausted: true));
     }
     final attempt = previous.attempts + 1;
