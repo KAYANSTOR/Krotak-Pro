@@ -1,16 +1,11 @@
 import '../../core/clock.dart';
 import '../../core/id_generator.dart';
 import '../../core/result.dart';
-import '../entities/audit.dart';
-import '../entities/card.dart';
 import '../entities/message.dart';
-import '../entities/money.dart';
-import '../entities/transaction.dart';
 import '../repositories/repositories.dart';
 import '../repositories/unit_of_work.dart';
 import 'local_message_recovery_service.dart';
 import 'local_message_retry_service.dart';
-import 'services.dart';
 
 /// عمليات التدخل اليدوي على الرسائل الفاشلة/المعلّقة — 1.0.9.
 final class PendingOperationsService {
