@@ -118,6 +118,15 @@ abstract interface class MessageParser {
   Result<ParsedTransfer> parse(IncomingMessage message);
 }
 
+/// Optional parser capability used when the inbound source has a strict
+/// template scope (for example a specific POS account).
+abstract interface class ScopedMessageParser {
+  Result<ParsedTransfer> parseScoped(
+    IncomingMessage message,
+    List<TransferTemplate> allowedTemplates,
+  );
+}
+
 abstract interface class MessageSender {
   Future<Result<void>> send({required String destination, required String body});
 }
