@@ -40,27 +40,35 @@ class _CategoriesSheetState extends State<_CategoriesSheet> {
                 ),
               ),
               Expanded(
-                child: ListView.builder(
-                  controller: scroll,
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-                  itemCount: widget.categories.length,
-                  itemBuilder: (context, i) {
-                    final cat = widget.categories[i];
-                    final major = cat.faceValue.minorUnits / 100.0;
-                    return ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      leading: CircleAvatar(
-                        backgroundColor: KayanColors.lightBackground,
+                child: widget.categories.isEmpty
+                    ? const Center(
                         child: Text(
-                          major == major.roundToDouble() ? major.toInt().toString() : major.toStringAsFixed(0),
-                          style: const TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w700, color: KayanColors.primary, fontSize: 12),
+                          'لا توجد فئات بعد — أنشئ فئة بقيمة اسمية موجبة',
+                          style: TextStyle(fontFamily: 'Tajawal', color: KayanColors.textSecondary),
+                          textAlign: TextAlign.center,
                         ),
+                      )
+                    : ListView.builder(
+                        controller: scroll,
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                        itemCount: widget.categories.length,
+                        itemBuilder: (context, i) {
+                          final cat = widget.categories[i];
+                          final major = cat.faceValue.minorUnits / 100.0;
+                          return ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            leading: CircleAvatar(
+                              backgroundColor: KayanColors.lightBackground,
+                              child: Text(
+                                major == major.roundToDouble() ? major.toInt().toString() : major.toStringAsFixed(0),
+                                style: const TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w700, color: KayanColors.primary, fontSize: 12),
+                              ),
+                            ),
+                            title: Text(cat.name, style: const TextStyle(fontFamily: 'Tajawal')),
+                            subtitle: Text('${major == major.roundToDouble() ? major.toInt() : major} ر.ي', style: const TextStyle(fontFamily: 'Tajawal', fontSize: 12)),
+                          );
+                        },
                       ),
-                      title: Text(cat.name, style: const TextStyle(fontFamily: 'Tajawal')),
-                      subtitle: Text('${major == major.roundToDouble() ? major.toInt() : major} ر.ي', style: const TextStyle(fontFamily: 'Tajawal', fontSize: 12)),
-                    );
-                  },
-                ),
               ),
             ],
           ),
@@ -72,48 +80,68 @@ class _CategoriesSheetState extends State<_CategoriesSheet> {
   Future<void> _createCategory(BuildContext context) async {
     final nameCtrl = TextEditingController();
     final valueCtrl = TextEditingController();
-    final ok = await showDialog<bool>(
+    String? localError;
+    await showDialog<void>(
       context: context,
+      barrierDismissible: false,
       builder: (ctx) => Directionality(
         textDirection: TextDirection.rtl,
-        child: AlertDialog(
-          title: const Text('فئة جديدة', style: TextStyle(fontFamily: 'Tajawal')),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'اسم الفئة (مثال: كرت 100)', border: OutlineInputBorder()), style: const TextStyle(fontFamily: 'Tajawal')),
-              const SizedBox(height: 12),
-              TextField(controller: valueCtrl, keyboardType: const TextInputType.numberWithOptions(decimal: true), inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))], decoration: const InputDecoration(labelText: 'القيمة الاسمية (ر.ي)', border: OutlineInputBorder()), style: const TextStyle(fontFamily: 'Tajawal')),
+        child: StatefulBuilder(
+          builder: (ctx, setLocal) => AlertDialog(
+            title: const Text('فئة جديدة', style: TextStyle(fontFamily: 'Tajawal')),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'اسم الفئة (مثال: كرت 100)', border: OutlineInputBorder()), style: const TextStyle(fontFamily: 'Tajawal')),
+                const SizedBox(height: 12),
+                TextField(controller: valueCtrl, keyboardType: const TextInputType.numberWithOptions(decimal: true), inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))], decoration: const InputDecoration(labelText: 'القيمة الاسمية (ر.ي)', border: OutlineInputBorder()), style: const TextStyle(fontFamily: 'Tajawal')),
+                if (localError != null) ...[
+                  const SizedBox(height: 10),
+                  Text(localError!, style: const TextStyle(fontFamily: 'Tajawal', color: Color(0xFFDC2626), fontSize: 13)),
+                ],
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('إلغاء', style: TextStyle(fontFamily: 'Tajawal')),
+              ),
+              FilledButton(
+                onPressed: () async {
+                  final name = nameCtrl.text.trim();
+                  final major = num.tryParse(valueCtrl.text.trim());
+                  if (name.isEmpty) {
+                    setLocal(() => localError = 'أدخل اسم الفئة');
+                    return;
+                  }
+                  if (major == null || major <= 0) {
+                    setLocal(() => localError = 'أدخل قيمة اسمية صحيحة أكبر من صفر');
+                    return;
+                  }
+                  final c = AppScope.of(context);
+                  final r = await c.catalogService.saveCategory(
+                    domain.CardCategory(
+                      id: '',
+                      name: name,
+                      faceValue: Money(minorUnits: (major * 100).round(), currencyCode: 'YER'),
+                      isActive: true,
+                    ),
+                  );
+                  if (r is Failure) {
+                    setLocal(() => localError = (r as Failure).error.message);
+                    return;
+                  }
+                  if (ctx.mounted) Navigator.pop(ctx);
+                },
+                child: const Text('حفظ', style: TextStyle(fontFamily: 'Tajawal')),
+              ),
             ],
           ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('إلغاء', style: TextStyle(fontFamily: 'Tajawal'))),
-            FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('حفظ', style: TextStyle(fontFamily: 'Tajawal'))),
-          ],
         ),
       ),
     );
-    if (ok != true || !context.mounted) return;
-    final name = nameCtrl.text.trim();
-    final major = num.tryParse(valueCtrl.text.trim());
     nameCtrl.dispose();
     valueCtrl.dispose();
-    if (name.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('أدخل اسم الفئة', style: TextStyle(fontFamily: 'Tajawal'))));
-      return;
-    }
-    if (major == null || major <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('أدخل قيمة اسمية صحيحة أكبر من صفر', style: TextStyle(fontFamily: 'Tajawal'))));
-      return;
-    }
-    final c = AppScope.of(context);
-    final r = await c.catalogService.saveCategory(domain.CardCategory(id: '', name: name, faceValue: Money(minorUnits: (major * 100).round(), currencyCode: 'YER'), isActive: true));
-    if (!context.mounted) return;
-    if (r is Failure) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text((r as Failure).error.message, style: const TextStyle(fontFamily: 'Tajawal'))));
-      return;
-    }
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم إنشاء الفئة', style: TextStyle(fontFamily: 'Tajawal'))));
     await widget.onChanged();
   }
 }
