@@ -20,7 +20,10 @@ final class PaymentSourceGuard {
   final TransferTemplateRepository templates;
   final LocalPaymentSourceRegistry? notificationSources;
 
-  Future<Result<void>> authorize(PaymentEvent event) async {
+  Future<Result<void>> authorize(
+    PaymentEvent event, {
+    String? matchedTemplateId,
+  }) async {
     if (event.channel == PaymentChannel.manual) {
       return const Success(null);
     }
@@ -88,15 +91,26 @@ final class PaymentSourceGuard {
     }
 
     final walletId = wallet.id;
-    final hasActiveTemplate = (configuredTemplates as Success<List<TransferTemplate>>)
+    final liveTemplates = (configuredTemplates as Success<List<TransferTemplate>>)
         .value
-        .any((t) => t.isActive && t.walletId == walletId);
+        .where((t) => t.isActive && t.walletId == walletId)
+        .toList(growable: false);
 
-    if (!hasActiveTemplate) {
+    if (liveTemplates.isEmpty) {
       return const Failure(
         AppFailure(
           code: 'no_source_template',
           message: 'No active transfer template is linked to this payment source',
+        ),
+      );
+    }
+
+    if (matchedTemplateId != null &&
+        !liveTemplates.any((t) => t.id == matchedTemplateId)) {
+      return const Failure(
+        AppFailure(
+          code: 'template_source_mismatch',
+          message: 'Matched template is not linked to the trusted payment source',
         ),
       );
     }
