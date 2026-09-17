@@ -1,6 +1,6 @@
 import 'package:flutter/services.dart';
 
-/// جسر فحص جاهزية أندرويد — صلاحيات SMS، إشعارات، بطارية، شرائح.
+/// جسر فحص جاهزية أندرويد — صلاحيات SMS، إشعارات، بطارية، شرائح، جهات اتصال.
 final class SystemDiagnosticsBridge {
   SystemDiagnosticsBridge({MethodChannel? channel})
       : _channel = channel ?? const MethodChannel('com.kayan.net/diagnostics');
@@ -22,6 +22,22 @@ final class SystemDiagnosticsBridge {
   Future<bool> requestSmsPermissions() async {
     try {
       return await _channel.invokeMethod<bool>('requestSmsPermissions') ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<bool> requestContactsPermission() async {
+    try {
+      return await _channel.invokeMethod<bool>('requestContacts') ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<bool> hasContactsPermission() async {
+    try {
+      return await _channel.invokeMethod<bool>('hasContactsPermission') ?? false;
     } catch (_) {
       return false;
     }
