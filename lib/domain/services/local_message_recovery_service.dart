@@ -33,16 +33,8 @@ final class LocalMessageRecoveryService {
   Future<Result<MessageRecoveryReport>> recoverPending() async {
     final enabled = await _processOldMessagesOnResume();
     if (!enabled) {
-      return const Success(MessageRecoveryReport(
-        attempted: 0,
-        processed: 0,
-        skipped: 0,
-        failed: 0,
-        errors: <String>[],
-        skippedBySetting: true,
-      ));
+      return const Success(MessageRecoveryReport(attempted: 0, processed: 0, skipped: 0, failed: 0, errors: <String>[], skippedBySetting: true));
     }
-
     final pending = await messages.pendingProcessing();
     if (pending is Failure<List<IncomingMessage>>) return Failure(pending.error);
     final list = (pending as Success<List<IncomingMessage>>).value;
@@ -58,7 +50,6 @@ final class LocalMessageRecoveryService {
         skipped++;
         continue;
       }
-
       final event = _eventForPersistedMessage(message);
       final sourceAuthorization = await sourceGuard.authorize(event);
       if (sourceAuthorization is Failure<void>) {
@@ -67,7 +58,6 @@ final class LocalMessageRecoveryService {
         errors.add('${message.id}:${sourceAuthorization.error.code}');
         continue;
       }
-
       attempted++;
       final parseResult = parser.parse(message);
       if (parseResult is Failure<ParsedTransfer>) {
@@ -76,40 +66,29 @@ final class LocalMessageRecoveryService {
         errors.add('${message.id}:${parseResult.error.code}');
         continue;
       }
-
       final parsed = (parseResult as Success<ParsedTransfer>).value;
-      final templateAuthorization = await sourceGuard.authorize(
-        event,
-        matchedTemplateId: parsed.templateId,
-      );
+      final templateAuthorization = await sourceGuard.authorize(event, matchedTemplateId: parsed.templateId);
       if (templateAuthorization is Failure<void>) {
         await messages.updateStatus(message.id, MessageProcessingStatus.rejected);
         skipped++;
         errors.add('${message.id}:${templateAuthorization.error.code}');
         continue;
       }
-
       if (message.status == MessageProcessingStatus.received) {
         await messages.updateStatus(message.id, MessageProcessingStatus.parsed);
       }
-
       final result = await processor.process(parsed);
       if (result is Success<Transaction>) {
         processed++;
         await retryService.clearAfterSuccess(message.id);
         continue;
       }
-
       final error = (result as Failure<Transaction>).error;
       if (error.code == 'unmatched_amount_pending') {
         skipped++;
         continue;
       }
-
-      final scheduled = await retryService.recordFailure(
-        messageId: message.id,
-        error: error,
-      );
+      final scheduled = await retryService.recordFailure(messageId: message.id, error: error);
       if (scheduled is Failure<MessageRetryState>) {
         failed++;
         errors.add('${message.id}:${scheduled.error.code}');
@@ -123,63 +102,29 @@ final class LocalMessageRecoveryService {
         skipped++;
       }
     }
-
-    return Success(MessageRecoveryReport(
-      attempted: attempted,
-      processed: processed,
-      skipped: skipped,
-      failed: failed,
-      errors: List.unmodifiable(errors),
-    ));
+    return Success(MessageRecoveryReport(attempted: attempted, processed: processed, skipped: skipped, failed: failed, errors: List.unmodifiable(errors)));
   }
 
   PaymentEvent _eventForPersistedMessage(IncomingMessage message) {
     final sender = message.sender.trim();
     if (sender.startsWith('notification:')) {
-      return PaymentEvent(
-        channel: PaymentChannel.notification,
-        sourceKey: sender,
-        body: message.body,
-        receivedAt: message.receivedAt,
-        packageName: sender.substring('notification:'.length),
-      );
+      return PaymentEvent(channel: PaymentChannel.notification, sourceKey: sender, body: message.body, receivedAt: message.receivedAt, packageName: sender.substring('notification:'.length));
     }
-    return PaymentEvent(
-      channel: PaymentChannel.sms,
-      sourceKey: sender,
-      body: message.body,
-      receivedAt: message.receivedAt,
-    );
+    return PaymentEvent(channel: PaymentChannel.sms, sourceKey: sender, body: message.body, receivedAt: message.receivedAt);
   }
 
   Future<Result<void>> retryNow(String messageId) async {
     final found = await messages.findById(messageId);
     if (found is Failure<IncomingMessage?>) return Failure(found.error);
     final message = (found as Success<IncomingMessage?>).value;
-    if (message == null) {
-      return const Failure(AppFailure(
-        code: 'message_not_found',
-        message: 'Message was not found',
-      ));
-    }
-    if (message.status == MessageProcessingStatus.processed ||
-        message.status == MessageProcessingStatus.rejected) {
-      return const Failure(AppFailure(
-        code: 'message_not_retryable',
-        message: 'Message is not eligible for retry',
-      ));
-    }
+    if (message == null) return const Failure(AppFailure(code: 'message_not_found', message: 'Message was not found'));
+    if (message.status == MessageProcessingStatus.processed || message.status == MessageProcessingStatus.rejected) return const Failure(AppFailure(code: 'message_not_retryable', message: 'Message is not eligible for retry'));
     final request = await retryService.requestImmediateRetry(messageId);
     if (request is Failure<void>) return request;
     final recovered = await recoverPending();
     if (recovered is Failure<MessageRecoveryReport>) return Failure(recovered.error);
     final report = (recovered as Success<MessageRecoveryReport>).value;
-    return report.failed > 0
-        ? const Failure(AppFailure(
-            code: 'retry_failed',
-            message: 'Retry did not complete successfully',
-          ))
-        : const Success(null);
+    return report.failed > 0 ? const Failure(AppFailure(code: 'retry_failed', message: 'Retry did not complete successfully')) : const Success(null);
   }
 
   Future<bool> _processOldMessagesOnResume() async {
@@ -187,10 +132,7 @@ final class LocalMessageRecoveryService {
     if (s == null) return SettingDefaults.processOldMessagesOnResume;
     final result = await s.find(SettingKeys.processOldMessagesOnResume);
     if (result is! Success<AppSetting?>) return SettingDefaults.processOldMessagesOnResume;
-    return SettingBool.read(
-      result.value?.value,
-      defaultValue: SettingDefaults.processOldMessagesOnResume,
-    );
+    return SettingBool.read(result.value?.value, defaultValue: SettingDefaults.processOldMessagesOnResume);
   }
 }
 
@@ -203,7 +145,6 @@ final class MessageRecoveryReport {
     required this.errors,
     this.skippedBySetting = false,
   });
-
   final int attempted;
   final int processed;
   final int skipped;
