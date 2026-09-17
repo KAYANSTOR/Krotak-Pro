@@ -129,12 +129,15 @@ final class LocalPosAccountRegistry {
       if (target == null) return false;
       if (PhoneNormalizer.samePhone(sender, needle)) return true;
 
-      final numericTokens = RegExp(r'\+?\d[\d\s().-]{5,}\d')
+      // Match phone identifiers as standalone digit sequences so an amount
+      // immediately before the phone cannot be swallowed into the same token.
+      final numericTokens = RegExp(r'\+?\d{7,15}')
           .allMatches(combined)
           .map((m) => m.group(0)!)
           .toList(growable: false);
-      return numericTokens.any((token) =>
-          PhoneNormalizer.canonicalize(token) == target);
+      return numericTokens.any(
+        (token) => PhoneNormalizer.canonicalize(token) == target,
+      );
     }
 
     final normalizedNeedle = _normalize(needle);
