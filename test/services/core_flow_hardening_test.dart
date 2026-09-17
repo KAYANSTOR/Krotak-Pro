@@ -19,6 +19,8 @@ import 'package:net_app/domain/services/local_transfer_processor.dart';
 import 'package:net_app/domain/services/services.dart';
 import 'package:net_app/platform/sms_bridge.dart';
 
+import '../helpers/trusted_payment_source.dart';
+
 void main() {
   group('IncomingSmsHandler idempotency', () {
     late _FakeMessages messages;
@@ -36,7 +38,14 @@ void main() {
         ),
       );
       processor = _FakeProcessor();
-      handler = IncomingSmsHandler(bridge: SmsBridge(), messages: messages, parser: parser, processor: processor, ids: SequentialIdGenerator());
+      handler = IncomingSmsHandler(
+        bridge: SmsBridge(),
+        messages: messages,
+        parser: parser,
+        processor: processor,
+        ids: SequentialIdGenerator(),
+        sourceGuard: trustedPaymentSourceGuard(),
+      );
     });
 
     test('same SMS is idempotent across time changes', () async {
