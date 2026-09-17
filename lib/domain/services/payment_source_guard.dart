@@ -124,7 +124,7 @@ final class PaymentSourceGuard {
 
     return Success(
       PaymentSourceScope(
-        wallet: wallet!,
+        wallet: wallet,
         posAccount: pos,
         templates: scopedTemplates,
       ),
