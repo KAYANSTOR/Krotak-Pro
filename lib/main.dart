@@ -3,6 +3,7 @@ import 'dart:ui';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:sqlite3_flutter_libs/sqlite3_flutter_libs.dart';
 
 import 'application/app_container.dart';
@@ -80,25 +81,30 @@ class _NetAppState extends State<NetApp> {
 
   @override
   Widget build(BuildContext context) => AppScope(
-    container: widget.container,
-    child: ValueListenableBuilder<ThemeMode>(
-      valueListenable: widget.container.themeModeNotifier,
-      builder: (context, mode, _) => MaterialApp(
-        title: 'NET',
-        debugShowCheckedModeBanner: false,
-        theme: buildKayanLightTheme(),
-        darkTheme: buildKayanDarkTheme(),
-        themeMode: mode,
-        locale: const Locale('ar'),
-        supportedLocales: const [Locale('ar'), Locale('en')],
-        builder: (context, child) => Directionality(
-          textDirection: TextDirection.rtl,
-          child: child ?? const SizedBox.shrink(),
+        container: widget.container,
+        child: ValueListenableBuilder<ThemeMode>(
+          valueListenable: widget.container.themeModeNotifier,
+          builder: (context, mode, _) => MaterialApp(
+            title: 'NET',
+            debugShowCheckedModeBanner: false,
+            theme: buildKayanLightTheme(),
+            darkTheme: buildKayanDarkTheme(),
+            themeMode: mode,
+            locale: const Locale('ar'),
+            supportedLocales: const [Locale('ar'), Locale('en')],
+            localizationsDelegates: const [
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate,
+            ],
+            builder: (context, child) => Directionality(
+              textDirection: TextDirection.rtl,
+              child: child ?? const SizedBox.shrink(),
+            ),
+            home: const HomeShell(),
+          ),
         ),
-        home: const HomeShell(),
-      ),
-    ),
-  );
+      );
 }
 
 class NetRuntimeErrorScreen extends StatelessWidget {
