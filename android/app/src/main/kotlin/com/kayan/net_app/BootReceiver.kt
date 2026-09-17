@@ -6,22 +6,24 @@ import android.content.Intent
 import android.util.Log
 
 /**
- * Phase 5: after device boot, mark a flag so the next Flutter session runs
- * recovery/delivery worker promptly. SMS continues via [SmsReceiver] which is
- * registered independently of the Flutter process.
+ * After device boot / package replace:
+ * 1) Persist recovery hint for Flutter resume path.
+ * 2) Bring [MainActivity] up so background processing and recovery start
+ *    without waiting for a manual open (user request).
  *
- * Does **not** auto-open the UI (avoids intrusive launch on every reboot).
+ * SMS still arrives via [SmsReceiver] independently of the UI process.
  */
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {
         val action = intent?.action ?: return
         if (action != Intent.ACTION_BOOT_COMPLETED &&
             action != Intent.ACTION_LOCKED_BOOT_COMPLETED &&
-            action != Intent.ACTION_MY_PACKAGE_REPLACED
+            action != Intent.ACTION_MY_PACKAGE_REPLACED &&
+            action != "android.intent.action.QUICKBOOT_POWERON"
         ) {
             return
         }
-        Log.i(TAG, "boot/package event action=$action — scheduling recovery hint")
+        Log.i(TAG, "boot/package event action=$action — recovery + auto-start")
         try {
             context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
                 .edit()
@@ -31,6 +33,22 @@ class BootReceiver : BroadcastReceiver() {
         } catch (e: Exception) {
             Log.w(TAG, "failed to persist boot recovery hint: ${e.message}")
         }
+
+        try {
+            val launch = Intent(context, MainActivity::class.java).apply {
+                addFlags(
+                    Intent.FLAG_ACTIVITY_NEW_TASK or
+                        Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                        Intent.FLAG_ACTIVITY_SINGLE_TOP,
+                )
+                putExtra(EXTRA_FROM_BOOT, true)
+            }
+            context.startActivity(launch)
+            Log.i(TAG, "MainActivity launched after $action")
+        } catch (e: Exception) {
+            // Some OEMs block background activity starts until autostart is allowed.
+            Log.w(TAG, "auto-start MainActivity blocked: ${e.message}")
+        }
     }
 
     companion object {
@@ -38,6 +56,7 @@ class BootReceiver : BroadcastReceiver() {
         const val PREFS = "net_boot_prefs"
         const val KEY_PENDING_RECOVERY = "pending_recovery_after_boot"
         const val KEY_BOOT_AT = "last_boot_at_ms"
+        const val EXTRA_FROM_BOOT = "net_from_boot"
 
         /** Called from MainActivity when Flutter engine is ready. */
         fun consumePendingRecovery(context: Context): Boolean {
