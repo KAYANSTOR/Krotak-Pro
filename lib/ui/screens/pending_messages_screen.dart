@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/result.dart';
 import '../../domain/entities/message.dart';
 import '../../domain/entities/money.dart';
+import '../../domain/entities/setting.dart';
 import '../../domain/entities/transaction.dart';
 import '../../domain/services/pending_attention_alarm_service.dart';
 import '../app_scope.dart';
@@ -31,6 +32,7 @@ class _PendingMessagesScreenState extends State<PendingMessagesScreen>
   List<_PendingRow> _rows = const [];
   String? _busyId;
   late final PendingAttentionAlarmService _alarm;
+  bool _alertEnabled = SettingDefaults.pendingAttentionAlertEnabled;
 
   @override
   void initState() {
@@ -38,6 +40,18 @@ class _PendingMessagesScreenState extends State<PendingMessagesScreen>
     WidgetsBinding.instance.addObserver(this);
     _alarm = AppScope.of(context).pendingAlarm;
     WidgetsBinding.instance.addPostFrameCallback((_) => _load());
+  }
+
+  Future<void> _loadAlertSetting() async {
+    final r = await AppScope.of(context).settings.find(
+          SettingKeys.pendingAttentionAlertEnabled,
+        );
+    if (!mounted) return;
+    final raw = r is Success<AppSetting?> ? r.value?.value : null;
+    _alertEnabled = SettingBool.read(
+      raw,
+      defaultValue: SettingDefaults.pendingAttentionAlertEnabled,
+    );
   }
 
   @override
@@ -64,6 +78,7 @@ class _PendingMessagesScreenState extends State<PendingMessagesScreen>
       _error = null;
     });
     final c = AppScope.of(context);
+    await _loadAlertSetting();
     final result = await c.pendingReview.listPending();
     if (!mounted) return;
     if (result is Failure<List<IncomingMessage>>) {
@@ -84,7 +99,7 @@ class _PendingMessagesScreenState extends State<PendingMessagesScreen>
       _all = list;
       _rows = rows;
     });
-    if (rows.isNotEmpty && !_alarm.isMuted) {
+    if (_alertEnabled && rows.isNotEmpty && !_alarm.isMuted) {
       _alarm.unmute();
       _alarm.start();
     } else {
@@ -216,7 +231,7 @@ class _PendingMessagesScreenState extends State<PendingMessagesScreen>
   void _toggleMute() {
     if (_alarm.isMuted) {
       _alarm.unmute();
-      if (_rows.isNotEmpty) _alarm.start();
+      if (_alertEnabled && _rows.isNotEmpty) _alarm.start();
     } else {
       _alarm.mute();
     }
@@ -263,20 +278,21 @@ class _PendingMessagesScreenState extends State<PendingMessagesScreen>
             ],
           ),
           actions: [
-            IconButton(
-              tooltip: _alarm.isMuted ? 'تشغيل التنبيه' : 'كتم التنبيه',
-              onPressed: _toggleMute,
-              icon: Icon(
-                _alarm.isMuted ? Icons.volume_off : Icons.volume_up,
-                color: const Color(0xFF0F766E),
+            if (_alertEnabled)
+              IconButton(
+                tooltip: _alarm.isMuted ? 'تشغيل التنبيه' : 'كتم التنبيه',
+                onPressed: _toggleMute,
+                icon: Icon(
+                  _alarm.isMuted ? Icons.volume_off : Icons.volume_up,
+                  color: const Color(0xFF0F766E),
+                ),
               ),
-            ),
           ],
         ),
         body: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            if (_rows.isNotEmpty && !_alarm.isMuted)
+            if (_alertEnabled && _rows.isNotEmpty && !_alarm.isMuted)
               Material(
                 color: const Color(0xFFFEF3C7),
                 child: Padding(
