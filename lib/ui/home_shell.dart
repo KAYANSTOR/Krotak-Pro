@@ -11,7 +11,10 @@ import 'widgets/kayan_bottom_nav.dart';
 import 'widgets/permissions_onboarding.dart';
 
 /// Bottom navigation: dashboard | reports | offers | accounts | cards
-/// Uses [IndexedStack] so tab state is preserved (no flicker).
+///
+/// Pages are created lazily on first visit. This avoids surfacing runtime
+/// failures from inactive tabs while the visible tab is rendering. State is
+/// preserved after a tab has been visited once.
 class HomeShell extends StatefulWidget {
   const HomeShell({super.key});
 
@@ -38,26 +41,16 @@ class _HomeShellState extends State<HomeShell> {
 
   int _index = 0;
   bool _permissionsStarted = false;
-
-  late final List<Widget> _pages = [
-    DashboardScreen(onNavigateToTab: _goToId),
-    const ReportsScreen(),
-    const OffersScreen(),
-    const CustomersScreen(),
-    const InventoryScreen(),
-  ];
+  late final List<Widget?> _pages;
 
   String get _currentId => _ids[_index];
-
-  void _goToId(String id) {
-    final i = _ids.indexOf(id);
-    if (i < 0 || i == _index) return;
-    setState(() => _index = i);
-  }
 
   @override
   void initState() {
     super.initState();
+    _pages = List<Widget?>.filled(_ids.length, null, growable: false);
+    _pages[0] = DashboardScreen(onNavigateToTab: _goToId);
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || _permissionsStarted) return;
       _permissionsStarted = true;
@@ -65,10 +58,42 @@ class _HomeShellState extends State<HomeShell> {
     });
   }
 
+  Widget _pageForIndex(int index) {
+    final existing = _pages[index];
+    if (existing != null) return existing;
+
+    final page = switch (index) {
+      0 => DashboardScreen(onNavigateToTab: _goToId),
+      1 => const ReportsScreen(),
+      2 => const OffersScreen(),
+      3 => const CustomersScreen(),
+      4 => const InventoryScreen(),
+      _ => const SizedBox.shrink(),
+    };
+    _pages[index] = page;
+    return page;
+  }
+
+  void _goToId(String id) {
+    final i = _ids.indexOf(id);
+    if (i < 0 || i == _index) return;
+    setState(() {
+      _index = i;
+      _pageForIndex(i);
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     // Dashboard and cards use their own headers (match Z Net video).
     final hideAppBar = _currentId == 'dashboard' || _currentId == 'cards';
+    final children = <Widget>[
+      for (var i = 0; i < _pages.length; i++)
+        i == _index
+            ? _pageForIndex(i)
+            : (_pages[i] ?? const SizedBox.shrink()),
+    ];
+
     return Scaffold(
       backgroundColor: const Color(0xFFF6F8F9),
       appBar: hideAppBar
@@ -81,7 +106,7 @@ class _HomeShellState extends State<HomeShell> {
         child: IndexedStack(
           index: _index,
           sizing: StackFit.expand,
-          children: _pages,
+          children: children,
         ),
       ),
       floatingActionButton: _currentId == 'dashboard'
