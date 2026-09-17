@@ -1,5 +1,3 @@
-import 'package:flutter/foundation.dart';
-
 import '../entities/message.dart';
 import '../entities/payment_event.dart';
 import '../entities/setting.dart';
@@ -60,13 +58,9 @@ final class LocalMessageRecoveryService {
         continue;
       }
 
-      // Reconstruct the original transport from the persisted source marker.
-      // Notification events use `notification:<package>` as their source key;
-      // ordinary SMS uses the actual SMS sender id.
       final event = _eventForPersistedMessage(message);
       final sourceAuthorization = await sourceGuard.authorize(event);
       if (sourceAuthorization is Failure<void>) {
-        // Do not let historical/untrusted data bypass the live-ingest boundary.
         await messages.updateStatus(message.id, MessageProcessingStatus.rejected);
         skipped++;
         errors.add('${message.id}:${sourceAuthorization.error.code}');
