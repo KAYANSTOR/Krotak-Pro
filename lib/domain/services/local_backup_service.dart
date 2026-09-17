@@ -1,6 +1,9 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
+import 'dart:typed_data';
 
+import 'package:cryptography/cryptography.dart';
 import 'package:path/path.dart' as p;
 
 import '../../core/clock.dart';
@@ -9,10 +12,15 @@ import '../../core/result.dart';
 import '../entities/setting.dart';
 import '../repositories/repositories.dart';
 
-/// Local backup/restore of application metadata (settings snapshot).
+/// Phase 6 encrypted backup / restore (screenshot-aligned).
 ///
-/// Full encrypted DB export requires native file access; this service stores
-/// a portable JSON snapshot that can be extended later to include DB file copy.
+/// Format `.znet`:
+/// - AES-GCM 256-bit
+/// - PBKDF2-HMAC-SHA256, 10_000 iterations
+/// - SHA-256 fingerprint of plaintext JSON
+///
+/// Restore applies settings only and **never** touches license rows
+/// (license counter stays under [LicenseRepository]).
 final class LocalBackupService {
   const LocalBackupService({
     required this.settings,
@@ -26,36 +34,109 @@ final class LocalBackupService {
   final IdGenerator ids;
   final Directory backupDirectory;
 
-  Future<Result<File>> createBackup({String? label}) async {
+  static const formatId = 'znet-backup-v1';
+  static const pbkdf2Iterations = 10000;
+  static const minPasswordLength = 4;
+
+  /// Keys exported in a settings snapshot (license is intentionally excluded).
+  static const List<String> snapshotKeys = [
+    SettingKeys.defaultCurrency,
+    SettingKeys.reservationMinutes,
+    SettingKeys.preferredSimSlot,
+    SettingKeys.preferredSendSimSlot,
+    SettingKeys.simAutoFailover,
+    SettingKeys.smsListenEnabled,
+    SettingKeys.networkName,
+    SettingKeys.smsAutoProcessingEnabled,
+    SettingKeys.processCategoryAmountsOnly,
+    SettingKeys.processOldMessagesOnResume,
+    SettingKeys.posBalanceRequestsEnabled,
+    SettingKeys.dailyOpsSummaryAutoSend,
+    SettingKeys.themeMode,
+    SettingKeys.autoRetryFailedMessages,
+    SettingKeys.retryMaxAttempts,
+    SettingKeys.retryBaseDelaySeconds,
+    SettingKeys.salafniEnabled,
+    SettingKeys.autoPosSettlementEnabled,
+    SettingKeys.broadcastMaxAttempts,
+    SettingKeys.broadcastRateDelayMs,
+    SettingKeys.lowStockThreshold,
+    SettingKeys.pendingAttentionAlertEnabled,
+    SettingKeys.promotionsCatalog,
+    SettingKeys.promotionRewardSmsTemplate,
+    SettingKeys.notificationSources,
+    SettingKeys.walletExtras,
+    SettingKeys.posAccounts,
+  ];
+
+  /// Encrypted backup. [password] must be ≥ [minPasswordLength].
+  Future<Result<File>> createBackup({
+    required String password,
+    String? label,
+  }) async {
+    final pwd = password.trim();
+    if (pwd.length < minPasswordLength) {
+      return const Failure(
+        AppFailure(
+          code: 'backup_password_too_short',
+          message: 'Password must be at least 4 characters',
+        ),
+      );
+    }
     try {
       if (!await backupDirectory.exists()) {
         await backupDirectory.create(recursive: true);
       }
 
-      final keys = [
-        SettingKeys.defaultCurrency,
-        SettingKeys.reservationMinutes,
-      ];
       final map = <String, String>{};
-      for (final key in keys) {
+      for (final key in snapshotKeys) {
         final result = await settings.find(key);
         if (result is Success<AppSetting?> && result.value != null) {
           map[key] = result.value!.value;
         }
       }
 
-      final payload = {
+      final plain = <String, dynamic>{
         'id': ids.next('backup'),
         'label': label ?? 'manual',
         'createdAt': clock.now().toIso8601String(),
+        'schemaVersion': 1,
         'settings': map,
+      };
+      final plainBytes = utf8.encode(
+        const JsonEncoder.withIndent('  ').convert(plain),
+      );
+
+      final fingerprint = await Sha256().hash(plainBytes);
+      final fingerprintHex = _toHex(fingerprint.bytes);
+
+      final salt = _randomBytes(16);
+      final secretKey = await _deriveKey(pwd, salt);
+      final algorithm = AesGcm.with256bits();
+      final secretBox = await algorithm.encrypt(
+        plainBytes,
+        secretKey: secretKey,
+      );
+
+      final envelope = <String, dynamic>{
+        'format': formatId,
+        'kdf': 'PBKDF2-HMAC-SHA256',
+        'iterations': pbkdf2Iterations,
+        'cipher': 'AES-256-GCM',
+        'salt': base64Encode(salt),
+        'nonce': base64Encode(secretBox.nonce),
+        'ciphertext': base64Encode(secretBox.cipherText),
+        'mac': base64Encode(secretBox.mac.bytes),
+        'fingerprint': fingerprintHex,
+        'createdAt': clock.now().toIso8601String(),
+        'label': label ?? 'manual',
       };
 
       final fileName =
-          'net-backup-${clock.now().millisecondsSinceEpoch}.json';
+          'net-backup-${clock.now().millisecondsSinceEpoch}.znet';
       final file = File(p.join(backupDirectory.path, fileName));
       await file.writeAsString(
-        const JsonEncoder.withIndent('  ').convert(payload),
+        const JsonEncoder.withIndent('  ').convert(envelope),
         flush: true,
       );
       return Success(file);
@@ -66,7 +147,11 @@ final class LocalBackupService {
     }
   }
 
-  Future<Result<void>> restoreFromFile(File file) async {
+  /// Restore settings from `.znet` (encrypted) or legacy plain `.json`.
+  Future<Result<void>> restoreFromFile(
+    File file, {
+    String? password,
+  }) async {
     try {
       if (!await file.exists()) {
         return const Failure(
@@ -75,13 +160,37 @@ final class LocalBackupService {
       }
       final raw = await file.readAsString();
       final decoded = jsonDecode(raw) as Map<String, dynamic>;
-      final settingsMap =
-          Map<String, dynamic>.from(decoded['settings'] as Map? ?? {});
+
+      Map<String, dynamic> settingsMap;
+      if (decoded['format'] == formatId) {
+        final pwd = (password ?? '').trim();
+        if (pwd.length < minPasswordLength) {
+          return const Failure(
+            AppFailure(
+              code: 'backup_password_required',
+              message: 'Password required for encrypted backup',
+            ),
+          );
+        }
+        final plain = await _decryptEnvelope(decoded, pwd);
+        if (plain is Failure<Map<String, dynamic>>) {
+          return Failure(plain.error);
+        }
+        settingsMap = Map<String, dynamic>.from(
+          (plain as Success<Map<String, dynamic>>).value['settings'] as Map? ??
+              {},
+        );
+      } else {
+        settingsMap =
+            Map<String, dynamic>.from(decoded['settings'] as Map? ?? {});
+      }
 
       for (final entry in settingsMap.entries) {
+        final key = entry.key;
+        if (key.toLowerCase().contains('license')) continue;
         final save = await settings.save(
           AppSetting(
-            key: entry.key,
+            key: key,
             value: entry.value.toString(),
             updatedAt: clock.now(),
           ),
@@ -102,7 +211,9 @@ final class LocalBackupService {
       final files = backupDirectory
           .listSync()
           .whereType<File>()
-          .where((f) => f.path.endsWith('.json'))
+          .where(
+            (f) => f.path.endsWith('.znet') || f.path.endsWith('.json'),
+          )
           .toList()
         ..sort((a, b) => b.path.compareTo(a.path));
       return Success(files);
@@ -111,5 +222,82 @@ final class LocalBackupService {
         AppFailure(code: 'list_backups_failed', message: e.toString()),
       );
     }
+  }
+
+  Future<Result<Map<String, dynamic>>> _decryptEnvelope(
+    Map<String, dynamic> envelope,
+    String password,
+  ) async {
+    try {
+      final iterations = envelope['iterations'] as int? ?? pbkdf2Iterations;
+      final salt = base64Decode(envelope['salt'] as String);
+      final nonce = base64Decode(envelope['nonce'] as String);
+      final cipherText = base64Decode(envelope['ciphertext'] as String);
+      final macBytes = base64Decode(envelope['mac'] as String);
+      final expectedFp = envelope['fingerprint'] as String?;
+
+      final secretKey =
+          await _deriveKey(password, salt, iterations: iterations);
+      final algorithm = AesGcm.with256bits();
+      final clear = await algorithm.decrypt(
+        SecretBox(cipherText, nonce: nonce, mac: Mac(macBytes)),
+        secretKey: secretKey,
+      );
+
+      if (expectedFp != null) {
+        final hash = await Sha256().hash(clear);
+        if (_toHex(hash.bytes) != expectedFp) {
+          return const Failure(
+            AppFailure(
+              code: 'backup_fingerprint_mismatch',
+              message: 'Backup integrity check failed',
+            ),
+          );
+        }
+      }
+
+      final decoded = jsonDecode(utf8.decode(clear)) as Map<String, dynamic>;
+      return Success(decoded);
+    } on SecretBoxAuthenticationError {
+      return const Failure(
+        AppFailure(
+          code: 'backup_wrong_password',
+          message: 'Wrong password or corrupted backup',
+        ),
+      );
+    } catch (e) {
+      return Failure(
+        AppFailure(code: 'backup_decrypt_failed', message: e.toString()),
+      );
+    }
+  }
+
+  Future<SecretKey> _deriveKey(
+    String password,
+    List<int> salt, {
+    int iterations = pbkdf2Iterations,
+  }) async {
+    final pbkdf2 = Pbkdf2(
+      macAlgorithm: Hmac.sha256(),
+      iterations: iterations,
+      bits: 256,
+    );
+    return pbkdf2.deriveKey(
+      secretKey: SecretKey(utf8.encode(password)),
+      nonce: salt,
+    );
+  }
+
+  List<int> _randomBytes(int length) {
+    final rnd = Random.secure();
+    return List<int>.generate(length, (_) => rnd.nextInt(256));
+  }
+
+  String _toHex(List<int> bytes) {
+    final b = StringBuffer();
+    for (final v in bytes) {
+      b.write(v.toRadixString(16).padLeft(2, '0'));
+    }
+    return b.toString();
   }
 }
