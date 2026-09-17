@@ -17,6 +17,7 @@ import '../data/repositories/local_broadcast_repository.dart';
 import '../domain/services/local_advance_service.dart';
 import '../domain/services/local_broadcast_service.dart';
 import '../domain/services/local_backup_service.dart';
+import '../domain/services/local_maintenance_service.dart';
 import '../domain/services/local_message_recovery_service.dart';
 import '../domain/services/message_delivery_worker.dart';
 import '../domain/services/local_message_retry_service.dart';
@@ -57,7 +58,7 @@ final class AppContainer {
     required this.inventoryService, required this.saleService, required this.advanceService, required this.broadcastService,
     required this.promotions, required this.promotionProgress, required this.systemHealth, required this.voucherOps,
     required this.pendingAlarm, required LocalMessageParser messageParser, required this.transferProcessor,
-    required this.licenseService, required this.backupService, required this.mergeService, required this.settlementService,
+    required this.licenseService, required this.backupService, required this.maintenanceService, required this.mergeService, required this.settlementService,
     required this.recoveryService, required this.deliveryWorker, required this.retryService, required this.pendingReview, required this.smsBridge,
     required this.smsHandler, required this.notificationBridge, required this.notificationSources,
     required this.notificationHandler, required this.clock, required this.ids, required this.themeModeNotifier,
@@ -97,6 +98,7 @@ final class AppContainer {
   final TransferProcessor transferProcessor;
   final LocalLicenseService licenseService;
   final LocalBackupService backupService;
+  final LocalMaintenanceService maintenanceService;
   final LocalAccountMergeService mergeService;
   final LocalSettlementService settlementService;
   final LocalMessageRecoveryService recoveryService;
@@ -169,6 +171,7 @@ final class AppContainer {
     final licenseService = LocalLicenseService(licenses: licenses, clock: clock);
     final backupDirectory = backupDirectoryOverride ?? Directory(p.join((await getApplicationDocumentsDirectory()).path, 'backups'));
     final backupService = LocalBackupService(settings: settings, clock: clock, ids: ids, backupDirectory: backupDirectory);
+    final maintenanceService = LocalMaintenanceService(messages: messages, clock: clock);
     final mergeService = LocalAccountMergeService(customers: customers, transactions: transactions, auditLogs: auditLogs, unitOfWork: uow, clock: clock, ids: ids);
     final settlementService = LocalSettlementService(customers: customers, transactions: transactions, auditLogs: auditLogs, unitOfWork: uow, clock: clock, ids: ids);
     final retryService = LocalMessageRetryService(auditLogs: auditLogs, messages: messages, clock: clock, ids: ids);
@@ -193,7 +196,7 @@ final class AppContainer {
       }
     }
 
-    return AppContainer._(database: database, customers: customers, wallets: wallets, pointsOfSale: pointsOfSale, categories: categories, cards: cards, messages: messages, transferTemplates: transferTemplates, transactions: transactions, sales: sales, auditLogs: auditLogs, licenses: licenses, settings: settings, unitOfWork: uow, customerService: customerService, balanceService: balanceService, catalogService: catalogService, walletCatalog: walletCatalog, posCatalog: posCatalog, posRegistry: posRegistry, inventoryService: inventoryService, saleService: saleService, advanceService: advanceService, broadcastService: broadcastService, promotions: promotions, promotionProgress: promotionProgress, systemHealth: systemHealth, voucherOps: voucherOps, pendingAlarm: pendingAlarm, messageParser: parser, transferProcessor: processor, licenseService: licenseService, backupService: backupService, mergeService: mergeService, settlementService: settlementService, recoveryService: recoveryService, deliveryWorker: deliveryWorker, retryService: retryService, pendingReview: pendingReview, smsBridge: smsBridge, smsHandler: smsHandler, notificationBridge: notificationBridge, notificationSources: notificationSources, notificationHandler: notificationHandler, clock: clock, ids: ids, themeModeNotifier: ValueNotifier<ThemeMode>(theme));
+    return AppContainer._(database: database, customers: customers, wallets: wallets, pointsOfSale: pointsOfSale, categories: categories, cards: cards, messages: messages, transferTemplates: transferTemplates, transactions: transactions, sales: sales, auditLogs: auditLogs, licenses: licenses, settings: settings, unitOfWork: uow, customerService: customerService, balanceService: balanceService, catalogService: catalogService, walletCatalog: walletCatalog, posCatalog: posCatalog, posRegistry: posRegistry, inventoryService: inventoryService, saleService: saleService, advanceService: advanceService, broadcastService: broadcastService, promotions: promotions, promotionProgress: promotionProgress, systemHealth: systemHealth, voucherOps: voucherOps, pendingAlarm: pendingAlarm, messageParser: parser, transferProcessor: processor, licenseService: licenseService, backupService: backupService, maintenanceService: maintenanceService, mergeService: mergeService, settlementService: settlementService, recoveryService: recoveryService, deliveryWorker: deliveryWorker, retryService: retryService, pendingReview: pendingReview, smsBridge: smsBridge, smsHandler: smsHandler, notificationBridge: notificationBridge, notificationSources: notificationSources, notificationHandler: notificationHandler, clock: clock, ids: ids, themeModeNotifier: ValueNotifier<ThemeMode>(theme));
   }
 
   Future<void> startBackgroundHandlers() async {
