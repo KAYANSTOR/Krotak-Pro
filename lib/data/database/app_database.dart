@@ -173,7 +173,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase(super.e);
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -182,6 +182,9 @@ class AppDatabase extends _$AppDatabase {
           // Legacy columns that older onCreate paths expected as ALTER after createAll.
           await customStatement(
             'ALTER TABLE transfer_templates ADD COLUMN wallet_id TEXT',
+          );
+          await customStatement(
+            'ALTER TABLE transfer_templates ADD COLUMN pos_account_id TEXT',
           );
           await customStatement(
             'ALTER TABLE transfer_templates ADD COLUMN priority INTEGER NOT NULL DEFAULT 0',
@@ -196,6 +199,10 @@ class AppDatabase extends _$AppDatabase {
             "ALTER TABLE transfer_templates ADD COLUMN identifier_kind TEXT NOT NULL DEFAULT 'phone'",
           );
           await _createIdempotencyIndexes();
+          await customStatement(
+            'CREATE INDEX IF NOT EXISTS idx_transfer_templates_wallet_pos_active_priority '
+            'ON transfer_templates (wallet_id, pos_account_id, is_active, priority)',
+          );
         },
         onUpgrade: (Migrator migrator, int from, int to) async {
           if (from < 2) {
@@ -213,6 +220,15 @@ class AppDatabase extends _$AppDatabase {
             );
             await customStatement(
               "ALTER TABLE transfer_templates ADD COLUMN identifier_kind TEXT NOT NULL DEFAULT 'phone'",
+            );
+          }
+          if (from < 4) {
+            await customStatement(
+              'ALTER TABLE transfer_templates ADD COLUMN pos_account_id TEXT',
+            );
+            await customStatement(
+              'CREATE INDEX IF NOT EXISTS idx_transfer_templates_wallet_pos_active_priority '
+              'ON transfer_templates (wallet_id, pos_account_id, is_active, priority)',
             );
           }
           if (from < 3) {
