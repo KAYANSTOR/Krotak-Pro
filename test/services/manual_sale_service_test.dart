@@ -106,7 +106,7 @@ void main() {
     );
     expect(cat, isA<Success<CardCategory>>());
     final drafts = [
-      for (var i = 0; i < count)
+      for (var i = 0; i < count; i++)
         CardImportDraft(
           serialNumber: 'S-${i + 1}',
           secretCode: 'CODE-${i + 1}',
@@ -208,7 +208,6 @@ void main() {
       customerId: customer.id,
       currencyCode: 'YER',
     );
-    // Net still the prior debt (cash deposit cancels the new sale)
     expect((after as Success<Money>).value.minorUnits, -face.minorUnits);
   });
 
