@@ -6,7 +6,6 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
-import android.os.Bundle
 import android.os.PowerManager
 import android.provider.Settings
 import android.telephony.SmsManager
@@ -77,9 +76,18 @@ class MainActivity : FlutterActivity(), SmsListener {
             },
         )
 
+        // Notification bridge contract used by Dart NotificationBridge.
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, notificationMethodChannelName).setMethodCallHandler { call, result ->
             when (call.method) {
-                "getPending" -> {
+                "setAllowedPackages" -> {
+                    val packages = call.argument<List<String>>("packages")?.toSet() ?: emptySet()
+                    getSharedPreferences(NotificationListener.PREFS, MODE_PRIVATE)
+                        .edit()
+                        .putStringSet(NotificationListener.ALLOWED_PACKAGES, packages)
+                        .apply()
+                    result.success(true)
+                }
+                "peekPendingNotifications" -> {
                     val items = NotificationInboxStore(applicationContext).peek()
                     result.success(items.map { item ->
                         mapOf(
@@ -91,7 +99,7 @@ class MainActivity : FlutterActivity(), SmsListener {
                         )
                     })
                 }
-                "ack" -> {
+                "ackPendingNotifications" -> {
                     val ids = call.argument<List<String>>("ids")?.toSet() ?: emptySet()
                     NotificationInboxStore(applicationContext).ack(ids)
                     result.success(true)
@@ -112,7 +120,7 @@ class MainActivity : FlutterActivity(), SmsListener {
             },
         )
 
-        // ── System diagnostics (1.0.9) ───────────────────────────────
+        // System diagnostics.
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, diagnosticsChannelName).setMethodCallHandler { call, result ->
             when (call.method) {
                 "probe" -> result.success(probeCapabilities())
@@ -212,8 +220,7 @@ class MainActivity : FlutterActivity(), SmsListener {
                 return false
             }
             val sm = getSystemService(TELEPHONY_SUBSCRIPTION_SERVICE) as? SubscriptionManager
-            val list = sm?.activeSubscriptionInfoList
-            list != null
+            sm?.activeSubscriptionInfoList != null
         } catch (_: Exception) {
             false
         }
@@ -259,7 +266,7 @@ class MainActivity : FlutterActivity(), SmsListener {
 
     override fun onDestroy() {
         if (SmsReceiver.listener === this) SmsReceiver.listener = null
-        if (NotificationEventBus.sink != null) NotificationEventBus.sink = null
+        NotificationEventBus.sink = null
         super.onDestroy()
     }
 
@@ -287,11 +294,8 @@ class MainActivity : FlutterActivity(), SmsListener {
         )
     }
 
-    /** Android 13+ POST_NOTIFICATIONS runtime permission. */
     private fun requestPostNotificationsPermission(): Boolean {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
-            return true
-        }
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return true
         val granted = ContextCompat.checkSelfPermission(
             this,
             Manifest.permission.POST_NOTIFICATIONS,
@@ -305,7 +309,6 @@ class MainActivity : FlutterActivity(), SmsListener {
         return false
     }
 
-    /** READ_PHONE_STATE for dual-SIM / network diagnostics. */
     private fun requestPhoneStatePermission(): Boolean {
         val granted = ContextCompat.checkSelfPermission(
             this,
