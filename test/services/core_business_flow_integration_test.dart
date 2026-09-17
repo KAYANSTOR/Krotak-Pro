@@ -173,7 +173,9 @@ void main() {
     expect(second, isA<Success<Transaction>>());
     expect((rows as Success<List<Card>>).value.single.status, CardStatus.sold);
     expect((ledger as Success<Transaction?>).value, isNotNull);
-    expect(sender.calls, 2);
+    // The sale is committed before SMS. A failed first delivery is retried
+    // from persisted delivery state without reserving or selling another card.
+    expect(sender.calls, 1);
     expect(customer.id, isNotEmpty);
   });
 
