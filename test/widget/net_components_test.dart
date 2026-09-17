@@ -120,15 +120,15 @@ void main() {
   });
 
   testWidgets('NetRecentTransactionCard shows type amount status', (tester) async {
-    const transaction = Transaction(
+    final transaction = Transaction(
       id: 'tx-1',
       type: TransactionType.sale,
       status: TransactionStatus.completed,
-      amount: Money(minorUnits: 20000, currencyCode: 'YER'),
+      amount: const Money(minorUnits: 20000, currencyCode: 'YER'),
       createdAt: DateTime(2026, 9, 14, 12),
       reference: 'ref-1',
     );
-    await tester.pumpWidget(_wrap(const NetRecentTransactionCard(transaction: transaction)));
+    await tester.pumpWidget(_wrap(NetRecentTransactionCard(transaction: transaction)));
     expect(find.textContaining('sale'), findsOneWidget);
     expect(find.textContaining('200'), findsOneWidget);
     expect(find.text('completed'), findsOneWidget);
