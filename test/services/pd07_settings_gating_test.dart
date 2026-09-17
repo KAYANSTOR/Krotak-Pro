@@ -11,6 +11,8 @@ import 'package:net_app/domain/services/local_message_recovery_service.dart';
 import 'package:net_app/domain/services/services.dart';
 import 'package:net_app/platform/sms_bridge.dart';
 
+import '../helpers/trusted_payment_source.dart';
+
 void main() {
   group('PD-07 settings gating', () {
     test('auto-processing OFF saves and parses without calling processor', () async {
@@ -34,6 +36,7 @@ void main() {
         processor: processor,
         ids: SequentialIdGenerator(),
         settings: settings,
+        sourceGuard: trustedPaymentSourceGuard(),
       );
 
       final result = await handler.handleManual(
@@ -69,6 +72,7 @@ void main() {
         processor: processor,
         ids: SequentialIdGenerator(),
         settings: _FakeSettings({}),
+        sourceGuard: trustedPaymentSourceGuard(),
       );
 
       final result = await handler.handleManual(
@@ -104,6 +108,7 @@ void main() {
         settings: _FakeSettings({
           SettingKeys.processOldMessagesOnResume: 'false',
         }),
+        sourceGuard: trustedPaymentSourceGuard(),
       );
 
       final result = await recovery.recoverPending();
