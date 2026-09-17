@@ -59,7 +59,11 @@ final class LocalPosAccountRegistry {
 
     PosAccount? hit;
     for (final account in active) {
-      final matched = account.identifiers.any(
+      final configuredIdentifiers = <String>[
+        ...account.identifiers,
+        if (account.notifyPhone != null) account.notifyPhone!,
+      ];
+      final matched = configuredIdentifiers.any(
         (identifier) => _messageContainsIdentifier(
           sender: sender,
           body: body,
@@ -125,7 +129,7 @@ final class LocalPosAccountRegistry {
       if (target == null) return false;
       if (PhoneNormalizer.samePhone(sender, needle)) return true;
 
-      final numericTokens = RegExp(r'\+?\d[\d\\s().-]{5,}\d')
+      final numericTokens = RegExp(r'\+?\d[\d\s().-]{5,}\d')
           .allMatches(combined)
           .map((m) => m.group(0)!)
           .toList(growable: false);
