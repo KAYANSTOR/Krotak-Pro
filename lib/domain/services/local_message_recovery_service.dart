@@ -1,3 +1,4 @@
+import '../../core/result.dart';
 import '../entities/message.dart';
 import '../entities/payment_event.dart';
 import '../entities/setting.dart';
