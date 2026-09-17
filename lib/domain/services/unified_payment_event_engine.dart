@@ -6,18 +6,14 @@ import '../entities/setting.dart';
 import '../entities/transaction.dart';
 import '../repositories/repositories.dart';
 import 'payment_fingerprint_service.dart';
+import 'payment_source_guard.dart';
 import 'services.dart';
 
-/// Single ingest path for SMS, future wallet notifications, and manual entry.
+/// Single ingest path for SMS, wallet notifications, and manual entry.
 ///
-/// ```text
-/// PaymentEvent
-///   -> parse (no commercial decision)
-///   -> fingerprint
-///   -> persist raw IncomingMessage (deduped by fingerprint)
-///   -> PD-07 auto-process gate
-///   -> TransferProcessor
-/// ```
+/// Inbound commercial processing has a hard trust boundary:
+/// source authorization happens BEFORE parsing/persistence, and the matched
+/// template must belong to that same configured source wallet.
 final class UnifiedPaymentEventEngine implements PaymentEventEngine {
   UnifiedPaymentEventEngine({
     required this.messages,
@@ -25,6 +21,7 @@ final class UnifiedPaymentEventEngine implements PaymentEventEngine {
     required this.processor,
     required this.ids,
     this.settings,
+    required this.sourceGuard,
     this.fingerprints = const PaymentFingerprintService(),
   });
 
@@ -33,15 +30,35 @@ final class UnifiedPaymentEventEngine implements PaymentEventEngine {
   final TransferProcessor processor;
   final IdGenerator ids;
   final SettingsRepository? settings;
+  final PaymentSourceGuard sourceGuard;
   final PaymentFingerprintService fingerprints;
 
   @override
   Future<Result<Transaction?>> ingest(PaymentEvent event) async {
+    // IMPORTANT: untrusted inbound events are ignored before parsing or
+    // durable persistence. A matching body alone is never sufficient.
+    final sourceAuthorization = await sourceGuard.authorize(event);
+    if (sourceAuthorization is Failure<void>) {
+      return Failure(sourceAuthorization.error);
+    }
+
     final provisional = event.toProvisionalMessage(id: ids.next('msg'));
     final parseResult = parser.parse(provisional);
     final parsed = parseResult is Success<ParsedTransfer>
         ? parseResult.value
         : null;
+
+    // A trusted source may only use templates linked to that same source.
+    if (parsed != null) {
+      final templateAuthorization = await sourceGuard.authorize(
+        event,
+        matchedTemplateId: parsed.templateId,
+      );
+      if (templateAuthorization is Failure<void>) {
+        return Failure(templateAuthorization.error);
+      }
+    }
+
     final fingerprint = fingerprints.compute(event: event, parsed: parsed);
 
     final existing = await messages.findByExternalReference(fingerprint.key);
@@ -76,14 +93,25 @@ final class UnifiedPaymentEventEngine implements PaymentEventEngine {
       return Failure(parseResult.error);
     }
 
+    final parsedTransfer = parsed;
+    if (parsedTransfer == null) {
+      await messages.updateStatus(message.id, MessageProcessingStatus.rejected);
+      return const Failure(
+        AppFailure(
+          code: 'message_not_parsed',
+          message: 'Inbound payment message could not be parsed',
+        ),
+      );
+    }
+
     final boundParse = ParsedTransfer(
       messageId: message.id,
-      amount: parsed!.amount,
-      customerIdentifier: parsed.customerIdentifier,
-      identifierType: parsed.identifierType,
-      reference: parsed.reference,
-      templateId: parsed.templateId,
-      rawIdentifier: parsed.rawIdentifier,
+      amount: parsedTransfer.amount,
+      customerIdentifier: parsedTransfer.customerIdentifier,
+      identifierType: parsedTransfer.identifierType,
+      reference: parsedTransfer.reference,
+      templateId: parsedTransfer.templateId,
+      rawIdentifier: parsedTransfer.rawIdentifier,
     );
     await messages.updateStatus(message.id, MessageProcessingStatus.parsed);
 
