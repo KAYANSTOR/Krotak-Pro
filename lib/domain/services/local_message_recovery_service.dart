@@ -8,22 +8,22 @@ import 'services.dart';
 
 /// Phase 4 recovery coordinator for received, parsed and failed messages.
 ///
-/// Recovery is idempotent and bounded by [LocalMessageRetryService]. A
-/// transient processor failure is scheduled with exponential backoff; terminal
-/// business failures remain rejected/parsed for operator handling.
+/// The production AppContainer injects the persistent retry service. Isolated
+/// callers that do not require persisted retry scheduling get a safe no-op
+/// coordinator so recovery remains backwards-compatible and testable.
 final class LocalMessageRecoveryService {
   const LocalMessageRecoveryService({
     required this.messages,
     required this.parser,
     required this.processor,
-    required this.retryService,
+    this.retryService = const NoopMessageRetryService(),
     this.settings,
   });
 
   final MessageRepository messages;
   final MessageParser parser;
   final TransferProcessor processor;
-  final LocalMessageRetryService retryService;
+  final MessageRetryServicePort retryService;
   final SettingsRepository? settings;
 
   Future<Result<MessageRecoveryReport>> recoverPending() async {
