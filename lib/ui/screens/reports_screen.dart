@@ -1,17 +1,19 @@
 import 'package:flutter/material.dart';
 
 import '../../core/result.dart';
-import '../../domain/entities/message.dart';
-import '../../domain/entities/transaction.dart';
+import '../../domain/services/ops_report_service.dart';
 import '../app_scope.dart';
 import '../routing/app_routes.dart';
 import '../theme/kayan_colors.dart';
 import '../widgets/async_views.dart';
+import 'failed_messages_screen.dart';
+import 'inventory_screen.dart';
 import 'pending_messages_screen.dart';
 import 'rejected_messages_screen.dart';
 import 'reports/pos_report_screen.dart';
 import 'reports/sales_period_report_screen.dart';
 
+/// مركز التقارير — مربوط بـ [OpsReportService] (مصادر Domain فقط).
 class ReportsScreen extends StatefulWidget {
   const ReportsScreen({super.key});
 
@@ -22,13 +24,7 @@ class ReportsScreen extends StatefulWidget {
 class _ReportsScreenState extends State<ReportsScreen> {
   bool _loading = true;
   String? _error;
-  int _dailyMinor = 0;
-  int _dailyCount = 0;
-  int _monthlyMinor = 0;
-  int _monthlyCount = 0;
-  int _completedTx = 0;
-  int _rejected = 0;
-  int _suspended = 0;
+  OpsSnapshot? _snap;
 
   @override
   void initState() {
@@ -42,56 +38,40 @@ class _ReportsScreenState extends State<ReportsScreen> {
       _error = null;
     });
     final c = AppScope.of(context);
-    final now = c.clock.now();
-    final dayStart = DateTime(now.year, now.month, now.day);
-    final monthStart = DateTime(now.year, now.month, 1);
-    final daily = await c.sales.listCompletedBetween(dayStart, now);
-    final monthly = await c.sales.listCompletedBetween(monthStart, now);
-    final recent = await c.transactions.listRecent(limit: 200);
-    final rejected = await c.messages.listByStatus(MessageProcessingStatus.rejected);
-    final received = await c.messages.listByStatus(MessageProcessingStatus.received);
-    final parsed = await c.messages.listByStatus(MessageProcessingStatus.parsed);
-    final failed = await c.messages.listByStatus(MessageProcessingStatus.failed);
+    final ops = OpsReportService(
+      messages: c.messages,
+      sales: c.sales,
+      transactions: c.transactions,
+      cards: c.cards,
+      clock: c.clock,
+    );
+    final result = await ops.snapshot();
     if (!mounted) return;
     setState(() {
       _loading = false;
-      if (daily is Failure ||
-          monthly is Failure ||
-          recent is Failure ||
-          rejected is Failure ||
-          received is Failure ||
-          parsed is Failure ||
-          failed is Failure) {
-        _error = 'تعذر تحميل التقارير';
+      if (result is Failure<OpsSnapshot>) {
+        _error = result.error.message.isEmpty
+            ? 'تعذر تحميل التقارير'
+            : result.error.message;
         return;
       }
-      final d = (daily as Success<List<Sale>>).value;
-      final m = (monthly as Success<List<Sale>>).value;
-      _dailyCount = d.length;
-      _dailyMinor = d.fold(0, (a, s) => a + s.amount.minorUnits);
-      _monthlyCount = m.length;
-      _monthlyMinor = m.fold(0, (a, s) => a + s.amount.minorUnits);
-      _completedTx = (recent as Success<List<Transaction>>)
-          .value
-          .where((t) => t.status == TransactionStatus.completed)
-          .length;
-      _rejected = (rejected as Success).value.length;
-      _suspended = (received as Success).value.length +
-          (parsed as Success).value.length +
-          (failed as Success).value.length;
+      _snap = (result as Success<OpsSnapshot>).value;
     });
   }
 
   void _open(Widget page) {
-    Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => page));
+    Navigator.of(context).push(MaterialPageRoute(builder: (_) => page));
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_loading) return const AsyncLoadingView();
+    if (_loading) {
+      return const AsyncLoadingView(message: 'جاري تحميل التقارير…');
+    }
     if (_error != null) {
       return AsyncErrorView(message: _error!, onRetry: _load);
     }
+    final s = _snap!;
 
     return Directionality(
       textDirection: TextDirection.rtl,
@@ -102,28 +82,40 @@ class _ReportsScreenState extends State<ReportsScreen> {
           child: ListView(
             padding: const EdgeInsets.all(16),
             children: [
+              _section('المبيعات والمخزون'),
               _tile(
                 title: 'مبيعات اليوم',
-                value: '${formatMoneyMinor(_dailyMinor)} · $_dailyCount كرت',
+                value:
+                    '${formatMoneyMinor(s.dailySalesMinor)} · ${s.dailySalesCount} كرت',
                 onTap: () => _open(
-                  const SalesPeriodReportScreen(initialRange: SalesReportRange.today),
+                  const SalesPeriodReportScreen(
+                    initialRange: SalesReportRange.today,
+                  ),
                 ),
               ),
               _tile(
                 title: 'مبيعات الشهر',
-                value: '${formatMoneyMinor(_monthlyMinor)} · $_monthlyCount كرت',
+                value:
+                    '${formatMoneyMinor(s.monthlySalesMinor)} · ${s.monthlySalesCount} كرت',
                 onTap: () => _open(
-                  const SalesPeriodReportScreen(initialRange: SalesReportRange.month),
+                  const SalesPeriodReportScreen(
+                    initialRange: SalesReportRange.month,
+                  ),
                 ),
               ),
               _tile(
                 title: 'تقرير المبيعات التفصيلي',
-                value: 'يوم / شهر / فترة مختارة من SaleRepository',
+                value: 'يوم / شهر / فترة مختارة',
                 onTap: () => AppRoutes.openSalesPeriodReport(context),
               ),
               _tile(
+                title: 'الكروت المتاحة',
+                value: '${s.availableCards} كرت في المخزون',
+                onTap: () => _open(const InventoryScreen()),
+              ),
+              _tile(
                 title: 'سجل العمليات',
-                value: '$_completedTx مكتملة (آخر 200)',
+                value: '${s.completedTxRecent} مكتملة (آخر 200)',
                 onTap: () => AppRoutes.openTransactionsLog(context),
               ),
               _tile(
@@ -131,18 +123,50 @@ class _ReportsScreenState extends State<ReportsScreen> {
                 value: 'مستحقات + عمولة + تسوية',
                 onTap: () => _open(const PosReportScreen()),
               ),
+              _section('خط الرسائل'),
               _tile(
                 title: 'الرسائل المرفوضة',
-                value: '$_rejected رسالة',
+                value: '${s.rejectedCount} رسالة',
                 onTap: () => _open(const RejectedMessagesScreen()),
               ),
               _tile(
-                title: 'الرسائل المعلّقة',
-                value: '$_suspended (واردة/محللة/فاشلة)',
+                title: 'خط الأنابيب المفتوح',
+                value:
+                    '${s.pipelineOpenCount} (واردة/محللة/معلّقة/إرسال/فاشلة)',
                 onTap: () => _open(const PendingMessagesScreen()),
+              ),
+              _tile(
+                title: 'قيد الإرسال',
+                value: '${s.sendingCount} رسالة',
+                onTap: () => _open(const PendingMessagesScreen()),
+              ),
+              _tile(
+                title: 'فشل يحتاج إعادة محاولة',
+                value: '${s.failedRetryCount} رسالة',
+                onTap: () => _open(const FailedMessagesScreen()),
+              ),
+              _tile(
+                title: 'مستنفدة المحاولات',
+                value: '${s.failedMaxCount} رسالة',
+                onTap: () => _open(const FailedMessagesScreen()),
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _section(String title) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8, top: 4),
+      child: Text(
+        title,
+        style: const TextStyle(
+          fontFamily: 'Tajawal',
+          fontWeight: FontWeight.w800,
+          fontSize: 14,
+          color: Color(0xFF64748B),
         ),
       ),
     );
@@ -156,7 +180,13 @@ class _ReportsScreenState extends State<ReportsScreen> {
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       child: ListTile(
-        title: Text(title, style: const TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.bold)),
+        title: Text(
+          title,
+          style: const TextStyle(
+            fontFamily: 'Tajawal',
+            fontWeight: FontWeight.bold,
+          ),
+        ),
         subtitle: Text(value, style: const TextStyle(fontFamily: 'Tajawal')),
         trailing: const Icon(Icons.chevron_left),
         onTap: onTap,
