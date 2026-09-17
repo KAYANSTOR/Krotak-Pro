@@ -203,6 +203,9 @@ final class AppContainer {
     _recoveryTimer ??= Timer.periodic(const Duration(minutes: 1), (_) => _runRecovery());
   }
 
+  /// Phase 5: extra recovery/delivery pass (e.g. on [AppLifecycleState.resumed]).
+  Future<void> runRecoveryPass() => _runRecovery();
+
   Future<void> _runRecovery() async {
     if (_recoveryBusy || _disposed) return;
     final enabled = await settings.find(SettingKeys.autoRetryFailedMessages);
