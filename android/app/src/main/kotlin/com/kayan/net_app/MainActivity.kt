@@ -67,12 +67,12 @@ class MainActivity : FlutterActivity(), SmsListener {
             object : EventChannel.StreamHandler {
                 override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
                     eventSink = events
-                    SmsEventBus.listener = this@MainActivity
+                    SmsReceiver.listener = this@MainActivity
                 }
 
                 override fun onCancel(arguments: Any?) {
                     eventSink = null
-                    if (SmsEventBus.listener === this@MainActivity) SmsEventBus.listener = null
+                    if (SmsReceiver.listener === this@MainActivity) SmsReceiver.listener = null
                 }
             },
         )
@@ -80,8 +80,16 @@ class MainActivity : FlutterActivity(), SmsListener {
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, notificationMethodChannelName).setMethodCallHandler { call, result ->
             when (call.method) {
                 "getPending" -> {
-                    val items = NotificationInboxStore(applicationContext).pending()
-                    result.success(items)
+                    val items = NotificationInboxStore(applicationContext).peek()
+                    result.success(items.map { item ->
+                        mapOf(
+                            "id" to item.id,
+                            "packageName" to item.packageName,
+                            "title" to item.title,
+                            "body" to item.body,
+                            "timestampMillis" to item.timestampMillis,
+                        )
+                    })
                 }
                 "ack" -> {
                     val ids = call.argument<List<String>>("ids")?.toSet() ?: emptySet()
@@ -240,12 +248,17 @@ class MainActivity : FlutterActivity(), SmsListener {
         throw Exception("No OEM autostart settings found")
     }
 
-    override fun onSmsReceived(payload: Map<String, Any?>) {
+    override fun onSmsReceived(sender: String, body: String, timestampMillis: Long) {
+        val payload = mapOf(
+            "sender" to sender,
+            "body" to body,
+            "timestampMillis" to timestampMillis,
+        )
         runOnUiThread { eventSink?.success(payload) }
     }
 
     override fun onDestroy() {
-        if (SmsEventBus.listener === this) SmsEventBus.listener = null
+        if (SmsReceiver.listener === this) SmsReceiver.listener = null
         if (NotificationEventBus.sink != null) NotificationEventBus.sink = null
         super.onDestroy()
     }
