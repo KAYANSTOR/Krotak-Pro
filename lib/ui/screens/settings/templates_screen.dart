@@ -16,10 +16,18 @@ import 'template_wizard_screen.dart';
 /// - FAB بنفسجي: قالب جديد +
 /// - ربط Domain: listByWallet / save / delete + reloadTemplates
 class TemplatesScreen extends StatefulWidget {
-  const TemplatesScreen({super.key, this.walletId, this.walletName});
+  const TemplatesScreen({
+    super.key,
+    this.walletId,
+    this.walletName,
+    this.posAccountId,
+    this.posName,
+  });
 
   final String? walletId;
   final String? walletName;
+  final String? posAccountId;
+  final String? posName;
 
   @override
   State<TemplatesScreen> createState() => _TemplatesScreenState();
@@ -63,7 +71,11 @@ class _TemplatesScreenState extends State<TemplatesScreen> {
       _walletNames = names;
       if (r is Success<List<TransferTemplate>>) {
         // ترتيب حسب الأولوية تصاعدياً (الأقل = أعلى أولوية) كما في الفيديو
-        final list = List<TransferTemplate>.from(r.value);
+        final list = List<TransferTemplate>.from(r.value)
+            .where((template) => widget.posAccountId == null
+                ? true
+                : template.posAccountId == widget.posAccountId)
+            .toList();
         list.sort((a, b) => a.priority.compareTo(b.priority));
         _items = list;
       } else {
@@ -78,6 +90,8 @@ class _TemplatesScreenState extends State<TemplatesScreen> {
         builder: (_) => TemplateWizardScreen(
           existing: existing,
           initialWalletId: widget.walletId ?? existing?.walletId,
+          initialPosAccountId:
+              widget.posAccountId ?? existing?.posAccountId,
         ),
       ),
     );
@@ -216,12 +230,16 @@ class _TemplatesScreenState extends State<TemplatesScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final title = widget.walletName != null
-        ? 'قوالب ${widget.walletName}'
-        : 'قوالب التحويل';
-    final subtitle = widget.walletName != null
-        ? 'إدارة قوالب استخراج البيانات لهذه المحفظة'
-        : 'إدارة قوالب استخراج البيانات';
+    final title = widget.posName != null
+        ? 'قوالب نقطة ${widget.posName}'
+        : widget.walletName != null
+            ? 'قوالب ${widget.walletName}'
+            : 'قوالب التحويل';
+    final subtitle = widget.posName != null
+        ? 'إدارة قوالب استخراج البيانات لنقطة البيع المحددة'
+        : widget.walletName != null
+            ? 'إدارة قوالب استخراج البيانات لهذه المحفظة'
+            : 'إدارة قوالب استخراج البيانات';
 
     return Directionality(
       textDirection: TextDirection.rtl,
