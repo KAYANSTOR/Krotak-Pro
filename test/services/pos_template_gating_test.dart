@@ -380,7 +380,13 @@ final class _Messages implements MessageRepository {
     return const Success(null);
   }
 
-  @override
+    @override
+  Future<Result<void>> delete(String id) async {
+    store.remove(id);
+    return const Success(null);
+  }
+
+@override
   Future<Result<void>> updateStatus(
     String id,
     MessageProcessingStatus status,
