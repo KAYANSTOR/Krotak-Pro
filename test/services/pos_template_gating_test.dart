@@ -338,6 +338,7 @@ final class _Templates implements TransferTemplateRepository {
   Future<Result<void>> save(TransferTemplate value) async => const Success(null);
 }
 
+// Contract guard: this fake intentionally implements the current delete API.
 final class _Messages implements MessageRepository {
   final Map<String, IncomingMessage> store = <String, IncomingMessage>{};
 
