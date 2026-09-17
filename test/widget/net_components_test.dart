@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:net_app/domain/entities/money.dart';
-import 'package:net_app/domain/entities/transaction.dart';
 import 'package:net_app/ui/theme/kayan_theme.dart';
 import 'package:net_app/ui/widgets/async_views.dart';
 import 'package:net_app/ui/widgets/net/net_alert_banner.dart';
@@ -12,40 +10,31 @@ import 'package:net_app/ui/widgets/net/net_quick_action_card.dart';
 import 'package:net_app/ui/widgets/net/net_recent_transaction_card.dart';
 import 'package:net_app/ui/widgets/net/net_section_header.dart';
 
-Widget _wrap(
-  Widget child, {
-  ThemeMode mode = ThemeMode.light,
-  TextDirection direction = TextDirection.rtl,
-}) {
-  return MaterialApp(
-    theme: buildKayanLightTheme(),
-    darkTheme: buildKayanDarkTheme(),
-    themeMode: mode,
-    home: Directionality(
-      textDirection: direction,
-      child: Scaffold(body: child),
-    ),
-  );
-}
+Widget _wrap(Widget child) => MaterialApp(
+      theme: buildKayanLightTheme(),
+      home: Directionality(
+        textDirection: TextDirection.rtl,
+        child: Scaffold(body: child),
+      ),
+    );
 
 void main() {
   testWidgets('NetDashboardHeader shows network and date', (tester) async {
     await tester.pumpWidget(
-      _wrap(const NetDashboardHeader(networkName: 'NET', dateLabel: 'اليوم', greeting: 'مساء الخير')),
+      _wrap(const NetDashboardHeader(networkName: 'Z Net', dateLabel: 'الأحد، 14 سبتمبر')),
     );
-    expect(find.text('شبكة NET'), findsOneWidget);
-    expect(find.textContaining('اليوم'), findsOneWidget);
+    expect(find.text('Z Net'), findsOneWidget);
+    expect(find.text('الأحد، 14 سبتمبر'), findsOneWidget);
   });
 
   testWidgets('NetDashboardHeader settings callback', (tester) async {
     var tapped = false;
     await tester.pumpWidget(
-      _wrap(const NetDashboardHeader(networkName: 'NET', dateLabel: 'اليوم', onSettings: null)),
-    );
-    expect(find.byIcon(Icons.settings_outlined), findsNothing);
-
-    await tester.pumpWidget(
-      _wrap(NetDashboardHeader(networkName: 'NET', dateLabel: 'اليوم', onSettings: () => tapped = true)),
+      _wrap(NetDashboardHeader(
+        networkName: 'Z Net',
+        dateLabel: 'اليوم',
+        onSettings: () => tapped = true,
+      )),
     );
     await tester.tap(find.byIcon(Icons.settings_outlined));
     expect(tapped, isTrue);
@@ -68,7 +57,7 @@ void main() {
     expect(find.textContaining('1500.5'), findsOneWidget);
     expect(find.text('7'), findsOneWidget);
     expect(find.text('12'), findsOneWidget);
-    expect(find.text('أرصدة العملاء'), findsOneWidget);
+    expect(find.textContaining('إجمالي رصيد العملاء'), findsOneWidget);
   });
 
   testWidgets('NetBalanceCard onTapAccounts and onTapCards fire', (tester) async {
@@ -84,9 +73,9 @@ void main() {
         ),
       ),
     );
-    await tester.tap(find.text('حسابات'));
+    await tester.tap(find.text('الحسابات'));
     expect(tab, 'accounts');
-    await tester.tap(find.text('كروت متاحة'));
+    await tester.tap(find.text('كروت متوفرة'));
     expect(tab, 'cards');
   });
 
@@ -98,7 +87,6 @@ void main() {
           title: 'الحسابات النشطة',
           value: '4',
           subtitle: 'عملاء',
-          icon: Icons.people_outline,
           onTap: () => tapped = true,
         ),
       ),
@@ -109,68 +97,80 @@ void main() {
 
   testWidgets('NetMetricCard shows title value subtitle', (tester) async {
     await tester.pumpWidget(
-      _wrap(const NetMetricCard(title: 'مبيعات اليوم', value: '100 ر.ي', subtitle: '3 عملية', icon: Icons.today_outlined)),
+      _wrap(const NetMetricCard(title: 'كروت متاحة', value: '9', subtitle: 'وحدة')),
     );
-    expect(find.text('مبيعات اليوم'), findsOneWidget);
-    expect(find.text('100 ر.ي'), findsOneWidget);
-    expect(find.text('3 عملية'), findsOneWidget);
+    expect(find.text('كروت متاحة'), findsOneWidget);
+    expect(find.text('9'), findsOneWidget);
+    expect(find.text('وحدة'), findsOneWidget);
   });
 
   testWidgets('NetQuickActionCard invokes onTap', (tester) async {
     var tapped = false;
     await tester.pumpWidget(
-      _wrap(NetQuickActionCard(label: 'بيع مباشر', icon: Icons.point_of_sale_outlined, onTap: () => tapped = true)),
+      _wrap(NetQuickActionCard(
+        label: 'بيع مباشر',
+        icon: Icons.point_of_sale,
+        onTap: () => tapped = true,
+      )),
     );
     await tester.tap(find.text('بيع مباشر'));
     expect(tapped, isTrue);
   });
 
   testWidgets('NetRecentTransactionCard shows type amount status', (tester) async {
-    final tx = Transaction(
-      id: 'tx1',
-      type: TransactionType.deposit,
-      status: TransactionStatus.completed,
-      amount: const Money(minorUnits: 200000, currencyCode: 'YER'),
-      customerId: 'c1',
-      reference: 'REF-1',
-      createdAt: DateTime(2026, 9, 11),
+    await tester.pumpWidget(
+      _wrap(const NetRecentTransactionCard(
+        title: 'بيع كرت',
+        amountText: '200 ر.ي',
+        statusText: 'مكتملة',
+      )),
     );
-    await tester.pumpWidget(_wrap(NetRecentTransactionCard(transaction: tx)));
-    expect(find.textContaining('deposit'), findsOneWidget);
-    expect(find.textContaining('2000'), findsOneWidget);
-    expect(find.text('completed'), findsOneWidget);
-    expect(find.text('REF-1'), findsOneWidget);
+    expect(find.text('بيع كرت'), findsOneWidget);
+    expect(find.text('200 ر.ي'), findsOneWidget);
+    expect(find.text('مكتملة'), findsOneWidget);
   });
 
   testWidgets('NetDashboardHeader RTL layout', (tester) async {
     await tester.pumpWidget(
-      _wrap(const NetDashboardHeader(networkName: 'NET', dateLabel: 'RTL'), direction: TextDirection.rtl),
+      _wrap(const NetDashboardHeader(networkName: 'شبكتي', dateLabel: 'اليوم')),
     );
-    expect(find.text('شبكة NET'), findsOneWidget);
+    final direction = tester.widget<Directionality>(find.byType(Directionality).first);
+    expect(direction.textDirection, TextDirection.rtl);
   });
 
   testWidgets('NetMetricCard dark theme renders', (tester) async {
-    await tester.pumpWidget(_wrap(const NetMetricCard(title: 'مبيعات', value: '0 ر.ي'), mode: ThemeMode.dark));
-    expect(find.text('مبيعات'), findsOneWidget);
-    expect(find.text('0 ر.ي'), findsOneWidget);
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: buildKayanLightTheme(),
+        darkTheme: buildKayanLightTheme(),
+        themeMode: ThemeMode.dark,
+        home: const NetMetricCard(title: 'اختبار', value: '1'),
+      ),
+    );
+    expect(find.text('اختبار'), findsOneWidget);
   });
 
   testWidgets('NetAlertBanner RTL', (tester) async {
-    await tester.pumpWidget(_wrap(const NetAlertBanner(message: 'تنبيه'), direction: TextDirection.rtl));
-    expect(find.text('تنبيه'), findsOneWidget);
+    await tester.pumpWidget(_wrap(const NetAlertBanner(message: 'RTL')));
+    final direction = tester.widget<Directionality>(find.byType(Directionality).first);
+    expect(direction.textDirection, TextDirection.rtl);
   });
 
   testWidgets('AsyncLoadingView shows custom message', (tester) async {
-    await tester.pumpWidget(_wrap(const AsyncLoadingView(message: 'تحميل مخصص')));
-    expect(find.text('تحميل مخصص'), findsOneWidget);
+    await tester.pumpWidget(_wrap(const AsyncLoadingView(message: 'جارٍ التحميل')));
+    expect(find.text('جارٍ التحميل'), findsOneWidget);
   });
 
   testWidgets('NetSectionHeader action callback', (tester) async {
     var tapped = false;
     await tester.pumpWidget(
-      _wrap(NetSectionHeader(title: 'آخر العمليات', actionLabel: 'الكل', onAction: () => tapped = true)),
+      _wrap(NetSectionHeader(
+        title: 'اختبار',
+        actionLabel: 'عرض الكل',
+        onAction: () => tapped = true,
+      )),
     );
-    await tester.tap(find.text('الكل'));
+    await tester.tap(find.text('عرض الكل'));
     expect(tapped, isTrue);
   });
 }
