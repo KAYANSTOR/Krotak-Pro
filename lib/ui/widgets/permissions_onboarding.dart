@@ -13,11 +13,9 @@ import '../theme/kayan_colors.dart';
 /// بوابة تهيئة إلزامية: لا تُسجّل كمكتملة إلا بعد تحقق أندرويد من جميع المتطلبات.
 abstract final class PermissionsOnboarding {
   /// تغيير الإصدار يعيد التحقق بعد تحديث متطلبات الصلاحيات.
-  static const doneKey = 'permissions_onboarding_done_v5';
+  static const doneKey = 'permissions_onboarding_done_v6';
 
   static Future<void> maybeRun(BuildContext context) async {
-    // Runtime permission onboarding is an Android concern. Avoid invoking
-    // permission_handler/native settings flows on desktop or test runners.
     if (!Platform.isAndroid) return;
 
     final c = AppScope.of(context);
@@ -26,7 +24,6 @@ abstract final class PermissionsOnboarding {
     final alreadyDone = existing is Success<AppSetting?> &&
         existing.value?.value == 'true';
 
-    // لا نعتمد على العلم وحده: إذا تغيّرت صلاحية نظامية بعد ذلك يجب إعادة الطلب/التحقق.
     if (alreadyDone && await _allRequirementsMet(diag)) return;
     if (!context.mounted) return;
 
@@ -42,15 +39,22 @@ abstract final class PermissionsOnboarding {
     final sms = await Permission.sms.status;
     final phone = await Permission.phone.status;
     final notifications = await Permission.notification.status;
+    final contacts = await Permission.contacts.status;
     final probe = await diag.probe();
 
     final smsOk = sms.isGranted && phone.isGranted;
     final notificationOk = notifications.isGranted;
+    final contactsOk = contacts.isGranted;
     final listenerOk = probe['notificationAccess'] == true;
     final batteryOk = probe['batteryOptimizationIgnored'] == true;
     final phoneStateOk = phone.isGranted;
 
-    return smsOk && notificationOk && listenerOk && batteryOk && phoneStateOk;
+    return smsOk &&
+        notificationOk &&
+        contactsOk &&
+        listenerOk &&
+        batteryOk &&
+        phoneStateOk;
   }
 
   static Future<bool> _showSequence(
@@ -79,6 +83,19 @@ abstract final class PermissionsOnboarding {
         },
       ),
       _PermStep(
+        title: 'جهات الاتصال',
+        body:
+            'يحتاج NET إلى قراءة جهات الاتصال لربط أرقام العملاء بالأسماء المعروفة وتسهيل التعرف على التحويلات.',
+        actionLabel: 'منح صلاحية جهات الاتصال',
+        verify: () async => (await Permission.contacts.status).isGranted,
+        onAllow: () async {
+          final status = await Permission.contacts.request();
+          if (!status.isGranted) {
+            await diag.requestContactsPermission();
+          }
+        },
+      ),
+      _PermStep(
         title: 'الوصول لإشعارات المحافظ',
         body:
             'يجب تفعيل خدمة قراءة الإشعارات من إعدادات أندرويد حتى يستطيع NET التقاط إشعارات المحافظ فعلياً.',
@@ -88,14 +105,24 @@ abstract final class PermissionsOnboarding {
         specialAccess: true,
       ),
       _PermStep(
-        title: 'استثناء تحسين البطارية',
+        title: 'العمل في الخلفية (البطارية)',
         body:
-            'يجب السماح للتطبيق بالعمل دون تقييد البطارية حتى تستمر معالجة الرسائل والإشعارات في الخلفية.',
+            'يجب السماح للتطبيق بالعمل دون تقييد البطارية حتى تستمر معالجة الرسائل والإشعارات بعد إغلاق الشاشة.',
         actionLabel: 'فتح إعدادات البطارية',
         verify: () async =>
             (await diag.probe())['batteryOptimizationIgnored'] == true,
         onAllow: () => diag.openBatteryOptimization(),
         specialAccess: true,
+      ),
+      _PermStep(
+        title: 'التشغيل التلقائي بعد إعادة تشغيل الهاتف',
+        body:
+            'على بعض الأجهزة (شاومي، هواوي، أوبو، فيفو…) يجب السماح بالتشغيل التلقائي حتى يعود NET للعمل بعد إقلاع الجهاز.',
+        actionLabel: 'فتح إعدادات التشغيل التلقائي',
+        verify: () async => false,
+        onAllow: () => diag.openAutoStartSettings(),
+        specialAccess: true,
+        optionalAfterOpen: true,
       ),
       _PermStep(
         title: 'حالة الهاتف والشرائح',
@@ -119,50 +146,42 @@ abstract final class PermissionsOnboarding {
           builder: (ctx) => Directionality(
             textDirection: TextDirection.rtl,
             child: AlertDialog(
-              backgroundColor: Colors.white,
-              surfaceTintColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
+              backgroundColor: KayanColors.surface,
               title: Text(
                 step.title,
                 style: const TextStyle(
                   fontFamily: 'Tajawal',
                   fontWeight: FontWeight.w800,
-                  color: KayanColors.textPrimary,
                 ),
               ),
               content: Text(
-                '${step.body}\n\nلن يعتبر الإعداد مكتملًا حتى يتأكد التطبيق من تفعيله فعليًا.',
-                style: const TextStyle(
-                  fontFamily: 'Tajawal',
-                  height: 1.5,
-                  color: KayanColors.textSecondary,
-                ),
+                step.body,
+                style: const TextStyle(fontFamily: 'Tajawal', height: 1.45),
               ),
-              actionsAlignment: MainAxisAlignment.spaceBetween,
               actions: [
-                if (!step.specialAccess)
+                TextButton(
+                  onPressed: () =>
+                      Navigator.pop(ctx, _PermissionAction.openSettings),
+                  child: const Text(
+                    'فتح الإعدادات',
+                    style: TextStyle(fontFamily: 'Tajawal'),
+                  ),
+                ),
+                if (step.optionalAfterOpen)
                   TextButton(
-                    onPressed: () => Navigator.pop(
-                      ctx,
-                      _PermissionAction.openSettings,
+                    onPressed: () =>
+                        Navigator.pop(ctx, _PermissionAction.skip),
+                    child: const Text(
+                      'تم — متابعة',
+                      style: TextStyle(fontFamily: 'Tajawal'),
                     ),
-                    child: const Text('فتح إعدادات التطبيق'),
                   ),
                 FilledButton(
-                  style: FilledButton.styleFrom(
-                    backgroundColor: KayanColors.primary,
-                    foregroundColor: Colors.white,
-                  ),
                   onPressed: () =>
                       Navigator.pop(ctx, _PermissionAction.allow),
                   child: Text(
                     step.actionLabel,
-                    style: const TextStyle(
-                      fontFamily: 'Tajawal',
-                      fontWeight: FontWeight.w700,
-                    ),
+                    style: const TextStyle(fontFamily: 'Tajawal'),
                   ),
                 ),
               ],
@@ -171,54 +190,25 @@ abstract final class PermissionsOnboarding {
         );
 
         if (!context.mounted) return false;
+        if (action == null) return false;
+
         if (action == _PermissionAction.openSettings) {
-          await _openAndAwaitResume(diag.openAppSettings);
+          await diag.openAppSettings();
+          await Future<void>.delayed(const Duration(milliseconds: 600));
         } else if (action == _PermissionAction.allow) {
-          if (step.specialAccess) {
-            await _openAndAwaitResume(step.onAllow);
-          } else {
-            try {
-              await step.onAllow();
-            } catch (_) {}
-          }
-        } else {
-          return false;
+          await step.onAllow();
+          await Future<void>.delayed(const Duration(milliseconds: 400));
+          if (step.optionalAfterOpen) break;
+        } else if (action == _PermissionAction.skip && step.optionalAfterOpen) {
+          break;
         }
       }
-      if (!context.mounted) return false;
     }
-
-    return _allRequirementsMet(diag);
-  }
-
-  static Future<void> _openAndAwaitResume(
-    Future<void> Function() openSettings,
-  ) async {
-    final completer = Completer<void>();
-    late final AppLifecycleListener listener;
-    listener = AppLifecycleListener(
-      onResume: () {
-        if (!completer.isCompleted) completer.complete();
-        listener.dispose();
-      },
-    );
-
-    try {
-      await openSettings();
-      await completer.future.timeout(
-        const Duration(minutes: 5),
-        onTimeout: () {},
-      );
-    } finally {
-      listener.dispose();
-    }
-    await Future<void>.delayed(const Duration(milliseconds: 300));
+    return context.mounted;
   }
 }
 
-enum _PermissionAction { allow, openSettings }
-
-class _PermStep {
+final class _PermStep {
   const _PermStep({
     required this.title,
     required this.body,
@@ -226,6 +216,7 @@ class _PermStep {
     required this.verify,
     required this.onAllow,
     this.specialAccess = false,
+    this.optionalAfterOpen = false,
   });
 
   final String title;
@@ -234,4 +225,7 @@ class _PermStep {
   final Future<bool> Function() verify;
   final Future<void> Function() onAllow;
   final bool specialAccess;
+  final bool optionalAfterOpen;
 }
+
+enum _PermissionAction { allow, openSettings, skip }
