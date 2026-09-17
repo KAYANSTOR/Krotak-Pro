@@ -142,6 +142,23 @@ final class LocalMessageRepository implements MessageRepository {
     }
   }
 
+  @override
+  Future<Result<void>> delete(String id) async {
+    try {
+      final changed = await (database.delete(database.incomingMessages)
+            ..where((table) => table.id.equals(id)))
+          .go();
+      if (changed != 1) {
+        return const Failure(
+          AppFailure(code: 'message_not_found', message: 'Message was not found'),
+        );
+      }
+      return const Success(null);
+    } catch (error) {
+      return Failure(_failure('message_delete_failed', error));
+    }
+  }
+
   domain.IncomingMessage _toMessage(IncomingMessage row) {
     return domain.IncomingMessage(
       id: row.id,
