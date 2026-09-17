@@ -1,0 +1,11 @@
+import 'package:flutter/material.dart';
+
+import '../../core/result.dart';
+import '../../domain/entities/pos_account.dart';
+import '../../domain/entities/wallet.dart';
+import '../app_scope.dart';
+import '../theme/kayan_colors.dart';
+import '../widgets/async_views.dart';
+import 'settings/templates_screen.dart';
+
+/// شاشة المحافظ ونقاط البيع — مطابقة 100% لإطارات فيديو Z Net (wallet_t*.jpg).
