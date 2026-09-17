@@ -32,6 +32,7 @@ import '../domain/services/local_settlement_service.dart';
 import '../domain/services/local_card_inventory_service.dart';
 import '../domain/services/local_catalog_services.dart';
 import '../domain/services/default_wallet_templates_seeder.dart';
+import '../domain/services/default_outbound_templates_seeder.dart';
 import '../domain/services/local_customer_balance_service.dart';
 import '../domain/services/local_customer_service.dart';
 import '../domain/services/local_license_service.dart';
@@ -167,6 +168,10 @@ final class AppContainer {
       settings: settings,
       clock: clock,
       ids: ids,
+    ).seedIfNeeded();
+    await DefaultOutboundTemplatesSeeder(
+      settings: settings,
+      clock: clock,
     ).seedIfNeeded();
 
     final listed = await transferTemplates.listAll();
