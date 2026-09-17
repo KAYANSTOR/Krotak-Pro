@@ -135,9 +135,17 @@ final class LocalPosAccountRegistry {
           .allMatches(combined)
           .map((m) => m.group(0)!)
           .toList(growable: false);
-      return numericTokens.any(
+      if (numericTokens.any(
         (token) => PhoneNormalizer.canonicalize(token) == target,
-      );
+      )) {
+        return true;
+      }
+
+      // Exact digit-run fallback handles messages where the sender/body has
+      // surrounding text but the configured POS phone remains contiguous.
+      return RegExp(
+        '(^|\\D)' + RegExp.escape(target) + r'(?!\\d)',
+      ).hasMatch(combined);
     }
 
     final normalizedNeedle = _normalize(needle);
