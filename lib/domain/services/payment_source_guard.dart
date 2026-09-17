@@ -118,9 +118,10 @@ final class PaymentSourceGuard {
       pos = (posResult as Success<PosAccount?>).value;
     }
 
-    final scopedTemplates = pos == null
+    final currentPos = pos;
+    final scopedTemplates = currentPos == null
         ? allLive.where((t) => t.posAccountId == null).toList(growable: false)
-        : allLive.where((t) => t.posAccountId == pos.posId).toList(growable: false);
+        : allLive.where((t) => t.posAccountId == currentPos.posId).toList(growable: false);
 
     return Success(
       PaymentSourceScope(
