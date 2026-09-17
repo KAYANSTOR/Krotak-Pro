@@ -7,7 +7,7 @@ import '../../theme/kayan_colors.dart';
 import '../../theme/kayan_palette.dart';
 import '../../widgets/async_views.dart';
 
-/// صيانة السجلات: حجم الرسائل + استعادة المعلّق عبر Domain فقط.
+/// صيانة السجلات: حجم الرسائل + استعادة المعلّق + تنظيف ذكي.
 class CleanLogsScreen extends StatefulWidget {
   const CleanLogsScreen({super.key});
 
@@ -23,6 +23,7 @@ class _CleanLogsScreenState extends State<CleanLogsScreen> {
   int _failed = 0;
   String? _status;
   bool _recovering = false;
+  bool _purging = false;
 
   @override
   void initState() {
@@ -63,6 +64,24 @@ class _CleanLogsScreenState extends State<CleanLogsScreen> {
         final report = (r as Success).value;
         _status =
             'استعادة: معالَج=${report.processed} فاشل=${report.failed}';
+      } else {
+        _status = (r as Failure).error.message;
+      }
+    });
+    await _load();
+  }
+
+  Future<void> _purge() async {
+    setState(() => _purging = true);
+    final c = AppScope.of(context);
+    final r = await c.maintenanceService.purgeExpiredMessages();
+    if (!mounted) return;
+    setState(() {
+      _purging = false;
+      if (r is Success) {
+        final report = (r as Success).value;
+        _status =
+            'تنظيف: مرفوض=${report.deletedRejected} مكتمل=${report.deletedProcessed} مستنفد=${report.deletedFailedMax}';
       } else {
         _status = (r as Failure).error.message;
       }
@@ -149,7 +168,7 @@ class _CleanLogsScreenState extends State<CleanLogsScreen> {
                             border: Border.all(color: palette.border),
                           ),
                           child: Text(
-                            'لا توجد عملية حذف جماعي في Domain الحالي. يمكن إعادة معالجة الرسائل المعلّقة عبر الاستعادة مع منع التكرار.',
+                            'التنظيف الذكي يحذف فقط: المرفوض (>30 يوم)، المكتمل (>3 أيام)، والمستنفد (>30 يوم). لا يمس المبيعات أو القيود المحاسبية.',
                             style: TextStyle(
                               fontFamily: 'Tajawal',
                               fontSize: 13,
@@ -177,6 +196,27 @@ class _CleanLogsScreenState extends State<CleanLogsScreen> {
                               : const Icon(Icons.restore),
                           label: Text(
                             _recovering ? 'جاري الاستعادة…' : 'استعادة المعلّق',
+                            style: const TextStyle(
+                              fontFamily: 'Tajawal',
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            minimumSize: const Size.fromHeight(48),
+                          ),
+                          onPressed: (_purging || _recovering) ? null : _purge,
+                          icon: _purging
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                )
+                              : const Icon(Icons.delete_sweep_outlined),
+                          label: Text(
+                            _purging ? 'جاري التنظيف…' : 'تنظيف السجلات المنتهية',
                             style: const TextStyle(
                               fontFamily: 'Tajawal',
                               fontWeight: FontWeight.w700,
