@@ -237,7 +237,9 @@ final class _FakeParser implements MessageParser {
         customerIdentifier: parsed.customerIdentifier,
         identifierType: parsed.identifierType,
         reference: parsed.reference,
-        templateId: parsed.templateId,
+        templateId: message.body.trim().startsWith('push')
+            ? 'template-jib'
+            : parsed.templateId,
         rawIdentifier: parsed.rawIdentifier,
       ),
     );
