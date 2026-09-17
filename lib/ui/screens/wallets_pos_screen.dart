@@ -8,7 +8,7 @@ import '../theme/kayan_colors.dart';
 import '../widgets/async_views.dart';
 import 'settings/templates_screen.dart';
 
-/// شاشة المحافظ ونقاط البيع — مطابقة 100% لإطارات فيديو Z Net (wallet_t*.jpg).
+/// إدارة المحافظ ونقاط البيع — مطابقة فيديو المنتج + مفتاح تفعيل فعّال.
 class WalletsPosScreen extends StatefulWidget {
   const WalletsPosScreen({super.key});
 
@@ -42,9 +42,7 @@ class _WalletsPosScreenState extends State<WalletsPosScreen>
     _tabs.addListener(() {
       if (!_tabs.indexIsChanging) setState(() {});
     });
-    _searchCtrl.addListener(() {
-      setState(() => _query = _searchCtrl.text.trim());
-    });
+    _searchCtrl.addListener(() => setState(() => _query = _searchCtrl.text.trim()));
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await AppScope.of(context).walletCatalog.ensureDefaultWallets();
       await _load();
@@ -139,8 +137,8 @@ class _WalletsPosScreenState extends State<WalletsPosScreen>
         );
     if (!mounted) return;
     setState(() {
-      final nextSet = {..._togglingIds}..remove(wallet.id);
-      _togglingIds = nextSet;
+      final s = {..._togglingIds}..remove(wallet.id);
+      _togglingIds = s;
     });
     if (r is Failure) {
       setState(() {
@@ -186,8 +184,8 @@ class _WalletsPosScreenState extends State<WalletsPosScreen>
     }
     if (!mounted) return;
     setState(() {
-      final nextSet = {..._togglingIds}..remove(pos.id);
-      _togglingIds = nextSet;
+      final s = {..._togglingIds}..remove(pos.id);
+      _togglingIds = s;
     });
     if (r is Failure) {
       setState(() {
@@ -207,6 +205,240 @@ class _WalletsPosScreenState extends State<WalletsPosScreen>
         : 'تم إيقاف نقطة البيع «${pos.name}»');
   }
 
+  Future<void> _editWallet(Wallet? existing) async {
+    final nameCtrl = TextEditingController(text: existing?.name ?? '');
+    final senderCtrl = TextEditingController(text: existing?.senderId ?? '');
+    final pkgCtrl = TextEditingController(text: existing?.packageName ?? '');
+    var mode = existing?.sourceMode ?? WalletSourceMode.sms;
+
+    final ok = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return Directionality(
+          textDirection: TextDirection.rtl,
+          child: StatefulBuilder(
+            builder: (ctx, setLocal) {
+              final inset = MediaQuery.viewInsetsOf(ctx).bottom;
+              return Padding(
+                padding: EdgeInsets.only(bottom: inset),
+                child: Container(
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                  ),
+                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Center(
+                        child: Container(
+                          width: 40,
+                          height: 4,
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade300,
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        existing == null ? 'محفظة جديدة' : 'تعديل محفظة',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontFamily: 'Tajawal',
+                          fontWeight: FontWeight.w800,
+                          fontSize: 18,
+                          color: Color(0xFF0F766E),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      TextField(
+                        controller: senderCtrl,
+                        decoration: const InputDecoration(
+                          labelText: 'معرف المحفظة (Sender ID)',
+                          hintText: 'JAIB',
+                          border: OutlineInputBorder(),
+                        ),
+                        style: const TextStyle(fontFamily: 'Tajawal'),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: nameCtrl,
+                        decoration: const InputDecoration(
+                          labelText: 'اسم المحفظة',
+                          border: OutlineInputBorder(),
+                        ),
+                        style: const TextStyle(fontFamily: 'Tajawal'),
+                      ),
+                      const SizedBox(height: 12),
+                      const Text('طريقة قراءة الدفع',
+                          style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w700)),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: ChoiceChip(
+                              label: const Text('رسائل SMS', style: TextStyle(fontFamily: 'Tajawal')),
+                              selected: mode == WalletSourceMode.sms,
+                              onSelected: (_) => setLocal(() => mode = WalletSourceMode.sms),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: ChoiceChip(
+                              label: const Text('الإشعارات', style: TextStyle(fontFamily: 'Tajawal')),
+                              selected: mode == WalletSourceMode.notification,
+                              onSelected: (_) =>
+                                  setLocal(() => mode = WalletSourceMode.notification),
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (mode == WalletSourceMode.notification) ...[
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: pkgCtrl,
+                          textDirection: TextDirection.ltr,
+                          decoration: const InputDecoration(
+                            labelText: 'اسم حزمة التطبيق (Package Name)',
+                            hintText: 'com.ahd.jaib',
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 20),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextButton(
+                              onPressed: () => Navigator.pop(ctx, false),
+                              child: const Text('إلغاء', style: TextStyle(fontFamily: 'Tajawal')),
+                            ),
+                          ),
+                          Expanded(
+                            flex: 2,
+                            child: FilledButton(
+                              style: FilledButton.styleFrom(
+                                backgroundColor: const Color(0xFF0F766E),
+                                minimumSize: const Size.fromHeight(48),
+                              ),
+                              onPressed: () {
+                                if (nameCtrl.text.trim().isEmpty) return;
+                                Navigator.pop(ctx, true);
+                              },
+                              child: Text(
+                                existing == null ? 'إنشاء' : 'حفظ',
+                                style: const TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w700),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        );
+      },
+    );
+
+    if (ok != true || !mounted) {
+      nameCtrl.dispose();
+      senderCtrl.dispose();
+      pkgCtrl.dispose();
+      return;
+    }
+
+    final name = nameCtrl.text.trim();
+    final sender = senderCtrl.text.trim();
+    final pkg = pkgCtrl.text.trim();
+    nameCtrl.dispose();
+    senderCtrl.dispose();
+    pkgCtrl.dispose();
+
+    if (existing == null) {
+      final r = await AppScope.of(context).walletCatalog.saveWallet(
+            name: name,
+            senderId: sender.isEmpty ? null : sender,
+            sourceMode: mode,
+            packageName: mode == WalletSourceMode.notification && pkg.isNotEmpty ? pkg : null,
+          );
+      if (r is Failure && mounted) _snack((r as Failure).error.message);
+    } else {
+      final r = await AppScope.of(context).walletCatalog.updateWallet(
+            id: existing.id,
+            name: name,
+            status: existing.status,
+            senderId: sender.isEmpty ? null : sender,
+            sourceMode: mode,
+            packageName: mode == WalletSourceMode.notification && pkg.isNotEmpty ? pkg : null,
+          );
+      if (r is Failure && mounted) _snack((r as Failure).error.message);
+    }
+    await _load();
+  }
+
+  void _walletMenu(Wallet w) {
+    showModalBottomSheet<void>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.edit_outlined, color: Color(0xFF0F766E)),
+                title: const Text('تعديل', style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w600)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _editWallet(w);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.settings_suggest_outlined, color: Color(0xFF0F766E)),
+                title: const Text('إدارة القوالب', style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w600)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => TemplatesScreen(walletId: w.id, walletName: w.name),
+                    ),
+                  );
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.delete_outline, color: Color(0xFFDC2626)),
+                title: const Text('حذف', style: TextStyle(fontFamily: 'Tajawal', color: Color(0xFFDC2626))),
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  final r = await AppScope.of(context).walletCatalog.updateWallet(
+                        id: w.id,
+                        name: w.name,
+                        status: WalletStatus.archived,
+                        senderId: w.senderId,
+                        sourceMode: w.sourceMode,
+                        packageName: w.packageName,
+                      );
+                  if (r is Failure && mounted) _snack((r as Failure).error.message);
+                  await _load();
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   void _snack(String msg) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -221,8 +453,15 @@ class _WalletsPosScreenState extends State<WalletsPosScreen>
       child: Scaffold(
         backgroundColor: const Color(0xFFF8FAFC),
         appBar: AppBar(
-          title: const Text('إدارة المحافظ ونقاط البيع',
-              style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w800)),
+          title: const Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('إدارة المحافظ ونقاط البيع',
+                  style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w800, fontSize: 17)),
+              Text('إعداد وتفعيل المحافظ ونقاط البيع المرتبطة بالرسائل',
+                  style: TextStyle(fontFamily: 'Tajawal', fontSize: 12, color: Color(0xFF64748B))),
+            ],
+          ),
           backgroundColor: const Color(0xFFF8FAFC),
           foregroundColor: const Color(0xFF0F172A),
           elevation: 0,
@@ -239,6 +478,7 @@ class _WalletsPosScreenState extends State<WalletsPosScreen>
                           controller: _searchCtrl,
                           decoration: InputDecoration(
                             hintText: 'ابحث بالاسم أو المعرف…',
+                            hintStyle: const TextStyle(fontFamily: 'Tajawal'),
                             prefixIcon: const Icon(Icons.search),
                             filled: true,
                             fillColor: Colors.white,
@@ -252,6 +492,7 @@ class _WalletsPosScreenState extends State<WalletsPosScreen>
                       ),
                       TabBar(
                         controller: _tabs,
+                        labelColor: const Color(0xFF0F766E),
                         labelStyle: const TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w700),
                         tabs: const [Tab(text: 'المحافظ'), Tab(text: 'نقاط البيع')],
                       ),
@@ -263,12 +504,16 @@ class _WalletsPosScreenState extends State<WalletsPosScreen>
                       ),
                     ],
                   ),
-        floatingActionButton: FloatingActionButton.extended(
+        floatingActionButton: FloatingActionButton(
           backgroundColor: const Color(0xFFDB2777),
-          onPressed: () => _tabs.index == 0 ? _load() : _load(),
-          label: Text(_tabs.index == 0 ? 'تحديث' : 'تحديث',
-              style: const TextStyle(fontFamily: 'Tajawal')),
-          icon: const Icon(Icons.refresh),
+          onPressed: () {
+            if (_tabs.index == 0) {
+              _editWallet(null);
+            } else {
+              _load();
+            }
+          },
+          child: const Icon(Icons.add),
         ),
       ),
     );
@@ -277,26 +522,94 @@ class _WalletsPosScreenState extends State<WalletsPosScreen>
   Widget _walletsList() {
     final items = _filteredWallets.where((w) => w.status != WalletStatus.archived).toList();
     if (items.isEmpty) {
-      return const Center(child: Text('لا توجد محافظ', style: TextStyle(fontFamily: 'Tajawal')));
+      return AsyncEmptyView(
+        message: 'لا توجد محافظ',
+        actionLabel: 'إضافة محفظة',
+        onAction: () => _editWallet(null),
+      );
     }
     return RefreshIndicator(
       onRefresh: _load,
+      color: const Color(0xFF0F766E),
       child: ListView.separated(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
         itemCount: items.length,
         separatorBuilder: (_, __) => const SizedBox(height: 10),
         itemBuilder: (_, i) {
           final w = items[i];
           final active = w.status == WalletStatus.active;
-          return Card(
-            child: ListTile(
-              title: Text(w.name, style: const TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w800)),
-              subtitle: Text('${w.senderId ?? '—'} · ${w.sourceMode.name}',
-                  style: const TextStyle(fontFamily: 'Tajawal')),
-              trailing: Switch.adaptive(
-                value: active,
-                activeColor: const Color(0xFF0F766E),
-                onChanged: _togglingIds.contains(w.id) ? null : (_) => _toggleWallet(w),
+          final color = _colorFor(w);
+          final isNotif = w.sourceMode == WalletSourceMode.notification;
+          return Material(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              child: Row(
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.more_vert, size: 20, color: Color(0xFF94A3B8)),
+                    onPressed: () => _walletMenu(w),
+                  ),
+                  Switch.adaptive(
+                    value: active,
+                    activeColor: const Color(0xFF0F766E),
+                    onChanged: _togglingIds.contains(w.id) ? null : (_) => _toggleWallet(w),
+                  ),
+                  const SizedBox(width: 4),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: isNotif ? const Color(0xFFF3E8FF) : const Color(0xFFF1F5F9),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      isNotif ? 'إشعار' : 'SMS',
+                      style: TextStyle(
+                        fontFamily: 'Tajawal',
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: isNotif ? const Color(0xFF7C3AED) : const Color(0xFF64748B),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(w.name,
+                            style: const TextStyle(
+                                fontFamily: 'Tajawal', fontWeight: FontWeight.w800, fontSize: 15)),
+                        Text(
+                          'محفظة — ${w.senderId ?? '—'}',
+                          style: const TextStyle(
+                              fontFamily: 'Tajawal', fontSize: 12, color: Color(0xFF64748B)),
+                        ),
+                        if (w.packageName != null && w.packageName!.isNotEmpty)
+                          Text(
+                            w.packageName!,
+                            style: const TextStyle(
+                                fontFamily: 'Tajawal', fontSize: 11, color: Color(0xFF94A3B8)),
+                            textDirection: TextDirection.ltr,
+                          ),
+                      ],
+                    ),
+                  ),
+                  CircleAvatar(
+                    radius: 18,
+                    backgroundColor: color.withValues(alpha: 0.15),
+                    child: Text(
+                      w.name.isNotEmpty ? w.name.characters.first : '?',
+                      style: TextStyle(
+                          fontFamily: 'Tajawal', fontWeight: FontWeight.w800, color: color),
+                    ),
+                  ),
+                ],
               ),
             ),
           );
@@ -308,24 +621,54 @@ class _WalletsPosScreenState extends State<WalletsPosScreen>
   Widget _posList() {
     final items = _filteredPos.where((p) => p.status != PointOfSaleStatus.archived).toList();
     if (items.isEmpty) {
-      return const Center(child: Text('لا توجد نقاط بيع', style: TextStyle(fontFamily: 'Tajawal')));
+      return const Center(
+          child: Text('لا توجد نقاط بيع', style: TextStyle(fontFamily: 'Tajawal')));
     }
     return RefreshIndicator(
       onRefresh: _load,
       child: ListView.separated(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
         itemCount: items.length,
         separatorBuilder: (_, __) => const SizedBox(height: 10),
         itemBuilder: (_, i) {
           final p = items[i];
           final active = p.status == PointOfSaleStatus.active;
-          return Card(
-            child: ListTile(
-              title: Text(p.name, style: const TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w800)),
-              trailing: Switch.adaptive(
-                value: active,
-                activeColor: const Color(0xFF0F766E),
-                onChanged: _togglingIds.contains(p.id) ? null : (_) => _togglePos(p),
+          final acc = _posAccounts[p.id];
+          final phone = acc?.notifyPhone ??
+              (acc != null && acc.identifiers.isNotEmpty ? acc.identifiers.first : null);
+          return Material(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              child: Row(
+                children: [
+                  Switch.adaptive(
+                    value: active,
+                    activeColor: const Color(0xFF0F766E),
+                    onChanged: _togglingIds.contains(p.id) ? null : (_) => _togglePos(p),
+                  ),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(p.name,
+                            style: const TextStyle(
+                                fontFamily: 'Tajawal', fontWeight: FontWeight.w800)),
+                        Text(
+                          phone == null ? 'نقطة بيع' : 'نقطة بيع — $phone',
+                          style: const TextStyle(
+                              fontFamily: 'Tajawal', fontSize: 12, color: Color(0xFF64748B)),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Icon(Icons.storefront_outlined, color: Color(0xFF0F766E)),
+                ],
               ),
             ),
           );
