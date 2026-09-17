@@ -29,18 +29,23 @@ Widget _wrap(
 }
 
 void main() {
-  testWidgets('NetDashboardHeader shows title and subtitle', (tester) async {
+  testWidgets('NetDashboardHeader shows network and date', (tester) async {
     await tester.pumpWidget(
-      _wrap(const NetDashboardHeader(title: 'NET', subtitle: 'ترخيص: active')),
+      _wrap(const NetDashboardHeader(networkName: 'NET', dateLabel: 'اليوم', greeting: 'مساء الخير')),
     );
-    expect(find.text('NET'), findsOneWidget);
-    expect(find.textContaining('ترخيص'), findsOneWidget);
+    expect(find.text('شبكة NET'), findsOneWidget);
+    expect(find.textContaining('اليوم'), findsOneWidget);
   });
 
   testWidgets('NetDashboardHeader settings callback', (tester) async {
     var tapped = false;
     await tester.pumpWidget(
-      _wrap(NetDashboardHeader(title: 'NET', onSettings: () => tapped = true)),
+      _wrap(const NetDashboardHeader(networkName: 'NET', dateLabel: 'اليوم', onSettings: null)),
+    );
+    expect(find.byIcon(Icons.settings_outlined), findsNothing);
+
+    await tester.pumpWidget(
+      _wrap(NetDashboardHeader(networkName: 'NET', dateLabel: 'اليوم', onSettings: () => tapped = true)),
     );
     await tester.tap(find.byIcon(Icons.settings_outlined));
     expect(tapped, isTrue);
@@ -138,10 +143,10 @@ void main() {
   });
 
   testWidgets('NetDashboardHeader RTL layout', (tester) async {
-    await tester.pumpWidget(_wrap(const NetDashboardHeader(title: 'NET', subtitle: 'RTL'), direction: TextDirection.rtl));
-    final dir = tester.widget<Directionality>(find.byType(Directionality).last);
-    expect(dir.textDirection, TextDirection.rtl);
-    expect(find.text('NET'), findsOneWidget);
+    await tester.pumpWidget(
+      _wrap(const NetDashboardHeader(networkName: 'NET', dateLabel: 'RTL'), direction: TextDirection.rtl),
+    );
+    expect(find.text('شبكة NET'), findsOneWidget);
   });
 
   testWidgets('NetMetricCard dark theme renders', (tester) async {
