@@ -8,6 +8,45 @@ import '../entities/message.dart';
 import '../repositories/repositories.dart';
 import 'message_retry_policy.dart';
 
+abstract interface class MessageRetryServicePort {
+  Future<Result<MessageRetryState>> state(String messageId);
+  Future<Result<MessageRetryState>> recordFailure({required String messageId, required AppFailure error});
+  Future<Result<void>> clearAfterSuccess(String messageId);
+  Future<Result<void>> requestImmediateRetry(String messageId);
+  Future<bool> isDue(String messageId, {DateTime? now});
+}
+
+/// Safe fallback used by isolated callers/tests that do not need retry persistence.
+/// Production AppContainer always injects [LocalMessageRetryService].
+final class NoopMessageRetryService implements MessageRetryServicePort {
+  const NoopMessageRetryService();
+
+  @override
+  Future<Result<MessageRetryState>> state(String messageId) async =>
+      const Success(MessageRetryState(attempts: 0, nextRetryAt: null));
+
+  @override
+  Future<Result<MessageRetryState>> recordFailure({
+    required String messageId,
+    required AppFailure error,
+  }) async =>
+      Success(MessageRetryState(
+        attempts: 0,
+        nextRetryAt: null,
+        lastErrorCode: error.code,
+        exhausted: !const MessageRetryPolicy().isRetryableCode('sms_delivery_failed'),
+      ));
+
+  @override
+  Future<Result<void>> clearAfterSuccess(String messageId) async => const Success(null);
+
+  @override
+  Future<Result<void>> requestImmediateRetry(String messageId) async => const Success(null);
+
+  @override
+  Future<bool> isDue(String messageId, {DateTime? now}) async => true;
+}
+
 final class MessageRetryState {
   const MessageRetryState({
     required this.attempts,
@@ -24,7 +63,7 @@ final class MessageRetryState {
   final bool immediateRequested;
 }
 
-final class LocalMessageRetryService {
+final class LocalMessageRetryService implements MessageRetryServicePort {
   const LocalMessageRetryService({
     required this.auditLogs,
     required this.messages,
@@ -39,6 +78,7 @@ final class LocalMessageRetryService {
   final IdGenerator ids;
   final MessageRetryPolicy policy;
 
+  @override
   Future<Result<MessageRetryState>> state(String messageId) async {
     final result = await auditLogs.findByEntity('message', messageId);
     if (result is Failure<List<AuditLog>>) return Failure(result.error);
@@ -86,6 +126,7 @@ final class LocalMessageRetryService {
     ));
   }
 
+  @override
   Future<Result<MessageRetryState>> recordFailure({required String messageId, required AppFailure error}) async {
     if (!policy.isRetryableCode(error.code)) {
       return Success(MessageRetryState(attempts: 0, nextRetryAt: null, lastErrorCode: error.code, exhausted: true));
@@ -109,11 +150,8 @@ final class LocalMessageRetryService {
     final attempt = previous.attempts + 1;
     final next = clock.now().add(policy.delayForAttempt(attempt));
     final audit = await auditLogs.append(AuditLog(
-      id: ids.next('audit'),
-      entityType: 'message',
-      entityId: messageId,
-      action: 'message_retry_scheduled',
-      occurredAt: clock.now(),
+      id: ids.next('audit'), entityType: 'message', entityId: messageId,
+      action: 'message_retry_scheduled', occurredAt: clock.now(),
       payloadJson: jsonEncode({'attempt': attempt, 'nextRetryAt': next.toIso8601String(), 'errorCode': error.code}),
     ));
     if (audit is Failure<void>) return Failure(audit.error);
@@ -122,16 +160,19 @@ final class LocalMessageRetryService {
     return Success(MessageRetryState(attempts: attempt, nextRetryAt: next, lastErrorCode: error.code));
   }
 
+  @override
   Future<Result<void>> clearAfterSuccess(String messageId) => auditLogs.append(AuditLog(
         id: ids.next('audit'), entityType: 'message', entityId: messageId,
         action: 'message_retry_cleared', occurredAt: clock.now(),
       ));
 
+  @override
   Future<Result<void>> requestImmediateRetry(String messageId) => auditLogs.append(AuditLog(
         id: ids.next('audit'), entityType: 'message', entityId: messageId,
         action: 'message_retry_requested', occurredAt: clock.now(),
       ));
 
+  @override
   Future<bool> isDue(String messageId, {DateTime? now}) async {
     final result = await state(messageId);
     if (result is Failure<MessageRetryState>) return false;
