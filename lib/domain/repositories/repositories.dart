@@ -83,6 +83,7 @@ abstract interface class MessageRepository {
   Future<Result<List<IncomingMessage>>> listByStatus(MessageProcessingStatus status);
   Future<Result<List<IncomingMessage>>> listRecent({int limit = 100});
   Future<Result<void>> updateStatus(String id, MessageProcessingStatus status);
+  Future<Result<void>> delete(String id);
 }
 
 abstract interface class TransferTemplateRepository {
