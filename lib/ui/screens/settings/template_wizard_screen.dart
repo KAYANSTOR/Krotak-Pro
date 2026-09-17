@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/result.dart';
 import '../../../domain/entities/message.dart';
+import '../../../domain/entities/pos_account.dart';
 import '../../../domain/entities/wallet.dart';
 import '../../../domain/services/local_message_parser.dart';
 import '../../app_scope.dart';
@@ -13,10 +14,12 @@ class TemplateWizardScreen extends StatefulWidget {
     super.key,
     this.existing,
     this.initialWalletId,
+    this.initialPosAccountId,
   });
 
   final TransferTemplate? existing;
   final String? initialWalletId;
+  final String? initialPosAccountId;
 
   @override
   State<TemplateWizardScreen> createState() => _TemplateWizardScreenState();
@@ -35,9 +38,11 @@ class _TemplateWizardScreenState extends State<TemplateWizardScreen> {
   final _priorityCtrl = TextEditingController(text: '0');
 
   String? _walletId;
+  String? _posAccountId;
   TemplateIdentifierKind _kind = TemplateIdentifierKind.phone;
   bool _isActive = true;
   List<Wallet> _wallets = const [];
+  List<PosAccount> _posAccounts = const [];
 
   @override
   void initState() {
@@ -50,10 +55,12 @@ class _TemplateWizardScreenState extends State<TemplateWizardScreen> {
       _patternCtrl.text = e.pattern;
       _priorityCtrl.text = '${e.priority}';
       _walletId = e.walletId;
+      _posAccountId = e.posAccountId;
       _kind = e.identifierKind;
       _isActive = e.isActive;
     } else {
       _walletId = widget.initialWalletId;
+      _posAccountId = widget.initialPosAccountId;
       _patternCtrl.text = _defaultPattern(TemplateIdentifierKind.phone);
     }
     WidgetsBinding.instance.addPostFrameCallback((_) => _loadWallets());
@@ -72,9 +79,18 @@ class _TemplateWizardScreenState extends State<TemplateWizardScreen> {
   Future<void> _loadWallets() async {
     final r = await AppScope.of(context).wallets.listAll();
     if (!mounted) return;
+    final pos = await AppScope.of(context).posRegistry.listAll();
     if (r is Success<List<Wallet>>) {
-      setState(() => _wallets = r.value);
+      _wallets = r.value;
     }
+    if (pos is Success<List<PosAccount>>) {
+      _posAccounts = pos.value
+          .where((account) =>
+              account.status == PointOfSaleStatus.active ||
+              account.posId == _posAccountId)
+          .toList(growable: false);
+    }
+    if (mounted) setState(() {});
   }
 
   String _defaultPattern(TemplateIdentifierKind kind) {
@@ -105,6 +121,10 @@ class _TemplateWizardScreenState extends State<TemplateWizardScreen> {
       case 0:
         if (_nameCtrl.text.trim().isEmpty) {
           _toast('أدخل اسم القالب');
+          return false;
+        }
+        if (_posAccountId != null && _walletId == null) {
+          _toast('قالب نقطة البيع يجب ربطه بمحفظة مصدر');
           return false;
         }
         return true;
@@ -165,6 +185,7 @@ class _TemplateWizardScreenState extends State<TemplateWizardScreen> {
       pattern: _patternCtrl.text.trim(),
       isActive: _isActive,
       walletId: _walletId,
+      posAccountId: _posAccountId,
       priority: int.tryParse(_priorityCtrl.text.trim()) ?? 0,
       sampleBody: _sampleCtrl.text.trim().isEmpty ? null : _sampleCtrl.text.trim(),
       senderCode: _senderCtrl.text.trim().isEmpty ? null : _senderCtrl.text.trim(),
@@ -317,7 +338,7 @@ class _TemplateWizardScreenState extends State<TemplateWizardScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _label('المحفظة (اختياري)'),
+        _label('المحفظة المصدر'),
         DropdownButtonFormField<String?>(
           value: _walletId,
           decoration: _dec(),
@@ -329,6 +350,40 @@ class _TemplateWizardScreenState extends State<TemplateWizardScreen> {
           ],
           onChanged: (v) => setState(() => _walletId = v),
         ),
+        const SizedBox(height: 14),
+        _label('نطاق نقطة البيع (اختياري)'),
+        DropdownButtonFormField<String?>(
+          value: _posAccountId,
+          decoration: _dec(),
+          items: [
+            const DropdownMenuItem<String?>(
+              value: null,
+              child: Text('قالب عام للمحفظة', style: TextStyle(fontFamily: 'Tajawal')),
+            ),
+            ..._posAccounts.map(
+              (account) => DropdownMenuItem(
+                value: account.posId,
+                child: Text(
+                  account.name,
+                  style: const TextStyle(fontFamily: 'Tajawal'),
+                ),
+              ),
+            ),
+          ],
+          onChanged: (v) => setState(() => _posAccountId = v),
+        ),
+        if (_posAccountId != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text(
+              'لن يُقبل هذا القالب إلا للرسائل التي تُنسب إلى نقطة البيع المحددة.',
+              style: TextStyle(
+                fontFamily: 'Tajawal',
+                fontSize: 11.5,
+                color: context.kayan.textTertiary,
+              ),
+            ),
+          ),
         const SizedBox(height: 14),
         _label('نوع معرّف المشترك للرسالة'),
         DropdownButtonFormField<TemplateIdentifierKind>(
