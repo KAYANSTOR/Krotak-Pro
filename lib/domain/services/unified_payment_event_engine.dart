@@ -57,8 +57,14 @@ final class UnifiedPaymentEventEngine implements PaymentEventEngine {
 
       // A known POS is a strict template scope. No configured POS template
       // means the raw message is silently ignored at the trust boundary.
-      if (sourceScope.isPos && sourceScope.templates.isEmpty) {
-        return const Success(null);
+      if (sourceScope.templates.isEmpty) {
+        if (sourceScope.isPos) return const Success(null);
+        return const Failure(
+          AppFailure(
+            code: 'no_source_template',
+            message: 'No active transfer template is linked to this payment source',
+          ),
+        );
       }
     }
 
