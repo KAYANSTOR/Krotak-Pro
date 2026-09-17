@@ -32,12 +32,14 @@ After Phase 3 commits the sale **before** SMS, failed deliveries must:
 | SMS fail | Append `sms_delivery_failed`, `recordFailure` (may → `failedMaxAttempts`) |
 | Already sent | status → `processed`, clear retry |
 
-## Integration
+## Integration (wired)
 
-Call `MessageDeliveryWorker.tick()`:
+`AppContainer.startBackgroundHandlers()` runs every **1 minute** (and once at start):
 
-- On app resume (alongside `LocalMessageRecoveryService.recoverPending`)
-- On a periodic timer (e.g. every 1–5 minutes while foregrounded)
+1. `recoveryService.recoverPending()` — reprocess received/parsed/failed commercial path
+2. `deliveryWorker.tick()` — resend SMS for `voucher_committed` without success
+
+Both respect `SettingKeys.autoRetryFailedMessages`.
 
 Do **not** call `reserveAvailableCard` from this worker.
 
@@ -47,5 +49,4 @@ Do **not** call `reserveAvailableCard` from this worker.
 
 ## Follow-ups
 
-- Wire into composition root / UI resume path
-- Expand `pendingProcessing()` to include `sending` if recovery should also see those rows
+- Optional: trigger an extra `tick()` on `AppLifecycleState.resumed` for faster recovery when returning to the app
