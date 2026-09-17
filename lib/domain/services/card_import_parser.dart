@@ -24,7 +24,8 @@ final class CardImportParseResult {
 }
 
 abstract final class CardImportParser {
-  static final _sep = RegExp(r'[,;\t]| {2,}');
+  static final _fieldSeparator = RegExp(r'[,;\t]+');
+  static final _whitespaceSeparator = RegExp(r'\s+');
 
   static CardImportParseResult parse(String raw) {
     final drafts = <CardImportDraft>[];
@@ -34,27 +35,36 @@ abstract final class CardImportParser {
 
     for (var i = 0; i < lines.length; i++) {
       final lineNo = i + 1;
-      var line = lines[i].trim();
+      final line = lines[i].trim();
       if (line.isEmpty || line.startsWith('#')) continue;
 
-      // Strip optional CSV header
-      if (lineNo == 1 &&
-          (line.toLowerCase().contains('serial') ||
-              line.contains('تسلسل') ||
-              line.toLowerCase().contains('pin') ||
-              line.contains('رمز'))) {
-        continue;
-      }
+      // Treat a line as a header only when it clearly contains both field
+      // names; this prevents a real serial such as `onlyserial` being lost.
+      final lower = line.toLowerCase();
+      final looksLikeHeader =
+          (lower.contains('serial') && lower.contains('pin')) ||
+          (line.contains('تسلسل') && line.contains('رمز'));
+      if (lineNo == 1 && looksLikeHeader) continue;
 
-      final parts = line.split(_sep).map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+      List<String> parts = line
+          .split(_fieldSeparator)
+          .map((e) => e.trim())
+          .where((e) => e.isNotEmpty)
+          .toList(growable: false);
+
       if (parts.length < 2) {
-        final space = line.split(RegExp(r'\s+'));
-        if (space.length >= 2) {
-          parts
-            ..clear()
-            ..addAll([space.first, space.sublist(1).join(' ')]);
+        final whitespaceParts = line
+            .split(_whitespaceSeparator)
+            .where((e) => e.isNotEmpty)
+            .toList(growable: false);
+        if (whitespaceParts.length >= 2) {
+          parts = <String>[
+            whitespaceParts.first,
+            whitespaceParts.sublist(1).join(' '),
+          ];
         }
       }
+
       if (parts.length < 2) {
         errors.add('سطر $lineNo: يُتوقَّع رقم تسلسلي ورمز سري');
         continue;
