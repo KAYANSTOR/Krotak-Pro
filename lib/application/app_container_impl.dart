@@ -111,6 +111,7 @@ final class AppContainer {
   final ValueNotifier<ThemeMode> themeModeNotifier;
   Timer? _recoveryTimer;
   bool _recoveryBusy = false;
+  bool _disposed = false;
 
   Future<Result<void>> reloadTemplates() async {
     final listed = await transferTemplates.listAll();
@@ -119,8 +120,12 @@ final class AppContainer {
     return const Success(null);
   }
 
-  static Future<AppContainer> bootstrap({List<TransferTemplate> templates = const []}) async {
-    final database = await openAppDatabase();
+  static Future<AppContainer> bootstrap({
+    List<TransferTemplate> templates = const [],
+    AppDatabase? databaseOverride,
+    Directory? backupDirectoryOverride,
+  }) async {
+    final database = databaseOverride ?? await openAppDatabase();
     final clock = SystemClock();
     final ids = RandomIdGenerator();
     final uow = DriftUnitOfWork(database);
@@ -160,8 +165,8 @@ final class AppContainer {
     final advanceService = LocalAdvanceService(advances: advanceRepository, customers: customers, categories: categories, cards: cards, inventory: inventoryService, transactions: transactions, sales: sales, auditLogs: auditLogs, settings: settings, unitOfWork: uow, messageSender: messageSender, clock: clock, ids: ids);
     final processor = LocalTransferProcessor(messages: messages, customers: customers, balances: balanceService, auditLogs: auditLogs, unitOfWork: uow, clock: clock, ids: ids, categories: categories, cards: cards, inventory: inventoryService, transactions: transactions, reservedSales: saleService, messageSender: messageSender, settings: settings, advanceService: advanceService, customerService: customerService);
     final licenseService = LocalLicenseService(licenses: licenses, clock: clock);
-    final docs = await getApplicationDocumentsDirectory();
-    final backupService = LocalBackupService(settings: settings, clock: clock, ids: ids, backupDirectory: Directory(p.join(docs.path, 'backups')));
+    final backupDirectory = backupDirectoryOverride ?? Directory(p.join((await getApplicationDocumentsDirectory()).path, 'backups'));
+    final backupService = LocalBackupService(settings: settings, clock: clock, ids: ids, backupDirectory: backupDirectory);
     final mergeService = LocalAccountMergeService(customers: customers, transactions: transactions, auditLogs: auditLogs, unitOfWork: uow, clock: clock, ids: ids);
     final settlementService = LocalSettlementService(customers: customers, transactions: transactions, auditLogs: auditLogs, unitOfWork: uow, clock: clock, ids: ids);
     final retryService = LocalMessageRetryService(auditLogs: auditLogs, messages: messages, clock: clock, ids: ids);
@@ -196,7 +201,7 @@ final class AppContainer {
   }
 
   Future<void> _runRecovery() async {
-    if (_recoveryBusy) return;
+    if (_recoveryBusy || _disposed) return;
     final enabled = await settings.find(SettingKeys.autoRetryFailedMessages);
     final raw = enabled is Success<AppSetting?> ? enabled.value?.value : null;
     if (!SettingBool.read(raw, defaultValue: SettingDefaults.autoRetryFailedMessages)) return;
@@ -205,6 +210,8 @@ final class AppContainer {
   }
 
   Future<void> dispose() async {
+    if (_disposed) return;
+    _disposed = true;
     _recoveryTimer?.cancel();
     _recoveryTimer = null;
     pendingAlarm.dispose();
