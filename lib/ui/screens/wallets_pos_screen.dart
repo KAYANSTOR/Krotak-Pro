@@ -779,7 +779,8 @@ class _WalletsPosScreenState extends State<WalletsPosScreen>
                   Navigator.of(context).push(
                     MaterialPageRoute(
                       builder: (_) => TemplatesScreen(
-                        walletName: pos.name,
+                        posAccountId: pos.id,
+                        posName: pos.name,
                       ),
                     ),
                   );
