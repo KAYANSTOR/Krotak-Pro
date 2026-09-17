@@ -118,10 +118,18 @@ void main() {
       ),
     );
     expect(find.text('dashboard'), findsOneWidget);
-    await tester.tap(find.text('الحسابات'));
+    final balanceAccounts = find.descendant(
+      of: find.byType(NetBalanceCard),
+      matching: find.text('الحسابات'),
+    );
+    await tester.tap(balanceAccounts);
     await tester.pump();
     expect(find.text('accounts'), findsOneWidget);
-    await tester.tap(find.text('كروت متوفرة'));
+    final balanceCards = find.descendant(
+      of: find.byType(NetBalanceCard),
+      matching: find.text('كروت متوفرة'),
+    );
+    await tester.tap(balanceCards);
     await tester.pump();
     expect(find.text('cards'), findsOneWidget);
   });
