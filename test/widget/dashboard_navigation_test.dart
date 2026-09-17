@@ -26,9 +26,9 @@ void main() {
         ),
       ),
     );
-    await tester.tap(find.text('حسابات'));
+    await tester.tap(find.text('الحسابات'));
     expect(requested, 'accounts');
-    await tester.tap(find.text('كروت متاحة'));
+    await tester.tap(find.text('كروت متوفرة'));
     expect(requested, 'cards');
   });
 
@@ -118,10 +118,10 @@ void main() {
       ),
     );
     expect(find.text('dashboard'), findsOneWidget);
-    await tester.tap(find.text('حسابات'));
+    await tester.tap(find.text('الحسابات'));
     await tester.pump();
     expect(find.text('accounts'), findsOneWidget);
-    await tester.tap(find.text('كروت متاحة'));
+    await tester.tap(find.text('كروت متوفرة'));
     await tester.pump();
     expect(find.text('cards'), findsOneWidget);
   });
