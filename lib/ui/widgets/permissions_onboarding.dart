@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -15,6 +16,10 @@ abstract final class PermissionsOnboarding {
   static const doneKey = 'permissions_onboarding_done_v5';
 
   static Future<void> maybeRun(BuildContext context) async {
+    // Runtime permission onboarding is an Android concern. Avoid invoking
+    // permission_handler/native settings flows on desktop or test runners.
+    if (!Platform.isAndroid) return;
+
     final c = AppScope.of(context);
     final diag = SystemDiagnosticsBridge();
     final existing = await c.settings.find(doneKey);
