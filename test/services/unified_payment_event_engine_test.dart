@@ -123,7 +123,6 @@ void main() {
             customerIdentifier: '770123456',
             identifierType: TransferIdentifierType.phone,
             reference: 'REF-DUP',
-            templateId: 'template-bank',
           ),
         ),
         processor: processor,
