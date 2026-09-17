@@ -4,14 +4,29 @@ import '../../core/result.dart';
 import '../entities/audit.dart';
 import '../entities/customer.dart';
 import '../entities/message.dart';
+import '../entities/payment_event.dart';
 import '../entities/transaction.dart';
 import '../repositories/repositories.dart';
 import '../repositories/unit_of_work.dart';
 import 'local_customer_identity_resolver.dart';
+import 'payment_source_guard.dart';
 import 'services.dart';
 
 final class PendingMessageReviewService {
-  const PendingMessageReviewService({required this.messages, required this.parser, required this.customers, required this.customerService, required this.balances, required this.auditLogs, required this.unitOfWork, required this.clock, required this.ids, this.identityResolver});
+  const PendingMessageReviewService({
+    required this.messages,
+    required this.parser,
+    required this.customers,
+    required this.customerService,
+    required this.balances,
+    required this.auditLogs,
+    required this.unitOfWork,
+    required this.clock,
+    required this.ids,
+    required this.sourceGuard,
+    this.identityResolver,
+  });
+
   final MessageRepository messages;
   final MessageParser parser;
   final CustomerRepository customers;
@@ -21,6 +36,7 @@ final class PendingMessageReviewService {
   final UnitOfWork unitOfWork;
   final Clock clock;
   final IdGenerator ids;
+  final PaymentSourceGuard sourceGuard;
   final LocalCustomerIdentityResolver? identityResolver;
   LocalCustomerIdentityResolver get _resolver => identityResolver ?? LocalCustomerIdentityResolver(customers: customers);
 
@@ -41,9 +57,19 @@ final class PendingMessageReviewService {
     if (message.status == MessageProcessingStatus.rejected) return const Failure(AppFailure(code: 'message_already_rejected', message: 'Message was already rejected'));
     if (message.status != MessageProcessingStatus.parsed && message.status != MessageProcessingStatus.received) return const Failure(AppFailure(code: 'message_not_pending', message: 'Message is not pending review'));
 
+    final event = _eventForMessage(message);
+    final sourceAuthorization = await sourceGuard.authorize(event);
+    if (sourceAuthorization is Failure<void>) return Failure(sourceAuthorization.error);
+
     final parseResult = parser.parse(message);
     if (parseResult is Failure<ParsedTransfer>) return Failure(parseResult.error);
     final transfer = (parseResult as Success<ParsedTransfer>).value;
+    final templateAuthorization = await sourceGuard.authorize(
+      event,
+      matchedTemplateId: transfer.templateId,
+    );
+    if (templateAuthorization is Failure<void>) return Failure(templateAuthorization.error);
+
     final resolutionResult = await _resolver.resolve(identifierValue: transfer.customerIdentifier, identifierType: transfer.identifierType);
     if (resolutionResult is Failure<CustomerIdentityResolution>) return Failure(resolutionResult.error);
     var resolution = (resolutionResult as Success<CustomerIdentityResolution>).value;
@@ -67,6 +93,25 @@ final class PendingMessageReviewService {
     await messages.updateStatus(messageId, MessageProcessingStatus.processed);
     await auditLogs.append(AuditLog(id: ids.next('audit'), entityType: 'message', entityId: messageId, action: 'pending_message_approved', occurredAt: clock.now(), payloadJson: '{"transactionId":"${tx.id}","customerId":"${customer.id}","amount":${transfer.amount.minorUnits},"currency":"${transfer.amount.currencyCode}","reference":"${transfer.reference}","sender":"${message.sender}"}'));
     return Success(tx);
+  }
+
+  PaymentEvent _eventForMessage(IncomingMessage message) {
+    final sender = message.sender.trim();
+    if (sender.startsWith('notification:')) {
+      return PaymentEvent(
+        channel: PaymentChannel.notification,
+        sourceKey: sender,
+        body: message.body,
+        receivedAt: message.receivedAt,
+        packageName: sender.substring('notification:'.length),
+      );
+    }
+    return PaymentEvent(
+      channel: PaymentChannel.sms,
+      sourceKey: sender,
+      body: message.body,
+      receivedAt: message.receivedAt,
+    );
   }
 
   Future<Result<void>> reject(String messageId, {String? reason}) async {
