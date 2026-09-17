@@ -58,11 +58,38 @@ final class PendingMessageReviewService {
     if (message.status != MessageProcessingStatus.parsed && message.status != MessageProcessingStatus.received) return const Failure(AppFailure(code: 'message_not_pending', message: 'Message is not pending review'));
 
     final event = _eventForMessage(message);
-    final sourceAuthorization = await sourceGuard.authorize(event);
-    if (sourceAuthorization is Failure<void>) return Failure(sourceAuthorization.error);
+    final scopeResult = await sourceGuard.resolve(event);
+    if (scopeResult is Failure<PaymentSourceScope>) {
+      return Failure(scopeResult.error);
+    }
+    final scope = (scopeResult as Success<PaymentSourceScope>).value;
+    if (scope.templates.isEmpty) {
+      if (scope.isPos) {
+        await messages.updateStatus(messageId, MessageProcessingStatus.rejected);
+      }
+      return const Failure(
+        AppFailure(
+          code: 'no_source_template',
+          message: 'No active template is configured for this payment source',
+        ),
+      );
+    }
 
-    final parseResult = parser.parse(message);
-    if (parseResult is Failure<ParsedTransfer>) return Failure(parseResult.error);
+    final parseResult = parser is ScopedMessageParser
+        ? (parser as ScopedMessageParser).parseScoped(message, scope.templates)
+        : parser.parse(message);
+    if (parseResult is Failure<ParsedTransfer>) {
+      if (scope.isPos && parseResult.error.code == 'message_not_matched') {
+        await messages.updateStatus(messageId, MessageProcessingStatus.rejected);
+        return const Failure(
+          AppFailure(
+            code: 'pos_message_ignored',
+            message: 'Message does not match the configured POS templates',
+          ),
+        );
+      }
+      return Failure(parseResult.error);
+    }
     final transfer = (parseResult as Success<ParsedTransfer>).value;
     final templateAuthorization = await sourceGuard.authorize(
       event,
