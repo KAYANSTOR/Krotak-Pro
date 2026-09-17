@@ -79,7 +79,6 @@ class MainActivity : FlutterActivity(), SmsListener {
             },
         )
 
-        // Notification bridge contract used by Dart NotificationBridge.
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, notificationMethodChannelName).setMethodCallHandler { call, result ->
             when (call.method) {
                 "setAllowedPackages" -> {
@@ -123,7 +122,6 @@ class MainActivity : FlutterActivity(), SmsListener {
             },
         )
 
-        // System diagnostics.
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, diagnosticsChannelName).setMethodCallHandler { call, result ->
             when (call.method) {
                 "probe" -> result.success(probeCapabilities())
@@ -151,6 +149,11 @@ class MainActivity : FlutterActivity(), SmsListener {
                     val granted = requestPhoneStatePermission()
                     result.success(granted)
                 }
+                "requestContacts" -> {
+                    val granted = requestContactsPermission()
+                    result.success(granted)
+                }
+                "hasContactsPermission" -> result.success(hasContactsPermission())
                 "openAppSettings" -> try {
                     val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
                         data = Uri.parse("package:$packageName")
@@ -326,9 +329,24 @@ class MainActivity : FlutterActivity(), SmsListener {
         return false
     }
 
+    private fun requestContactsPermission(): Boolean {
+        val granted = ContextCompat.checkSelfPermission(
+            this,
+            Manifest.permission.READ_CONTACTS,
+        ) == PackageManager.PERMISSION_GRANTED
+        if (granted) return true
+        ActivityCompat.requestPermissions(
+            this,
+            arrayOf(Manifest.permission.READ_CONTACTS),
+            REQUEST_CONTACTS,
+        )
+        return false
+    }
+
     companion object {
         private const val REQUEST_SMS = 1001
         private const val REQUEST_POST_NOTIFICATIONS = 1002
         private const val REQUEST_PHONE_STATE = 1003
+        private const val REQUEST_CONTACTS = 1004
     }
 }
