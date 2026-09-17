@@ -84,15 +84,25 @@ Values: `received`, `parsed`, `pending`, `sending`, `processed`, `failedMaxAttem
 
 Helper: `MessageStatusMachine` (`lib/domain/message_status_machine.dart`) — single place for allowed transitions and terminal/attention classification.
 
+## Rejection codes (screenshot appendix)
+
+Canonical codes: `lib/domain/rejection_codes.dart` → `RejectionCodes`  
+Full operational rules: `docs/screenshot-spec-appendix.md`
+
+## Shared test fakes
+
+Prefer `test/helpers/in_memory_repositories.dart` (`InMemoryMessageRepository`, `InMemoryAuditLogRepository`, `InMemoryUnitOfWork`) over one-off fakes when adding new tests.
+
 ## Rules for Phase 1
 
-1. Every new Fake in tests must implement the exact interface above (no missing methods, no extra required methods that production does not have).
-2. Prefer shared fakes under `test/helpers/` over one-off classes when the same repository is faked in multiple tests.
+1. Every new Fake in tests must implement the exact interface above.
+2. Prefer shared fakes under `test/helpers/` over one-off classes.
 3. Do not widen or narrow repository contracts in feature PRs without updating this document.
 4. CI must stay green (`analyze` + `test`) on this branch before starting Phase 2 schema work.
 
 ## Next contract work
 
-- [ ] Shared fake suite for Customer / Message / Card / Transaction / Sale / Audit
+- [x] Shared fake suite (Message / Audit / UnitOfWork starter)
+- [ ] Shared fakes for Customer / Card / Transaction / Sale
 - [ ] Audit call sites of `UnitOfWork` for sale + reservation paths
-- [ ] Add `findByDedupeKey` / fingerprint uniqueness only after schema Phase 2 decision
+- [ ] Add fingerprint uniqueness only after schema Phase 2 decision
