@@ -8,50 +8,41 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Write wallets_pos_screen.dart
+      - name: Restore wallets_pos_screen.dart from gzip+b64
         run: |
           python3 << 'PY'
-          import base64
+          import base64, gzip
           from pathlib import Path
-          b64 = Path('tools/wallets_pos_phase3.b64').read_text().strip()
-          data = base64.b64decode(b64)
-          Path('lib/ui/screens/wallets_pos_screen.dart').write_bytes(data)
-          print('ok', len(data))
+          gzb64 = Path('tools/wallets_pos_phase3.gz.b64').read_text().strip()
+          raw = gzip.decompress(base64.b64decode(gzb64))
+          Path('lib/ui/screens/wallets_pos_screen.dart').write_bytes(raw)
+          print('restored', len(raw), 'bytes')
+          assert b'class WalletsPosScreen' in raw
           PY
-      - name: Fix default wallet seeds (video badges)
+      - name: Fix default wallet seeds (video badges SMS vs notification)
         run: |
           python3 << 'PY'
           from pathlib import Path
           p = Path('lib/domain/services/local_catalog_services.dart')
           t = p.read_text()
-          old = """  static const _defaults = [
-    (name: 'جيب', senderId: 'JAIB', sourceMode: WalletSourceMode.notification, packageName: 'com.ahd.jaib'),
-    (name: 'جوالي', senderId: 'JAWALI', sourceMode: WalletSourceMode.notification, packageName: 'com.wecash.jawali'),
-    (name: 'ون كاش', senderId: 'ONE CASH', sourceMode: WalletSourceMode.notification, packageName: 'com.one.onecustomer'),
-    (name: 'فلوسك', senderId: 'FLOOSAK', sourceMode: WalletSourceMode.notification, packageName: 'co.ysys.floosak'),
-  ];"""
-          new = """  static const _defaults = [
-    # مطابقة إطارات الفيديو: جيب إشعار + package، الباقي SMS
-    (name: 'جيب', senderId: 'JAIB', sourceMode: WalletSourceMode.notification, packageName: 'com.ahd.jaib'),
-    (name: 'جوالي', senderId: 'JAWALI', sourceMode: WalletSourceMode.sms, packageName: 'com.wecash.jawali'),
-    (name: 'ون كاش', senderId: 'ONE CASH', sourceMode: WalletSourceMode.sms, packageName: 'com.one.onecustomer'),
-    (name: 'فلوسك', senderId: 'FLOOSAK', sourceMode: WalletSourceMode.sms, packageName: 'co.ysys.floosak'),
-  ];"""
-          if old not in t:
-            if "WalletSourceMode.sms, packageName: 'com.wecash.jawali'" in t:
-              print('already patched')
-            else:
-              # try flexible replace on mode lines only
-              t2 = t.replace("sourceMode: WalletSourceMode.notification, packageName: 'com.wecash.jawali'", "sourceMode: WalletSourceMode.sms, packageName: 'com.wecash.jawali'")
-              t2 = t2.replace("sourceMode: WalletSourceMode.notification, packageName: 'com.one.onecustomer'", "sourceMode: WalletSourceMode.sms, packageName: 'com.one.onecustomer'")
-              t2 = t2.replace("sourceMode: WalletSourceMode.notification, packageName: 'co.ysys.floosak'", "sourceMode: WalletSourceMode.sms, packageName: 'co.ysys.floosak'")
-              if t2 == t:
-                raise SystemExit('defaults block not found')
-              p.write_text(t2)
-              print('seeds patched flex')
+          replacements = [
+            ("sourceMode: WalletSourceMode.notification, packageName: 'com.wecash.jawali'",
+             "sourceMode: WalletSourceMode.sms, packageName: 'com.wecash.jawali'"),
+            ("sourceMode: WalletSourceMode.notification, packageName: 'com.one.onecustomer'",
+             "sourceMode: WalletSourceMode.sms, packageName: 'com.one.onecustomer'"),
+            ("sourceMode: WalletSourceMode.notification, packageName: 'co.ysys.floosak'",
+             "sourceMode: WalletSourceMode.sms, packageName: 'co.ysys.floosak'"),
+          ]
+          changed = False
+          for old, new in replacements:
+            if old in t:
+              t = t.replace(old, new)
+              changed = True
+          if changed:
+            p.write_text(t)
+            print('seeds patched to video badges')
           else:
-            p.write_text(t.replace(old, new, 1))
-            print('seeds patched')
+            print('seeds already match video (or block not found)')
           PY
       - name: Commit and push
         run: |
@@ -59,5 +50,5 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add lib/ui/screens/wallets_pos_screen.dart lib/domain/services/local_catalog_services.dart
           git status
-          git commit -m "Phase 3 complete: Wallets/POS video-accurate UI + SMS/notif seeds + POS phone field" || echo nochange
+          git commit -m "feat(wallets): Phase 3 complete — video-accurate Wallets/POS UI + SMS/notif seeds + POS phone" || echo nochange
           git push origin HEAD:main
