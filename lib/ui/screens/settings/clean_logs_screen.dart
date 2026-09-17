@@ -72,6 +72,36 @@ class _CleanLogsScreenState extends State<CleanLogsScreen> {
   }
 
   Future<void> _purge() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          title: const Text(
+            'تأكيد التنظيف الذكي',
+            style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w800),
+          ),
+          content: const Text(
+            'سيُحذف فقط: الرسائل المرفوضة (>30 يوم)، المكتملة (>3 أيام)، والمستنفدة (>30 يوم).\n'
+            'لن تُمس المبيعات أو القيود المحاسبية أو الكروت.\n\n'
+            'هل تريد المتابعة؟',
+            style: TextStyle(fontFamily: 'Tajawal', height: 1.45),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('إلغاء', style: TextStyle(fontFamily: 'Tajawal')),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('تنظيف', style: TextStyle(fontFamily: 'Tajawal')),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
     setState(() => _purging = true);
     final c = AppScope.of(context);
     final r = await c.maintenanceService.purgeExpiredMessages();
