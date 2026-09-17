@@ -36,6 +36,7 @@ import '../domain/services/local_message_parser.dart';
 import '../domain/services/local_payment_source_registry.dart';
 import '../domain/services/local_sale_service.dart';
 import '../domain/services/local_transfer_processor.dart';
+import '../domain/services/payment_source_guard.dart';
 import '../domain/services/unified_payment_event_engine.dart';
 import '../domain/services/services.dart';
 import '../platform/native_message_sender.dart';
@@ -215,7 +216,6 @@ final class AppContainer {
     final licenseService = LocalLicenseService(licenses: licenses, clock: clock);
     final docs = await getApplicationDocumentsDirectory();
     final backupService = LocalBackupService(settings: settings, clock: clock, ids: ids, backupDirectory: Directory(p.join(docs.path, 'backups')));
-    final smsHandler = IncomingSmsHandler(bridge: smsBridge, messages: messages, parser: parser, processor: processor, ids: ids, settings: settings, advanceService: advanceService);
     final mergeService = LocalAccountMergeService(customers: customers, transactions: transactions, auditLogs: auditLogs, unitOfWork: uow, clock: clock, ids: ids);
     final settlementService = LocalSettlementService(customers: customers, transactions: transactions, auditLogs: auditLogs, unitOfWork: uow, clock: clock, ids: ids);
     final retryService = LocalMessageRetryService(auditLogs: auditLogs, messages: messages, clock: clock, ids: ids);
@@ -223,8 +223,42 @@ final class AppContainer {
     final pendingReview = PendingMessageReviewService(messages: messages, parser: parser, customers: customers, customerService: customerService, balances: balanceService, auditLogs: auditLogs, unitOfWork: uow, clock: clock, ids: ids);
     final notificationBridge = NotificationBridge();
     final notificationSources = LocalPaymentSourceRegistry(settings: settings, clock: clock);
-    final notificationEngine = UnifiedPaymentEventEngine(messages: messages, parser: parser, processor: processor, ids: ids, settings: settings);
-    final notificationHandler = IncomingNotificationHandler(bridge: notificationBridge, sources: notificationSources, engine: notificationEngine);
+    final sourceGuard = PaymentSourceGuard(
+      wallets: wallets,
+      templates: transferTemplates,
+      notificationSources: notificationSources,
+    );
+    final smsEngine = UnifiedPaymentEventEngine(
+      messages: messages,
+      parser: parser,
+      processor: processor,
+      ids: ids,
+      settings: settings,
+      sourceGuard: sourceGuard,
+    );
+    final notificationEngine = UnifiedPaymentEventEngine(
+      messages: messages,
+      parser: parser,
+      processor: processor,
+      ids: ids,
+      settings: settings,
+      sourceGuard: sourceGuard,
+    );
+    final smsHandler = IncomingSmsHandler(
+      bridge: smsBridge,
+      messages: messages,
+      parser: parser,
+      processor: processor,
+      ids: ids,
+      settings: settings,
+      advanceService: advanceService,
+      engine: smsEngine,
+    );
+    final notificationHandler = IncomingNotificationHandler(
+      bridge: notificationBridge,
+      sources: notificationSources,
+      engine: notificationEngine,
+    );
 
     ThemeMode theme = ThemeMode.system;
     final themeSetting = await settings.find(SettingKeys.themeMode);
