@@ -1,6 +1,25 @@
 import 'money.dart';
 
-enum MessageProcessingStatus { received, parsed, processed, rejected, failed }
+enum MessageProcessingStatus {
+  /// Message stored, not yet parsed.
+  received,
+  /// Fields extracted and shape accepted.
+  parsed,
+  /// Temporary shortfall; eligible for retry / review.
+  pending,
+  /// Delivery attempt in progress.
+  sending,
+  /// Fully processed (ledger + delivery recorded as required).
+  processed,
+  /// Exhausted retry policy.
+  failedMaxAttempts,
+  /// Rejected by a known business rule.
+  rejected,
+  /// Recovered from a pending/failed state and re-entered the pipeline safely.
+  recovered,
+  /// Legacy / generic failure (prefer failedMaxAttempts when max attempts reached).
+  failed,
+}
 
 /// Classifies the extracted transfer identifier so identity resolution and
 /// delivery never treat an account/name/reference as a phone number.
