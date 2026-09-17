@@ -8,19 +8,51 @@ void main() {
   test('retries only transient failures', () {
     expect(policy.isRetryableCode('sms_delivery_failed'), isTrue);
     expect(policy.isRetryableCode('out_of_stock'), isFalse);
+    expect(policy.isRetryableCode('voucherSendFailed'), isTrue);
   });
 
-  test('uses bounded exponential backoff', () {
+  test('uses bounded exponential backoff with maxAttempts=3', () {
+    expect(policy.maxAttempts, 3);
     expect(policy.delayForAttempt(1), const Duration(seconds: 30));
     expect(policy.delayForAttempt(2), const Duration(seconds: 60));
     expect(policy.delayForAttempt(3), const Duration(seconds: 120));
-    expect(policy.delayForAttempt(5), const Duration(minutes: 8));
-    // Attempts are clamped to maxAttempts=5 before calculating the delay.
-    expect(policy.delayForAttempt(99), const Duration(minutes: 8));
+    // Clamped to maxAttempts=3 → same as attempt 3
+    expect(policy.delayForAttempt(99), const Duration(seconds: 120));
   });
 
-  test('terminal status remains rejected', () {
-    expect(policy.statusAfterFailure('out_of_stock'), MessageProcessingStatus.rejected);
-    expect(policy.statusAfterFailure('sms_delivery_failed'), MessageProcessingStatus.failed);
+  test('statusAfterFailure maps exhausted to failedMaxAttempts', () {
+    expect(
+      policy.statusAfterFailure('out_of_stock', attemptsAfter: 1),
+      MessageProcessingStatus.rejected,
+    );
+    expect(
+      policy.statusAfterFailure('sms_delivery_failed', attemptsAfter: 1),
+      MessageProcessingStatus.failed,
+    );
+    expect(
+      policy.statusAfterFailure('sms_delivery_failed', attemptsAfter: 3),
+      MessageProcessingStatus.failedMaxAttempts,
+    );
+  });
+
+  test('confirm-pending timeout is 15 minutes', () {
+    expect(policy.confirmPendingTimeout, const Duration(minutes: 15));
+    final last = DateTime.utc(2026, 9, 17, 12, 0);
+    expect(
+      policy.shouldRequeueAfterConfirmTimeout(
+        status: MessageProcessingStatus.sending,
+        lastAttemptAt: last,
+        now: last.add(const Duration(minutes: 14)),
+      ),
+      isFalse,
+    );
+    expect(
+      policy.shouldRequeueAfterConfirmTimeout(
+        status: MessageProcessingStatus.sending,
+        lastAttemptAt: last,
+        now: last.add(const Duration(minutes: 15)),
+      ),
+      isTrue,
+    );
   });
 }

@@ -1,16 +1,21 @@
 import '../entities/message.dart';
 
-/// Phase 4 retry policy. Only transient failures are retried automatically.
+/// Retry policy aligned with help-center screenshots: max 3 attempts.
+/// Transient failures stay retryable; exhausted attempts → failedMaxAttempts.
 final class MessageRetryPolicy {
   const MessageRetryPolicy({
-    this.maxAttempts = 5,
+    this.maxAttempts = 3,
     this.baseDelay = const Duration(seconds: 30),
     this.maxDelay = const Duration(minutes: 30),
+    this.confirmPendingTimeout = const Duration(minutes: 15),
   });
 
   final int maxAttempts;
   final Duration baseDelay;
   final Duration maxDelay;
+
+  /// Screenshot rule: if stuck awaiting network confirm > 15 minutes, re-queue.
+  final Duration confirmPendingTimeout;
 
   bool isRetryableCode(String code) => const {
         'commercial_flow_misconfigured',
@@ -25,6 +30,7 @@ final class MessageRetryPolicy {
         'transfer_ledger_missing',
         'message_save_failed',
         'message_status_update_failed',
+        RejectionRetryHints.voucherSendFailed,
       }.contains(code);
 
   bool canRetry(int attempts) => attempts < maxAttempts;
@@ -38,6 +44,33 @@ final class MessageRetryPolicy {
     return Duration(seconds: seconds > maxDelay.inSeconds ? maxDelay.inSeconds : seconds);
   }
 
-  MessageProcessingStatus statusAfterFailure(String code) =>
-      isRetryableCode(code) ? MessageProcessingStatus.failed : MessageProcessingStatus.rejected;
+  /// Status after a failed attempt.
+  MessageProcessingStatus statusAfterFailure(String code, {required int attemptsAfter}) {
+    if (!isRetryableCode(code)) {
+      return MessageProcessingStatus.rejected;
+    }
+    if (!canRetry(attemptsAfter)) {
+      return MessageProcessingStatus.failedMaxAttempts;
+    }
+    return MessageProcessingStatus.failed;
+  }
+
+  /// Whether a sending/pending message should be re-queued by timeout.
+  bool shouldRequeueAfterConfirmTimeout({
+    required MessageProcessingStatus status,
+    required DateTime lastAttemptAt,
+    DateTime? now,
+  }) {
+    if (status != MessageProcessingStatus.sending &&
+        status != MessageProcessingStatus.pending) {
+      return false;
+    }
+    final clock = now ?? DateTime.now().toUtc();
+    return clock.difference(lastAttemptAt) >= confirmPendingTimeout;
+  }
+}
+
+/// Local string aliases so policy does not hard-depend on RejectionCodes import order.
+abstract final class RejectionRetryHints {
+  static const voucherSendFailed = 'voucherSendFailed';
 }
