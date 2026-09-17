@@ -70,6 +70,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
     final reserved = await c.cards.listByStatus(domain.CardStatus.reserved);
     final sold = await c.cards.listByStatus(domain.CardStatus.sold);
     final disabled = await c.cards.listByStatus(domain.CardStatus.disabled);
+    final expired = await c.cards.listByStatus(domain.CardStatus.expired);
     if (!mounted) return;
     if (cats is Failure) {
       setState(() {
@@ -83,6 +84,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
       if (reserved is Success<List<domain.Card>>) ...reserved.value,
       if (sold is Success<List<domain.Card>>) ...sold.value,
       if (disabled is Success<List<domain.Card>>) ...disabled.value,
+      if (expired is Success<List<domain.Card>>) ...expired.value,
     ];
     setState(() {
       _loading = false;
@@ -181,6 +183,14 @@ class _InventoryScreenState extends State<InventoryScreen> {
       ),
     );
     if (mounted) await _load();
+  }
+
+  Future<void> _copyField(String value, String message) async {
+    await Clipboard.setData(ClipboardData(text: value));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message, style: const TextStyle(fontFamily: 'Tajawal'))),
+    );
   }
 
   void _resetInventoryFilters() {
@@ -434,6 +444,14 @@ class _InventoryScreenState extends State<InventoryScreen> {
                                           );
                                         }
                                       },
+                                      onCopySerial: () => _copyField(
+                                        card.serialNumber,
+                                        'تم نسخ الرقم التسلسلي',
+                                      ),
+                                      onCopySecret: () => _copyField(
+                                        card.secretCode,
+                                        'تم نسخ رمز الكود',
+                                      ),
                                     );
                                   },
                                 ),
