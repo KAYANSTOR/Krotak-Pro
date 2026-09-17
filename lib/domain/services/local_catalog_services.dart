@@ -197,7 +197,7 @@ final class LocalWalletCatalogService implements WalletCatalogService {
     final saved = await wallets.save(updated);
     if (saved is Failure<void>) return Failure(saved.error);
     await _writeExtras(updated.id, updated.senderId, updated.sourceMode, updated.packageName);
-    await auditLogs.append(AuditLog(id: ids.next('audit'), entityType: 'wallet', entityId: updated.id, action: 'updated', occurredAt: clock.now()));
+    await auditLogs.append(AuditLog(id: ids.next('audit'), entityType: 'wallet', entityId: updated.id, action: 'status_changed', payloadJson: '{"status":"' + updated.status.name + '"}', occurredAt: clock.now()));
     return Success(updated);
   }
   @override
