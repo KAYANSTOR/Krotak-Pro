@@ -1,4 +1,5 @@
 import '../../core/result.dart';
+import 'local_pos_account_registry.dart';
 import '../entities/message.dart';
 import '../entities/payment_event.dart';
 import '../entities/pos_account.dart';
