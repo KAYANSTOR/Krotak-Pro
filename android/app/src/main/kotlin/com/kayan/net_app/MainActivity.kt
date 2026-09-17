@@ -27,6 +27,9 @@ class MainActivity : FlutterActivity(), SmsListener {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        if (BootReceiver.consumePendingRecovery(this)) {
+            android.util.Log.i("NetMain", "pending recovery after boot — Flutter resume will run recovery pass")
+        }
 
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, methodChannelName).setMethodCallHandler { call, result ->
             when (call.method) {
