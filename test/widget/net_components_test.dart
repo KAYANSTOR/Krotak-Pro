@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:net_app/domain/entities/money.dart';
+import 'package:net_app/domain/entities/transaction.dart';
 import 'package:net_app/ui/theme/kayan_theme.dart';
 import 'package:net_app/ui/widgets/async_views.dart';
 import 'package:net_app/ui/widgets/net/net_alert_banner.dart';
@@ -118,16 +120,18 @@ void main() {
   });
 
   testWidgets('NetRecentTransactionCard shows type amount status', (tester) async {
-    await tester.pumpWidget(
-      _wrap(const NetRecentTransactionCard(
-        title: 'بيع كرت',
-        amountText: '200 ر.ي',
-        statusText: 'مكتملة',
-      )),
+    const transaction = Transaction(
+      id: 'tx-1',
+      type: TransactionType.sale,
+      status: TransactionStatus.completed,
+      amount: Money(minorUnits: 20000, currencyCode: 'YER'),
+      createdAt: DateTime(2026, 9, 14, 12),
+      reference: 'ref-1',
     );
-    expect(find.text('بيع كرت'), findsOneWidget);
-    expect(find.text('200 ر.ي'), findsOneWidget);
-    expect(find.text('مكتملة'), findsOneWidget);
+    await tester.pumpWidget(_wrap(const NetRecentTransactionCard(transaction: transaction)));
+    expect(find.textContaining('sale'), findsOneWidget);
+    expect(find.textContaining('200'), findsOneWidget);
+    expect(find.text('completed'), findsOneWidget);
   });
 
   testWidgets('NetDashboardHeader RTL layout', (tester) async {
