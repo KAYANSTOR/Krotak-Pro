@@ -12,6 +12,8 @@ import 'package:net_app/domain/repositories/unit_of_work.dart';
 import 'package:net_app/domain/services/pending_message_review_service.dart';
 import 'package:net_app/domain/services/services.dart';
 
+import '../helpers/trusted_payment_source.dart';
+
 void main() {
   group('PendingMessageReviewService', () {
     late _FakeMessages messages;
@@ -37,13 +39,14 @@ void main() {
         unitOfWork: const _PassthroughUow(),
         clock: const _FixedClock(),
         ids: SequentialIdGenerator(),
+        sourceGuard: trustedPaymentSourceGuard(),
       );
     });
 
     test('approve credits existing customer and marks processed', () async {
       customers.store['c1'] = Customer(id: 'c1', displayName: 'عميل', status: CustomerStatus.active, createdAt: DateTime.utc(2026, 1, 1), updatedAt: DateTime.utc(2026, 1, 1));
       customers.byIdentifier['770123456'] = 'c1';
-      messages.store['m1'] = IncomingMessage(id: 'm1', sender: 'JAIB', body: 'body', receivedAt: DateTime.utc(2026, 9, 12), status: MessageProcessingStatus.parsed);
+      messages.store['m1'] = IncomingMessage(id: 'm1', sender: 'bank', body: 'body', receivedAt: DateTime.utc(2026, 9, 12), status: MessageProcessingStatus.parsed);
       final result = await service.approve('m1');
       expect(result, isA<Success<Transaction>>());
       expect(messages.store['m1']!.status, MessageProcessingStatus.processed);
@@ -52,7 +55,7 @@ void main() {
     });
 
     test('reject marks rejected and audits', () async {
-      messages.store['m2'] = IncomingMessage(id: 'm2', sender: 'JAIB', body: 'body', receivedAt: DateTime.utc(2026, 9, 12), status: MessageProcessingStatus.parsed);
+      messages.store['m2'] = IncomingMessage(id: 'm2', sender: 'bank', body: 'body', receivedAt: DateTime.utc(2026, 9, 12), status: MessageProcessingStatus.parsed);
       final result = await service.reject('m2', reason: 'اختبار');
       expect(result, isA<Success<void>>());
       expect(messages.store['m2']!.status, MessageProcessingStatus.rejected);
@@ -60,7 +63,7 @@ void main() {
     });
 
     test('approve creates customer when missing', () async {
-      messages.store['m3'] = IncomingMessage(id: 'm3', sender: 'JAIB', body: 'body', receivedAt: DateTime.utc(2026, 9, 12), status: MessageProcessingStatus.parsed);
+      messages.store['m3'] = IncomingMessage(id: 'm3', sender: 'bank', body: 'body', receivedAt: DateTime.utc(2026, 9, 12), status: MessageProcessingStatus.parsed);
       final result = await service.approve('m3');
       expect(result, isA<Success<Transaction>>());
       expect(customerService.created, 1);
@@ -98,27 +101,26 @@ final class _FakeCustomers implements CustomerRepository {
   @override Future<Result<Customer?>> findById(String id) async => Success(store[id]);
   @override Future<Result<Customer?>> findByIdentifier(String value) async { final id = byIdentifier[value]; return Success(id == null ? null : store[id]); }
   @override Future<Result<void>> save(Customer customer) async { store[customer.id] = customer; return const Success(null); }
-  @override Future<Result<void>> saveIdentifier(CustomerIdentifier identifier) async { byIdentifier[identifier.value] = identifier.customerId; return const Success(null); }
   @override Future<Result<List<Customer>>> search(String query) async => Success(store.values.toList());
   @override Future<Result<List<CustomerIdentifier>>> listIdentifiers(String customerId) async => const Success([]);
+  @override Future<Result<void>> saveIdentifier(CustomerIdentifier identifier) async { return const Success(null); }
 }
 final class _FakeCustomerService implements CustomerService {
   _FakeCustomerService(this.customers);
   final _FakeCustomers customers;
   int created = 0;
-  @override Future<Result<Customer>> create({required String displayName, required CustomerIdentifierType identifierType, required String identifierValue}) async { created++; final c = Customer(id: 'c-new-$created', displayName: displayName, status: CustomerStatus.active, createdAt: DateTime.utc(2026, 9, 12), updatedAt: DateTime.utc(2026, 9, 12)); customers.store[c.id] = c; customers.byIdentifier[identifierValue] = c.id; return Success(c); }
-  @override Future<Result<void>> blacklist(String customerId) async => const Success(null);
-  @override Future<Result<void>> addIdentifier({required String customerId, required CustomerIdentifierType type, required String value, required bool isPrimary}) async => const Success(null);
-  @override Future<Result<void>> bindPrimaryGsm({required String customerId, required String phone}) async { customers.byIdentifier[phone] = customerId; return const Success(null); }
+  @override Future<Result<Customer>> create({required String displayName, required CustomerIdentifierType identifierType, required String identifierValue}) async { created += 1; final c = Customer(id: 'new-$created', displayName: displayName, status: CustomerStatus.active, createdAt: DateTime.utc(2026, 1, 1), updatedAt: DateTime.utc(2026, 1, 1)); customers.store[c.id] = c; customers.byIdentifier[identifierValue] = c.id; return Success(c); }
+  @override Future<Result<void>> addIdentifier({required String customerId, required CustomerIdentifierType type, required String value, bool isPrimary = false}) async => const Success(null);
+  @override Future<Result<void>> bindPrimaryGsm({required String customerId, required String phone}) async => const Success(null);
 }
 final class _FakeBalances implements CustomerBalanceService {
   int credits = 0;
-  @override Future<Result<Money>> getBalance({required String customerId, required String currencyCode}) async => Success(Money(minorUnits: 0, currencyCode: currencyCode));
-  @override Future<Result<Money>> getTotalOutstanding({required String currencyCode}) async => Success(Money(minorUnits: 0, currencyCode: currencyCode));
-  @override Future<Result<Transaction>> credit({required String customerId, required Money amount, String? reference}) async { credits++; return Success(Transaction(id: 'tx-$credits', customerId: customerId, type: TransactionType.deposit, status: TransactionStatus.completed, amount: amount, createdAt: DateTime.utc(2026, 9, 12), reference: reference)); }
+  @override Future<Result<Money>> getBalance({required String customerId, required String currencyCode}) async => const Success(Money(minorUnits: 0, currencyCode: 'YER'));
+  @override Future<Result<Transaction>> recordCredit({required String customerId, required Money amount, required String reference, required String source, required DateTime at, required String operationId}) async { credits += 1; return Success(Transaction(id: operationId, type: TransactionType.deposit, status: TransactionStatus.completed, amount: amount, createdAt: at, customerId: customerId, reference: reference)); }
+  @override Future<Result<Transaction>> recordDebit({required String customerId, required Money amount, required String reference, required String source, required DateTime at, required String operationId}) async => throw UnimplementedError();
 }
 final class _FakeAudit implements AuditLogRepository {
   final logs = <AuditLog>[];
   @override Future<Result<void>> append(AuditLog log) async { logs.add(log); return const Success(null); }
-  @override Future<Result<List<AuditLog>>> findByEntity(String entityType, String entityId) async => Success(logs.where((l) => l.entityId == entityId).toList());
+  @override Future<Result<List<AuditLog>>> findByEntity(String entityType, String entityId) async => Success(logs.where((e) => e.entityId == entityId).toList());
 }
