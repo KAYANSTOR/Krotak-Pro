@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import 'application/app_container.dart';
@@ -23,9 +25,21 @@ Future<void> main() async {
 
   final container = await AppContainer.bootstrap(templates: defaultTemplates);
   await _loadThemeMode(container);
-  await container.startBackgroundHandlers();
 
+  // Background integrations must never block the first Flutter frame.
+  // A native/platform-service failure should not leave the app on the
+  // launcher splash screen. The service can recover/retry independently.
   runApp(NetApp(container: container));
+  unawaited(_startBackgroundHandlersSafely(container));
+}
+
+Future<void> _startBackgroundHandlersSafely(AppContainer container) async {
+  try {
+    await container.startBackgroundHandlers();
+  } catch (error, stackTrace) {
+    debugPrint('Background handler startup failed: $error');
+    debugPrintStack(stackTrace: stackTrace);
+  }
 }
 
 Future<void> _loadThemeMode(AppContainer container) async {
