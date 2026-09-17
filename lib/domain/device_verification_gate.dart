@@ -63,10 +63,48 @@ abstract final class DeviceVerificationCatalog {
       detail: 'قياس تأخير الإرسال على جهاز حقيقي وفق سياسة المشغّل.',
       phaseRef: 'Phase 8',
     ),
+    DeviceVerificationItem(
+      id: 'visual_cards',
+      title: 'تدقيق بصري — الكروت',
+      detail: 'فئات وشرائح وتذكرة واستيراد وعمليات محجوز على جهاز حقيقي (فاتح/داكن).',
+      phaseRef: 'Phase 11 / مطابقة 7',
+    ),
+    DeviceVerificationItem(
+      id: 'visual_reports_pos',
+      title: 'تدقيق بصري — التقارير وPOS',
+      detail: 'تقرير فترة + مستحق وعمولة وتسوية نقطة بيع على جهاز حقيقي.',
+      phaseRef: 'Phase 11 / مطابقة 8',
+    ),
+    DeviceVerificationItem(
+      id: 'visual_direct_sale',
+      title: 'تدقيق بصري — البيع المباشر',
+      detail: 'نقدي / آجل / هدية / نقطة بيع عبر Domain على جهاز حقيقي.',
+      phaseRef: 'Phase 11 / مطابقة 9',
+    ),
+    DeviceVerificationItem(
+      id: 'visual_offers',
+      title: 'تدقيق بصري — العروض',
+      detail: 'إنشاء وتعديل وتفعيل/تعطيل وحذف عرض من الكتالوج المحلي.',
+      phaseRef: 'Phase 11 / مطابقة 9',
+    ),
+    DeviceVerificationItem(
+      id: 'visual_system_check',
+      title: 'تدقيق بصري — فحص النظام',
+      detail: 'فحص النظام وتنظيف السجلات على KayanPalette في الوضعين.',
+      phaseRef: 'Phase 11 / مطابقة 10',
+    ),
   ];
 
   /// Gates that cannot be marked passed without operator measurement notes.
   static const measurementGateIds = {'bulk_import', 'broadcast_rate'};
+
+  static const visualGateIds = {
+    'visual_cards',
+    'visual_reports_pos',
+    'visual_direct_sale',
+    'visual_offers',
+    'visual_system_check',
+  };
 
   static DeviceVerificationItem? byId(String id) {
     for (final item in items) {
