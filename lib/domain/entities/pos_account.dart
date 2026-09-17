@@ -2,10 +2,7 @@ import 'wallet.dart';
 
 /// وضع نسبة عمولة نقطة البيع — 1.0.9.
 enum PosPercentageMode {
-  /// اعتماد نسب الفئة الافتراضية.
   defaultCategory,
-
-  /// عمولة صفرية لكل الفئات.
   zero,
 }
 
@@ -61,23 +58,49 @@ final class PosAccount {
         'percentageMode': percentageMode.name,
       };
 
+  /// Defensive decoder for persisted settings. Old/corrupt records must never
+  /// crash the UI with a null-check operator; invalid required fields are
+  /// rejected explicitly and handled by the registry as corrupt data.
   static PosAccount fromJson(Map<String, Object?> json) {
+    String requiredString(String key) {
+      final value = json[key];
+      if (value is String && value.trim().isNotEmpty) return value;
+      throw FormatException('Invalid POS account field: $key');
+    }
+
     final rawIds = json['identifiers'];
     final modeRaw = json['percentageMode'] as String?;
+    final statusRaw = json['status'] as String?;
+
+    final status = _parseStatus(statusRaw);
+    final percentageMode = _parsePercentageMode(modeRaw);
+
     return PosAccount(
-      posId: json['posId']! as String,
-      customerId: json['customerId']! as String,
-      name: json['name']! as String,
+      posId: requiredString('posId'),
+      customerId: requiredString('customerId'),
+      name: requiredString('name'),
       identifiers: rawIds is List
-          ? rawIds.map((e) => e.toString()).toList(growable: false)
+          ? rawIds.whereType<String>().where((e) => e.trim().isNotEmpty).toList(growable: false)
           : const <String>[],
       notifyPhone: json['notifyPhone'] as String?,
-      status: PointOfSaleStatus.values.byName(
-        (json['status'] as String?) ?? PointOfSaleStatus.active.name,
-      ),
-      percentageMode: PosPercentageMode.values.byName(
-        modeRaw ?? PosPercentageMode.defaultCategory.name,
-      ),
+      status: status,
+      percentageMode: percentageMode,
     );
+  }
+
+  static PointOfSaleStatus _parseStatus(String? raw) {
+    if (raw == null) return PointOfSaleStatus.active;
+    for (final value in PointOfSaleStatus.values) {
+      if (value.name == raw) return value;
+    }
+    return PointOfSaleStatus.active;
+  }
+
+  static PosPercentageMode _parsePercentageMode(String? raw) {
+    if (raw == null) return PosPercentageMode.defaultCategory;
+    for (final value in PosPercentageMode.values) {
+      if (value.name == raw) return value;
+    }
+    return PosPercentageMode.defaultCategory;
   }
 }
