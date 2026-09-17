@@ -11,6 +11,8 @@ import 'package:net_app/domain/services/payment_fingerprint_service.dart';
 import 'package:net_app/domain/services/services.dart';
 import 'package:net_app/domain/services/unified_payment_event_engine.dart';
 
+import '../helpers/trusted_payment_source.dart';
+
 void main() {
   group('PaymentFingerprintService', () {
     const service = PaymentFingerprintService();
@@ -87,6 +89,7 @@ void main() {
         processor: processor,
         ids: SequentialIdGenerator(),
         settings: _FakeSettings({}),
+        sourceGuard: trustedPaymentSourceGuard(),
       );
 
       final result = await engine.ingest(
@@ -123,12 +126,13 @@ void main() {
         ),
         processor: processor,
         ids: SequentialIdGenerator(),
+        sourceGuard: trustedPaymentSourceGuard(),
       );
 
       await engine.ingest(
         PaymentEvent(
           channel: PaymentChannel.sms,
-          sourceKey: 'JIB',
+          sourceKey: 'bank',
           body: 'sms REF-DUP',
           receivedAt: DateTime.utc(2026, 9, 13),
         ),
@@ -168,6 +172,7 @@ void main() {
         settings: _FakeSettings({
           SettingKeys.smsAutoProcessingEnabled: 'false',
         }),
+        sourceGuard: trustedPaymentSourceGuard(),
       );
 
       await engine.ingest(
@@ -194,6 +199,7 @@ void main() {
         parser: _FailingParser(),
         processor: processor,
         ids: SequentialIdGenerator(),
+        sourceGuard: trustedPaymentSourceGuard(),
       );
 
       final result = await engine.ingest(
