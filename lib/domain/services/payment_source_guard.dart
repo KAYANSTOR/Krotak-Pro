@@ -39,16 +39,18 @@ final class PaymentSourceGuard {
         .where((w) => w.status == WalletStatus.active)
         .toList(growable: false);
 
-    Wallet? wallet;
+    final matchingWallets = <Wallet>[];
     if (event.channel == PaymentChannel.sms) {
       final incomingSender = _normalize(event.sourceKey);
-      wallet = activeWallets.where((w) {
-        if (w.sourceMode != WalletSourceMode.sms) return false;
-        final sender = w.senderId;
-        return sender != null &&
-            sender.trim().isNotEmpty &&
-            _normalize(sender) == incomingSender;
-      }).firstOrNull;
+      matchingWallets.addAll(
+        activeWallets.where((w) {
+          if (w.sourceMode != WalletSourceMode.sms) return false;
+          final sender = w.senderId;
+          return sender != null &&
+              sender.trim().isNotEmpty &&
+              _normalize(sender) == incomingSender;
+        }),
+      );
     } else if (event.channel == PaymentChannel.notification) {
       final package = event.packageName?.trim();
       if (package == null || package.isEmpty) {
@@ -59,11 +61,13 @@ final class PaymentSourceGuard {
           ),
         );
       }
-      wallet = activeWallets.where((w) =>
-          w.sourceMode == WalletSourceMode.notification &&
-          w.packageName != null &&
-          w.packageName!.trim() == package).firstOrNull;
-      if (wallet != null && notificationSources != null) {
+      matchingWallets.addAll(
+        activeWallets.where((w) =>
+            w.sourceMode == WalletSourceMode.notification &&
+            w.packageName != null &&
+            w.packageName!.trim() == package),
+      );
+      if (matchingWallets.isNotEmpty && notificationSources != null) {
         final configured = await notificationSources!.list();
         if (configured is Failure<List<PaymentSource>>) {
           return Failure(configured.error);
@@ -71,11 +75,11 @@ final class PaymentSourceGuard {
         final source = (configured as Success<List<PaymentSource>>).value
             .where((s) => s.packageName == package && s.enabled)
             .firstOrNull;
-        if (source == null) wallet = null;
+        if (source == null) matchingWallets.clear();
       }
     }
 
-    if (wallet == null) {
+    if (matchingWallets.isEmpty) {
       return const Failure(
         AppFailure(
           code: 'untrusted_payment_source',
@@ -83,6 +87,15 @@ final class PaymentSourceGuard {
         ),
       );
     }
+    if (matchingWallets.length > 1) {
+      return const Failure(
+        AppFailure(
+          code: 'payment_source_ambiguous',
+          message: 'Payment source is linked to more than one active wallet',
+        ),
+      );
+    }
+    final wallet = matchingWallets.single;
 
     final configuredTemplates = await templates.listAll();
     if (configuredTemplates is Failure<List<TransferTemplate>>) {
