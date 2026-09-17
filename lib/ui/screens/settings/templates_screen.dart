@@ -4,12 +4,17 @@ import '../../../core/result.dart';
 import '../../../domain/entities/message.dart';
 import '../../../domain/entities/wallet.dart';
 import '../../app_scope.dart';
-import '../../theme/kayan_palette.dart';
 import '../../widgets/async_views.dart';
 import 'template_simulation_screen.dart';
 import 'template_wizard_screen.dart';
 
-/// قائمة قوالب التحويل — مطابقة أسلوب فيديو Z Net (أولوية + تفعيل + قائمة).
+/// قائمة قوالب التحويل — مطابقة 100% لإطار فيديو Z Net (`tpl_sys50.jpg`).
+///
+/// - عنوان: قوالب {المحفظة} + عنوان فرعي
+/// - بطاقة: ✓ أخضر · اسم القالب · شارة نشط · أولوية · Switch · ⋮
+/// - قائمة ⋮: تعديل / حذف
+/// - FAB بنفسجي: قالب جديد +
+/// - ربط Domain: listByWallet / save / delete + reloadTemplates
 class TemplatesScreen extends StatefulWidget {
   const TemplatesScreen({super.key, this.walletId, this.walletName});
 
@@ -57,7 +62,10 @@ class _TemplatesScreenState extends State<TemplatesScreen> {
       _loading = false;
       _walletNames = names;
       if (r is Success<List<TransferTemplate>>) {
-        _items = r.value;
+        // ترتيب حسب الأولوية تصاعدياً (الأقل = أعلى أولوية) كما في الفيديو
+        final list = List<TransferTemplate>.from(r.value);
+        list.sort((a, b) => a.priority.compareTo(b.priority));
+        _items = list;
       } else {
         _error = (r as Failure).error.message;
       }
@@ -84,7 +92,12 @@ class _TemplatesScreenState extends State<TemplatesScreen> {
     final r = await c.transferTemplates.save(t.copyWith(isActive: active));
     if (r is Failure && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(r.error.message, style: const TextStyle(fontFamily: 'Tajawal'))),
+        SnackBar(
+          content: Text(
+            r.error.message,
+            style: const TextStyle(fontFamily: 'Tajawal'),
+          ),
+        ),
       );
     } else {
       await _reloadParser();
@@ -95,13 +108,30 @@ class _TemplatesScreenState extends State<TemplatesScreen> {
   Future<void> _delete(TransferTemplate t) async {
     final ok = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('حذف القالب؟', style: TextStyle(fontFamily: 'Tajawal')),
-        content: Text('سيتم حذف «${t.name}» نهائيًا.', style: const TextStyle(fontFamily: 'Tajawal')),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('إلغاء', style: TextStyle(fontFamily: 'Tajawal'))),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('حذف', style: TextStyle(fontFamily: 'Tajawal'))),
-        ],
+      builder: (ctx) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Text(
+            'حذف القالب؟',
+            style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w800),
+          ),
+          content: Text(
+            'سيتم حذف «${t.name}» نهائيًا.',
+            style: const TextStyle(fontFamily: 'Tajawal'),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('إلغاء', style: TextStyle(fontFamily: 'Tajawal')),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: const Color(0xFFDC2626)),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('حذف', style: TextStyle(fontFamily: 'Tajawal')),
+            ),
+          ],
+        ),
       ),
     );
     if (ok != true) return;
@@ -109,7 +139,12 @@ class _TemplatesScreenState extends State<TemplatesScreen> {
     final r = await c.transferTemplates.delete(t.id);
     if (r is Failure && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(r.error.message, style: const TextStyle(fontFamily: 'Tajawal'))),
+        SnackBar(
+          content: Text(
+            r.error.message,
+            style: const TextStyle(fontFamily: 'Tajawal'),
+          ),
+        ),
       );
     } else {
       await _reloadParser();
@@ -117,30 +152,63 @@ class _TemplatesScreenState extends State<TemplatesScreen> {
     await _load();
   }
 
-  void _menu(TransferTemplate t) {
+  void _showMenu(TransferTemplate t) {
     showModalBottomSheet<void>(
       context: context,
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.edit_outlined),
-              title: const Text('تعديل', style: TextStyle(fontFamily: 'Tajawal')),
-              onTap: () {
-                Navigator.pop(ctx);
-                _openWizard(existing: t);
-              },
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+          ),
+          child: SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const SizedBox(height: 8),
+                Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.edit_outlined, color: Color(0xFF0F766E)),
+                  title: const Text(
+                    'تعديل',
+                    style: TextStyle(
+                      fontFamily: 'Tajawal',
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _openWizard(existing: t);
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.delete_outline, color: Color(0xFFDC2626)),
+                  title: const Text(
+                    'حذف',
+                    style: TextStyle(
+                      fontFamily: 'Tajawal',
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFFDC2626),
+                    ),
+                  ),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _delete(t);
+                  },
+                ),
+                const SizedBox(height: 8),
+              ],
             ),
-            ListTile(
-              leading: Icon(Icons.delete_outline, color: Theme.of(context).colorScheme.error),
-              title: Text('حذف', style: TextStyle(fontFamily: 'Tajawal', color: Theme.of(context).colorScheme.error)),
-              onTap: () {
-                Navigator.pop(ctx);
-                _delete(t);
-              },
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -148,23 +216,47 @@ class _TemplatesScreenState extends State<TemplatesScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final kayan = context.kayan;
-    final title = widget.walletName != null ? 'قوالب ${widget.walletName}' : 'قوالب التحويل';
+    final title = widget.walletName != null
+        ? 'قوالب ${widget.walletName}'
+        : 'قوالب التحويل';
+    final subtitle = widget.walletName != null
+        ? 'إدارة قوالب استخراج البيانات لهذه المحفظة'
+        : 'إدارة قوالب استخراج البيانات';
 
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
-        backgroundColor: kayan.appBackground,
+        backgroundColor: const Color(0xFFF0F9F8),
         appBar: AppBar(
-          backgroundColor: kayan.surface,
+          backgroundColor: Colors.white,
+          elevation: 0,
+          surfaceTintColor: Colors.transparent,
+          leading: IconButton(
+            tooltip: 'رجوع',
+            onPressed: () => Navigator.maybePop(context),
+            icon: const Icon(Icons.arrow_forward, color: Color(0xFF0F172A)),
+          ),
           title: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(title, textAlign: TextAlign.center, style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w800, color: kayan.textPrimary)),
               Text(
-                'إدارة قوالب استخراج البيانات',
+                title,
                 textAlign: TextAlign.center,
-                style: TextStyle(fontFamily: 'Tajawal', fontSize: 12, color: kayan.textSecondary),
+                style: const TextStyle(
+                  fontFamily: 'Tajawal',
+                  fontWeight: FontWeight.w800,
+                  fontSize: 18,
+                  color: Color(0xFF0F172A),
+                ),
+              ),
+              Text(
+                subtitle,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontFamily: 'Tajawal',
+                  fontSize: 12,
+                  color: Color(0xFF64748B),
+                ),
               ),
             ],
           ),
@@ -172,9 +264,13 @@ class _TemplatesScreenState extends State<TemplatesScreen> {
             IconButton(
               tooltip: 'محاكاة',
               onPressed: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => TemplateSimulationScreen(initialWalletId: widget.walletId)),
+                MaterialPageRoute(
+                  builder: (_) => TemplateSimulationScreen(
+                    initialWalletId: widget.walletId,
+                  ),
+                ),
               ),
-              icon: const Icon(Icons.science_outlined),
+              icon: const Icon(Icons.science_outlined, color: Color(0xFF0F766E)),
             ),
           ],
         ),
@@ -182,97 +278,204 @@ class _TemplatesScreenState extends State<TemplatesScreen> {
           onPressed: () => _openWizard(),
           backgroundColor: const Color(0xFFA855F7),
           foregroundColor: Colors.white,
-          icon: const Icon(Icons.add),
-          label: const Text('قالب جديد', style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w700)),
+          elevation: 2,
+          icon: const Icon(Icons.add, size: 22),
+          label: const Text(
+            'قالب جديد',
+            style: TextStyle(
+              fontFamily: 'Tajawal',
+              fontWeight: FontWeight.w700,
+              fontSize: 14,
+            ),
+          ),
         ),
         body: _loading
             ? const AsyncLoadingView()
             : _error != null
                 ? AsyncErrorView(message: _error!, onRetry: _load)
                 : _items.isEmpty
-                    ? AsyncEmptyView(message: 'لا قوالب', actionLabel: 'إضافة', onAction: () => _openWizard())
+                    ? AsyncEmptyView(
+                        message: 'لا قوالب بعد',
+                        actionLabel: 'إضافة قالب',
+                        onAction: () => _openWizard(),
+                      )
                     : RefreshIndicator(
+                        color: const Color(0xFF0F766E),
                         onRefresh: _load,
                         child: ListView.separated(
-                          padding: const EdgeInsets.fromLTRB(16, 12, 16, 88),
+                          padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
                           itemCount: _items.length,
                           separatorBuilder: (_, __) => const SizedBox(height: 10),
-                          itemBuilder: (_, i) {
-                            final t = _items[i];
-                            final walletLabel = t.walletId == null ? null : _walletNames[t.walletId!];
-                            return Material(
-                              color: kayan.surface,
-                              borderRadius: BorderRadius.circular(14),
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                                child: Row(
-                                  children: [
-                                    IconButton(
-                                      onPressed: () => _menu(t),
-                                      icon: Icon(Icons.more_vert, color: kayan.textTertiary),
-                                    ),
-                                    Switch.adaptive(
-                                      value: t.isActive,
-                                      onChanged: (v) => _toggle(t, v),
-                                    ),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.end,
-                                        children: [
-                                          Text(
-                                            t.name,
-                                            style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w700, color: kayan.textPrimary),
-                                          ),
-                                          const SizedBox(height: 4),
-                                          Row(
-                                            mainAxisAlignment: MainAxisAlignment.end,
-                                            children: [
-                                              Container(
-                                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                                decoration: BoxDecoration(
-                                                  color: t.isActive
-                                                      ? const Color(0xFF059669).withValues(alpha: 0.12)
-                                                      : kayan.surfaceVariant,
-                                                  borderRadius: BorderRadius.circular(8),
-                                                ),
-                                                child: Text(
-                                                  t.isActive ? 'نشط' : 'متوقف',
-                                                  style: TextStyle(
-                                                    fontFamily: 'Tajawal',
-                                                    fontSize: 11,
-                                                    color: t.isActive ? const Color(0xFF059669) : kayan.textTertiary,
-                                                  ),
-                                                ),
-                                              ),
-                                              const SizedBox(width: 8),
-                                              Text(
-                                                'أولوية: ${t.priority}',
-                                                style: TextStyle(fontFamily: 'Tajawal', fontSize: 12, color: kayan.textSecondary),
-                                              ),
-                                              if (walletLabel != null) ...[
-                                                const SizedBox(width: 8),
-                                                Text(
-                                                  walletLabel,
-                                                  style: TextStyle(fontFamily: 'Tajawal', fontSize: 11, color: kayan.textTertiary),
-                                                ),
-                                              ],
-                                            ],
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Icon(
-                                      Icons.check_circle,
-                                      color: t.isActive ? const Color(0xFF10B981) : kayan.border,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            );
-                          },
+                          itemBuilder: (_, i) => _TemplateCard(
+                            template: _items[i],
+                            walletLabel: _items[i].walletId == null
+                                ? null
+                                : _walletNames[_items[i].walletId!],
+                            onToggle: (v) => _toggle(_items[i], v),
+                            onMenu: () => _showMenu(_items[i]),
+                          ),
                         ),
                       ),
+      ),
+    );
+  }
+}
+
+/// بطاقة قالب مطابقة لإطار `tpl_sys50.jpg`:
+/// [⋮] [Switch]  …  [اسم + شارات]  [✓]
+class _TemplateCard extends StatelessWidget {
+  const _TemplateCard({
+    required this.template,
+    required this.onToggle,
+    required this.onMenu,
+    this.walletLabel,
+  });
+
+  final TransferTemplate template;
+  final String? walletLabel;
+  final ValueChanged<bool> onToggle;
+  final VoidCallback onMenu;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = template;
+    final active = t.isActive;
+
+    return Material(
+      color: Colors.white,
+      elevation: 0,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFFE2E8F0)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.03),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+        child: Row(
+          children: [
+            // ⋮ قائمة
+            IconButton(
+              onPressed: onMenu,
+              visualDensity: VisualDensity.compact,
+              icon: const Icon(Icons.more_vert, color: Color(0xFF94A3B8), size: 22),
+            ),
+            // Switch
+            Switch.adaptive(
+              value: active,
+              activeColor: const Color(0xFF0F766E),
+              onChanged: onToggle,
+            ),
+            const SizedBox(width: 4),
+            // المحتوى النصي
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    t.name,
+                    textAlign: TextAlign.right,
+                    style: const TextStyle(
+                      fontFamily: 'Tajawal',
+                      fontWeight: FontWeight.w700,
+                      fontSize: 15,
+                      color: Color(0xFF0F172A),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      // شارة نشط / متوقف
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: active
+                              ? const Color(0xFF059669).withValues(alpha: 0.12)
+                              : const Color(0xFFF1F5F9),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 6,
+                              height: 6,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: active
+                                    ? const Color(0xFF059669)
+                                    : const Color(0xFF94A3B8),
+                              ),
+                            ),
+                            const SizedBox(width: 5),
+                            Text(
+                              active ? 'نشط' : 'متوقف',
+                              style: TextStyle(
+                                fontFamily: 'Tajawal',
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: active
+                                    ? const Color(0xFF059669)
+                                    : const Color(0xFF64748B),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        'أولوية: ${t.priority}',
+                        style: const TextStyle(
+                          fontFamily: 'Tajawal',
+                          fontSize: 12,
+                          color: Color(0xFF64748B),
+                        ),
+                      ),
+                      if (walletLabel != null) ...[
+                        const SizedBox(width: 8),
+                        Text(
+                          walletLabel!,
+                          style: const TextStyle(
+                            fontFamily: 'Tajawal',
+                            fontSize: 11,
+                            color: Color(0xFF94A3B8),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 10),
+            // أيقونة ✓ خضراء (مطابقة للفيديو)
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: active
+                    ? const Color(0xFFD1FAE5)
+                    : const Color(0xFFF1F5F9),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(
+                Icons.check_circle,
+                size: 22,
+                color: active
+                    ? const Color(0xFF10B981)
+                    : const Color(0xFFCBD5E1),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
