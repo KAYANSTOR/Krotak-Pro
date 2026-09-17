@@ -51,17 +51,33 @@ final class LocalMessageRecoveryService {
         continue;
       }
       final event = _eventForPersistedMessage(message);
-      final sourceAuthorization = await sourceGuard.authorize(event);
-      if (sourceAuthorization is Failure<void>) {
+      final scopeResult = await sourceGuard.resolve(event);
+      if (scopeResult is Failure<PaymentSourceScope>) {
         await messages.updateStatus(message.id, MessageProcessingStatus.rejected);
         skipped++;
-        errors.add('${message.id}:${sourceAuthorization.error.code}');
+        errors.add('${message.id}:${scopeResult.error.code}');
         continue;
       }
+      final scope = (scopeResult as Success<PaymentSourceScope>).value;
+      if (scope.templates.isEmpty) {
+        await messages.updateStatus(message.id, MessageProcessingStatus.rejected);
+        skipped++;
+        if (!scope.isPos) {
+          errors.add('${message.id}:no_source_template');
+        }
+        continue;
+      }
+
       attempted++;
-      final parseResult = parser.parse(message);
+      final parseResult = parser is ScopedMessageParser
+          ? (parser as ScopedMessageParser).parseScoped(message, scope.templates)
+          : parser.parse(message);
       if (parseResult is Failure<ParsedTransfer>) {
         await messages.updateStatus(message.id, MessageProcessingStatus.rejected);
+        if (scope.isPos && parseResult.error.code == 'message_not_matched') {
+          skipped++;
+          continue;
+        }
         failed++;
         errors.add('${message.id}:${parseResult.error.code}');
         continue;
