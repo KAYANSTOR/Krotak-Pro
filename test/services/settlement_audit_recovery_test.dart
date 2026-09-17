@@ -4,7 +4,7 @@ import 'package:net_app/core/clock.dart';
 import 'package:net_app/core/id_generator.dart';
 import 'package:net_app/core/result.dart';
 import 'package:net_app/data/database/app_database.dart'
-    hide Customer, Card, Sale, TransferTemplate, CardCategory, Transaction, IncomingMessage;
+    hide Customer, Card, Sale, TransferTemplate, CardCategory, Transaction, IncomingMessage, Wallet;
 import 'package:net_app/data/database/drift_unit_of_work.dart';
 import 'package:net_app/data/repositories/local_repositories.dart';
 import 'package:net_app/domain/entities/card.dart';
