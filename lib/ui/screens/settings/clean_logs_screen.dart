@@ -3,10 +3,11 @@ import 'package:flutter/material.dart';
 import '../../../core/result.dart';
 import '../../../domain/entities/message.dart';
 import '../../app_scope.dart';
+import '../../theme/kayan_colors.dart';
+import '../../theme/kayan_palette.dart';
 import '../../widgets/async_views.dart';
 
-/// Surfaces message/audit volume. Domain has no destructive purge API —
-/// cleanup is limited to re-running recovery on pending messages.
+/// صيانة السجلات: حجم الرسائل + استعادة المعلّق عبر Domain فقط.
 class CleanLogsScreen extends StatefulWidget {
   const CleanLogsScreen({super.key});
 
@@ -21,6 +22,7 @@ class _CleanLogsScreenState extends State<CleanLogsScreen> {
   int _rejected = 0;
   int _failed = 0;
   String? _status;
+  bool _recovering = false;
 
   @override
   void initState() {
@@ -51,13 +53,16 @@ class _CleanLogsScreenState extends State<CleanLogsScreen> {
   }
 
   Future<void> _recover() async {
+    setState(() => _recovering = true);
     final c = AppScope.of(context);
     final r = await c.recoveryService.recoverPending();
     if (!mounted) return;
     setState(() {
+      _recovering = false;
       if (r is Success) {
         final report = (r as Success).value;
-        _status = 'استعادة: processed=${report.processed} failed=${report.failed}';
+        _status =
+            'استعادة: معالَج=${report.processed} فاشل=${report.failed}';
       } else {
         _status = (r as Failure).error.message;
       }
@@ -67,31 +72,169 @@ class _CleanLogsScreenState extends State<CleanLogsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('تنظيف السجلات')),
-      body: _loading
-          ? const AsyncLoadingView()
-          : _error != null
-              ? AsyncErrorView(message: _error!, onRetry: _load)
-              : ListView(
-                  padding: const EdgeInsets.all(16),
-                  children: [
-                    Text('معلّقة/واردة: $_pending', style: const TextStyle(fontFamily: 'Tajawal')),
-                    Text('مرفوضة: $_rejected', style: const TextStyle(fontFamily: 'Tajawal')),
-                    Text('فاشلة: $_failed', style: const TextStyle(fontFamily: 'Tajawal')),
-                    const SizedBox(height: 12),
-                    const Text(
-                      'لا توجد عملية حذف جماعي في Domain الحالي. يمكن إعادة معالجة الرسائل المعلّقة عبر الاستعادة.',
-                      style: TextStyle(fontFamily: 'Tajawal', fontSize: 13),
+    final palette = KayanPalette.of(context);
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Scaffold(
+        backgroundColor: palette.appBackground,
+        appBar: AppBar(
+          title: Text(
+            'تنظيف السجلات',
+            style: TextStyle(
+              fontFamily: 'Tajawal',
+              fontWeight: FontWeight.w800,
+              color: palette.textPrimary,
+            ),
+          ),
+          backgroundColor: palette.appBackground,
+          foregroundColor: palette.textPrimary,
+          elevation: 0,
+        ),
+        body: _loading
+            ? const AsyncLoadingView(message: 'جاري قراءة حجم السجلات…')
+            : _error != null
+                ? AsyncErrorView(message: _error!, onRetry: _load)
+                : RefreshIndicator(
+                    onRefresh: _load,
+                    color: KayanColors.primary,
+                    child: ListView(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+                      children: [
+                        Text(
+                          'حجم الرسائل حسب الحالة',
+                          style: TextStyle(
+                            fontFamily: 'Tajawal',
+                            fontWeight: FontWeight.w800,
+                            fontSize: 15,
+                            color: palette.textPrimary,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _statCard(
+                                palette,
+                                title: 'معلّقة',
+                                value: '$_pending',
+                                color: const Color(0xFFD97706),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: _statCard(
+                                palette,
+                                title: 'مرفوضة',
+                                value: '$_rejected',
+                                color: const Color(0xFF64748B),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: _statCard(
+                                palette,
+                                title: 'فاشلة',
+                                value: '$_failed',
+                                color: const Color(0xFFDC2626),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: palette.surface,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: palette.border),
+                          ),
+                          child: Text(
+                            'لا توجد عملية حذف جماعي في Domain الحالي. يمكن إعادة معالجة الرسائل المعلّقة عبر الاستعادة مع منع التكرار.',
+                            style: TextStyle(
+                              fontFamily: 'Tajawal',
+                              fontSize: 13,
+                              height: 1.45,
+                              color: palette.textSecondary,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        FilledButton.icon(
+                          style: FilledButton.styleFrom(
+                            backgroundColor: KayanColors.primary,
+                            minimumSize: const Size.fromHeight(48),
+                          ),
+                          onPressed: _recovering ? null : _recover,
+                          icon: _recovering
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : const Icon(Icons.restore),
+                          label: Text(
+                            _recovering ? 'جاري الاستعادة…' : 'استعادة المعلّق',
+                            style: const TextStyle(
+                              fontFamily: 'Tajawal',
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                        if (_status != null) ...[
+                          const SizedBox(height: 12),
+                          Text(
+                            _status!,
+                            style: TextStyle(
+                              fontFamily: 'Tajawal',
+                              color: palette.textPrimary,
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
-                    const SizedBox(height: 16),
-                    FilledButton(onPressed: _recover, child: const Text('استعادة المعلّق')),
-                    if (_status != null) ...[
-                      const SizedBox(height: 12),
-                      Text(_status!, style: const TextStyle(fontFamily: 'Tajawal')),
-                    ],
-                  ],
-                ),
+                  ),
+      ),
+    );
+  }
+
+  Widget _statCard(
+    KayanPalette palette, {
+    required String title,
+    required String value,
+    required Color color,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 10),
+      decoration: BoxDecoration(
+        color: palette.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: palette.border),
+      ),
+      child: Column(
+        children: [
+          Text(
+            value,
+            style: TextStyle(
+              fontFamily: 'Tajawal',
+              fontWeight: FontWeight.w800,
+              fontSize: 22,
+              color: color,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            title,
+            style: TextStyle(
+              fontFamily: 'Tajawal',
+              fontSize: 12,
+              color: palette.textSecondary,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
