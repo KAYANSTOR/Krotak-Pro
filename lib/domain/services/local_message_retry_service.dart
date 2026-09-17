@@ -16,8 +16,6 @@ abstract interface class MessageRetryServicePort {
   Future<bool> isDue(String messageId, {DateTime? now});
 }
 
-/// Safe fallback used by isolated callers/tests that do not need retry persistence.
-/// Production AppContainer always injects [LocalMessageRetryService].
 final class NoopMessageRetryService implements MessageRetryServicePort {
   const NoopMessageRetryService();
 
@@ -29,13 +27,15 @@ final class NoopMessageRetryService implements MessageRetryServicePort {
   Future<Result<MessageRetryState>> recordFailure({
     required String messageId,
     required AppFailure error,
-  }) async =>
-      Success(MessageRetryState(
-        attempts: 0,
-        nextRetryAt: null,
-        lastErrorCode: error.code,
-        exhausted: !const MessageRetryPolicy().isRetryableCode('sms_delivery_failed'),
-      ));
+  }) async {
+    final retryable = const MessageRetryPolicy().isRetryableCode(error.code);
+    return Success(MessageRetryState(
+      attempts: retryable ? 1 : 0,
+      nextRetryAt: null,
+      lastErrorCode: error.code,
+      exhausted: !retryable,
+    ));
+  }
 
   @override
   Future<Result<void>> clearAfterSuccess(String messageId) async => const Success(null);
