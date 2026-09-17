@@ -192,7 +192,13 @@ final class _FakeMessages implements MessageRepository {
   Future<Result<List<IncomingMessage>>> listRecent({int limit = 100}) async =>
       Success(store.values.take(limit).toList(growable: false));
 
-  @override
+    @override
+  Future<Result<void>> delete(String id) async {
+    store.remove(id);
+    return const Success(null);
+  }
+
+@override
   Future<Result<void>> updateStatus(
     String id,
     MessageProcessingStatus status,
