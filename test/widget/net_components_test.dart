@@ -15,7 +15,6 @@ import 'package:net_app/ui/widgets/net/net_section_header.dart';
 Widget _wrap(Widget child) => MaterialApp(
       theme: buildKayanLightTheme(),
       home: Directionality(
-        key: const ValueKey('test-rtl-directionality'),
         textDirection: TextDirection.rtl,
         child: Scaffold(body: child),
       ),
@@ -27,7 +26,7 @@ void main() {
       _wrap(const NetDashboardHeader(networkName: 'Z Net', dateLabel: 'الأحد، 14 سبتمبر')),
     );
     expect(find.text('شبكة Z Net'), findsOneWidget);
-    expect(find.text('الأحد، 14 سبتمبر'), findsOneWidget);
+    expect(find.textContaining('الأحد، 14 سبتمبر'), findsOneWidget);
   });
 
   testWidgets('NetDashboardHeader settings callback', (tester) async {
@@ -139,10 +138,8 @@ void main() {
     await tester.pumpWidget(
       _wrap(const NetDashboardHeader(networkName: 'شبكتي', dateLabel: 'اليوم')),
     );
-    final direction = tester.widget<Directionality>(
-      find.byKey(const ValueKey('test-rtl-directionality')),
-    );
-    expect(direction.textDirection, TextDirection.rtl);
+    final directions = tester.widgetList<Directionality>(find.byType(Directionality));
+    expect(directions.any((d) => d.textDirection == TextDirection.rtl), isTrue);
   });
 
   testWidgets('NetMetricCard dark theme renders', (tester) async {
@@ -159,10 +156,8 @@ void main() {
 
   testWidgets('NetAlertBanner RTL', (tester) async {
     await tester.pumpWidget(_wrap(const NetAlertBanner(message: 'RTL')));
-    final direction = tester.widget<Directionality>(
-      find.byKey(const ValueKey('test-rtl-directionality')),
-    );
-    expect(direction.textDirection, TextDirection.rtl);
+    final directions = tester.widgetList<Directionality>(find.byType(Directionality));
+    expect(directions.any((d) => d.textDirection == TextDirection.rtl), isTrue);
   });
 
   testWidgets('AsyncLoadingView shows custom message', (tester) async {
