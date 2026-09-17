@@ -3,6 +3,7 @@ import 'dart:ui';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:sqlite3_flutter_libs/sqlite3_flutter_libs.dart';
 
 import 'application/app_container.dart';
 import 'core/result.dart';
@@ -15,6 +16,9 @@ import 'ui/theme/kayan_theme.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Load the bundled native sqlite3 library before Drift/NativeDatabase is used.
+  await applyWorkaroundToOpenSqlite3OnOldAndroidVersions();
 
   ErrorWidget.builder = (details) => NetRuntimeErrorScreen(details: details);
   FlutterError.onError = (details) {
