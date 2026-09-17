@@ -8,41 +8,36 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Restore wallets_pos_screen.dart from gzip+b64
+      - name: Restore wallets_pos_screen.dart from gzip+b64 parts
         run: |
           python3 << 'PY'
           import base64, gzip
           from pathlib import Path
-          gzb64 = Path('tools/wallets_pos_phase3.gz.b64').read_text().strip()
+          parts = sorted(Path('tools').glob('wallets_gz_part_*.b64'))
+          gzb64 = ''.join(p.read_text().strip() for p in parts)
           raw = gzip.decompress(base64.b64decode(gzb64))
           Path('lib/ui/screens/wallets_pos_screen.dart').write_bytes(raw)
           print('restored', len(raw), 'bytes')
           assert b'class WalletsPosScreen' in raw
+          print('assert ok')
           PY
-      - name: Fix default wallet seeds (video badges SMS vs notification)
+      - name: Fix default wallet seeds (video badges)
         run: |
           python3 << 'PY'
           from pathlib import Path
           p = Path('lib/domain/services/local_catalog_services.dart')
           t = p.read_text()
-          replacements = [
+          for old, new in [
             ("sourceMode: WalletSourceMode.notification, packageName: 'com.wecash.jawali'",
              "sourceMode: WalletSourceMode.sms, packageName: 'com.wecash.jawali'"),
             ("sourceMode: WalletSourceMode.notification, packageName: 'com.one.onecustomer'",
              "sourceMode: WalletSourceMode.sms, packageName: 'com.one.onecustomer'"),
             ("sourceMode: WalletSourceMode.notification, packageName: 'co.ysys.floosak'",
              "sourceMode: WalletSourceMode.sms, packageName: 'co.ysys.floosak'"),
-          ]
-          changed = False
-          for old, new in replacements:
-            if old in t:
-              t = t.replace(old, new)
-              changed = True
-          if changed:
-            p.write_text(t)
-            print('seeds patched to video badges')
-          else:
-            print('seeds already match video (or block not found)')
+          ]:
+            t = t.replace(old, new)
+          p.write_text(t)
+          print('seeds applied')
           PY
       - name: Commit and push
         run: |
