@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
 import 'package:net_app/data/database/app_database.dart' hide Customer, Card, Sale, TransferTemplate;
 
@@ -13,8 +14,8 @@ void main() {
     await database.close();
   });
 
-  test('creates schema version 3 and starts empty', () async {
-    expect(database.schemaVersion, 3);
+  test('creates schema version 4 and starts empty', () async {
+    expect(database.schemaVersion, 4);
     expect(await database.select(database.customers).get(), isEmpty);
     expect(await database.select(database.cards).get(), isEmpty);
     expect(await database.select(database.incomingMessages).get(), isEmpty);
