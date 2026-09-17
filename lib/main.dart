@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:ui';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'application/app_container.dart';
@@ -14,6 +16,18 @@ import 'ui/theme/kayan_theme.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  ErrorWidget.builder = (details) => NetRuntimeErrorScreen(details: details);
+  FlutterError.onError = (details) {
+    FlutterError.presentError(details);
+    debugPrint(details.exceptionAsString());
+    if (details.stack != null) debugPrintStack(stackTrace: details.stack);
+  };
+  PlatformDispatcher.instance.onError = (error, stack) {
+    debugPrint('Uncaught platform error: $error');
+    debugPrintStack(stackTrace: stack);
+    return true;
+  };
+
   const defaultTemplates = [
     TransferTemplate(
       id: 'tpl-default',
@@ -25,10 +39,6 @@ Future<void> main() async {
 
   final container = await AppContainer.bootstrap(templates: defaultTemplates);
   await _loadThemeMode(container);
-
-  // Background integrations must never block the first Flutter frame.
-  // A native/platform-service failure should not leave the app on the
-  // launcher splash screen. The service can recover/retry independently.
   runApp(NetApp(container: container));
   unawaited(_startBackgroundHandlersSafely(container));
 }
@@ -72,14 +82,58 @@ class _NetAppState extends State<NetApp> {
         themeMode: mode,
         locale: const Locale('ar'),
         supportedLocales: const [Locale('ar'), Locale('en')],
-        builder: (context, child) {
-          return Directionality(
-            textDirection: TextDirection.rtl,
-            child: child ?? const SizedBox.shrink(),
-          );
-        },
+        builder: (context, child) => Directionality(
+          textDirection: TextDirection.rtl,
+          child: child ?? const SizedBox.shrink(),
+        ),
         home: const HomeShell(),
       ),
     ),
   );
+}
+
+class NetRuntimeErrorScreen extends StatelessWidget {
+  const NetRuntimeErrorScreen({super.key, required this.details});
+  final FlutterErrorDetails details;
+
+  @override
+  Widget build(BuildContext context) {
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Material(
+        color: const Color(0xFFF8FAFC),
+        child: SafeArea(
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.error_outline_rounded, size: 56, color: Color(0xFFDC2626)),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'تعذر عرض هذه الشاشة',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontFamily: 'Tajawal', fontSize: 20, fontWeight: FontWeight.w800),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    details.exceptionAsString(),
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontFamily: 'Tajawal', fontSize: 13, height: 1.5),
+                  ),
+                  const SizedBox(height: 18),
+                  FilledButton.icon(
+                    onPressed: () => Navigator.of(context).maybePop(),
+                    icon: const Icon(Icons.arrow_back),
+                    label: const Text('العودة', style: TextStyle(fontFamily: 'Tajawal')),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
