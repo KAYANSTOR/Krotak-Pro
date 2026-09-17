@@ -14,7 +14,7 @@ import 'services.dart';
 /// Active templates are tried in ascending [TransferTemplate.priority] order.
 /// Call [replaceTemplates] after saving templates so SMS path picks them up
 /// without restarting the app.
-final class LocalMessageParser implements MessageParser {
+final class LocalMessageParser implements MessageParser, ScopedMessageParser {
   LocalMessageParser({
     required List<TransferTemplate> templates,
     this.defaultCurrencyCode = 'YER',
@@ -58,8 +58,15 @@ final class LocalMessageParser implements MessageParser {
   };
 
   @override
-  Result<ParsedTransfer> parse(IncomingMessage message) {
-    final active = _templates.where((t) => t.isActive).toList(growable: false);
+  Result<ParsedTransfer> parse(IncomingMessage message) =>
+      parseScoped(message, _templates);
+
+  @override
+  Result<ParsedTransfer> parseScoped(
+    IncomingMessage message,
+    List<TransferTemplate> allowedTemplates,
+  ) {
+    final active = allowedTemplates.where((t) => t.isActive).toList(growable: false);
     if (active.isEmpty) {
       return const Failure(
         AppFailure(
