@@ -140,7 +140,7 @@ void main() {
       final second = await engine.ingest(
         PaymentEvent(
           channel: PaymentChannel.notification,
-          sourceKey: 'JIB',
+          sourceKey: 'bank',
           body: 'push REF-DUP',
           receivedAt: DateTime.utc(2026, 9, 13, 0, 2),
           packageName: 'com.wallet.jib',
