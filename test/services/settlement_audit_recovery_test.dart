@@ -12,6 +12,7 @@ import 'package:net_app/domain/entities/customer.dart';
 import 'package:net_app/domain/entities/message.dart';
 import 'package:net_app/domain/entities/money.dart';
 import 'package:net_app/domain/entities/transaction.dart';
+import 'package:net_app/domain/entities/wallet.dart';
 import 'package:net_app/domain/services/local_card_inventory_service.dart';
 import 'package:net_app/domain/services/local_catalog_services.dart';
 import 'package:net_app/domain/services/local_customer_balance_service.dart';
@@ -21,6 +22,7 @@ import 'package:net_app/domain/services/local_message_recovery_service.dart';
 import 'package:net_app/domain/services/local_sale_service.dart';
 import 'package:net_app/domain/services/local_settlement_service.dart';
 import 'package:net_app/domain/services/local_transfer_processor.dart';
+import 'package:net_app/domain/services/payment_source_guard.dart';
 import 'package:net_app/domain/services/services.dart';
 
 void main() {
@@ -32,6 +34,8 @@ void main() {
   late LocalSaleRepository sales;
   late LocalMessageRepository messages;
   late LocalAuditLogRepository auditLogs;
+  late LocalWalletRepository wallets;
+  late LocalTransferTemplateRepository transferTemplates;
   late DriftUnitOfWork unitOfWork;
   late FixedClock clock;
   late SequentialIdGenerator ids;
@@ -45,7 +49,7 @@ void main() {
   late LocalTransferProcessor processor;
   late LocalMessageRecoveryService recoveryService;
 
-  setUp(() {
+  setUp(() async {
     database = AppDatabase(NativeDatabase.memory());
     customers = LocalCustomerRepository(database);
     categories = LocalCardCategoryRepository(database);
@@ -54,9 +58,31 @@ void main() {
     sales = LocalSaleRepository(database);
     messages = LocalMessageRepository(database);
     auditLogs = LocalAuditLogRepository(database);
+    wallets = LocalWalletRepository(database);
+    transferTemplates = LocalTransferTemplateRepository(database);
     unitOfWork = DriftUnitOfWork(database);
     clock = FixedClock(DateTime(2026, 1, 1, 12));
     ids = SequentialIdGenerator();
+
+    await wallets.save(
+      Wallet(
+        id: 'wallet-bank',
+        name: 'Bank SMS',
+        status: WalletStatus.active,
+        createdAt: clock.now(),
+        senderId: 'BANK',
+        sourceMode: WalletSourceMode.sms,
+      ),
+    );
+    await transferTemplates.save(
+      const TransferTemplate(
+        id: 'tpl-1',
+        name: 'default',
+        pattern: 'تم تحويل {amount} ريال الى {phone} برقم العملية {ref}',
+        isActive: true,
+        walletId: 'wallet-bank',
+      ),
+    );
 
     customerService = LocalCustomerService(
       customers: customers,
@@ -114,6 +140,7 @@ void main() {
           name: 'default',
           pattern: 'تم تحويل {amount} ريال الى {phone} برقم العملية {ref}',
           isActive: true,
+          walletId: 'wallet-bank',
         ),
       ],
     );
@@ -130,6 +157,10 @@ void main() {
       messages: messages,
       parser: parser,
       processor: processor,
+      sourceGuard: PaymentSourceGuard(
+        wallets: wallets,
+        templates: transferTemplates,
+      ),
     );
   });
 
@@ -246,7 +277,7 @@ void main() {
       customerId: customer.id,
       currencyCode: 'YER',
     );
-    
+
     expect((balance as Success<Money>).value.minorUnits, 150000);
 
     final report2 = await recoveryService.recoverPending();
