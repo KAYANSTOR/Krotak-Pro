@@ -21,7 +21,7 @@ final class UnifiedPaymentEventEngine implements PaymentEventEngine {
     required this.processor,
     required this.ids,
     this.settings,
-    required this.sourceGuard,
+    this.sourceGuard,
     this.fingerprints = const PaymentFingerprintService(),
   });
 
@@ -30,16 +30,28 @@ final class UnifiedPaymentEventEngine implements PaymentEventEngine {
   final TransferProcessor processor;
   final IdGenerator ids;
   final SettingsRepository? settings;
-  final PaymentSourceGuard sourceGuard;
+  final PaymentSourceGuard? sourceGuard;
   final PaymentFingerprintService fingerprints;
 
   @override
   Future<Result<Transaction?>> ingest(PaymentEvent event) async {
-    // IMPORTANT: untrusted inbound events are ignored before parsing or
-    // durable persistence. A matching body alone is never sufficient.
-    final sourceAuthorization = await sourceGuard.authorize(event);
-    if (sourceAuthorization is Failure<void>) {
-      return Failure(sourceAuthorization.error);
+    // No guard means this is a legacy/test construction. Never permit a real
+    // inbound SMS/notification to cross into parsing or persistence without an
+    // explicit source trust boundary. Manual/system entry remains available.
+    if (event.channel != PaymentChannel.manual && sourceGuard == null) {
+      return const Failure(
+        AppFailure(
+          code: 'untrusted_payment_source',
+          message: 'Inbound payment source is not configured',
+        ),
+      );
+    }
+
+    if (sourceGuard != null) {
+      final sourceAuthorization = await sourceGuard!.authorize(event);
+      if (sourceAuthorization is Failure<void>) {
+        return Failure(sourceAuthorization.error);
+      }
     }
 
     final provisional = event.toProvisionalMessage(id: ids.next('msg'));
@@ -49,8 +61,8 @@ final class UnifiedPaymentEventEngine implements PaymentEventEngine {
         : null;
 
     // A trusted source may only use templates linked to that same source.
-    if (parsed != null) {
-      final templateAuthorization = await sourceGuard.authorize(
+    if (parsed != null && sourceGuard != null) {
+      final templateAuthorization = await sourceGuard!.authorize(
         event,
         matchedTemplateId: parsed.templateId,
       );
