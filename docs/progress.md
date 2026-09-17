@@ -20,11 +20,18 @@ CI على main — analyze + test + Android debug APK build
 
 ### Phase 19 — Device Verification Protocol (2026-09-16) ✅ برمجيًا / 🟡 بانتظار تشغيل جهاز
 - `exportEvidencePack` لحزمة أدلة JSON قابلة للنسخ.
-- `readyForRelease` = كل البوابات مررة + أدلة قياس للاستيراد والبث.
-- زر نسخ الحزمة من شاشة تحقق الجهاز.
 - تقرير: [phase-19-device-verification-protocol.md](phase-19-device-verification-protocol.md)
 
-## المتبقي Post-V1 (الترتيب الرسمي)
-تشغيل البوابات على جهاز Android حقيقي وحفظ حزمة الأدلة. لا بنود برمجي رسمي بعد Phase 19.
+## خطة المطابقة 100%
 
-مرجع: NET-POST-V1-MASTER-PLAN — GitHub مصدر الحقيقة؛ لا Local Only.
+### Phase 8.2–8.4 — التقارير وتسوية POS (2026-09-17) ✅ برمجيًا
+- تقرير مبيعات حسب الفترة.
+- حسابات نقاط البيع مع المستحق والعمولة والتسوية اليدوية/التلقائية.
+- تقرير: [phase-8-reports-pos-settlement.md](phase-8-reports-pos-settlement.md)
+
+## المتبقي
+
+- تدقيق بصري لشاشة الكروت (المرحلة 7).
+- تشغيل بوابات التحقق على جهاز Android حقيقي وحفظ حزمة الأدلة.
+
+مرجع: NET-POST-V1-MASTER-PLAN + خطة-المطابقة-100 — GitHub مصدر الحقيقة.

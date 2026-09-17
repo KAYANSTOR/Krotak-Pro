@@ -5,11 +5,12 @@ import '../../domain/entities/message.dart';
 import '../../domain/entities/transaction.dart';
 import '../app_scope.dart';
 import '../routing/app_routes.dart';
+import '../theme/kayan_colors.dart';
 import '../widgets/async_views.dart';
 import 'pending_messages_screen.dart';
 import 'rejected_messages_screen.dart';
-import 'reports/messages_by_status_screen.dart';
 import 'reports/pos_report_screen.dart';
+import 'reports/sales_period_report_screen.dart';
 
 class ReportsScreen extends StatefulWidget {
   const ReportsScreen({super.key});
@@ -92,42 +93,57 @@ class _ReportsScreenState extends State<ReportsScreen> {
       return AsyncErrorView(message: _error!, onRetry: _load);
     }
 
-    return RefreshIndicator(
-      onRefresh: _load,
-      child: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          _tile(
-            title: 'مبيعات اليوم',
-            value: '${formatMoneyMinor(_dailyMinor)} · $_dailyCount',
-            onTap: () => AppRoutes.openTransactionsLog(context),
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: ColoredBox(
+        color: KayanColors.appBackground,
+        child: RefreshIndicator(
+          onRefresh: _load,
+          child: ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              _tile(
+                title: 'مبيعات اليوم',
+                value: '${formatMoneyMinor(_dailyMinor)} · $_dailyCount كرت',
+                onTap: () => _open(
+                  const SalesPeriodReportScreen(initialRange: SalesReportRange.today),
+                ),
+              ),
+              _tile(
+                title: 'مبيعات الشهر',
+                value: '${formatMoneyMinor(_monthlyMinor)} · $_monthlyCount كرت',
+                onTap: () => _open(
+                  const SalesPeriodReportScreen(initialRange: SalesReportRange.month),
+                ),
+              ),
+              _tile(
+                title: 'تقرير المبيعات التفصيلي',
+                value: 'يوم / شهر / فترة مختارة من SaleRepository',
+                onTap: () => AppRoutes.openSalesPeriodReport(context),
+              ),
+              _tile(
+                title: 'سجل العمليات',
+                value: '$_completedTx مكتملة (آخر 200)',
+                onTap: () => AppRoutes.openTransactionsLog(context),
+              ),
+              _tile(
+                title: 'حسابات نقاط البيع',
+                value: 'مستحقات + عمولة + تسوية',
+                onTap: () => _open(const PosReportScreen()),
+              ),
+              _tile(
+                title: 'الرسائل المرفوضة',
+                value: '$_rejected رسالة',
+                onTap: () => _open(const RejectedMessagesScreen()),
+              ),
+              _tile(
+                title: 'الرسائل المعلّقة',
+                value: '$_suspended (واردة/محللة/فاشلة)',
+                onTap: () => _open(const PendingMessagesScreen()),
+              ),
+            ],
           ),
-          _tile(
-            title: 'مبيعات الشهر',
-            value: '${formatMoneyMinor(_monthlyMinor)} · $_monthlyCount',
-            onTap: () => AppRoutes.openTransactionsLog(context),
-          ),
-          _tile(
-            title: 'سجل العمليات',
-            value: '$_completedTx مكتملة (آخر 200)',
-            onTap: () => AppRoutes.openTransactionsLog(context),
-          ),
-          _tile(
-            title: 'تقرير نقاط البيع',
-            value: 'قائمة نقاط البيع المسجّلة',
-            onTap: () => _open(const PosReportScreen()),
-          ),
-          _tile(
-            title: 'الرسائل المرفوضة',
-            value: '$_rejected رسالة',
-            onTap: () => _open(const RejectedMessagesScreen()),
-          ),
-          _tile(
-            title: 'الرسائل المعلّقة',
-            value: '$_suspended (واردة/محللة/فاشلة)',
-            onTap: () => _open(const PendingMessagesScreen()),
-          ),
-        ],
+        ),
       ),
     );
   }

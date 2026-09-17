@@ -6,6 +6,8 @@ import '../screens/failed_messages_screen.dart';
 import '../screens/help_center_screen.dart';
 import '../screens/pending_messages_screen.dart';
 import '../screens/rejected_messages_screen.dart';
+import '../screens/reports/pos_report_screen.dart';
+import '../screens/reports/sales_period_report_screen.dart';
 import '../screens/settings_screen.dart';
 import '../screens/system_check_screen.dart';
 import '../screens/transactions_log_screen.dart';
@@ -19,7 +21,6 @@ abstract final class AppRoutes {
   }
 
   static Future<void> openSettings(BuildContext context) {
-    // SettingsHubScreen owns its own Scaffold + header (matches Z Net video).
     return push(context, const SettingsScreen());
   }
 
@@ -33,16 +34,11 @@ abstract final class AppRoutes {
   static Future<void> openDirectSale(BuildContext context) => push(context, const DirectSaleScreen());
   static Future<void> openTransactionsLog(BuildContext context) => push(context, const TransactionsLogScreen());
   static Future<void> openWalletsAndPos(BuildContext context) => push(context, const WalletsPosScreen());
-}
-
-class _Subpage extends StatelessWidget {
-  const _Subpage({required this.title, required this.child});
-  final String title;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(title: Text(title)),
-        body: child,
-      );
+  static Future<void> openSalesPeriodReport(
+    BuildContext context, {
+    SalesReportRange range = SalesReportRange.today,
+  }) =>
+      push(context, SalesPeriodReportScreen(initialRange: range));
+  static Future<void> openPosReport(BuildContext context) =>
+      push(context, const PosReportScreen());
 }
