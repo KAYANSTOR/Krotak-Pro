@@ -81,7 +81,11 @@ class _TemplateWizardScreenState extends State<TemplateWizardScreen> {
     if (!mounted) return;
     final pos = await AppScope.of(context).posRegistry.listAll();
     if (r is Success<List<Wallet>>) {
-      _wallets = r.value;
+      _wallets = r.value
+          .where((wallet) =>
+              wallet.status == WalletStatus.active ||
+              wallet.id == _walletId)
+          .toList(growable: false);
     }
     if (pos is Success<List<PosAccount>>) {
       _posAccounts = pos.value
