@@ -36,6 +36,7 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
   bool _categoryOnly = SettingDefaults.processCategoryAmountsOnly;
   bool _oldMsgs = SettingDefaults.processOldMessagesOnResume;
   bool _salafni = SettingDefaults.salafniEnabled;
+  bool _interventionAlert = SettingDefaults.pendingAttentionAlertEnabled;
   bool _darkMode = false;
   bool _dailySummary = SettingDefaults.dailyOpsSummaryAutoSend;
   bool _autoPosSettlement = SettingDefaults.autoPosSettlementEnabled;
@@ -61,6 +62,7 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
     final cat = await read(SettingKeys.processCategoryAmountsOnly);
     final old = await read(SettingKeys.processOldMessagesOnResume);
     final sal = await read(SettingKeys.salafniEnabled);
+    final intervention = await read(SettingKeys.pendingAttentionAlertEnabled);
     final theme = await read(SettingKeys.themeMode);
     final daily = await read(SettingKeys.dailyOpsSummaryAutoSend);
     final settle = await read(SettingKeys.autoPosSettlementEnabled);
@@ -74,6 +76,10 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
       _categoryOnly = SettingBool.read(cat, defaultValue: SettingDefaults.processCategoryAmountsOnly);
       _oldMsgs = SettingBool.read(old, defaultValue: SettingDefaults.processOldMessagesOnResume);
       _salafni = SettingBool.read(sal, defaultValue: SettingDefaults.salafniEnabled);
+      _interventionAlert = SettingBool.read(
+        intervention,
+        defaultValue: SettingDefaults.pendingAttentionAlertEnabled,
+      );
       _dailySummary = SettingBool.read(daily, defaultValue: SettingDefaults.dailyOpsSummaryAutoSend);
       _autoPosSettlement = SettingBool.read(settle, defaultValue: SettingDefaults.autoPosSettlementEnabled);
       _lowStock = SettingInt.read(low, defaultValue: SettingDefaults.lowStockThreshold);
@@ -177,6 +183,18 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
                                   onChanged: (v) async {
                                     setState(() => _oldMsgs = v);
                                     await _saveBool(SettingKeys.processOldMessagesOnResume, v);
+                                  },
+                                ),
+                                SettingsGroupSwitchRow(
+                                  icon: Icons.notifications_active_outlined,
+                                  title: 'تنبيه العمليات التي تتطلب تدخلاً',
+                                  subtitle: _interventionAlert
+                                      ? 'يصدر تنبيه صوتي عند وجود عملية معلّقة تحتاج تدخلاً يدوياً'
+                                      : 'التنبيه الصوتي معطّل — الرسائل المعلّقة تظهر في القائمة دون صوت',
+                                  value: _interventionAlert,
+                                  onChanged: (v) async {
+                                    setState(() => _interventionAlert = v);
+                                    await _saveBool(SettingKeys.pendingAttentionAlertEnabled, v);
                                   },
                                 ),
                                 SettingsGroupSwitchRow(
