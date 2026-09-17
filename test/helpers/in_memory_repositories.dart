@@ -31,7 +31,9 @@ final class InMemoryMessageRepository implements MessageRepository {
         .where((m) =>
             m.status == MessageProcessingStatus.received ||
             m.status == MessageProcessingStatus.parsed ||
-            m.status == MessageProcessingStatus.pending)
+            m.status == MessageProcessingStatus.pending ||
+            m.status == MessageProcessingStatus.sending ||
+            m.status == MessageProcessingStatus.failed)
         .toList();
     return Success(list);
   }
@@ -63,6 +65,12 @@ final class InMemoryMessageRepository implements MessageRepository {
       externalReference: current.externalReference,
       customerIdentifier: current.customerIdentifier,
     );
+    return const Success(null);
+  }
+
+  @override
+  Future<Result<void>> delete(String id) async {
+    _byId.remove(id);
     return const Success(null);
   }
 }
@@ -261,7 +269,7 @@ final class InMemoryCardRepository implements CardRepository {
     _cards[cardId] = Card(
       id: c.id,
       categoryId: c.categoryId,
-      serialNumber: c.serialNumber,
+      serialNumber: c.secretCode,
       secretCode: c.secretCode,
       status: CardStatus.available,
     );
