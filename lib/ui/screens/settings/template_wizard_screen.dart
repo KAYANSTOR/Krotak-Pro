@@ -193,6 +193,34 @@ class _TemplateWizardScreenState extends State<TemplateWizardScreen> {
         appBar: AppBar(
           backgroundColor: kayan.surface,
           elevation: 0,
+          surfaceTintColor: Colors.transparent,
+          leadingWidth: 130,
+          leading: TextButton.icon(
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              foregroundColor: const Color(0xFF0F766E),
+            ),
+            onPressed: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text(
+                    'أنت في الوضع المتقدم لإعداد القوالب',
+                    style: TextStyle(fontFamily: 'Tajawal'),
+                  ),
+                  duration: Duration(seconds: 2),
+                ),
+              );
+            },
+            icon: const Icon(Icons.settings, size: 18),
+            label: const Text(
+              'الوضع المتقدم',
+              style: TextStyle(
+                fontFamily: 'Tajawal',
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
           title: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -470,7 +498,7 @@ class _TemplateWizardScreenState extends State<TemplateWizardScreen> {
         ),
         const SizedBox(height: 6),
         Text(
-          'اضبط أولوية التحليل وحالة القالب، ثم اضغط «حفظ القالب».',
+          'اضبط أولوية التحليل وحالة القالب، ثم اضغط "حفظ القالب" في الأسفل.',
           style: TextStyle(fontFamily: 'Tajawal', color: kayan.textSecondary, fontSize: 13),
         ),
         const SizedBox(height: 18),
@@ -483,7 +511,7 @@ class _TemplateWizardScreenState extends State<TemplateWizardScreen> {
         ),
         const SizedBox(height: 6),
         Text(
-          'الأقل رقمًا = أولوية أعلى عند تطابق أكثر من قالب',
+          'توليد تلقائي (يمكنك تعديل القيمة يدوياً)',
           style: TextStyle(fontFamily: 'Tajawal', fontSize: 12, color: kayan.textTertiary),
         ),
         const SizedBox(height: 16),
@@ -492,7 +520,7 @@ class _TemplateWizardScreenState extends State<TemplateWizardScreen> {
           value: _isActive,
           decoration: _dec(),
           items: const [
-            DropdownMenuItem(value: true, child: Text('نشط (مفعّل تلقائيًا)', style: TextStyle(fontFamily: 'Tajawal'))),
+            DropdownMenuItem(value: true, child: Text('نشط (مفعل تلقائياً)', style: TextStyle(fontFamily: 'Tajawal'))),
             DropdownMenuItem(value: false, child: Text('متوقف', style: TextStyle(fontFamily: 'Tajawal'))),
           ],
           onChanged: (v) {
@@ -517,6 +545,7 @@ class _TemplateWizardScreenState extends State<TemplateWizardScreen> {
       );
 }
 
+/// مؤشر 4 مراحل مطابق لإطارات tpl_60 / tpl_sys130 (دوائر + خطوط + ✓).
 class _StepIndicator extends StatelessWidget {
   const _StepIndicator({required this.current, required this.labels});
   final int current;
@@ -524,50 +553,86 @@ class _StepIndicator extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: List.generate(labels.length, (i) {
-        final done = i < current;
-        final active = i == current;
-        final color = active || done ? const Color(0xFF0F766E) : Colors.grey.shade400;
-        return Expanded(
-          child: Column(
+    const teal = Color(0xFF0F766E);
+    return Column(
+      children: [
+        SizedBox(
+          height: 36,
+          child: Row(
             children: [
-              Container(
-                width: 28,
-                height: 28,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: active || done ? const Color(0xFF0F766E) : Colors.transparent,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: color, width: 2),
-                ),
-                child: done
-                    ? const Icon(Icons.check, size: 16, color: Colors.white)
-                    : Text(
-                        '${i + 1}',
-                        style: TextStyle(
-                          fontFamily: 'Tajawal',
-                          fontWeight: FontWeight.w700,
-                          fontSize: 12,
-                          color: active ? Colors.white : color,
-                        ),
-                      ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                labels[i],
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontFamily: 'Tajawal',
-                  fontSize: 10,
-                  color: color,
-                  fontWeight: active ? FontWeight.w700 : FontWeight.w500,
-                ),
-              ),
+              for (var i = 0; i < labels.length; i++) ...[
+                if (i > 0)
+                  Expanded(
+                    child: Container(
+                      height: 2,
+                      color: i <= current ? teal : const Color(0xFFCBD5E1),
+                    ),
+                  ),
+                _stepCircle(i, teal),
+              ],
             ],
           ),
-        );
-      }),
+        ),
+        const SizedBox(height: 6),
+        Row(
+          children: [
+            for (var i = 0; i < labels.length; i++)
+              Expanded(
+                child: Text(
+                  labels[i],
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontFamily: 'Tajawal',
+                    fontSize: 11,
+                    fontWeight: i == current ? FontWeight.w700 : FontWeight.w500,
+                    color: i <= current ? teal : const Color(0xFF94A3B8),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _stepCircle(int i, Color teal) {
+    final done = i < current;
+    final active = i == current;
+    final showPerson = active && i == 0;
+    return Container(
+      width: 32,
+      height: 32,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: done || active ? teal : Colors.white,
+        shape: BoxShape.circle,
+        border: Border.all(
+          color: done || active ? teal : const Color(0xFFCBD5E1),
+          width: 2,
+        ),
+        boxShadow: active
+            ? [
+                BoxShadow(
+                  color: teal.withValues(alpha: 0.25),
+                  blurRadius: 6,
+                  offset: const Offset(0, 2),
+                )
+              ]
+            : null,
+      ),
+      child: done
+          ? const Icon(Icons.check, size: 16, color: Colors.white)
+          : showPerson
+              ? const Icon(Icons.person, size: 18, color: Colors.white)
+              : Text(
+                  '${i + 1}',
+                  style: TextStyle(
+                    fontFamily: 'Tajawal',
+                    fontWeight: FontWeight.w800,
+                    fontSize: 13,
+                    color: active ? Colors.white : const Color(0xFF94A3B8),
+                  ),
+                ),
     );
   }
 }
