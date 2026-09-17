@@ -34,6 +34,8 @@ void main() {
     expect(snap.allPassed, isFalse);
     expect(snap.readyForRelease, isFalse);
     expect(snap.of('sms_send_receive'), DeviceVerificationStatus.pending);
+    expect(snap.of('visual_cards'), DeviceVerificationStatus.pending);
+    expect(snap.total, DeviceVerificationCatalog.items.length);
   });
 
   test('mark persists and reloads', () async {
@@ -112,11 +114,26 @@ void main() {
     final snap = (loaded as Success<DeviceVerificationSnapshot>).value;
     final pack = service.exportEvidencePack(snap);
     expect(pack['phase'], 19);
+    expect(pack['matchingPhase'], 11);
+    expect(pack['appVersion'], '1.0.11+11');
     expect(pack['schema'], 'net.device_verification.v1');
     expect(pack['readyForRelease'], isFalse);
     final gates = pack['gates'] as Map;
     expect(gates.containsKey('bulk_import'), isTrue);
+    expect(gates.containsKey('visual_cards'), isTrue);
     expect((gates['bulk_import'] as Map)['status'], 'passed');
+  });
+
+  test('visual gate can be marked without measurement note', () async {
+    final result = await service.mark(
+      gateId: 'visual_system_check',
+      status: DeviceVerificationStatus.passed,
+    );
+    expect(result, isA<Success<DeviceVerificationSnapshot>>());
+    expect(
+      (result as Success<DeviceVerificationSnapshot>).value.of('visual_system_check'),
+      DeviceVerificationStatus.passed,
+    );
   });
 
   test('legacy string payload still decodes', () async {

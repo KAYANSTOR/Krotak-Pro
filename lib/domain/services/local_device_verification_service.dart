@@ -171,6 +171,8 @@ final class LocalDeviceVerificationService {
   Map<String, Object?> exportEvidencePack(DeviceVerificationSnapshot snap) {
     return {
       'phase': 19,
+      'matchingPhase': 11,
+      'appVersion': '1.0.11+11',
       'schema': 'net.device_verification.v1',
       'exportedAt': _clock.now().toIso8601String(),
       'passedCount': snap.passedCount,
