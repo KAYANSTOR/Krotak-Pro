@@ -67,7 +67,9 @@ class _OffersScreenState extends State<OffersScreen>
   List<Promotion> _filtered(bool active) =>
       _items.where((p) => p.isActive == active).toList(growable: false);
 
-  Future<void> _create() async {
+  Future<void> _create() => _openForm();
+
+  Future<void> _openForm([Promotion? existing]) async {
     final c = AppScope.of(context);
     final catsResult = await c.categories.listAll();
     if (!mounted) return;
@@ -86,10 +88,18 @@ class _OffersScreenState extends State<OffersScreen>
       return;
     }
 
-    final titleCtrl = TextEditingController();
-    final thresholdCtrl = TextEditingController();
-    final notesCtrl = TextEditingController();
-    String rewardId = categories.first.id;
+    final titleCtrl = TextEditingController(text: existing?.title ?? '');
+    final thresholdCtrl = TextEditingController(
+      text: existing == null
+          ? ''
+          : (existing.thresholdMinorUnits / 100).toStringAsFixed(
+              existing.thresholdMinorUnits % 100 == 0 ? 0 : 2,
+            ),
+    );
+    final notesCtrl = TextEditingController(text: existing?.notes ?? '');
+    var rewardId = categories.any((e) => e.id == existing?.rewardCategoryId)
+        ? existing!.rewardCategoryId
+        : categories.first.id;
 
     final saved = await showModalBottomSheet<bool>(
       context: context,
@@ -124,10 +134,12 @@ class _OffersScreenState extends State<OffersScreen>
                         ),
                       ),
                       const SizedBox(height: 14),
-                      const Text(
-                        'عرض ترويجي جديد',
+                      Text(
+                        existing == null
+                            ? 'عرض ترويجي جديد'
+                            : 'تعديل العرض',
                         textAlign: TextAlign.center,
-                        style: TextStyle(
+                        style: const TextStyle(
                           fontFamily: 'Tajawal',
                           fontWeight: FontWeight.w800,
                           fontSize: 18,
@@ -239,12 +251,22 @@ class _OffersScreenState extends State<OffersScreen>
                                   });
                                   return;
                                 }
-                                final r = await c.promotions.create(
-                                  title: titleCtrl.text,
-                                  thresholdMinorUnits: (major * 100).round(),
-                                  rewardCategoryId: rewardId,
-                                  notes: notesCtrl.text,
-                                );
+                                final r = existing == null
+                                    ? await c.promotions.create(
+                                        title: titleCtrl.text,
+                                        thresholdMinorUnits:
+                                            (major * 100).round(),
+                                        rewardCategoryId: rewardId,
+                                        notes: notesCtrl.text,
+                                      )
+                                    : await c.promotions.update(
+                                        id: existing.id,
+                                        title: titleCtrl.text,
+                                        thresholdMinorUnits:
+                                            (major * 100).round(),
+                                        rewardCategoryId: rewardId,
+                                        notes: notesCtrl.text,
+                                      );
                                 if (!ctx.mounted) return;
                                 if (r is Success) {
                                   Navigator.pop(ctx, true);
@@ -405,10 +427,18 @@ class _OffersScreenState extends State<OffersScreen>
             ),
             trailing: PopupMenuButton<String>(
               onSelected: (v) {
+                if (v == 'edit') _openForm(p);
                 if (v == 'toggle') _toggle(p);
                 if (v == 'delete') _delete(p);
               },
               itemBuilder: (_) => [
+                const PopupMenuItem(
+                  value: 'edit',
+                  child: Text(
+                    'تعديل',
+                    style: TextStyle(fontFamily: 'Tajawal'),
+                  ),
+                ),
                 PopupMenuItem(
                   value: 'toggle',
                   child: Text(
