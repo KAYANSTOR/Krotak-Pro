@@ -15,7 +15,8 @@ void main() {
     expect(policy.delayForAttempt(2), const Duration(seconds: 60));
     expect(policy.delayForAttempt(3), const Duration(seconds: 120));
     expect(policy.delayForAttempt(5), const Duration(minutes: 8));
-    expect(policy.delayForAttempt(99), const Duration(minutes: 30));
+    // Attempts are clamped to maxAttempts=5 before calculating the delay.
+    expect(policy.delayForAttempt(99), const Duration(minutes: 8));
   });
 
   test('terminal status remains rejected', () {
