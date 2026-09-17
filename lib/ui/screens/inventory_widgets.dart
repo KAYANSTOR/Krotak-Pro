@@ -16,7 +16,6 @@ class _Header extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(12, 10, 16, 6),
       child: Row(
         children: [
-          // RTL: first child = right side → title on the right
           const Text(
             'إدارة الكروت',
             style: TextStyle(
@@ -27,7 +26,6 @@ class _Header extends StatelessWidget {
             ),
           ),
           const Spacer(),
-          // From right to left after title: archive, add, menu
           _RoundIcon(icon: Icons.delete_outline, onTap: onDelete),
           const SizedBox(width: 8),
           _RoundIcon(icon: Icons.add, onTap: onAdd),
@@ -130,9 +128,7 @@ class _CategoryChip extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(20),
-              border: selected
-                  ? null
-                  : Border.all(color: const Color(0xFFE2E8F0)),
+              border: selected ? null : Border.all(color: const Color(0xFFE2E8F0)),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -203,10 +199,14 @@ class _TicketCard extends StatelessWidget {
     required this.card,
     required this.faceLabel,
     this.onTap,
+    this.onCopySerial,
+    this.onCopySecret,
   });
   final domain.Card card;
   final String faceLabel;
   final VoidCallback? onTap;
+  final VoidCallback? onCopySerial;
+  final VoidCallback? onCopySecret;
 
   bool get _used =>
       card.status == domain.CardStatus.sold ||
@@ -235,7 +235,6 @@ class _TicketCard extends StatelessWidget {
           child: IntrinsicHeight(
             child: Row(
               children: [
-                // Right: serial + badge + face
                 Expanded(
                   flex: 5,
                   child: Padding(
@@ -246,14 +245,17 @@ class _TicketCard extends StatelessWidget {
                         Row(
                           children: [
                             Flexible(
-                              child: Text(
-                                card.serialNumber,
-                                style: const TextStyle(
-                                  fontFamily: 'Tajawal',
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 15,
+                              child: InkWell(
+                                onLongPress: onCopySerial,
+                                child: Text(
+                                  card.serialNumber,
+                                  style: const TextStyle(
+                                    fontFamily: 'Tajawal',
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 15,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
                                 ),
-                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
                             const SizedBox(width: 8),
@@ -290,12 +292,10 @@ class _TicketCard extends StatelessWidget {
                     ),
                   ),
                 ),
-                // Perforation
                 SizedBox(
                   width: 18,
                   child: CustomPaint(painter: _PerforationPainter()),
                 ),
-                // Left: secret
                 Expanded(
                   flex: 4,
                   child: Padding(
@@ -313,14 +313,18 @@ class _TicketCard extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(height: 4),
-                        Text(
-                          card.secretCode,
-                          style: const TextStyle(
-                            fontFamily: 'Tajawal',
-                            fontWeight: FontWeight.w800,
-                            fontSize: 16,
+                        InkWell(
+                          onTap: onCopySecret,
+                          onLongPress: onCopySecret,
+                          child: Text(
+                            card.secretCode,
+                            style: const TextStyle(
+                              fontFamily: 'Tajawal',
+                              fontWeight: FontWeight.w800,
+                              fontSize: 16,
+                            ),
+                            textAlign: TextAlign.center,
                           ),
-                          textAlign: TextAlign.center,
                         ),
                       ],
                     ),
@@ -358,4 +362,3 @@ class _PerforationPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
-
