@@ -104,7 +104,7 @@ final class PaymentSourceGuard {
     }
 
     final allLive = (configuredTemplates as Success<List<TransferTemplate>>).value
-        .where((t) => t.isActive && t.walletId == wallet!.id)
+        .where((t) => t.isActive && t.walletId == wallet.id)
         .toList(growable: false);
 
     PosAccount? pos;
@@ -120,7 +120,7 @@ final class PaymentSourceGuard {
 
     final scopedTemplates = pos == null
         ? allLive.where((t) => t.posAccountId == null).toList(growable: false)
-        : allLive.where((t) => t.posAccountId == pos!.posId).toList(growable: false);
+        : allLive.where((t) => t.posAccountId == pos.posId).toList(growable: false);
 
     return Success(
       PaymentSourceScope(
