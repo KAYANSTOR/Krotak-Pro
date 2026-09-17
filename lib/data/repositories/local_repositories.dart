@@ -1,5 +1,7 @@
 library local_repositories;
 
+import 'dart:convert';
+
 import 'package:drift/drift.dart';
 
 import '../../core/result.dart';
