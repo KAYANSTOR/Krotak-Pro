@@ -219,7 +219,6 @@ final class AppContainer {
     final mergeService = LocalAccountMergeService(customers: customers, transactions: transactions, auditLogs: auditLogs, unitOfWork: uow, clock: clock, ids: ids);
     final settlementService = LocalSettlementService(customers: customers, transactions: transactions, auditLogs: auditLogs, unitOfWork: uow, clock: clock, ids: ids);
     final retryService = LocalMessageRetryService(auditLogs: auditLogs, messages: messages, clock: clock, ids: ids);
-    final recoveryService = LocalMessageRecoveryService(messages: messages, parser: parser, processor: processor, retryService: retryService, settings: settings);
     final pendingReview = PendingMessageReviewService(messages: messages, parser: parser, customers: customers, customerService: customerService, balances: balanceService, auditLogs: auditLogs, unitOfWork: uow, clock: clock, ids: ids);
     final notificationBridge = NotificationBridge();
     final notificationSources = LocalPaymentSourceRegistry(settings: settings, clock: clock);
@@ -243,6 +242,14 @@ final class AppContainer {
       ids: ids,
       settings: settings,
       sourceGuard: sourceGuard,
+    );
+    final recoveryService = LocalMessageRecoveryService(
+      messages: messages,
+      parser: parser,
+      processor: processor,
+      sourceGuard: sourceGuard,
+      retryService: retryService,
+      settings: settings,
     );
     final smsHandler = IncomingSmsHandler(
       bridge: smsBridge,
