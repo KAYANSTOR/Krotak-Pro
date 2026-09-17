@@ -41,6 +41,7 @@ final class TransferTemplate {
     required this.pattern,
     required this.isActive,
     this.walletId,
+    this.posAccountId,
     this.priority = 0,
     this.sampleBody,
     this.senderCode,
@@ -63,6 +64,10 @@ final class TransferTemplate {
   /// Optional link to a [Wallet] so templates can be managed per wallet.
   final String? walletId;
 
+  /// Optional link to a specific POS account. When set, the template is valid
+  /// only for messages recognized as belonging to this active POS account.
+  final String? posAccountId;
+
   /// Lower value = higher precedence when multiple templates match.
   final int priority;
 
@@ -81,11 +86,13 @@ final class TransferTemplate {
     String? pattern,
     bool? isActive,
     String? walletId,
+    String? posAccountId,
     int? priority,
     String? sampleBody,
     String? senderCode,
     TemplateIdentifierKind? identifierKind,
     bool clearWalletId = false,
+    bool clearPosAccountId = false,
   }) {
     return TransferTemplate(
       id: id ?? this.id,
@@ -93,6 +100,7 @@ final class TransferTemplate {
       pattern: pattern ?? this.pattern,
       isActive: isActive ?? this.isActive,
       walletId: clearWalletId ? null : (walletId ?? this.walletId),
+      posAccountId: clearPosAccountId ? null : (posAccountId ?? this.posAccountId),
       priority: priority ?? this.priority,
       sampleBody: sampleBody ?? this.sampleBody,
       senderCode: senderCode ?? this.senderCode,
