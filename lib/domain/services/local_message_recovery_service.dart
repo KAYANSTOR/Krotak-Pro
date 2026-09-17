@@ -1,21 +1,25 @@
-import '../../core/result.dart';
+import 'package:flutter/foundation.dart';
+
 import '../entities/message.dart';
+import '../entities/payment_event.dart';
 import '../entities/setting.dart';
 import '../entities/transaction.dart';
 import '../repositories/repositories.dart';
 import 'local_message_retry_service.dart';
+import 'payment_source_guard.dart';
 import 'services.dart';
 
 /// Phase 4 recovery coordinator for received, parsed and failed messages.
 ///
-/// The production AppContainer injects the persistent retry service. Isolated
-/// callers that do not require persisted retry scheduling get a safe no-op
-/// coordinator so recovery remains backwards-compatible and testable.
+/// Recovery must obey the same inbound trust boundary as live ingestion. A
+/// message that is no longer backed by an active configured wallet/source and
+/// wallet-linked template is never allowed to reach TransferProcessor.
 final class LocalMessageRecoveryService {
   const LocalMessageRecoveryService({
     required this.messages,
     required this.parser,
     required this.processor,
+    required this.sourceGuard,
     this.retryService = const NoopMessageRetryService(),
     this.settings,
   });
@@ -23,6 +27,7 @@ final class LocalMessageRecoveryService {
   final MessageRepository messages;
   final MessageParser parser;
   final TransferProcessor processor;
+  final PaymentSourceGuard sourceGuard;
   final MessageRetryServicePort retryService;
   final SettingsRepository? settings;
 
@@ -55,27 +60,45 @@ final class LocalMessageRecoveryService {
         continue;
       }
 
-      attempted++;
-      if (message.status == MessageProcessingStatus.received) {
-        final parseResult = parser.parse(message);
-        if (parseResult is Failure<ParsedTransfer>) {
-          await messages.updateStatus(message.id, MessageProcessingStatus.rejected);
-          failed++;
-          errors.add('${message.id}:${parseResult.error.code}');
-          continue;
-        }
-        await messages.updateStatus(message.id, MessageProcessingStatus.parsed);
-      }
-
-      final parsed = parser.parse(message);
-      if (parsed is Failure<ParsedTransfer>) {
+      // Reconstruct the original transport from the persisted source marker.
+      // Notification events use `notification:<package>` as their source key;
+      // ordinary SMS uses the actual SMS sender id.
+      final event = _eventForPersistedMessage(message);
+      final sourceAuthorization = await sourceGuard.authorize(event);
+      if (sourceAuthorization is Failure<void>) {
+        // Do not let historical/untrusted data bypass the live-ingest boundary.
         await messages.updateStatus(message.id, MessageProcessingStatus.rejected);
-        failed++;
-        errors.add('${message.id}:${parsed.error.code}');
+        skipped++;
+        errors.add('${message.id}:${sourceAuthorization.error.code}');
         continue;
       }
 
-      final result = await processor.process((parsed as Success<ParsedTransfer>).value);
+      attempted++;
+      final parseResult = parser.parse(message);
+      if (parseResult is Failure<ParsedTransfer>) {
+        await messages.updateStatus(message.id, MessageProcessingStatus.rejected);
+        failed++;
+        errors.add('${message.id}:${parseResult.error.code}');
+        continue;
+      }
+
+      final parsed = (parseResult as Success<ParsedTransfer>).value;
+      final templateAuthorization = await sourceGuard.authorize(
+        event,
+        matchedTemplateId: parsed.templateId,
+      );
+      if (templateAuthorization is Failure<void>) {
+        await messages.updateStatus(message.id, MessageProcessingStatus.rejected);
+        skipped++;
+        errors.add('${message.id}:${templateAuthorization.error.code}');
+        continue;
+      }
+
+      if (message.status == MessageProcessingStatus.received) {
+        await messages.updateStatus(message.id, MessageProcessingStatus.parsed);
+      }
+
+      final result = await processor.process(parsed);
       if (result is Success<Transaction>) {
         processed++;
         await retryService.clearAfterSuccess(message.id);
@@ -113,6 +136,25 @@ final class LocalMessageRecoveryService {
       failed: failed,
       errors: List.unmodifiable(errors),
     ));
+  }
+
+  PaymentEvent _eventForPersistedMessage(IncomingMessage message) {
+    final sender = message.sender.trim();
+    if (sender.startsWith('notification:')) {
+      return PaymentEvent(
+        channel: PaymentChannel.notification,
+        sourceKey: sender,
+        body: message.body,
+        receivedAt: message.receivedAt,
+        packageName: sender.substring('notification:'.length),
+      );
+    }
+    return PaymentEvent(
+      channel: PaymentChannel.sms,
+      sourceKey: sender,
+      body: message.body,
+      receivedAt: message.receivedAt,
+    );
   }
 
   Future<Result<void>> retryNow(String messageId) async {
