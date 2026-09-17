@@ -46,6 +46,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
   void initState() {
     super.initState();
     _searchCtrl.addListener(() {
+      if (!mounted) return;
       setState(() => _query = _searchCtrl.text.trim());
     });
     WidgetsBinding.instance.addPostFrameCallback((_) => _load());
@@ -58,6 +59,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
   }
 
   Future<void> _load() async {
+    if (!mounted) return;
     setState(() {
       _loading = true;
       _error = null;
@@ -88,6 +90,10 @@ class _InventoryScreenState extends State<InventoryScreen> {
           .where((e) => e.isActive)
           .toList();
       _allCards = list;
+      if (_categoryFilter != null &&
+          !_categories.any((e) => e.id == _categoryFilter)) {
+        _categoryFilter = null;
+      }
     });
   }
 
@@ -161,12 +167,8 @@ class _InventoryScreenState extends State<InventoryScreen> {
 
   Future<void> _openAddCards() async {
     if (_categories.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('أنشئ فئة كروت أولاً', style: TextStyle(fontFamily: 'Tajawal')),
-        ),
-      );
-      return;
+      await _openCategories();
+      if (!mounted || _categories.isEmpty) return;
     }
     await showModalBottomSheet<void>(
       context: context,
@@ -181,6 +183,102 @@ class _InventoryScreenState extends State<InventoryScreen> {
     if (mounted) await _load();
   }
 
+  void _resetInventoryFilters() {
+    _searchCtrl.clear();
+    setState(() {
+      _categoryFilter = null;
+      _statusFilter = _StatusFilter.all;
+    });
+  }
+
+  void _showHeaderMenu() {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const SizedBox(height: 8),
+                Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Color(0xFFCBD5E1),
+                    borderRadius: BorderRadius.all(Radius.circular(4)),
+                  ),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.refresh, color: KayanColors.primary),
+                  title: const Text(
+                    'تحديث المخزون',
+                    style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w700),
+                  ),
+                  onTap: () async {
+                    Navigator.pop(ctx);
+                    await _load();
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.category_outlined, color: KayanColors.primary),
+                  title: const Text(
+                    'إدارة الفئات',
+                    style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w700),
+                  ),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _openCategories();
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.cloud_upload_outlined, color: KayanColors.primary),
+                  title: const Text(
+                    'استيراد كروت',
+                    style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w700),
+                  ),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _openAddCards();
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.filter_alt_off_outlined, color: KayanColors.primary),
+                  title: const Text(
+                    'إلغاء الفلاتر والبحث',
+                    style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w700),
+                  ),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _resetInventoryFilters();
+                  },
+                ),
+                const SizedBox(height: 8),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showUsedCardsAction() async {
+    setState(() {
+      _statusFilter = _statusFilter == _StatusFilter.used
+          ? _StatusFilter.all
+          : _StatusFilter.used;
+    });
+    if (_statusFilter == _StatusFilter.used) {
+      await _load();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Directionality(
@@ -190,18 +288,9 @@ class _InventoryScreenState extends State<InventoryScreen> {
         child: Column(
           children: [
             _Header(
-              onMenu: () {},
+              onMenu: _showHeaderMenu,
               onAdd: _openAddCards,
-              onDelete: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text(
-                      'لحذف كرت: افتح الكروت المستخدمة واختر العملية المناسبة',
-                      style: TextStyle(fontFamily: 'Tajawal'),
-                    ),
-                  ),
-                );
-              },
+              onDelete: _showUsedCardsAction,
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 4, 16, 10),
