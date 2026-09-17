@@ -288,6 +288,18 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final customer = _customer;
+    if (_loading) return const Directionality(textDirection: TextDirection.rtl, child: Scaffold(body: AsyncLoadingView()));
+    if (_error != null) return Directionality(textDirection: TextDirection.rtl, child: Scaffold(body: AsyncErrorView(message: _error!, onRetry: _load)));
+    if (customer == null) {
+      return Directionality(
+        textDirection: TextDirection.rtl,
+        child: Scaffold(
+          body: AsyncErrorView(message: 'تعذر تحميل الحساب، البيانات غير متاحة.', onRetry: _load),
+        ),
+      );
+    }
+
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
@@ -304,7 +316,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text(
-                _customer?.displayName ?? 'تفاصيل الحساب',
+                customer.displayName,
                 textAlign: TextAlign.center,
                 style: const TextStyle(
                   fontFamily: 'Tajawal',
@@ -331,194 +343,189 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
             ),
           ],
         ),
-        body: _loading
-            ? const AsyncLoadingView()
-            : _error != null
-                ? AsyncErrorView(message: _error!, onRetry: _load)
-                : RefreshIndicator(
-                    color: const Color(0xFF0F766E),
-                    onRefresh: _load,
-                    child: ListView(
-                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
+        body: RefreshIndicator(
+          color: const Color(0xFF0F766E),
+          onRefresh: _load,
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
+            children: [
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
                       children: [
-                        // بطاقة الرصيد
-                        Container(
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: const Color(0xFFE2E8F0)),
+                        Expanded(
+                          child: Text(
+                            customer.displayName,
+                            style: const TextStyle(
+                              fontFamily: 'Tajawal',
+                              fontWeight: FontWeight.w800,
+                              fontSize: 17,
+                              color: Color(0xFF0F172A),
+                            ),
                           ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: Text(
-                                      _customer!.displayName,
-                                      style: const TextStyle(
-                                        fontFamily: 'Tajawal',
-                                        fontWeight: FontWeight.w800,
-                                        fontSize: 17,
-                                        color: Color(0xFF0F172A),
-                                      ),
-                                    ),
-                                  ),
-                                  if (!_hasPrimaryPhone)
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFFFEF3C7),
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                      child: const Text(
-                                        'غير مربوط',
-                                        style: TextStyle(
-                                          fontFamily: 'Tajawal',
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.w700,
-                                          color: Color(0xFFB45309),
-                                        ),
-                                      ),
-                                    ),
-                                ],
+                        ),
+                        if (!_hasPrimaryPhone)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFEF3C7),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Text(
+                              'غير مربوط',
+                              style: TextStyle(
+                                fontFamily: 'Tajawal',
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFFB45309),
                               ),
-                              const SizedBox(height: 6),
-                              const Text(
-                                'الرصيد الحالي',
-                                style: TextStyle(
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    const Text(
+                      'الرصيد الحالي',
+                      style: TextStyle(
+                        fontFamily: 'Tajawal',
+                        fontSize: 12,
+                        color: Color(0xFF64748B),
+                      ),
+                    ),
+                    Text(
+                      _fmtMoney(_balance),
+                      style: const TextStyle(
+                        fontFamily: 'Tajawal',
+                        fontSize: 26,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF0F766E),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  FilledButton.icon(
+                    onPressed: _linkPhone,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: const Color(0xFF0F766E),
+                    ),
+                    icon: const Icon(Icons.link, size: 18),
+                    label: Text(
+                      _hasPrimaryPhone ? 'تغيير الجوال' : 'ربط الجوال',
+                      style: const TextStyle(fontFamily: 'Tajawal'),
+                    ),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: _adjustBalance,
+                    icon: const Icon(Icons.account_balance_wallet_outlined, size: 18),
+                    label: const Text(
+                      'تعديل الرصيد',
+                      style: TextStyle(fontFamily: 'Tajawal'),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              CustomerPromotionProgressSection(
+                items: _promos,
+                onOpenAll: () => showCustomerPromotionSheet(
+                  context: context,
+                  items: _promos,
+                ),
+              ),
+              if (_recent.isNotEmpty) ...[
+                const SizedBox(height: 16),
+                const Text(
+                  'آخر العمليات',
+                  style: TextStyle(
+                    fontFamily: 'Tajawal',
+                    fontWeight: FontWeight.w800,
+                    fontSize: 15,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                ..._recent.map((tx) {
+                  final credit = tx.type == TransactionType.deposit ||
+                      tx.type == TransactionType.reward;
+                  final major = tx.amount.minorUnits / 100.0;
+                  final amt = major == major.roundToDouble()
+                      ? major.toInt().toString()
+                      : major.toStringAsFixed(2);
+                  final title = (tx.reference != null && tx.reference!.isNotEmpty)
+                      ? tx.reference!
+                      : tx.type.name;
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          credit ? Icons.arrow_downward : Icons.arrow_upward,
+                          size: 18,
+                          color: credit
+                              ? const Color(0xFF059669)
+                              : const Color(0xFFDC2626),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                title,
+                                style: const TextStyle(
                                   fontFamily: 'Tajawal',
-                                  fontSize: 12,
-                                  color: Color(0xFF64748B),
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 13,
                                 ),
                               ),
                               Text(
-                                _fmtMoney(_balance),
+                                _fmtTxTime(tx.createdAt),
                                 style: const TextStyle(
                                   fontFamily: 'Tajawal',
-                                  fontSize: 26,
-                                  fontWeight: FontWeight.w800,
-                                  color: Color(0xFF0F766E),
+                                  fontSize: 11,
+                                  color: Color(0xFF94A3B8),
                                 ),
                               ),
                             ],
                           ),
                         ),
-                        const SizedBox(height: 12),
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: [
-                            FilledButton.icon(
-                              onPressed: _linkPhone,
-                              style: FilledButton.styleFrom(
-                                backgroundColor: const Color(0xFF0F766E),
-                              ),
-                              icon: const Icon(Icons.link, size: 18),
-                              label: Text(
-                                _hasPrimaryPhone ? 'تغيير الجوال' : 'ربط الجوال',
-                                style: const TextStyle(fontFamily: 'Tajawal'),
-                              ),
-                            ),
-                            OutlinedButton.icon(
-                              onPressed: _adjustBalance,
-                              icon: const Icon(Icons.account_balance_wallet_outlined, size: 18),
-                              label: const Text(
-                                'تعديل الرصيد',
-                                style: TextStyle(fontFamily: 'Tajawal'),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 16),
-                        CustomerPromotionProgressSection(
-                          items: _promos,
-                          onOpenAll: () => showCustomerPromotionSheet(
-                            context: context,
-                            items: _promos,
+                        Text(
+                          '${credit ? '+' : '-'}$amt ر.ي',
+                          style: TextStyle(
+                            fontFamily: 'Tajawal',
+                            fontWeight: FontWeight.w700,
+                            color: credit
+                                ? const Color(0xFF059669)
+                                : const Color(0xFFDC2626),
                           ),
                         ),
-                        if (_recent.isNotEmpty) ...[
-                          const SizedBox(height: 16),
-                          const Text(
-                            'آخر العمليات',
-                            style: TextStyle(
-                              fontFamily: 'Tajawal',
-                              fontWeight: FontWeight.w800,
-                              fontSize: 15,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          ..._recent.map((tx) {
-                            final credit = tx.type == TransactionType.deposit ||
-                                tx.type == TransactionType.reward;
-                            final major = tx.amount.minorUnits / 100.0;
-                            final amt = major == major.roundToDouble()
-                                ? major.toInt().toString()
-                                : major.toStringAsFixed(2);
-                            final title = (tx.reference != null && tx.reference!.isNotEmpty)
-                                ? tx.reference!
-                                : tx.type.name;
-                            return Container(
-                              margin: const EdgeInsets.only(bottom: 8),
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: const Color(0xFFE2E8F0)),
-                              ),
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    credit ? Icons.arrow_downward : Icons.arrow_upward,
-                                    size: 18,
-                                    color: credit
-                                        ? const Color(0xFF059669)
-                                        : const Color(0xFFDC2626),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          title,
-                                          style: const TextStyle(
-                                            fontFamily: 'Tajawal',
-                                            fontWeight: FontWeight.w600,
-                                            fontSize: 13,
-                                          ),
-                                        ),
-                                        Text(
-                                          _fmtTxTime(tx.createdAt),
-                                          style: const TextStyle(
-                                            fontFamily: 'Tajawal',
-                                            fontSize: 11,
-                                            color: Color(0xFF94A3B8),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  Text(
-                                    '${credit ? '+' : '-'}$amt ر.ي',
-                                    style: TextStyle(
-                                      fontFamily: 'Tajawal',
-                                      fontWeight: FontWeight.w700,
-                                      color: credit
-                                          ? const Color(0xFF059669)
-                                          : const Color(0xFFDC2626),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            );
-                          }),
-                        ],
                       ],
                     ),
-                  ),
+                  );
+                }),
+              ],
+            ],
+          ),
+        ),
       ),
     );
   }
