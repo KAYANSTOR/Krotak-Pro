@@ -44,6 +44,7 @@ class KayanBottomNav extends StatelessWidget {
             for (final item in items)
               Expanded(
                 child: _NavItem(
+                  key: ValueKey('nav-${item.id}'),
                   label: item.label,
                   icon: item.icon,
                   activeIcon: item.activeIcon,
@@ -60,6 +61,7 @@ class KayanBottomNav extends StatelessWidget {
 
 class _NavItem extends StatelessWidget {
   const _NavItem({
+    super.key,
     required this.label,
     required this.icon,
     required this.activeIcon,
