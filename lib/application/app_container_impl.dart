@@ -172,7 +172,7 @@ final class AppContainer {
     final notificationEngine = UnifiedPaymentEventEngine(messages: messages, parser: parser, processor: processor, ids: ids, settings: settings, sourceGuard: sourceGuard);
     final recoveryService = LocalMessageRecoveryService(messages: messages, parser: parser, processor: processor, sourceGuard: sourceGuard, retryService: retryService, settings: settings);
     final pendingReview = PendingMessageReviewService(messages: messages, parser: parser, customers: customers, customerService: customerService, balances: balanceService, auditLogs: auditLogs, unitOfWork: uow, clock: clock, ids: ids, sourceGuard: sourceGuard);
-    final smsHandler = IncomingSmsHandler(bridge: smsBridge, messages: messages, parser: parser, processor: processor, ids: ids, settings: settings, advanceService: advanceService, engine: smsEngine);
+    final smsHandler = IncomingSmsHandler(bridge: smsBridge, messages: messages, parser: parser, processor: processor, ids: ids, settings: settings, advanceService: advanceService, engine: smsEngine, sourceGuard: sourceGuard);
     final notificationHandler = IncomingNotificationHandler(bridge: notificationBridge, sources: notificationSources, engine: notificationEngine);
 
     ThemeMode theme = ThemeMode.system;
