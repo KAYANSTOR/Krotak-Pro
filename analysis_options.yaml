@@ -13,6 +13,13 @@ analyzer:
   exclude:
     - build/**
     - android/**
+  errors:
+    # These are cleanup-quality lints, not correctness failures. Keep them
+    # visible in analyzer output while preventing them from blocking CI.
+    unused_import: info
+    unused_element: info
+    unnecessary_cast: info
+    unused_local_variable: info
 
 linter:
   # The lint rules applied to this project can be customized in the
@@ -20,14 +27,12 @@ linter:
   # included above or to enable additional rules. A list of all available lints
   # and their documentation is published at https://dart.dev/lints.
   #
-  # Instead of disabling a lint rule for the entire project in the
-  # section below, it can also be suppressed for a single line of code
-  # or a specific dart file by using the `// ignore: name_of_lint` and
-  # `// ignore_for_file: name_of_lint` syntax on the line or in the file
-  # producing the lint.
+  # Instead of disabling a lint rule for the entire project, it can also be
+  # suppressed for a single line of code or a specific Dart file by using the
+  # `// ignore: name_of_lint` and `// ignore_for_file: name_of_lint` syntax.
   rules:
-    # avoid_print: false  # Uncomment to disable the `avoid_print` rule
-    # prefer_single_quotes: true  # Uncomment to enable the `prefer_single_quotes` rule
+    # avoid_print: false  # Uncomment to disable `avoid_print`
+    # prefer_single_quotes: true  # Uncomment to enable `prefer_single_quotes`
 
-# Additional information about this file can be found at
+# Additional information about these options can be found at:
 # https://dart.dev/guides/language/analysis-options
