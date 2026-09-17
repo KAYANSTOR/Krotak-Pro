@@ -43,7 +43,7 @@ abstract final class PermissionsOnboarding {
     final notificationOk = notifications.isGranted;
     final listenerOk = probe['notificationAccess'] == true;
     final batteryOk = probe['batteryOptimizationIgnored'] == true;
-    final phoneStateOk = probe['dualSimReadable'] == true || phone.isGranted;
+    final phoneStateOk = phone.isGranted;
 
     return smsOk && notificationOk && listenerOk && batteryOk && phoneStateOk;
   }
@@ -95,14 +95,9 @@ abstract final class PermissionsOnboarding {
       _PermStep(
         title: 'حالة الهاتف والشرائح',
         body:
-            'يستخدم NET حالة الهاتف وبيانات الشرائح اللازمة للتشخيص والتوافق مع الأجهزة متعددة الشرائح.',
+            'يستخدم NET حالة الهاتف اللازمة للتشخيص والتوافق مع الأجهزة متعددة الشرائح.',
         actionLabel: 'منح إذن حالة الهاتف',
-        verify: () async {
-          final phone = await Permission.phone.status;
-          final probe = await diag.probe();
-          return phone.isGranted &&
-              (probe['dualSimReadable'] == true || phone.isGranted);
-        },
+        verify: () async => (await Permission.phone.status).isGranted,
         onAllow: () async {
           await Permission.phone.request();
         },
@@ -172,18 +167,17 @@ abstract final class PermissionsOnboarding {
 
         if (!context.mounted) return false;
         if (action == _PermissionAction.openSettings) {
-          await diag.openAppSettings();
+          await _openAndAwaitResume(diag.openAppSettings);
         } else if (action == _PermissionAction.allow) {
-          try {
-            await step.onAllow();
-          } catch (_) {}
+          if (step.specialAccess) {
+            await _openAndAwaitResume(step.onAllow);
+          } else {
+            try {
+              await step.onAllow();
+            } catch (_) {}
+          }
         } else {
           return false;
-        }
-
-        // الإعدادات الخاصة تُفتح خارج التطبيق؛ انتظر رجوع التطبيق ثم أعد التحقق.
-        if (step.specialAccess) {
-          await _waitForResume(context);
         }
       }
       if (!context.mounted) return false;
@@ -192,13 +186,9 @@ abstract final class PermissionsOnboarding {
     return _allRequirementsMet(diag);
   }
 
-  static Future<void> _waitForResume(BuildContext context) async {
-    final binding = WidgetsBinding.instance;
-    if (binding.lifecycleState == AppLifecycleState.resumed) {
-      await Future<void>.delayed(const Duration(milliseconds: 300));
-      return;
-    }
-
+  static Future<void> _openAndAwaitResume(
+    Future<void> Function() openSettings,
+  ) async {
     final completer = Completer<void>();
     late final AppLifecycleListener listener;
     listener = AppLifecycleListener(
@@ -207,10 +197,17 @@ abstract final class PermissionsOnboarding {
         listener.dispose();
       },
     );
-    await completer.future.timeout(
-      const Duration(minutes: 5),
-      onTimeout: () => listener.dispose(),
-    );
+
+    try {
+      await openSettings();
+      await completer.future.timeout(
+        const Duration(minutes: 5),
+        onTimeout: () {},
+      );
+    } finally {
+      listener.dispose();
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 300));
   }
 }
 
