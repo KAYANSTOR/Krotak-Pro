@@ -31,6 +31,7 @@ import '../domain/services/pending_message_review_service.dart';
 import '../domain/services/local_settlement_service.dart';
 import '../domain/services/local_card_inventory_service.dart';
 import '../domain/services/local_catalog_services.dart';
+import '../domain/services/default_wallet_templates_seeder.dart';
 import '../domain/services/local_customer_balance_service.dart';
 import '../domain/services/local_customer_service.dart';
 import '../domain/services/local_license_service.dart';
@@ -158,6 +159,16 @@ final class AppContainer {
     final systemHealth = LocalSystemHealthService(bridge: SystemDiagnosticsBridge(), clock: clock);
     final voucherOps = LocalVoucherOpsService(cards: cards, sales: sales, transactions: transactions, balances: balanceService, auditLogs: auditLogs, unitOfWork: uow, clock: clock, ids: ids);
     final pendingAlarm = PendingAttentionAlarmService();
+    // Seed four default wallets + built-in parse templates (product video).
+    await walletCatalog.ensureDefaultWallets();
+    await DefaultWalletTemplatesSeeder(
+      wallets: wallets,
+      templates: transferTemplates,
+      settings: settings,
+      clock: clock,
+      ids: ids,
+    ).seedIfNeeded();
+
     final listed = await transferTemplates.listAll();
     final live = listed is Success<List<TransferTemplate>> ? listed.value : const <TransferTemplate>[];
     final parser = LocalMessageParser(templates: live.isNotEmpty ? live : templates);
@@ -206,7 +217,6 @@ final class AppContainer {
     _recoveryTimer ??= Timer.periodic(const Duration(minutes: 1), (_) => _runRecovery());
   }
 
-  /// Phase 5: extra recovery/delivery pass (e.g. on [AppLifecycleState.resumed]).
   Future<void> runRecoveryPass() => _runRecovery();
 
   Future<void> _runRecovery() async {
