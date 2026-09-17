@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 
@@ -7,72 +9,100 @@ import '../../platform/system_diagnostics_bridge.dart';
 import '../app_scope.dart';
 import '../theme/kayan_colors.dart';
 
-/// يطلب كل الصلاحيات الحرجة عند أول دخول — منطق كامل بـ Dart عبر permission_handler.
-/// فتح إعدادات النظام (إشعارات المحافظ / البطارية) يستخدم الجسر الموجود فقط.
+/// بوابة تهيئة إلزامية: لا تُسجّل كمكتملة إلا بعد تحقق أندرويد من جميع المتطلبات.
 abstract final class PermissionsOnboarding {
-  /// ارفع الإصدار عند تغيير الخطوات لإعادة العرض للمستخدمين الحاليين.
-  static const doneKey = 'permissions_onboarding_done_v4';
+  /// تغيير الإصدار يعيد التحقق بعد تحديث متطلبات الصلاحيات.
+  static const doneKey = 'permissions_onboarding_done_v5';
 
   static Future<void> maybeRun(BuildContext context) async {
     final c = AppScope.of(context);
+    final diag = SystemDiagnosticsBridge();
     final existing = await c.settings.find(doneKey);
-    if (existing is Success<AppSetting?> && existing.value?.value == 'true') {
-      return;
-    }
+    final alreadyDone = existing is Success<AppSetting?> &&
+        existing.value?.value == 'true';
+
+    // لا نعتمد على العلم وحده: إذا تغيّرت صلاحية نظامية بعد ذلك يجب إعادة الطلب/التحقق.
+    if (alreadyDone && await _allRequirementsMet(diag)) return;
     if (!context.mounted) return;
-    await _showSequence(context);
-    if (!context.mounted) return;
+
+    final complete = await _showSequence(context, diag);
+    if (!complete || !context.mounted) return;
+
     await c.settings.save(
       AppSetting(key: doneKey, value: 'true', updatedAt: c.clock.now()),
     );
   }
 
-  static Future<void> _showSequence(BuildContext context) async {
-    final diag = SystemDiagnosticsBridge();
+  static Future<bool> _allRequirementsMet(SystemDiagnosticsBridge diag) async {
+    final sms = await Permission.sms.status;
+    final phone = await Permission.phone.status;
+    final notifications = await Permission.notification.status;
+    final probe = await diag.probe();
 
+    final smsOk = sms.isGranted && phone.isGranted;
+    final notificationOk = notifications.isGranted;
+    final listenerOk = probe['notificationAccess'] == true;
+    final batteryOk = probe['batteryOptimizationIgnored'] == true;
+    final phoneStateOk = probe['dualSimReadable'] == true || phone.isGranted;
+
+    return smsOk && notificationOk && listenerOk && batteryOk && phoneStateOk;
+  }
+
+  static Future<bool> _showSequence(
+    BuildContext context,
+    SystemDiagnosticsBridge diag,
+  ) async {
     final steps = <_PermStep>[
       _PermStep(
         title: 'صلاحيات الرسائل (SMS)',
         body:
-            'يحتاج التطبيق إلى قراءة واستقبال وإرسال رسائل SMS لمعالجة التحويلات تلقائياً وإرسال كروت العملاء.',
-        actionLabel: 'موافق — منح الصلاحية',
+            'يحتاج NET إلى قراءة واستقبال وإرسال SMS لمعالجة التحويلات تلقائياً وإرسال كروت العملاء.',
+        actionLabel: 'منح صلاحيات SMS',
+        verify: () async => (await Permission.sms.status).isGranted &&
+            (await Permission.phone.status).isGranted,
         onAllow: () async {
-          // طلب صلاحيات SMS بالكامل عبر permission_handler (Dart)
-          await [
-            Permission.sms,
-            Permission.phone, // يساعد بعض الأجهزة على وصول SMS
-          ].request();
+          await [Permission.sms, Permission.phone].request();
         },
       ),
       _PermStep(
         title: 'إشعارات التطبيق',
-        body:
-            'للتنبيه عند الرسائل المعلّقة والتنبيهات التشغيلية يحتاج التطبيق إذن عرض الإشعارات.',
-        actionLabel: 'موافق — منح الصلاحية',
+        body: 'يحتاج NET إلى إذن الإشعارات للتنبيهات التشغيلية.',
+        actionLabel: 'منح إذن الإشعارات',
+        verify: () async => (await Permission.notification.status).isGranted,
         onAllow: () async {
-          // POST_NOTIFICATIONS على Android 13+ عبر permission_handler
           await Permission.notification.request();
         },
       ),
       _PermStep(
         title: 'الوصول لإشعارات المحافظ',
         body:
-            'لتقاط إشعارات تطبيقات المحافظ (جيب، جوالي، ون كاش، فلوسك) تلقائياً يجب تفعيل خدمة قراءة الإشعارات من إعدادات النظام.',
-        actionLabel: 'موافق — فتح الإعداد',
+            'يجب تفعيل خدمة قراءة الإشعارات من إعدادات أندرويد حتى يستطيع NET التقاط إشعارات المحافظ فعلياً.',
+        actionLabel: 'فتح إعدادات إشعارات المحافظ',
+        verify: () async => (await diag.probe())['notificationAccess'] == true,
         onAllow: () => diag.openNotificationAccess(),
+        specialAccess: true,
       ),
       _PermStep(
         title: 'استثناء تحسين البطارية',
         body:
-            'لضمان استمرار الخدمة في الخلفية دون توقف عند قفل الشاشة، امنح استثناء تحسين البطارية لهذا التطبيق.',
-        actionLabel: 'موافق — فتح الإعداد',
+            'يجب السماح للتطبيق بالعمل دون تقييد البطارية حتى تستمر معالجة الرسائل والإشعارات في الخلفية.',
+        actionLabel: 'فتح إعدادات البطارية',
+        verify: () async =>
+            (await diag.probe())['batteryOptimizationIgnored'] == true,
         onAllow: () => diag.openBatteryOptimization(),
+        specialAccess: true,
       ),
       _PermStep(
-        title: 'حالة الهاتف (اختياري)',
+        title: 'حالة الهاتف والشرائح',
         body:
-            'يُستخدم لمعرفة حالة الشبكة والشرائح عند تشخيص النظام. يمكنك التخطي إن رغبت.',
-        actionLabel: 'موافق',
+            'يستخدم NET حالة الهاتف وبيانات الشرائح اللازمة للتشخيص والتوافق مع الأجهزة متعددة الشرائح.',
+        actionLabel: 'منح إذن حالة الهاتف',
+        verify: () async {
+          final phone = await Permission.phone.status;
+          final probe = await diag.probe();
+          return phone.isGranted &&
+              (probe['dualSimReadable'] == true || phone.isGranted);
+        },
         onAllow: () async {
           await Permission.phone.request();
         },
@@ -80,80 +110,126 @@ abstract final class PermissionsOnboarding {
     ];
 
     for (final step in steps) {
-      if (!context.mounted) return;
-      final ok = await showDialog<bool>(
-        context: context,
-        barrierDismissible: false,
-        builder: (ctx) => Directionality(
-          textDirection: TextDirection.rtl,
-          child: AlertDialog(
-            backgroundColor: Colors.white,
-            surfaceTintColor: Colors.white,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            title: Text(
-              step.title,
-              style: const TextStyle(
-                fontFamily: 'Tajawal',
-                fontWeight: FontWeight.w800,
-                color: KayanColors.textPrimary,
+      while (context.mounted) {
+        if (await step.verify()) break;
+
+        final action = await showDialog<_PermissionAction>(
+          context: context,
+          barrierDismissible: false,
+          builder: (ctx) => Directionality(
+            textDirection: TextDirection.rtl,
+            child: AlertDialog(
+              backgroundColor: Colors.white,
+              surfaceTintColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
               ),
-            ),
-            content: Text(
-              step.body,
-              style: const TextStyle(
-                fontFamily: 'Tajawal',
-                height: 1.5,
-                color: KayanColors.textSecondary,
+              title: Text(
+                step.title,
+                style: const TextStyle(
+                  fontFamily: 'Tajawal',
+                  fontWeight: FontWeight.w800,
+                  color: KayanColors.textPrimary,
+                ),
               ),
-            ),
-            actionsAlignment: MainAxisAlignment.spaceBetween,
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx, false),
-                child: const Text(
-                  'لاحقاً',
-                  style: TextStyle(
-                    fontFamily: 'Tajawal',
-                    color: KayanColors.textSecondary,
+              content: Text(
+                '${step.body}\n\nلن يعتبر الإعداد مكتملًا حتى يتأكد التطبيق من تفعيله فعليًا.',
+                style: const TextStyle(
+                  fontFamily: 'Tajawal',
+                  height: 1.5,
+                  color: KayanColors.textSecondary,
+                ),
+              ),
+              actionsAlignment: MainAxisAlignment.spaceBetween,
+              actions: [
+                if (!step.specialAccess)
+                  TextButton(
+                    onPressed: () => Navigator.pop(
+                      ctx,
+                      _PermissionAction.openSettings,
+                    ),
+                    child: const Text('فتح إعدادات التطبيق'),
+                  ),
+                FilledButton(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: KayanColors.primary,
+                    foregroundColor: Colors.white,
+                  ),
+                  onPressed: () =>
+                      Navigator.pop(ctx, _PermissionAction.allow),
+                  child: Text(
+                    step.actionLabel,
+                    style: const TextStyle(
+                      fontFamily: 'Tajawal',
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
-              ),
-              FilledButton(
-                style: FilledButton.styleFrom(
-                  backgroundColor: KayanColors.primary,
-                  foregroundColor: Colors.white,
-                ),
-                onPressed: () => Navigator.pop(ctx, true),
-                child: Text(
-                  step.actionLabel,
-                  style: const TextStyle(
-                    fontFamily: 'Tajawal',
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
-      );
-      if (ok == true) {
-        try {
-          await step.onAllow();
-        } catch (_) {}
+        );
+
+        if (!context.mounted) return false;
+        if (action == _PermissionAction.openSettings) {
+          await diag.openAppSettings();
+        } else if (action == _PermissionAction.allow) {
+          try {
+            await step.onAllow();
+          } catch (_) {}
+        } else {
+          return false;
+        }
+
+        // الإعدادات الخاصة تُفتح خارج التطبيق؛ انتظر رجوع التطبيق ثم أعد التحقق.
+        if (step.specialAccess) {
+          await _waitForResume(context);
+        }
       }
+      if (!context.mounted) return false;
     }
+
+    return _allRequirementsMet(diag);
+  }
+
+  static Future<void> _waitForResume(BuildContext context) async {
+    final binding = WidgetsBinding.instance;
+    if (binding.lifecycleState == AppLifecycleState.resumed) {
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+      return;
+    }
+
+    final completer = Completer<void>();
+    late final AppLifecycleListener listener;
+    listener = AppLifecycleListener(
+      onResume: () {
+        if (!completer.isCompleted) completer.complete();
+        listener.dispose();
+      },
+    );
+    await completer.future.timeout(
+      const Duration(minutes: 5),
+      onTimeout: () => listener.dispose(),
+    );
   }
 }
+
+enum _PermissionAction { allow, openSettings }
 
 class _PermStep {
   const _PermStep({
     required this.title,
     required this.body,
     required this.actionLabel,
+    required this.verify,
     required this.onAllow,
+    this.specialAccess = false,
   });
+
   final String title;
   final String body;
   final String actionLabel;
+  final Future<bool> Function() verify;
   final Future<void> Function() onAllow;
+  final bool specialAccess;
 }
