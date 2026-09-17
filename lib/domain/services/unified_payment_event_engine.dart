@@ -47,27 +47,55 @@ final class UnifiedPaymentEventEngine implements PaymentEventEngine {
       );
     }
 
-    if (sourceGuard != null) {
-      final sourceAuthorization = await sourceGuard!.authorize(event);
-      if (sourceAuthorization is Failure<void>) {
-        return Failure(sourceAuthorization.error);
+    PaymentSourceScope? sourceScope;
+    if (sourceGuard != null && event.channel != PaymentChannel.manual) {
+      final resolvedScope = await sourceGuard!.resolve(event);
+      if (resolvedScope is Failure<PaymentSourceScope>) {
+        return Failure(resolvedScope.error);
+      }
+      sourceScope = (resolvedScope as Success<PaymentSourceScope>).value;
+
+      // A known POS is a strict template scope. No configured POS template
+      // means the raw message is silently ignored at the trust boundary.
+      if (sourceScope.isPos && sourceScope.templates.isEmpty) {
+        return const Success(null);
       }
     }
 
     final provisional = event.toProvisionalMessage(id: ids.next('msg'));
-    final parseResult = parser.parse(provisional);
+    final parseResult = sourceScope != null && parser is ScopedMessageParser
+        ? (parser as ScopedMessageParser).parseScoped(
+            provisional,
+            sourceScope.templates,
+          )
+        : parser.parse(provisional);
+
+    if (parseResult is Failure<ParsedTransfer>) {
+      // For a recognized POS account, a non-matching message is intentionally
+      // invisible to business processing: no persistence, rejection, recovery,
+      // pending review, or customer notification.
+      if (sourceScope?.isPos == true &&
+          parseResult.error.code == 'message_not_matched') {
+        return const Success(null);
+      }
+    }
+
     final parsed = parseResult is Success<ParsedTransfer>
         ? parseResult.value
         : null;
 
-    // A trusted source may only use templates linked to that same source.
-    if (parsed != null && sourceGuard != null) {
-      final templateAuthorization = await sourceGuard!.authorize(
-        event,
-        matchedTemplateId: parsed.templateId,
+    if (parsed != null && sourceScope != null) {
+      final templateAllowed = sourceScope.templates.any(
+        (template) => template.id == parsed.templateId,
       );
-      if (templateAuthorization is Failure<void>) {
-        return Failure(templateAuthorization.error);
+      if (!templateAllowed) {
+        if (sourceScope.isPos) return const Success(null);
+        return const Failure(
+          AppFailure(
+            code: 'template_source_mismatch',
+            message: 'Matched template is outside the trusted source scope',
+          ),
+        );
       }
     }
 
