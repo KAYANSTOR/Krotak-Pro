@@ -1,13 +1,3 @@
-import 'dart:convert';
-
-import 'package:drift/drift.dart';
-
-import '../../../core/result.dart';
-import '../../../domain/entities/setting.dart';
-import '../../../domain/entities/wallet.dart' as domain;
-import '../../../domain/repositories/repositories.dart';
-import '../database/app_database.dart';
-
 part of local_repositories;
 
 final class LocalWalletRepository implements WalletRepository {
@@ -67,7 +57,7 @@ final class LocalWalletRepository implements WalletRepository {
         };
         await database.into(database.appSettings).insertOnConflictUpdate(
               AppSettingsCompanion.insert(
-                key: SettingKeys.walletExtras,
+                key: domain.SettingKeys.walletExtras,
                 value: jsonEncode(extras),
                 updatedAt: wallet.createdAt,
               ),
@@ -81,7 +71,7 @@ final class LocalWalletRepository implements WalletRepository {
 
   Future<Map<String, Map<String, dynamic>>> _readExtras() async {
     final row = await (database.select(database.appSettings)
-          ..where((table) => table.key.equals(SettingKeys.walletExtras)))
+          ..where((table) => table.key.equals(domain.SettingKeys.walletExtras)))
         .getSingleOrNull();
     if (row == null || row.value.trim().isEmpty) {
       return <String, Map<String, dynamic>>{};
@@ -106,9 +96,9 @@ final class LocalWalletRepository implements WalletRepository {
     Map<String, dynamic>? extra,
   ) {
     final sourceModeRaw = extra?['sourceMode']?.toString();
-    final sourceMode = WalletSourceMode.values.firstWhere(
+    final sourceMode = domain.WalletSourceMode.values.firstWhere(
       (mode) => mode.name == sourceModeRaw,
-      orElse: () => WalletSourceMode.sms,
+      orElse: () => domain.WalletSourceMode.sms,
     );
     return domain.Wallet(
       id: row.id,
