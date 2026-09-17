@@ -10,7 +10,7 @@ final class LocalTransferTemplateRepository implements TransferTemplateRepositor
     try {
       final rows = await database.customSelect(
         'SELECT id, name, pattern, is_active, '
-        'wallet_id, priority, sample_body, sender_code, identifier_kind '
+        'wallet_id, pos_account_id, priority, sample_body, sender_code, identifier_kind '
         'FROM transfer_templates ORDER BY priority ASC, name ASC',
         readsFrom: {database.transferTemplates},
       ).get();
@@ -26,13 +26,13 @@ final class LocalTransferTemplateRepository implements TransferTemplateRepositor
       final rows = walletId == null
           ? await database.customSelect(
               'SELECT id, name, pattern, is_active, '
-              'wallet_id, priority, sample_body, sender_code, identifier_kind '
+              'wallet_id, pos_account_id, priority, sample_body, sender_code, identifier_kind '
               'FROM transfer_templates ORDER BY priority ASC, name ASC',
               readsFrom: {database.transferTemplates},
             ).get()
           : await database.customSelect(
               'SELECT id, name, pattern, is_active, '
-              'wallet_id, priority, sample_body, sender_code, identifier_kind '
+              'wallet_id, pos_account_id, priority, sample_body, sender_code, identifier_kind '
               'FROM transfer_templates WHERE wallet_id = ? '
               'ORDER BY priority ASC, name ASC',
               variables: [Variable.withString(walletId)],
@@ -49,7 +49,7 @@ final class LocalTransferTemplateRepository implements TransferTemplateRepositor
     try {
       final rows = await database.customSelect(
         'SELECT id, name, pattern, is_active, '
-        'wallet_id, priority, sample_body, sender_code, identifier_kind '
+        'wallet_id, pos_account_id, priority, sample_body, sender_code, identifier_kind '
         'FROM transfer_templates WHERE id = ? LIMIT 1',
         variables: [Variable.withString(id)],
         readsFrom: {database.transferTemplates},
@@ -74,10 +74,11 @@ final class LocalTransferTemplateRepository implements TransferTemplateRepositor
           );
       await database.customStatement(
         'UPDATE transfer_templates SET '
-        'wallet_id = ?, priority = ?, sample_body = ?, sender_code = ?, identifier_kind = ? '
+        'wallet_id = ?, pos_account_id = ?, priority = ?, sample_body = ?, sender_code = ?, identifier_kind = ? '
         'WHERE id = ?',
         [
           template.walletId,
+          template.posAccountId,
           template.priority,
           template.sampleBody,
           template.senderCode,
@@ -115,6 +116,7 @@ final class LocalTransferTemplateRepository implements TransferTemplateRepositor
       pattern: row.read<String>('pattern'),
       isActive: row.read<bool>('is_active'),
       walletId: row.read<String?>('wallet_id'),
+      posAccountId: row.read<String?>('pos_account_id'),
       priority: row.read<int?>('priority') ?? 0,
       sampleBody: row.read<String?>('sample_body'),
       senderCode: row.read<String?>('sender_code'),
