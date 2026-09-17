@@ -173,33 +173,13 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase(super.e);
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
         onCreate: (Migrator migrator) async {
           await migrator.createAll();
-          await customStatement(
-            'CREATE UNIQUE INDEX IF NOT EXISTS idx_customer_identifiers_value '
-            'ON customer_identifiers (value)',
-          );
-          await customStatement(
-            'CREATE UNIQUE INDEX IF NOT EXISTS idx_cards_serial_number '
-            'ON cards (serial_number)',
-          );
-          await customStatement(
-            'CREATE UNIQUE INDEX IF NOT EXISTS idx_cards_secret_code '
-            'ON cards (secret_code)',
-          );
-          await customStatement(
-            'CREATE UNIQUE INDEX IF NOT EXISTS idx_incoming_messages_external_reference '
-            'ON incoming_messages (external_reference)',
-          );
-          await customStatement(
-            'CREATE UNIQUE INDEX IF NOT EXISTS idx_transactions_reference '
-            'ON transactions (reference)',
-          );
-          // Template meta columns (wallet link + priority + wizard fields).
+          // Legacy columns that older onCreate paths expected as ALTER after createAll.
           await customStatement(
             'ALTER TABLE transfer_templates ADD COLUMN wallet_id TEXT',
           );
@@ -213,8 +193,9 @@ class AppDatabase extends _$AppDatabase {
             'ALTER TABLE transfer_templates ADD COLUMN sender_code TEXT',
           );
           await customStatement(
-            'ALTER TABLE transfer_templates ADD COLUMN identifier_kind TEXT NOT NULL DEFAULT \'phone\'',
+            "ALTER TABLE transfer_templates ADD COLUMN identifier_kind TEXT NOT NULL DEFAULT 'phone'",
           );
+          await _createIdempotencyIndexes();
         },
         onUpgrade: (Migrator migrator, int from, int to) async {
           if (from < 2) {
@@ -231,9 +212,47 @@ class AppDatabase extends _$AppDatabase {
               'ALTER TABLE transfer_templates ADD COLUMN sender_code TEXT',
             );
             await customStatement(
-              'ALTER TABLE transfer_templates ADD COLUMN identifier_kind TEXT NOT NULL DEFAULT \'phone\'',
+              "ALTER TABLE transfer_templates ADD COLUMN identifier_kind TEXT NOT NULL DEFAULT 'phone'",
             );
+          }
+          if (from < 3) {
+            // Phase 2: enforce uniqueness for reservation, message ref, txn ref, one sale per card.
+            await _createIdempotencyIndexes();
           }
         },
       );
+
+  /// Unique indexes required by the conversion plan (idempotency).
+  /// Safe to call multiple times (IF NOT EXISTS). Partial indexes allow multiple NULLs.
+  Future<void> _createIdempotencyIndexes() async {
+    await customStatement(
+      'CREATE UNIQUE INDEX IF NOT EXISTS idx_customer_identifiers_value '
+      'ON customer_identifiers (value)',
+    );
+    await customStatement(
+      'CREATE UNIQUE INDEX IF NOT EXISTS idx_cards_serial_number '
+      'ON cards (serial_number)',
+    );
+    await customStatement(
+      'CREATE UNIQUE INDEX IF NOT EXISTS idx_cards_secret_code '
+      'ON cards (secret_code)',
+    );
+    await customStatement(
+      'CREATE UNIQUE INDEX IF NOT EXISTS idx_cards_reservation_id '
+      'ON cards (reservation_id) WHERE reservation_id IS NOT NULL',
+    );
+    await customStatement(
+      'CREATE UNIQUE INDEX IF NOT EXISTS idx_incoming_messages_external_reference '
+      'ON incoming_messages (external_reference) '
+      'WHERE external_reference IS NOT NULL',
+    );
+    await customStatement(
+      'CREATE UNIQUE INDEX IF NOT EXISTS idx_transactions_reference '
+      'ON transactions (reference) WHERE reference IS NOT NULL',
+    );
+    await customStatement(
+      'CREATE UNIQUE INDEX IF NOT EXISTS idx_sales_card_id '
+      'ON sales (card_id)',
+    );
+  }
 }

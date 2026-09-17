@@ -13,8 +13,8 @@ void main() {
     await database.close();
   });
 
-  test('creates current schema and starts empty', () async {
-    expect(database.schemaVersion, 2);
+  test('creates schema version 3 and starts empty', () async {
+    expect(database.schemaVersion, 3);
     expect(await database.select(database.customers).get(), isEmpty);
     expect(await database.select(database.cards).get(), isEmpty);
     expect(await database.select(database.incomingMessages).get(), isEmpty);
@@ -67,6 +67,92 @@ void main() {
           secretCode: 'secret-2', status: 'available',
         ),
       ), throwsA(isA<Exception>()),
+    );
+  });
+
+  test('phase2: unique reservation_id prevents double reservation key', () async {
+    await database.into(database.cards).insert(
+      CardsCompanion.insert(
+        id: 'card-r1', categoryId: 'cat-1', serialNumber: 'R-1',
+        secretCode: 'sec-r1', status: 'reserved',
+        reservationId: const Value('res-1'),
+        reservedAt: Value(DateTime(2026, 9, 17)),
+        reservationExpiresAt: Value(DateTime(2026, 9, 17, 1)),
+      ),
+    );
+    await expectLater(
+      database.into(database.cards).insert(
+        CardsCompanion.insert(
+          id: 'card-r2', categoryId: 'cat-1', serialNumber: 'R-2',
+          secretCode: 'sec-r2', status: 'reserved',
+          reservationId: const Value('res-1'),
+          reservedAt: Value(DateTime(2026, 9, 17)),
+          reservationExpiresAt: Value(DateTime(2026, 9, 17, 1)),
+        ),
+      ),
+      throwsA(isA<Exception>()),
+    );
+  });
+
+  test('phase2: unique external_reference on messages', () async {
+    await database.into(database.incomingMessages).insert(
+      IncomingMessagesCompanion.insert(
+        id: 'm1', sender: 'JAIB', body: 'body1',
+        receivedAt: DateTime(2026, 9, 17), status: 'received',
+        externalReference: const Value('ref-100'),
+      ),
+    );
+    await expectLater(
+      database.into(database.incomingMessages).insert(
+        IncomingMessagesCompanion.insert(
+          id: 'm2', sender: 'JAIB', body: 'body2',
+          receivedAt: DateTime(2026, 9, 17), status: 'received',
+          externalReference: const Value('ref-100'),
+        ),
+      ),
+      throwsA(isA<Exception>()),
+    );
+  });
+
+  test('phase2: unique transaction reference', () async {
+    await database.into(database.transactions).insert(
+      TransactionsCompanion.insert(
+        id: 'tx1', type: 'deposit', status: 'completed',
+        amountMinorUnits: 1000, currencyCode: 'YER',
+        createdAt: DateTime(2026, 9, 17),
+        reference: const Value('op-1'),
+      ),
+    );
+    await expectLater(
+      database.into(database.transactions).insert(
+        TransactionsCompanion.insert(
+          id: 'tx2', type: 'deposit', status: 'completed',
+          amountMinorUnits: 500, currencyCode: 'YER',
+          createdAt: DateTime(2026, 9, 17),
+          reference: const Value('op-1'),
+        ),
+      ),
+      throwsA(isA<Exception>()),
+    );
+  });
+
+  test('phase2: one sale row per card_id', () async {
+    await database.into(database.sales).insert(
+      SalesCompanion.insert(
+        id: 'sale-1', customerId: 'c1', cardId: 'card-x',
+        amountMinorUnits: 100, currencyCode: 'YER',
+        status: 'completed', createdAt: DateTime(2026, 9, 17),
+      ),
+    );
+    await expectLater(
+      database.into(database.sales).insert(
+        SalesCompanion.insert(
+          id: 'sale-2', customerId: 'c1', cardId: 'card-x',
+          amountMinorUnits: 100, currencyCode: 'YER',
+          status: 'completed', createdAt: DateTime(2026, 9, 17),
+        ),
+      ),
+      throwsA(isA<Exception>()),
     );
   });
 }
