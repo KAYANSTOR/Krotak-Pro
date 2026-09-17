@@ -8,7 +8,7 @@ import '../repositories/repositories.dart';
 
 /// Seeds built-in parse templates for the four default Yemen wallets.
 ///
-/// Patterns follow the product video / help-center samples so JAIB / JAWALI /
+/// Patterns follow the product video samples so JAIB / JAWALI /
 /// ONE CASH / FLOOSAK work without manual wizard setup. New wallets still
 /// require operator-defined templates.
 final class DefaultWalletTemplatesSeeder {
@@ -26,7 +26,7 @@ final class DefaultWalletTemplatesSeeder {
   final Clock clock;
   final IdGenerator ids;
 
-  static const seededKey = 'default_wallet_templates_seeded_v1';
+  static const seededKey = 'default_wallet_templates_seeded_v2';
 
   /// Idempotent: skips when [seededKey] is set, otherwise inserts missing
   /// templates keyed by stable id `tpl-default-{senderId}-{variant}`.
@@ -134,6 +134,14 @@ final class DefaultWalletTemplatesSeeder {
       sampleBody: 'اضيف 650 ر.ي تحويل مشترك رص:650 ر.ي من 773303455',
     ),
     _TplSpec(
+      senderCode: 'JAWALI',
+      variant: 'en-received',
+      name: 'JAWALI — received (EN)',
+      priority: 30,
+      pattern: 'You have received {amount} YER from {phone} your balance {ref}',
+      sampleBody: 'You have received 50 YER from 773303455 your balance 100',
+    ),
+    _TplSpec(
       senderCode: 'ONE CASH',
       variant: 'ar-shared',
       name: 'ون كاش — تحويل مشترك',
@@ -142,6 +150,14 @@ final class DefaultWalletTemplatesSeeder {
           'اضيف {amount} ر.ي تحويل مشترك رص:{ref} ر.ي من {account}-{phone}',
       sampleBody:
           'اضيف 1000 ر.ي تحويل مشترك رص:1000 ر.ي من عميل-771234567',
+    ),
+    _TplSpec(
+      senderCode: 'ONE CASH',
+      variant: 'ar-hawala',
+      name: 'ون كاش — استلمت حوالة',
+      priority: 15,
+      pattern: 'استلمت حوالة من {account} بمبلغ {amount} ر.ي رصيدك {ref} ر.ي',
+      sampleBody: 'استلمت حوالة من عميل بمبلغ 500.00 ر.ي رصيدك 1500.00 ر.ي',
     ),
     _TplSpec(
       senderCode: 'ONE CASH',
@@ -160,6 +176,14 @@ final class DefaultWalletTemplatesSeeder {
           'اضيف {amount} ر.ي تحويل مشترك رص:{ref} ر.ي من {account}-{phone}',
       sampleBody:
           'اضيف 2000 ر.ي تحويل مشترك رص:2000 ر.ي من عميل-770000001',
+    ),
+    _TplSpec(
+      senderCode: 'FLOOSAK',
+      variant: 'ar-hawala',
+      name: 'فلوسك — استلمت حوالة',
+      priority: 15,
+      pattern: 'استلمت حوالة من {account} بمبلغ {amount} ر.ي رصيدك {ref} ر.ي',
+      sampleBody: 'استلمت حوالة من محمد احمد بمبلغ 200.00 ر.ي رصيدك 600.00 ر.ي',
     ),
     _TplSpec(
       senderCode: 'FLOOSAK',
