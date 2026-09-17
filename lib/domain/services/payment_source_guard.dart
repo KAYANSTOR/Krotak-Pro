@@ -1,13 +1,11 @@
 import '../../core/result.dart';
 import '../entities/message.dart';
 import '../entities/payment_event.dart';
-import '../entities/transfer_template.dart';
 import '../entities/wallet.dart';
 import '../repositories/repositories.dart';
 import 'local_payment_source_registry.dart';
 
 /// Authorizes inbound payment events against explicitly configured payment sources.
-///
 /// Commercial processing is never allowed merely because an SMS body matches a
 /// template. The source must belong to an active wallet configured for the same
 /// transport and the matching template must be linked to that wallet.
@@ -40,12 +38,16 @@ final class PaymentSourceGuard {
       wallet = activeWallets.where((w) {
         if (w.sourceMode != WalletSourceMode.sms) return false;
         final sender = w.senderId;
-        return sender != null && sender.trim().isNotEmpty && _normalize(sender) == incomingSender;
+        return sender != null && sender.trim().isNotEmpty &&
+            _normalize(sender) == incomingSender;
       }).firstOrNull;
     } else if (event.channel == PaymentChannel.notification) {
       final package = event.packageName?.trim();
       if (package == null || package.isEmpty) {
-        return const Failure(AppFailure(code: 'untrusted_payment_source', message: 'Notification source is not configured'));
+        return const Failure(AppFailure(
+          code: 'untrusted_payment_source',
+          message: 'Notification source is not configured',
+        ));
       }
       wallet = activeWallets.where((w) =>
           w.sourceMode == WalletSourceMode.notification &&
