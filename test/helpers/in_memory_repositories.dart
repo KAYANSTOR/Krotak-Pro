@@ -14,6 +14,12 @@ final class InMemoryMessageRepository implements MessageRepository {
   }
 
   @override
+  Future<Result<void>> delete(String id) async {
+    _byId.remove(id);
+    return const Success(null);
+  }
+
+  @override
   Future<Result<IncomingMessage?>> findById(String id) async =>
       Success(_byId[id]);
 
