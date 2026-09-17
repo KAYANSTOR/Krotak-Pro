@@ -3,6 +3,7 @@ import '../entities/audit.dart';
 import '../entities/message.dart';
 import '../entities/money.dart';
 import '../repositories/repositories.dart';
+import '../rejection_codes.dart';
 import 'services.dart';
 
 /// Known rejection categories derived from Audit actions (PD-08).
@@ -21,26 +22,40 @@ abstract final class RejectionCategories {
 
   /// Map terminal audit action → category chip label.
   static String fromAuditAction(String? action) {
+    // Prefer canonical RejectionCodes when audit stores domain codes.
     switch (action) {
+      case RejectionCodes.voucherSendFailed:
       case 'sms_delivery_failed':
         return smsDeliveryFailed;
+      case RejectionCodes.voucherUnavailable:
       case 'transfer_out_of_stock':
-        return outOfStock;
-      case 'pending_message_rejected':
-        return rejectedFromPending;
-      case 'transfer_unresolved':
-        return unresolvedCustomer;
-      case 'transfer_ambiguous_category':
-        return ambiguousCategory;
-      case 'transfer_unmatched_amount':
-        return unmatchedAmount;
       case 'transfer_reservation_failed':
         return outOfStock;
-      case 'transfer_rejected':
-        return other;
+      case RejectionCodes.duplicateTransaction:
+        return duplicateTransfer;
+      case RejectionCodes.noActiveTemplate:
+      case RejectionCodes.invalidFormat:
+      case RejectionCodes.parseFailure:
       case 'message_parse_failed':
       case 'transfer_parse_failed':
         return templateMismatch;
+      case RejectionCodes.unknownSender:
+      case 'transfer_unresolved':
+        return unresolvedCustomer;
+      case RejectionCodes.categoryMismatch:
+      case 'transfer_unmatched_amount':
+        return unmatchedAmount;
+      case RejectionCodes.missingFields:
+      case RejectionCodes.blacklisted:
+      case RejectionCodes.licenseBlocked:
+      case RejectionCodes.creditLimitExceeded:
+      case RejectionCodes.other:
+      case 'transfer_rejected':
+        return other;
+      case 'pending_message_rejected':
+        return rejectedFromPending;
+      case 'transfer_ambiguous_category':
+        return ambiguousCategory;
       default:
         return other;
     }
