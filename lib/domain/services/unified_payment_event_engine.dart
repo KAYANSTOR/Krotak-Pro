@@ -90,7 +90,9 @@ final class UnifiedPaymentEventEngine implements PaymentEventEngine {
         ? parseResult.value
         : null;
 
-    if (parsed != null && sourceScope != null) {
+    if (parsed != null &&
+        parsed.templateId != null &&
+        sourceScope != null) {
       final templateAllowed = sourceScope.templates.any(
         (template) => template.id == parsed.templateId,
       );
