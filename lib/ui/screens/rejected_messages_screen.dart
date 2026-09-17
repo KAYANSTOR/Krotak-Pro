@@ -5,10 +5,16 @@ import '../../domain/entities/money.dart';
 import '../../domain/entities/setting.dart';
 import '../../domain/services/rejected_message_catalog.dart';
 import '../app_scope.dart';
-import '../theme/net_semantic_colors.dart';
 import '../widgets/async_views.dart';
 
-/// الرسائل المرفوضة — مراجعة وأرشفة (PD-08 / B3).
+/// الرسائل المرفوضة — مطابقة إطار الفيديو (`cards_t320s` / `rem_320`).
+///
+/// - عنوان + عنوان فرعي
+/// - شرائح تصنيف أفقية (مكررة / غير صالحة / …)
+/// - بطاقة ملخص صفراء: الإجمالي + شارة «جديد»
+/// - تجميع بالتاريخ
+/// - بطاقة: سبب · وقت · شارة محفظة
+/// - Domain: RejectedMessageCatalog + mark viewed
 class RejectedMessagesScreen extends StatefulWidget {
   const RejectedMessagesScreen({super.key});
 
@@ -23,6 +29,20 @@ class _RejectedMessagesScreenState extends State<RejectedMessagesScreen> {
   List<RejectedMessageItem> _items = const [];
   String _filter = RejectionCategories.all;
   int _newCount = 0;
+
+  /// تسميات قصيرة للشرائح مطابقة لنص الفيديو قدر الإمكان.
+  static const _chipShort = <String, String>{
+    RejectionCategories.all: 'الكل',
+    RejectionCategories.duplicateTransfer: 'عملية تحويل مكررة',
+    RejectionCategories.templateMismatch: 'تنسيق الرسالة غير صالح',
+    RejectionCategories.unresolvedCustomer: 'غير مسجلة',
+    RejectionCategories.smsDeliveryFailed: 'فشل إرسال الكود',
+    RejectionCategories.outOfStock: 'لا يوجد مخزون',
+    RejectionCategories.rejectedFromPending: 'مرفوضة من المعلّقة',
+    RejectionCategories.ambiguousCategory: 'فئة غامضة',
+    RejectionCategories.unmatchedAmount: 'مبلغ بلا فئة',
+    RejectionCategories.other: 'أخرى',
+  };
 
   @override
   void initState() {
@@ -91,12 +111,12 @@ class _RejectedMessagesScreenState extends State<RejectedMessagesScreen> {
     }
     const preferred = [
       RejectionCategories.all,
-      RejectionCategories.smsDeliveryFailed,
-      RejectionCategories.outOfStock,
       RejectionCategories.duplicateTransfer,
       RejectionCategories.templateMismatch,
-      RejectionCategories.rejectedFromPending,
       RejectionCategories.unresolvedCustomer,
+      RejectionCategories.smsDeliveryFailed,
+      RejectionCategories.outOfStock,
+      RejectionCategories.rejectedFromPending,
       RejectionCategories.ambiguousCategory,
       RejectionCategories.unmatchedAmount,
       RejectionCategories.other,
@@ -129,326 +149,430 @@ class _RejectedMessagesScreenState extends State<RejectedMessagesScreen> {
         .toList(growable: false);
   }
 
+  /// تجميع حسب يوم الاستلام (الأحدث أولاً).
+  Map<String, List<RejectedMessageItem>> get _grouped {
+    final map = <String, List<RejectedMessageItem>>{};
+    for (final i in _filtered) {
+      final t = i.message.receivedAt.toLocal();
+      final key =
+          '${t.year}-${t.month.toString().padLeft(2, '0')}-${t.day.toString().padLeft(2, '0')}';
+      map.putIfAbsent(key, () => []).add(i);
+    }
+    return map;
+  }
+
+  String _chipLabel(String cat) => _chipShort[cat] ?? cat;
+
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final semantic = Theme.of(context).extension<NetSemanticColors>();
-    final danger = semantic?.rejected ?? cs.error;
+    final groups = _grouped;
+    final keys = groups.keys.toList();
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          'الرسائل المرفوضة',
-          style: TextStyle(fontFamily: 'Tajawal'),
-        ),
-        actions: [
-          IconButton(
-            tooltip: 'تحديث',
-            onPressed: () => _load(markViewed: false),
-            icon: const Icon(Icons.refresh),
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF0F9F8),
+        appBar: AppBar(
+          backgroundColor: Colors.white,
+          elevation: 0,
+          surfaceTintColor: Colors.transparent,
+          leading: IconButton(
+            tooltip: 'رجوع',
+            onPressed: () => Navigator.maybePop(context),
+            icon: const Icon(Icons.arrow_forward, color: Color(0xFF0F172A)),
           ),
-        ],
-      ),
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-            child: Text(
-              'مراجعة وتحليل الرسائل المرفوضة',
-              style: TextStyle(
-                fontFamily: 'Tajawal',
-                color: cs.onSurfaceVariant,
-                fontSize: 13,
-              ),
-            ),
-          ),
-          if (!_loading && _error == null) ...[
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-              child: _SummaryCard(
-                total: _items.length,
-                newCount: _newCount,
-                accent: danger,
-              ),
-            ),
-            SizedBox(
-              height: 44,
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                itemCount: _availableCategories.length,
-                separatorBuilder: (_, __) => const SizedBox(width: 8),
-                itemBuilder: (_, i) {
-                  final cat = _availableCategories[i];
-                  final selected = _filter == cat;
-                  final count = cat == RejectionCategories.all
-                      ? _items.length
-                      : _items.where((e) => e.category == cat).length;
-                  return FilterChip(
-                    label: Text(
-                      count > 0 && cat != RejectionCategories.all
-                          ? '$cat ($count)'
-                          : cat,
-                      style: const TextStyle(fontFamily: 'Tajawal', fontSize: 12),
-                    ),
-                    selected: selected,
-                    onSelected: (_) => setState(() => _filter = cat),
-                  );
-                },
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-              child: TextField(
-                controller: _searchCtrl,
-                onChanged: (_) => setState(() {}),
-                decoration: InputDecoration(
-                  hintText: 'بحث بجوال أو محفظة أو سبب',
-                  hintStyle: const TextStyle(fontFamily: 'Tajawal'),
-                  prefixIcon: const Icon(Icons.search),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  isDense: true,
+          title: const Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'الرسائل المرفوضة',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontFamily: 'Tajawal',
+                  fontWeight: FontWeight.w800,
+                  fontSize: 18,
+                  color: Color(0xFF0F172A),
                 ),
-                style: const TextStyle(fontFamily: 'Tajawal'),
               ),
+              Text(
+                'مراجعة وتحليل الرسائل المرفوضة',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontFamily: 'Tajawal',
+                  fontSize: 12,
+                  color: Color(0xFF64748B),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            IconButton(
+              tooltip: 'أرشيف',
+              onPressed: () {},
+              icon: const Icon(Icons.inventory_2_outlined, color: Color(0xFF64748B)),
+            ),
+            IconButton(
+              tooltip: 'المزيد',
+              onPressed: () => _load(markViewed: false),
+              icon: const Icon(Icons.more_horiz, color: Color(0xFF64748B)),
             ),
           ],
-          Expanded(
-            child: _loading
-                ? const AsyncLoadingView()
-                : _error != null
-                    ? AsyncErrorView(message: _error!, onRetry: () => _load())
-                    : _filtered.isEmpty
-                        ? AsyncEmptyView(
-                            message: _items.isEmpty
-                                ? 'لا توجد رسائل مرفوضة\nالرسائل المرفوضة بعد المراجعة تظهر هنا للتحليل'
-                                : 'لا نتائج لهذا التصنيف أو البحث',
-                            icon: Icons.archive_outlined,
-                          )
-                        : RefreshIndicator(
-                            onRefresh: () => _load(markViewed: false),
-                            child: ListView.separated(
-                              padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-                              itemCount: _filtered.length,
-                              separatorBuilder: (_, __) =>
-                                  const SizedBox(height: 10),
-                              itemBuilder: (_, i) {
-                                return _RejectedCard(
-                                  item: _filtered[i],
-                                  accent: danger,
-                                );
-                              },
+        ),
+        body: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (!_loading && _error == null) ...[
+              // شرائح التصنيف — مطابقة الفيديو
+              SizedBox(
+                height: 48,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
+                  itemCount: _availableCategories.length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 8),
+                  itemBuilder: (_, i) {
+                    final cat = _availableCategories[i];
+                    final selected = _filter == cat;
+                    return ChoiceChip(
+                      label: Text(
+                        _chipLabel(cat),
+                        style: TextStyle(
+                          fontFamily: 'Tajawal',
+                          fontSize: 12,
+                          fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                          color: selected ? Colors.white : const Color(0xFF334155),
+                        ),
+                      ),
+                      selected: selected,
+                      selectedColor: const Color(0xFF0F766E),
+                      backgroundColor: Colors.white,
+                      side: BorderSide(
+                        color: selected
+                            ? const Color(0xFF0F766E)
+                            : const Color(0xFFE2E8F0),
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      onSelected: (_) => setState(() => _filter = cat),
+                      showCheckmark: false,
+                      visualDensity: VisualDensity.compact,
+                    );
+                  },
+                ),
+              ),
+              // بطاقة الملخص الصفراء
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                child: _SummaryBanner(
+                  total: _items.length,
+                  newCount: _newCount,
+                ),
+              ),
+              // بحث
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                child: TextField(
+                  controller: _searchCtrl,
+                  onChanged: (_) => setState(() {}),
+                  style: const TextStyle(fontFamily: 'Tajawal'),
+                  decoration: InputDecoration(
+                    hintText: 'بحث بجوال أو محفظة أو سبب',
+                    hintStyle: const TextStyle(
+                      fontFamily: 'Tajawal',
+                      color: Color(0xFF94A3B8),
+                    ),
+                    prefixIcon: const Icon(Icons.search, color: Color(0xFF94A3B8)),
+                    filled: true,
+                    fillColor: const Color(0xFFF1F5F9),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: BorderSide.none,
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 12,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+            Expanded(
+              child: _loading
+                  ? const AsyncLoadingView()
+                  : _error != null
+                      ? AsyncErrorView(message: _error!, onRetry: () => _load())
+                      : _filtered.isEmpty
+                          ? AsyncEmptyView(
+                              message: _items.isEmpty
+                                  ? 'لا توجد رسائل مرفوضة'
+                                  : 'لا نتائج لهذا التصنيف أو البحث',
+                              icon: Icons.archive_outlined,
+                            )
+                          : RefreshIndicator(
+                              color: const Color(0xFF0F766E),
+                              onRefresh: () => _load(markViewed: false),
+                              child: ListView.builder(
+                                padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
+                                itemCount: keys.length,
+                                itemBuilder: (_, gi) {
+                                  final day = keys[gi];
+                                  final dayItems = groups[day]!;
+                                  return Column(
+                                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                                    children: [
+                                      Padding(
+                                        padding: const EdgeInsets.only(
+                                          top: 8,
+                                          bottom: 8,
+                                        ),
+                                        child: Text(
+                                          '$day (${dayItems.length})',
+                                          textAlign: TextAlign.left,
+                                          style: const TextStyle(
+                                            fontFamily: 'Tajawal',
+                                            fontSize: 12,
+                                            color: Color(0xFF94A3B8),
+                                          ),
+                                        ),
+                                      ),
+                                      ...dayItems.map(
+                                        (item) => Padding(
+                                          padding: const EdgeInsets.only(bottom: 10),
+                                          child: _RejectedCard(item: item),
+                                        ),
+                                      ),
+                                    ],
+                                  );
+                                },
+                              ),
                             ),
-                          ),
-          ),
-        ],
+            ),
+          ],
+        ),
       ),
     );
   }
 }
 
-class _SummaryCard extends StatelessWidget {
-  const _SummaryCard({
-    required this.total,
-    required this.newCount,
-    required this.accent,
-  });
+/// بطاقة ملخص صفراء مطابقة للفيديو.
+class _SummaryBanner extends StatelessWidget {
+  const _SummaryBanner({required this.total, required this.newCount});
 
   final int total;
   final int newCount;
-  final Color accent;
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Material(
-      color: accent.withOpacity(0.08),
-      shape: RoundedRectangleBorder(
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFEF3C7),
         borderRadius: BorderRadius.circular(14),
-        side: BorderSide(color: accent.withOpacity(0.35)),
+        border: Border.all(color: const Color(0xFFFCD34D).withValues(alpha: 0.6)),
       ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        child: Row(
-          children: [
-            Icon(Icons.archive_outlined, color: accent),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'إجمالي المرفوضة',
-                    style: TextStyle(
-                      fontFamily: 'Tajawal',
-                      color: cs.onSurfaceVariant,
-                      fontSize: 12,
-                    ),
-                  ),
-                  Text(
-                    '$total رسالة',
-                    style: const TextStyle(
-                      fontFamily: 'Tajawal',
-                      fontWeight: FontWeight.w700,
-                      fontSize: 18,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            if (newCount > 0)
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  color: accent,
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  '$newCount جديد',
+      child: Row(
+        children: [
+          const Icon(Icons.chat_bubble_outline, color: Color(0xFFB45309), size: 22),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'إجمالي الرسائل المرفوضة',
                   style: TextStyle(
                     fontFamily: 'Tajawal',
-                    color: cs.onError,
-                    fontWeight: FontWeight.w600,
                     fontSize: 12,
+                    color: Color(0xFF92400E),
                   ),
                 ),
+                Text(
+                  '$total رسالة مرفوضة',
+                  style: const TextStyle(
+                    fontFamily: 'Tajawal',
+                    fontWeight: FontWeight.w800,
+                    fontSize: 16,
+                    color: Color(0xFF78350F),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (newCount > 0)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFEE2E2),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: const Color(0xFFFECACA)),
               ),
-          ],
-        ),
+              child: Text(
+                '$newCount جديد',
+                style: const TextStyle(
+                  fontFamily: 'Tajawal',
+                  fontWeight: FontWeight.w700,
+                  fontSize: 12,
+                  color: Color(0xFFDC2626),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
 }
 
+/// بطاقة رسالة مرفوضة مطابقة للإطار.
 class _RejectedCard extends StatelessWidget {
-  const _RejectedCard({required this.item, required this.accent});
+  const _RejectedCard({required this.item});
 
   final RejectedMessageItem item;
-  final Color accent;
-
-  String _fmtAmount(Money? m) {
-    if (m == null) return '—';
-    final major = m.minorUnits / 100.0;
-    return '${major.toStringAsFixed(m.minorUnits % 100 == 0 ? 0 : 2)} ${m.currencyCode}';
-  }
 
   String _fmtTime(DateTime t) {
     final local = t.toLocal();
-    return '${local.year}/${local.month.toString().padLeft(2, '0')}/${local.day.toString().padLeft(2, '0')} '
-        '${local.hour.toString().padLeft(2, '0')}:${local.minute.toString().padLeft(2, '0')}';
+    final h = local.hour;
+    final m = local.minute.toString().padLeft(2, '0');
+    final period = h >= 12 ? 'م' : 'ص';
+    final h12 = h == 0 ? 12 : (h > 12 ? h - 12 : h);
+    return '$h12:$m $period';
   }
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     final m = item.message;
+    final wallet = m.sender.isEmpty ? '—' : m.sender;
 
-    return Material(
-      color: cs.surface,
-      shape: RoundedRectangleBorder(
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
         borderRadius: BorderRadius.circular(14),
-        side: BorderSide(color: cs.outlineVariant),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  width: 4,
-                  height: 48,
-                  decoration: BoxDecoration(
-                    color: accent,
-                    borderRadius: BorderRadius.circular(4),
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // نقطة رمادية يمين المحتوى (RTL visual)
+              Container(
+                width: 8,
+                height: 8,
+                margin: const EdgeInsets.only(top: 6),
+                decoration: const BoxDecoration(
+                  color: Color(0xFFCBD5E1),
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  item.reason,
+                  textAlign: TextAlign.right,
+                  style: const TextStyle(
+                    fontFamily: 'Tajawal',
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                    color: Color(0xFF0F172A),
+                    height: 1.35,
                   ),
                 ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        item.reason,
-                        style: TextStyle(
-                          fontFamily: 'Tajawal',
-                          fontWeight: FontWeight.w700,
-                          fontSize: 14,
-                          color: accent,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        item.category,
-                        style: TextStyle(
-                          fontFamily: 'Tajawal',
-                          fontSize: 11,
-                          color: cs.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
-                  ),
+              ),
+              const SizedBox(width: 10),
+              // نقطة حمراء يسار (حافة البطاقة)
+              Container(
+                width: 8,
+                height: 8,
+                margin: const EdgeInsets.only(top: 6),
+                decoration: const BoxDecoration(
+                  color: Color(0xFFEF4444),
+                  shape: BoxShape.circle,
                 ),
-                if (item.isNew)
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: accent.withOpacity(0.12),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      'جديد',
-                      style: TextStyle(
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              // شارة المحفظة
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF1F5F9),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.account_balance_wallet_outlined,
+                        size: 14, color: Color(0xFF64748B)),
+                    const SizedBox(width: 4),
+                    Text(
+                      wallet,
+                      style: const TextStyle(
                         fontFamily: 'Tajawal',
                         fontSize: 11,
-                        color: accent,
+                        color: Color(0xFF475569),
                         fontWeight: FontWeight.w600,
                       ),
                     ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              // الوقت
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF1F5F9),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.access_time, size: 14, color: Color(0xFF64748B)),
+                    const SizedBox(width: 4),
+                    Text(
+                      _fmtTime(m.receivedAt),
+                      style: const TextStyle(
+                        fontFamily: 'Tajawal',
+                        fontSize: 11,
+                        color: Color(0xFF475569),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (item.isNew) ...[
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFEE2E2),
+                    borderRadius: BorderRadius.circular(8),
                   ),
+                  child: const Text(
+                    'جديد',
+                    style: TextStyle(
+                      fontFamily: 'Tajawal',
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFFDC2626),
+                    ),
+                  ),
+                ),
               ],
-            ),
-            const SizedBox(height: 10),
-            _line(Icons.account_balance_wallet_outlined, 'المحفظة', m.sender),
-            _line(Icons.phone_android, 'الجوال', item.phone ?? '—'),
-            _line(Icons.payments_outlined, 'المبلغ', _fmtAmount(item.amount)),
-            if (item.reference != null && item.reference!.isNotEmpty)
-              _line(Icons.tag, 'المرجع', item.reference!),
-            _line(Icons.schedule, 'الوقت', _fmtTime(m.receivedAt)),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _line(IconData icon, String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 4),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, size: 16, color: Colors.grey),
-          const SizedBox(width: 6),
-          Text(
-            '$label: ',
-            style: const TextStyle(
-              fontFamily: 'Tajawal',
-              fontSize: 13,
-              color: Colors.grey,
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: const TextStyle(fontFamily: 'Tajawal', fontSize: 13),
-            ),
+            ],
           ),
         ],
       ),
