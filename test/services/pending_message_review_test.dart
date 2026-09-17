@@ -93,7 +93,13 @@ final class _FakeMessages implements MessageRepository {
   @override Future<Result<List<IncomingMessage>>> pendingProcessing() async => Success(store.values.where((m) => m.status == MessageProcessingStatus.received || m.status == MessageProcessingStatus.parsed).toList());
   @override Future<Result<List<IncomingMessage>>> listByStatus(MessageProcessingStatus status) async => Success(store.values.where((m) => m.status == status).toList());
   @override Future<Result<List<IncomingMessage>>> listRecent({int limit = 100}) async => Success(store.values.take(limit).toList());
-  @override Future<Result<void>> updateStatus(String id, MessageProcessingStatus status) async { final m = store[id]!; store[id] = IncomingMessage(id: m.id, sender: m.sender, body: m.body, receivedAt: m.receivedAt, status: status, externalReference: m.externalReference, customerIdentifier: m.customerIdentifier); return const Success(null); }
+    @override
+  Future<Result<void>> delete(String id) async {
+    store.remove(id);
+    return const Success(null);
+  }
+
+@override Future<Result<void>> updateStatus(String id, MessageProcessingStatus status) async { final m = store[id]!; store[id] = IncomingMessage(id: m.id, sender: m.sender, body: m.body, receivedAt: m.receivedAt, status: status, externalReference: m.externalReference, customerIdentifier: m.customerIdentifier); return const Success(null); }
 }
 final class _FakeCustomers implements CustomerRepository {
   final store = <String, Customer>{};
