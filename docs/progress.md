@@ -42,10 +42,15 @@ CI على main — analyze + test + Android debug APK build
 - فحص النظام + تنظيف السجلات على `KayanPalette`.
 - تقرير: [phase-10-maintenance-system-check.md](phase-10-maintenance-system-check.md)
 
-## المتبقي
+### Phase 11 — تحقق جهاز نهائي + APK (2026-09-17) ✅ برمجيًا / 🟡 بانتظار جهاز حقيقي
+- بوابات تدقيق بصري للكروت والتقارير والبيع المباشر والعروض وفحص النظام.
+- إصدار `1.0.11+11` + CI release APK.
+- تقرير: [phase-11-final-device-verification-apk.md](phase-11-final-device-verification-apk.md)
+
+## المتبقي (جهاز فقط)
 
 - تأكيد بصري على جهاز Android حقيقي لشاشة الكروت والتقارير والعروض والبيع المباشر وفحص النظام.
 - تشغيل بوابات التحقق على جهاز Android حقيقي وحفظ حزمة الأدلة.
-- المرحلة 11: تحقق جهاز نهائي + APK.
+- تثبيت APK `1.0.11+11` على الجهاز ونسخ حزمة الأدلة من شاشة تحقق الجهاز.
 
 مرجع: NET-POST-V1-MASTER-PLAN + خطة-المطابقة-100 — GitHub مصدر الحقيقة.
