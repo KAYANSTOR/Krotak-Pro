@@ -63,6 +63,31 @@ void main() {
     );
   });
 
+  test('persists wallet payment source metadata used by inbound trust checks', () async {
+    final wallets = LocalWalletRepository(database);
+    final now = DateTime(2026, 1, 1);
+
+    await wallets.save(
+      domain.Wallet(
+        id: 'wallet-source',
+        name: 'JIB',
+        status: domain.WalletStatus.active,
+        createdAt: now,
+        senderId: 'JIB',
+        sourceMode: domain.WalletSourceMode.notification,
+        packageName: 'com.wallet.jib',
+      ),
+    );
+
+    final found = await wallets.findById('wallet-source');
+    expect(found, isA<Success<domain.Wallet?>>());
+    final wallet = (found as Success<domain.Wallet?>).value;
+    expect(wallet, isNotNull);
+    expect(wallet!.senderId, 'JIB');
+    expect(wallet.sourceMode, domain.WalletSourceMode.notification);
+    expect(wallet.packageName, 'com.wallet.jib');
+  });
+
   test('rejects duplicate card serial numbers', () async {
     final cards = LocalCardRepository(database);
     const first = domain.Card(
