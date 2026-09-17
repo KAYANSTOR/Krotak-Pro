@@ -3,7 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:net_app/core/clock.dart';
 import 'package:net_app/core/id_generator.dart';
 import 'package:net_app/core/result.dart';
-import 'package:net_app/data/database/app_database.dart';
+import 'package:net_app/data/database/app_database.dart' hide Wallet, PointOfSale;
 import 'package:net_app/data/repositories/local_repositories.dart';
 import 'package:net_app/domain/entities/wallet.dart';
 import 'package:net_app/domain/services/local_catalog_services.dart';
@@ -20,11 +20,13 @@ void main() {
     walletRepo = LocalWalletRepository(database);
     posRepo = LocalPointOfSaleRepository(database);
     final audit = LocalAuditLogRepository(database);
+    final settings = LocalSettingsRepository(database);
     final clock = FixedClock(DateTime(2026, 9, 13));
     final ids = SequentialIdGenerator();
     wallets = LocalWalletCatalogService(
       wallets: walletRepo,
       auditLogs: audit,
+      settings: settings,
       clock: clock,
       ids: ids,
     );
