@@ -105,6 +105,50 @@ final class LocalPromotionCatalog {
     return save(promo);
   }
 
+  Future<Result<Promotion>> update({
+    required String id,
+    required String title,
+    required int thresholdMinorUnits,
+    required String rewardCategoryId,
+    String? notes,
+  }) async {
+    final listed = await listAll();
+    if (listed is Failure<List<Promotion>>) return Failure(listed.error);
+    final items = List<Promotion>.of((listed as Success<List<Promotion>>).value);
+    final idx = items.indexWhere((p) => p.id == id);
+    if (idx < 0) {
+      return const Failure(
+        AppFailure(code: 'promo_not_found', message: 'العرض غير موجود'),
+      );
+    }
+    final name = title.trim();
+    if (name.isEmpty) {
+      return const Failure(
+        AppFailure(code: 'invalid_title', message: 'عنوان العرض مطلوب'),
+      );
+    }
+    if (thresholdMinorUnits <= 0) {
+      return const Failure(
+        AppFailure(
+          code: 'invalid_threshold',
+          message: 'عتبة التراكم يجب أن تكون موجبة',
+        ),
+      );
+    }
+    if (rewardCategoryId.trim().isEmpty) {
+      return const Failure(
+        AppFailure(code: 'invalid_reward', message: 'اختر فئة مكافأة'),
+      );
+    }
+    final updated = items[idx].copyWith(
+      title: name,
+      thresholdMinorUnits: thresholdMinorUnits,
+      rewardCategoryId: rewardCategoryId.trim(),
+      notes: notes?.trim().isEmpty == true ? null : notes?.trim(),
+    );
+    return save(updated);
+  }
+
   Future<Result<void>> setStatus(String id, PromotionStatus status) async {
     final listed = await listAll();
     if (listed is Failure<List<Promotion>>) return Failure(listed.error);
