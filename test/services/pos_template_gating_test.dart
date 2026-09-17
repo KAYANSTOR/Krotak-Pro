@@ -48,7 +48,7 @@ void main() {
     final parser = LocalMessageParser(templates: templates);
     final posRegistry = LocalPosAccountRegistry(
       settings: settings,
-      clock: const FixedClock(DateTime.utc(2026, 9, 18)),
+      clock: FixedClock(DateTime.utc(2026, 9, 18)),
     );
     final guard = PaymentSourceGuard(
       wallets: _WalletRepo([wallet]),
