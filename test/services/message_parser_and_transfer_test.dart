@@ -350,6 +350,12 @@ final class _FakeMessages implements MessageRepository {
   }
 
   @override
+  Future<Result<void>> delete(String id) async {
+    store.remove(id);
+    return const Success(null);
+  }
+
+  @override
   Future<Result<IncomingMessage?>> findById(String id) async =>
       Success(store[id]);
 
