@@ -8,12 +8,15 @@ void main() {
     await tester.pumpWidget(const MaterialApp(home: HelpCenterScreen()));
     expect(find.text('التقارير والعمليات'), findsOneWidget);
     expect(find.text('مركز استرداد العمليات والأخطاء'), findsOneWidget);
-    expect(find.text('إدارة وتوليد ومخزون الكروت'), findsOneWidget);
+    final cardsTopic = find.text('إدارة وتوليد ومخزون الكروت');
+    await tester.scrollUntilVisible(cardsTopic, 500, scrollable: find.byType(Scrollable));
+    expect(cardsTopic, findsOneWidget);
   });
 
   testWidgets('HelpCenterScreen supports expansion', (tester) async {
     await tester.pumpWidget(const MaterialApp(home: HelpCenterScreen()));
     final title = find.text('إضافة الكروت يدويًا وبالإدخال النصي السريع');
+    await tester.scrollUntilVisible(title, 500, scrollable: find.byType(Scrollable));
     expect(title, findsOneWidget);
     await tester.tap(title);
     await tester.pump();
