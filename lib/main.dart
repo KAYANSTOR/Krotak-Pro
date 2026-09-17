@@ -71,12 +71,27 @@ class NetApp extends StatefulWidget {
   State<NetApp> createState() => _NetAppState();
 }
 
-class _NetAppState extends State<NetApp> {
+class _NetAppState extends State<NetApp> with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     AppScope.unregister(widget.container);
     widget.container.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      // Phase 5: faster delivery recovery when returning to the app (and after boot open).
+      unawaited(widget.container.runRecoveryPass());
+    }
   }
 
   @override
