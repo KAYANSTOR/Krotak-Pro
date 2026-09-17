@@ -1,6 +1,7 @@
 import '../../core/result.dart';
 import '../entities/message.dart';
 import '../entities/payment_event.dart';
+import '../entities/pos_account.dart';
 import '../entities/wallet.dart';
 import '../repositories/repositories.dart';
 import 'local_payment_source_registry.dart';
@@ -14,17 +15,23 @@ final class PaymentSourceGuard {
     required this.wallets,
     required this.templates,
     this.notificationSources,
+    this.posRegistry,
   });
 
   final WalletRepository wallets;
   final TransferTemplateRepository templates;
   final LocalPaymentSourceRegistry? notificationSources;
+  final LocalPosAccountRegistry? posRegistry;
 
-  Future<Result<void>> authorize(
-    PaymentEvent event, {
-    String? matchedTemplateId,
-  }) async {
-    if (event.channel == PaymentChannel.manual) return const Success(null);
+  Future<Result<PaymentSourceScope>> resolve(PaymentEvent event) async {
+    if (event.channel == PaymentChannel.manual) {
+      return const Failure(
+        AppFailure(
+          code: 'manual_scope_not_required',
+          message: 'Manual events do not require an inbound source scope',
+        ),
+      );
+    }
 
     final listedWallets = await wallets.listAll();
     if (listedWallets is Failure<List<Wallet>>) return Failure(listedWallets.error);
@@ -38,16 +45,19 @@ final class PaymentSourceGuard {
       wallet = activeWallets.where((w) {
         if (w.sourceMode != WalletSourceMode.sms) return false;
         final sender = w.senderId;
-        return sender != null && sender.trim().isNotEmpty &&
+        return sender != null &&
+            sender.trim().isNotEmpty &&
             _normalize(sender) == incomingSender;
       }).firstOrNull;
     } else if (event.channel == PaymentChannel.notification) {
       final package = event.packageName?.trim();
       if (package == null || package.isEmpty) {
-        return const Failure(AppFailure(
-          code: 'untrusted_payment_source',
-          message: 'Notification source is not configured',
-        ));
+        return const Failure(
+          AppFailure(
+            code: 'untrusted_payment_source',
+            message: 'Notification source is not configured',
+          ),
+        );
       }
       wallet = activeWallets.where((w) =>
           w.sourceMode == WalletSourceMode.notification &&
@@ -55,7 +65,9 @@ final class PaymentSourceGuard {
           w.packageName!.trim() == package).firstOrNull;
       if (wallet != null && notificationSources != null) {
         final configured = await notificationSources!.list();
-        if (configured is Failure<List<PaymentSource>>) return Failure(configured.error);
+        if (configured is Failure<List<PaymentSource>>) {
+          return Failure(configured.error);
+        }
         final source = (configured as Success<List<PaymentSource>>).value
             .where((s) => s.packageName == package && s.enabled)
             .firstOrNull;
@@ -64,32 +76,96 @@ final class PaymentSourceGuard {
     }
 
     if (wallet == null) {
-      return const Failure(AppFailure(
-        code: 'untrusted_payment_source',
-        message: 'Payment source is not linked to an active configured wallet',
-      ));
+      return const Failure(
+        AppFailure(
+          code: 'untrusted_payment_source',
+          message: 'Payment source is not linked to an active configured wallet',
+        ),
+      );
     }
 
     final configuredTemplates = await templates.listAll();
-    if (configuredTemplates is Failure<List<TransferTemplate>>) return Failure(configuredTemplates.error);
-    final walletId = wallet.id;
-    final liveTemplates = (configuredTemplates as Success<List<TransferTemplate>>).value
-        .where((t) => t.isActive && t.walletId == walletId)
-        .toList(growable: false);
-    if (liveTemplates.isEmpty) {
-      return const Failure(AppFailure(
-        code: 'no_source_template',
-        message: 'No active transfer template is linked to this payment source',
-      ));
+    if (configuredTemplates is Failure<List<TransferTemplate>>) {
+      return Failure(configuredTemplates.error);
     }
-    if (matchedTemplateId != null && !liveTemplates.any((t) => t.id == matchedTemplateId)) {
-      return const Failure(AppFailure(
-        code: 'template_source_mismatch',
-        message: 'Matched template is not linked to the trusted payment source',
-      ));
+
+    final allLive = (configuredTemplates as Success<List<TransferTemplate>>).value
+        .where((t) => t.isActive && t.walletId == wallet!.id)
+        .toList(growable: false);
+
+    PosAccount? pos;
+    final registry = posRegistry;
+    if (registry != null) {
+      final posResult = await registry.findByMessage(
+        sender: event.sourceKey,
+        body: event.body,
+      );
+      if (posResult is Failure<PosAccount?>) return Failure(posResult.error);
+      pos = (posResult as Success<PosAccount?>).value;
+    }
+
+    final scopedTemplates = pos == null
+        ? allLive.where((t) => t.posAccountId == null).toList(growable: false)
+        : allLive.where((t) => t.posAccountId == pos!.posId).toList(growable: false);
+
+    return Success(
+      PaymentSourceScope(
+        wallet: wallet!,
+        posAccount: pos,
+        templates: scopedTemplates,
+      ),
+    );
+  }
+
+  Future<Result<void>> authorize(
+    PaymentEvent event, {
+    String? matchedTemplateId,
+  }) async {
+    if (event.channel == PaymentChannel.manual) return const Success(null);
+
+    final scopeResult = await resolve(event);
+    if (scopeResult is Failure<PaymentSourceScope>) {
+      return Failure(scopeResult.error);
+    }
+    final scope = (scopeResult as Success<PaymentSourceScope>).value;
+    if (scope.templates.isEmpty) {
+      return Failure(
+        AppFailure(
+          code: scope.posAccount == null
+              ? 'no_source_template'
+              : 'pos_no_active_template',
+          message: scope.posAccount == null
+              ? 'No active transfer template is linked to this payment source'
+              : 'No active transfer template is configured for this POS account',
+        ),
+      );
+    }
+
+    if (matchedTemplateId != null &&
+        !scope.templates.any((t) => t.id == matchedTemplateId)) {
+      return const Failure(
+        AppFailure(
+          code: 'template_source_mismatch',
+          message: 'Matched template is outside the trusted source scope',
+        ),
+      );
     }
     return const Success(null);
   }
 
   String _normalize(String raw) => raw.trim().replaceAll(RegExp(r'\s+'), '').toLowerCase();
+}
+
+final class PaymentSourceScope {
+  const PaymentSourceScope({
+    required this.wallet,
+    required this.templates,
+    this.posAccount,
+  });
+
+  final Wallet wallet;
+  final PosAccount? posAccount;
+  final List<TransferTemplate> templates;
+
+  bool get isPos => posAccount != null;
 }
