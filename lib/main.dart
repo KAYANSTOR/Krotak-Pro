@@ -39,6 +39,7 @@ Future<void> main() async {
 
   final container = await AppContainer.bootstrap(templates: defaultTemplates);
   await _loadThemeMode(container);
+  AppScope.register(container);
   runApp(NetApp(container: container));
   unawaited(_startBackgroundHandlersSafely(container));
 }
@@ -67,7 +68,11 @@ class NetApp extends StatefulWidget {
 
 class _NetAppState extends State<NetApp> {
   @override
-  void dispose() { widget.container.dispose(); super.dispose(); }
+  void dispose() {
+    AppScope.unregister(widget.container);
+    widget.container.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) => AppScope(
