@@ -10,7 +10,6 @@ on:
 jobs:
   analyze-test:
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
@@ -20,11 +19,15 @@ jobs:
       - name: Install SQLite
         run: sudo apt-get update && sudo apt-get install -y libsqlite3-dev
       - run: flutter pub get
-      - run: dart analyze lib test || true
-      - run: flutter analyze --no-fatal-infos || true
-      - run: flutter test || true
+      - name: Analyze
+        run: dart analyze lib test
+      - name: Flutter analyze
+        run: flutter analyze --no-fatal-infos
+      - name: Test
+        run: flutter test
 
   build-apk:
+    needs: analyze-test
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -45,7 +48,6 @@ jobs:
           if-no-files-found: error
       - name: Publish GitHub Release
         if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
-        continue-on-error: true
         uses: softprops/action-gh-release@v2
         with:
           tag_name: apk-${{ github.run_number }}
