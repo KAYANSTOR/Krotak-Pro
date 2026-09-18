@@ -89,10 +89,10 @@ class CustomerPromotionProgressSection extends StatelessWidget {
                         '${(p.accumulatedMinor / 100).toStringAsFixed(0)} / '
                         '${(p.promotion.thresholdMinorUnits / 100).toStringAsFixed(0)} '
                         '${p.currencyCode}',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontFamily: 'Tajawal',
                           fontSize: 11,
-                          color: Color(0xFF64748B),
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
                       ),
                     ],
@@ -143,7 +143,7 @@ Future<void> showCustomerPromotionSheet({
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontFamily: 'Tajawal',
-                      color: Color(0xFF64748B),
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
                   ),
                 )

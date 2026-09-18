@@ -5,6 +5,7 @@ import '../../../domain/entities/setting.dart';
 import '../../../domain/services/local_advance_service.dart';
 import '../../app_scope.dart';
 import '../../theme/kayan_colors.dart';
+import '../../theme/net_semantic_colors.dart';
 import '../../widgets/async_views.dart';
 
 /// تعديل صيغ رسائل خدمة «سلفني» (قبول / رفض / سداد) — قابلة للتخصيص بالكامل.
@@ -130,9 +131,11 @@ class _SalafniTemplatesScreenState extends State<SalafniTemplatesScreen> {
                   Container(
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFECFDF5),
+                      color: netColors.availableContainer,
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: const Color(0xFFA7F3D0)),
+                      border: Border.all(
+                        color: netColors.available.withValues(alpha: 0.35),
+                      ),
                     ),
                     child: const Text(
                       'عدّل نص الرسائل التي يرسلها النظام لخدمة سلفني.\n'
@@ -216,7 +219,9 @@ class _SalafniTemplatesScreenState extends State<SalafniTemplatesScreen> {
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                borderSide: BorderSide(
+                  color: Theme.of(context).colorScheme.outlineVariant,
+                ),
               ),
             ),
           ),

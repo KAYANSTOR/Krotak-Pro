@@ -7,6 +7,7 @@ import '../../domain/entities/money.dart';
 import '../../domain/entities/transaction.dart';
 import '../../domain/services/local_promotion_progress_service.dart';
 import '../app_scope.dart';
+import '../theme/net_semantic_colors.dart';
 import '../widgets/async_views.dart';
 import '../widgets/customer_promotion_progress.dart';
 
@@ -110,12 +111,12 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Text(
+              Text(
                 'الرجاء إدخال رقم جوال المشترك لإرسال الكروت المعلّقة وتأكيد المعاملات المستقبلية.',
                 style: TextStyle(
                   fontFamily: 'Tajawal',
                   fontSize: 13,
-                  color: Color(0xFF64748B),
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                   height: 1.4,
                 ),
               ),
@@ -310,7 +311,10 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
           surfaceTintColor: Colors.transparent,
           leading: IconButton(
             onPressed: () => Navigator.maybePop(context),
-            icon: const Icon(Icons.arrow_forward, color: Color(0xFF0F172A)),
+            icon: Icon(
+              Icons.arrow_forward,
+              color: Theme.of(context).colorScheme.onSurface,
+            ),
           ),
           title: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -318,20 +322,20 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
               Text(
                 customer.displayName,
                 textAlign: TextAlign.center,
-                style: const TextStyle(
+                style: TextStyle(
                   fontFamily: 'Tajawal',
                   fontWeight: FontWeight.w800,
                   fontSize: 16,
-                  color: Color(0xFF0F172A),
+                  color: Theme.of(context).colorScheme.onSurface,
                 ),
               ),
-              const Text(
+              Text(
                 'كشف حساب المشترك والعمليات',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontFamily: 'Tajawal',
                   fontSize: 11,
-                  color: Color(0xFF64748B),
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
               ),
             ],
@@ -366,11 +370,11 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                         Expanded(
                           child: Text(
                             customer.displayName,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontFamily: 'Tajawal',
                               fontWeight: FontWeight.w800,
                               fontSize: 17,
-                              color: Color(0xFF0F172A),
+                              color: Theme.of(context).colorScheme.onSurface,
                             ),
                           ),
                         ),
@@ -378,28 +382,28 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFFEF3C7),
+                              color: netColors.warningContainer,
                               borderRadius: BorderRadius.circular(8),
                             ),
-                            child: const Text(
+                            child: Text(
                               'غير مربوط',
                               style: TextStyle(
                                 fontFamily: 'Tajawal',
                                 fontSize: 11,
                                 fontWeight: FontWeight.w700,
-                                color: Color(0xFFB45309),
+                                color: netColors.warning,
                               ),
                             ),
                           ),
                       ],
                     ),
                     const SizedBox(height: 6),
-                    const Text(
+                    Text(
                       'الرصيد الحالي',
                       style: TextStyle(
                         fontFamily: 'Tajawal',
                         fontSize: 12,
-                        color: Color(0xFF64748B),
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
                     ),
                     Text(
@@ -503,10 +507,10 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                               ),
                               Text(
                                 _fmtTxTime(tx.createdAt),
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontFamily: 'Tajawal',
                                   fontSize: 11,
-                                  color: Color(0xFF94A3B8),
+                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                                 ),
                               ),
                             ],
