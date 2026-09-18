@@ -173,7 +173,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase(super.e);
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -194,6 +194,18 @@ class AppDatabase extends _$AppDatabase {
           );
           await customStatement(
             "ALTER TABLE transfer_templates ADD COLUMN identifier_kind TEXT NOT NULL DEFAULT 'phone'",
+          );
+          await customStatement(
+            'ALTER TABLE transfer_templates ADD COLUMN pos_id TEXT',
+          );
+          await customStatement(
+            'ALTER TABLE transfer_templates ADD COLUMN sender_name_label TEXT',
+          );
+          await customStatement(
+            'ALTER TABLE transfer_templates ADD COLUMN note_label TEXT',
+          );
+          await customStatement(
+            'ALTER TABLE transfer_templates ADD COLUMN require_reference INTEGER NOT NULL DEFAULT 1',
           );
           await _createIdempotencyIndexes();
         },
@@ -218,6 +230,21 @@ class AppDatabase extends _$AppDatabase {
           if (from < 3) {
             // Phase 2: enforce uniqueness for reservation, message ref, txn ref, one sale per card.
             await _createIdempotencyIndexes();
+          }
+          if (from < 4) {
+            // Wallets/POS video-match: per-POS templates + static preview labels.
+            await customStatement(
+              'ALTER TABLE transfer_templates ADD COLUMN pos_id TEXT',
+            );
+            await customStatement(
+              'ALTER TABLE transfer_templates ADD COLUMN sender_name_label TEXT',
+            );
+            await customStatement(
+              'ALTER TABLE transfer_templates ADD COLUMN note_label TEXT',
+            );
+            await customStatement(
+              'ALTER TABLE transfer_templates ADD COLUMN require_reference INTEGER NOT NULL DEFAULT 1',
+            );
           }
         },
       );

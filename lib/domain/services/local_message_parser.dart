@@ -107,14 +107,21 @@ final class LocalMessageParser implements MessageParser {
       account: account,
       ref: ref,
     );
-    if (resolved == null || ref == null || ref.isEmpty) return null;
+    if (resolved == null) return null;
+    // `ref` (transaction reference) is required by default — this is a
+    // deliberate financial safety net: a template with no captured
+    // reference can't be de-duplicated against a real bank transaction.
+    // Only templates that explicitly opt out (`requireReference: false`,
+    // e.g. POS card-request templates that carry no reference at all)
+    // skip this check.
+    if (template.requireReference && (ref == null || ref.isEmpty)) return null;
 
     return ParsedTransfer(
       messageId: messageId,
       amount: Money(minorUnits: minor, currencyCode: defaultCurrencyCode),
       customerIdentifier: resolved.value,
       identifierType: resolved.type,
-      reference: ref,
+      reference: ref ?? '',
       templateId: template.id,
       rawIdentifier: resolved.raw,
     );
