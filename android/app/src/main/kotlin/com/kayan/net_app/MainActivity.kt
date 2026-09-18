@@ -7,6 +7,7 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.PowerManager
+import android.provider.ContactsContract
 import android.provider.Settings
 import android.telephony.SmsManager
 import android.telephony.SubscriptionManager
@@ -24,6 +25,7 @@ class MainActivity : FlutterActivity(), SmsListener {
     private val notificationEventChannelName = "com.kayan.net/notifications_stream"
     private val diagnosticsChannelName = "com.kayan.net/diagnostics"
     private var eventSink: EventChannel.EventSink? = null
+    private var pendingContactResult: MethodChannel.Result? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -172,6 +174,14 @@ class MainActivity : FlutterActivity(), SmsListener {
                     result.success(granted)
                 }
                 "hasContactsPermission" -> result.success(hasContactsPermission())
+                "pickContact" -> try {
+                    val intent = Intent(Intent.ACTION_PICK, ContactsContract.Contacts.CONTENT_URI)
+                    pendingContactResult = result
+                    startActivityForResult(intent, REQUEST_PICK_CONTACT)
+                } catch (e: Exception) {
+                    pendingContactResult = null
+                    result.error("contact_picker_failed", e.message, null)
+                }
                 "openAppSettings" -> try {
                     val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
                         data = Uri.parse("package:$packageName")
@@ -252,6 +262,49 @@ class MainActivity : FlutterActivity(), SmsListener {
 
     private fun hasContactsPermission(): Boolean =
         ContextCompat.checkSelfPermission(this, Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        if (requestCode == REQUEST_PICK_CONTACT) {
+            val result = pendingContactResult
+            pendingContactResult = null
+            if (result == null) return
+            if (resultCode != RESULT_OK || data == null) {
+                result.success(null)
+                return
+            }
+            try {
+                result.success(queryContactPhone(data.data))
+            } catch (e: Exception) {
+                result.error("contact_read_failed", e.message, null)
+            }
+            return
+        }
+        super.onActivityResult(requestCode, resultCode, data)
+    }
+
+    /// يقرأ أول رقم هاتف من جهة الاتصال المختارة — أو null عند الإلغاء.
+    private fun queryContactPhone(contactUri: Uri?): String? {
+        val uri = contactUri ?: return null
+        contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+            if (!cursor.moveToFirst()) return null
+            val contactId = cursor.getLong(cursor.getColumnIndexOrThrow(ContactsContract.Contacts._ID))
+            val hasPhone = cursor.getInt(cursor.getColumnIndexOrThrow(ContactsContract.Contacts.HAS_PHONE_NUMBER)) != 0
+            if (!hasPhone) return null
+            contentResolver.query(
+                ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
+                arrayOf(ContactsContract.CommonDataKinds.Phone.NUMBER),
+                ContactsContract.CommonDataKinds.Phone.CONTACT_ID + " = ?",
+                arrayOf(contactId.toString()),
+                null,
+            )?.use { phoneCursor ->
+                if (phoneCursor.moveToFirst()) {
+                    val idx = phoneCursor.getColumnIndexOrThrow(ContactsContract.CommonDataKinds.Phone.NUMBER)
+                    return phoneCursor.getString(idx)
+                }
+            }
+        }
+        return null
+    }
 
     private fun openOemAutostartSettings() {
         val intents = listOf(
@@ -366,5 +419,6 @@ class MainActivity : FlutterActivity(), SmsListener {
         private const val REQUEST_POST_NOTIFICATIONS = 1002
         private const val REQUEST_PHONE_STATE = 1003
         private const val REQUEST_CONTACTS = 1004
+        private const val REQUEST_PICK_CONTACT = 2001
     }
 }
