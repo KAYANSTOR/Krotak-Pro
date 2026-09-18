@@ -26,7 +26,11 @@ class SettingsSearchScope extends InheritedWidget {
 }
 
 /// صف قابل للبحث داخل بطاقة مجموعة.
-abstract interface class SettingsSearchable {
+///
+/// يورّث StatelessWidget حتى تتمكن البطاقة من ترقية النوع أثناء الفلترة.
+abstract class SettingsSearchRow extends StatelessWidget {
+  const SettingsSearchRow({super.key});
+
   /// النص الذي يُطابَق عليه البحث: العنوان + الوصف + كلمات بديلة.
   String get searchableText;
 }
@@ -49,7 +53,7 @@ class SettingsGroupCard extends StatelessWidget {
     final query = SettingsSearchScope.maybeQueryOf(context).trim().toLowerCase();
     final visible = <Widget>[];
     for (final child in children) {
-      if (child is SettingsSearchable) {
+      if (child is SettingsSearchRow) {
         final matches = query.isEmpty ||
             child.searchableText.toLowerCase().contains(query);
         if (!matches) continue;
@@ -89,7 +93,7 @@ class SettingsGroupCard extends StatelessWidget {
 }
 
 /// صف تنقّل داخل مجموعة: أيقونة يمين + عنوان/وصف + شيفرون.
-class SettingsGroupNavRow extends StatelessWidget implements SettingsSearchable {
+class SettingsGroupNavRow extends SettingsSearchRow {
   const SettingsGroupNavRow({
     super.key,
     required this.icon,
@@ -164,8 +168,7 @@ class SettingsGroupNavRow extends StatelessWidget implements SettingsSearchable 
 }
 
 /// صف مفتاح داخل مجموعة: أيقونة + عنوان/وصف + Switch.
-class SettingsGroupSwitchRow extends StatelessWidget
-    implements SettingsSearchable {
+class SettingsGroupSwitchRow extends SettingsSearchRow {
   const SettingsGroupSwitchRow({
     super.key,
     required this.icon,
