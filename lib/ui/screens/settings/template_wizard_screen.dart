@@ -565,10 +565,12 @@ class _StepIndicator extends StatelessWidget {
                   Expanded(
                     child: Container(
                       height: 2,
-                      color: i <= current ? teal : const Color(0xFFCBD5E1),
+                      color: i <= current
+                          ? teal
+                          : Theme.of(context).colorScheme.outlineVariant,
                     ),
                   ),
-                _stepCircle(i, teal),
+                _stepCircle(context, i, teal),
               ],
             ],
           ),
@@ -585,7 +587,9 @@ class _StepIndicator extends StatelessWidget {
                     fontFamily: 'Tajawal',
                     fontSize: 11,
                     fontWeight: i == current ? FontWeight.w700 : FontWeight.w500,
-                    color: i <= current ? teal : const Color(0xFF94A3B8),
+                    color: i <= current
+                        ? teal
+                        : Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
                 ),
               ),
@@ -595,7 +599,7 @@ class _StepIndicator extends StatelessWidget {
     );
   }
 
-  Widget _stepCircle(int i, Color teal) {
+  Widget _stepCircle(BuildContext context, int i, Color teal) {
     final done = i < current;
     final active = i == current;
     final showPerson = active && i == 0;
