@@ -109,7 +109,7 @@ final class MessageDeliveryWorker {
       }
 
       final body =
-          'بطاقة الإنترنت\nالرقم: ${card.serialNumber}\nالرمز: ${card.secretCode}';
+          cardDeliverySmsBody(serialNumber: card.serialNumber, secretCode: card.secretCode);
       final sent = await messageSender.send(
         destination: voucher.destination,
         body: body,
