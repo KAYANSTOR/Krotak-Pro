@@ -199,13 +199,39 @@ class _PermissionsFlowState extends State<_PermissionsFlow> {
   bool _verified = false;
   bool _busy = false;
 
+  /// أرقام الخطوات التي تحقق شرطها فعليًا — تُعرض كتقدّم وتُتخطّى عند الفتح.
+  final Set<int> _satisfied = <int>{};
+
   _PermStep get _step => widget.steps[_index];
   bool get _isLast => _index >= widget.steps.length - 1;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _check());
+    WidgetsBinding.instance.addPostFrameCallback((_) => _bootstrap());
+  }
+
+  /// يبدأ المستخدم من أول متطلب ناقص فعليًا بدل إعادة المرور على كل الخطوات
+  /// الممنوحة مسبقًا في كل مرة يفتح فيها التطبيق.
+  Future<void> _bootstrap() async {
+    for (var i = 0; i < widget.steps.length - 1; i++) {
+      var ok = false;
+      try {
+        ok = await widget.steps[i].verify();
+      } catch (_) {
+        ok = false;
+      }
+      if (!ok) break;
+      _satisfied.add(i);
+      if (!mounted) return;
+      setState(() {
+        _index = i + 1;
+        _verified = false;
+        _checking = true;
+      });
+    }
+    if (!mounted) return;
+    await _check();
   }
 
   Future<void> _check() async {
@@ -221,6 +247,11 @@ class _PermissionsFlowState extends State<_PermissionsFlow> {
     setState(() {
       _checking = false;
       _verified = ok;
+      if (ok) {
+        _satisfied.add(_index);
+      } else {
+        _satisfied.remove(_index);
+      }
     });
   }
 
@@ -297,7 +328,9 @@ class _PermissionsFlowState extends State<_PermissionsFlow> {
                           ),
                         ),
                         Text(
-                          'الخطوة ${_index + 1} من ${widget.steps.length} · مطلوب لإكمال التشغيل',
+                          _satisfied.isEmpty
+                              ? 'الخطوة ${_index + 1} من ${widget.steps.length} · مطلوب لإكمال التشغيل'
+                              : 'الخطوة ${_index + 1} من ${widget.steps.length} · مكتمل ${_satisfied.length} من ${widget.steps.length}',
                           style: TextStyle(
                             fontFamily: NetTypography.family,
                             fontSize: 12,
