@@ -138,17 +138,34 @@ class _DeviceVerificationScreenState extends State<DeviceVerificationScreen> {
                     padding: NetSpacing.screen,
                     children: [
                       NetSurfaceCard(
+                        borderColor: _snapshot.readyForRelease
+                            ? context.netColors.premium.withValues(alpha: 0.45)
+                            : null,
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            Text(
-                              'بوابات الإنتاج — ${_snapshot.passedCount}/${_snapshot.total} مؤكدة على جهاز حقيقي',
-                              style: TextStyle(
-                                fontFamily: NetTypography.family,
-                                fontSize: 13.5,
-                                fontWeight: FontWeight.w700,
-                                color: palette.textPrimary,
-                              ),
+                            Row(
+                              children: [
+                                if (_snapshot.readyForRelease) ...[
+                                  Icon(
+                                    Icons.workspace_premium_rounded,
+                                    size: 18,
+                                    color: context.netColors.premium,
+                                  ),
+                                  const SizedBox(width: NetSpacing.xs),
+                                ],
+                                Expanded(
+                                  child: Text(
+                                    'بوابات الإنتاج — ${_snapshot.passedCount}/${_snapshot.total} مؤكدة على جهاز حقيقي',
+                                    style: TextStyle(
+                                      fontFamily: NetTypography.family,
+                                      fontSize: 13.5,
+                                      fontWeight: FontWeight.w700,
+                                      color: palette.textPrimary,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                             const SizedBox(height: NetSpacing.xs),
                             Text(
@@ -160,7 +177,7 @@ class _DeviceVerificationScreenState extends State<DeviceVerificationScreen> {
                                 fontSize: 12.5,
                                 height: 1.4,
                                 color: _snapshot.readyForRelease
-                                    ? context.netColors.available
+                                    ? context.netColors.premium
                                     : palette.textSecondary,
                               ),
                             ),

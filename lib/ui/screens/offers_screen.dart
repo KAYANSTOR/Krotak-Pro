@@ -454,13 +454,13 @@ class _PromotionCard extends StatelessWidget {
                 width: NetSizes.badge,
                 height: NetSizes.badge,
                 decoration: BoxDecoration(
-                  color: palette.primary.withValues(alpha: palette.isDark ? 0.22 : 0.12),
+                  color: net.premiumContainer,
                   borderRadius: NetRadii.smAll,
                 ),
                 child: Icon(
                   Icons.card_giftcard_rounded,
                   size: 20,
-                  color: palette.primary,
+                  color: net.premium,
                 ),
               ),
               const SizedBox(width: NetSpacing.md),
