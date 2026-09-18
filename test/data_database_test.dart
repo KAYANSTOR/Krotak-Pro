@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:net_app/data/database/app_database.dart' hide Customer, Card, Sale, TransferTemplate;
 
