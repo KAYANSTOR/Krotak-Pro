@@ -11,6 +11,7 @@ import '../../theme/net_tokens.dart';
 import '../../widgets/async_views.dart';
 import '../../widgets/net/net_indicators.dart';
 import '../../widgets/net/net_initial_avatar.dart';
+import '../../widgets/net/net_sheet.dart';
 import '../../widgets/net/net_surface_card.dart';
 
 enum SalesReportRange { today, month, custom }
@@ -43,6 +44,9 @@ class _SalesPeriodReportScreenState extends State<SalesPeriodReportScreen> {
   String? _error;
   List<_Row> _rows = const [];
   int _totalMinor = 0;
+
+  /// الفئات بالاسم لربط كل بيع بفئته (قراءة فقط لأغراض العرض).
+  Map<String, String> _categoryNames = const {};
 
   @override
   void initState() {
@@ -127,6 +131,32 @@ class _SalesPeriodReportScreenState extends State<SalesPeriodReportScreen> {
       ];
       _totalMinor = sales.fold(0, (a, s) => a + s.amount.minorUnits);
     });
+  }
+
+  /// ورقة «تفاصيل المبيعات حسب الفئات» — تجميع عرض فقط من المبيعات المحمّلة.
+  ///
+  /// كل بيع يتم بقيمة فئة مطابقة تمامًا، فيكفي التجميع بالقيمة الاسمية
+  /// وربطها بأسماء الفئات النشطة — دون أي استعلامات أو منطق جديد.
+  Future<void> _showCategoryBreakdown() async {
+    final byAmount = <int, ({int count, int minor})>{};
+    for (final r in _rows) {
+      final key = r.sale.amount.minorUnits;
+      final prev = byAmount[key] ?? (count: 0, minor: 0);
+      byAmount[key] = (
+        count: prev.count + 1,
+        minor: prev.minor + r.sale.amount.minorUnits,
+      );
+    }
+    final entries = byAmount.entries.toList()
+      ..sort((a, b) => b.value.minor.compareTo(a.value.minor));
+    if (!mounted) return;
+    await NetSheet.show<void>(
+      context,
+      builder: (_) => _CategoryBreakdownSheet(
+        entries: [for (final e in entries) MapEntry(e.key, e.value)],
+        totalMinor: _totalMinor,
+      ),
+    );
   }
 
   Widget _rangeChip({
@@ -301,6 +331,49 @@ class _SalesPeriodReportScreenState extends State<SalesPeriodReportScreen> {
                 ),
               ),
             ),
+
+            // ── تفاصيل المبيعات حسب الفئات (الفيديو t29s) ──
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                NetSpacing.lg,
+                NetSpacing.sm,
+                NetSpacing.lg,
+                0,
+              ),
+              child: NetSurfaceCard(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: NetSpacing.md,
+                  vertical: NetSpacing.sm,
+                ),
+                onTap: _rows.isEmpty ? null : _showCategoryBreakdown,
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.pie_chart_outline_rounded,
+                      size: NetSizes.iconSm,
+                      color: palette.primary,
+                    ),
+                    const SizedBox(width: NetSpacing.sm),
+                    Expanded(
+                      child: Text(
+                        'تفاصيل المبيعات حسب الفئات',
+                        style: TextStyle(
+                          fontFamily: NetTypography.family,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: palette.textPrimary,
+                        ),
+                      ),
+                    ),
+                    Icon(
+                      Icons.chevron_left_rounded,
+                      size: NetSizes.iconSm,
+                      color: palette.textTertiary,
+                    ),
+                  ],
+                ),
+              ),
+            ),
             Expanded(
               child: _loading
                   ? const AsyncLoadingView(skeleton: true, skeletonCount: 5)
@@ -395,6 +468,157 @@ class _SalesPeriodReportScreenState extends State<SalesPeriodReportScreen> {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// ورقة تفاصيل المبيعات حسب الفئات — عرض فقط: بحث + شريط نسبة لكل فئة.
+///
+/// التجميع بالقيمة الاسمية لأن كل بيع يقابل فئة مطابقة تمامًا للمبلغ؛
+/// اسم الفئة يُعرض عند تطابق قيمة واحدة مع فئة واحدة فقط.
+class _CategoryBreakdownSheet extends StatefulWidget {
+  const _CategoryBreakdownSheet({
+    required this.entries,
+    required this.totalMinor,
+  });
+
+  /// faceValue (minorUnits) → (عدد الكروت، مجموع البيع).
+  final List<MapEntry<int, ({int count, int minor})>> entries;
+  final int totalMinor;
+
+  @override
+  State<_CategoryBreakdownSheet> createState() =>
+      _CategoryBreakdownSheetState();
+}
+
+class _CategoryBreakdownSheetState extends State<_CategoryBreakdownSheet> {
+  final _searchCtrl = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = KayanPalette.of(context);
+    final net = context.netColors;
+    final q = _query.trim();
+    final visible = q.isEmpty
+        ? widget.entries
+        : widget.entries
+            .where((e) => formatMoneyMinor(e.key).contains(q))
+            .toList(growable: false);
+
+    return NetSheet(
+      title: 'تفاصيل المبيعات حسب الفئات',
+      subtitle: 'توزيع مبيعات الفترة المحددة على فئات الكروت',
+      icon: Icons.pie_chart_outline_rounded,
+      children: [
+        TextField(
+          controller: _searchCtrl,
+          onChanged: (v) => setState(() => _query = v),
+          decoration: InputDecoration(
+            hintText: 'ابحث عن فئة...',
+            prefixIcon: Icon(Icons.search_rounded, color: palette.textTertiary),
+            filled: true,
+            fillColor: palette.surface,
+            isDense: true,
+            border: OutlineInputBorder(
+              borderRadius: NetRadii.smAll,
+              borderSide: BorderSide(color: palette.border),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: NetRadii.smAll,
+              borderSide: BorderSide(color: palette.border),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: NetRadii.smAll,
+              borderSide: BorderSide(color: palette.primary, width: 1.4),
+            ),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: NetSpacing.md,
+              vertical: NetSpacing.md,
+            ),
+          ),
+          style: TextStyle(
+            fontFamily: NetTypography.family,
+            fontSize: 14,
+            color: palette.textPrimary,
+          ),
+        ),
+        const SizedBox(height: NetSpacing.lg),
+        if (visible.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: NetSpacing.xxl),
+            child: Text(
+              'لا نتائج مطابقة',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontFamily: NetTypography.family,
+                fontSize: 13,
+                color: palette.textSecondary,
+              ),
+            ),
+          )
+        else
+          for (final e in visible)
+            Padding(
+              padding: const EdgeInsets.only(bottom: NetSpacing.md),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          formatMoneyMinor(e.key),
+                          style: TextStyle(
+                            fontFamily: NetTypography.family,
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w700,
+                            color: palette.textPrimary,
+                          ),
+                        ),
+                      ),
+                      Text(
+                        '${e.value.count} كرت · ${(widget.totalMinor <= 0 ? 0.0 : e.value.minor / widget.totalMinor * 100).toStringAsFixed(e.value.minor * 100 ~/ (widget.totalMinor == 0 ? 1 : widget.totalMinor) >= 10 ? 0 : 1)}%',
+                        style: TextStyle(
+                          fontFamily: NetTypography.family,
+                          fontSize: 12,
+                          color: palette.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: NetSpacing.xs),
+                  ClipRRect(
+                    borderRadius: NetRadii.pillAll,
+                    child: TweenAnimationBuilder<double>(
+                      tween: Tween(
+                        begin: 0,
+                        end: widget.totalMinor <= 0
+                            ? 0.0
+                            : (e.value.minor / widget.totalMinor)
+                                .clamp(0.0, 1.0),
+                      ),
+                      duration: const Duration(milliseconds: 450),
+                      curve: Curves.easeOutCubic,
+                      builder: (context, v, _) => LinearProgressIndicator(
+                        value: v,
+                        minHeight: 8,
+                        backgroundColor: palette.surfaceVariant,
+                        valueColor:
+                            AlwaysStoppedAnimation<Color>(net.available),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+      ],
     );
   }
 }

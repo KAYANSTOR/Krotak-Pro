@@ -16,6 +16,8 @@ class NetDashboardHeader extends StatelessWidget {
     this.onHelp,
     this.onNotifications,
     this.notificationsCount = 0,
+    this.subscriptionLabel,
+    this.remainingMessages,
   });
 
   final String networkName;
@@ -25,6 +27,12 @@ class NetDashboardHeader extends StatelessWidget {
   final VoidCallback? onHelp;
   final VoidCallback? onNotifications;
   final int notificationsCount;
+
+  /// شريط الاشتراك — يظهر فقط عند توفر قيمة حقيقية من الترخيص.
+  final String? subscriptionLabel;
+
+  /// عدد الرسائل المتبقية (اختياري؛ null يخفي العنصر).
+  final int? remainingMessages;
 
   @override
   Widget build(BuildContext context) {
@@ -82,6 +90,55 @@ class NetDashboardHeader extends StatelessWidget {
                     color: palette.textSecondary,
                   ),
                 ),
+                if (subscriptionLabel != null) ...[
+                  const SizedBox(height: NetSpacing.xs),
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.verified_user_outlined,
+                        size: 13,
+                        color: palette.primary,
+                      ),
+                      const SizedBox(width: NetSpacing.xs),
+                      Flexible(
+                        child: Text(
+                          subscriptionLabel!,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontFamily: NetTypography.family,
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w700,
+                            color: palette.primary,
+                          ),
+                        ),
+                      ),
+                      if (remainingMessages != null) ...[
+                        const SizedBox(width: NetSpacing.sm),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color:
+                                palette.primary.withValues(alpha: 0.12),
+                            borderRadius: NetRadii.pillAll,
+                          ),
+                          child: Text(
+                            'الرسائل المتبقية: $remainingMessages',
+                            style: TextStyle(
+                              fontFamily: NetTypography.family,
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w700,
+                              color: palette.primary,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ],
               ],
             ),
           ),

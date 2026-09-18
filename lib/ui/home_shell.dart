@@ -26,8 +26,9 @@ class HomeShell extends StatefulWidget {
 class _HomeShellState extends State<HomeShell> {
   static const _ids = ['dashboard', 'reports', 'offers', 'accounts', 'cards'];
 
-  /// Signals the dashboard to reload after a mutation performed elsewhere
-  /// (direct sale, POS accounts) without coupling the tabs together.
+  /// Signals the dashboard and the accounts tab to reload after a mutation
+  /// performed elsewhere (customer creation, direct sale, POS accounts)
+  /// without coupling the tabs together.
   final ValueNotifier<int> _dashboardRefresh = ValueNotifier<int>(0);
 
   int _index = 0;
@@ -58,6 +59,7 @@ class _HomeShellState extends State<HomeShell> {
   Widget _buildDashboard() => DashboardScreen(
         onNavigateToTab: _goToId,
         refreshSignal: _dashboardRefresh,
+        onMutated: () => _dashboardRefresh.value++,
       );
 
   Widget _pageForIndex(int index) {
@@ -68,7 +70,7 @@ class _HomeShellState extends State<HomeShell> {
       0 => _buildDashboard(),
       1 => const ReportsScreen(),
       2 => const OffersScreen(),
-      3 => const CustomersScreen(),
+      3 => CustomersScreen(refreshSignal: _dashboardRefresh),
       4 => const InventoryScreen(),
       _ => const SizedBox.shrink(),
     };
@@ -83,17 +85,22 @@ class _HomeShellState extends State<HomeShell> {
       _index = i;
       _pageForIndex(i);
     });
-    if (id == 'dashboard') _dashboardRefresh.value++;
+  }
+
+  /// Fan-out of one shared refresh: called after any mutation from any tab so
+  /// the dashboard and the accounts tab always see the latest data.
+  void _bumpRefresh() {
+    _dashboardRefresh.value++;
   }
 
   Future<void> _openDirectSale() async {
     await AppRoutes.openDirectSale(context);
-    if (mounted) _dashboardRefresh.value++;
+    if (mounted) _bumpRefresh();
   }
 
   Future<void> _openWalletsAndPos() async {
     await AppRoutes.openWalletsAndPos(context);
-    if (mounted) _dashboardRefresh.value++;
+    if (mounted) _bumpRefresh();
   }
 
   /// Center button of the bottom bar — the same quick actions the dashboard
@@ -106,7 +113,7 @@ class _HomeShellState extends State<HomeShell> {
       onAddCustomer: () => _goToId('accounts'),
       onCreateCustomer: () async {
         await CustomerCreateSheet.show(context);
-        if (mounted) _dashboardRefresh.value++;
+        if (mounted) _bumpRefresh();
       },
       onOffers: () => _goToId('offers'),
       onCards: () => _goToId('cards'),

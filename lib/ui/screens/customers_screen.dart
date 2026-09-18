@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -23,7 +24,11 @@ enum _AccountFilter { all, debtor, creditor, unlinked }
 ///
 /// كل عمليات القراءة والإنشاء كما هي؛ التحديث بصري فقط.
 class CustomersScreen extends StatefulWidget {
-  const CustomersScreen({super.key});
+  const CustomersScreen({super.key, this.refreshSignal});
+
+  /// Bumped by the shell when a customer is created elsewhere (quick actions,
+  /// dashboard) so this kept-alive tab reloads without reopening it.
+  final ValueListenable<int>? refreshSignal;
 
   @override
   State<CustomersScreen> createState() => _CustomersScreenState();
@@ -39,11 +44,18 @@ class _CustomersScreenState extends State<CustomersScreen> {
   @override
   void initState() {
     super.initState();
+    widget.refreshSignal?.addListener(_onExternalRefresh);
     WidgetsBinding.instance.addPostFrameCallback((_) => _load());
+  }
+
+  void _onExternalRefresh() {
+    if (!mounted) return;
+    _load(_searchCtrl.text);
   }
 
   @override
   void dispose() {
+    widget.refreshSignal?.removeListener(_onExternalRefresh);
     _searchCtrl.dispose();
     super.dispose();
   }

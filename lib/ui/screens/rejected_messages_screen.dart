@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/result.dart';
+import '../../domain/entities/message.dart';
 import '../../domain/entities/money.dart';
 import '../../domain/entities/setting.dart';
 import '../../domain/services/rejected_message_catalog.dart';
@@ -31,6 +32,10 @@ class _RejectedMessagesScreenState extends State<RejectedMessagesScreen> {
   List<RejectedMessageItem> _items = const [];
   String _filter = RejectionCategories.all;
   int _newCount = 0;
+
+  /// تبويب الأرشيف — الرسائل التي تمت معالجتها/استعادتها بنجاح (قراءة فقط).
+  bool _showArchive = false;
+  List<RejectedMessageItem> _archiveItems = const [];
 
   /// تسميات قصيرة للشرائح مطابقة لنص الفيديو قدر الإمكان.
   static const _chipShort = <String, String>{
@@ -88,6 +93,35 @@ class _RejectedMessagesScreenState extends State<RejectedMessagesScreen> {
     final items = (result as Success<List<RejectedMessageItem>>).value;
     final newCount = items.where((i) => i.isNew).length;
 
+    // الأرشيف: الرسائل المحلولة بنجاح (معالجة أو مستردة) — عرض فقط.
+    final archive = <RejectedMessageItem>[];
+    for (final status in [
+      MessageProcessingStatus.processed,
+      MessageProcessingStatus.recovered,
+    ]) {
+      final r = await c.messages.listByStatus(status);
+      if (r is Success<List<IncomingMessage>>) {
+        for (final m in r.value) {
+          final parse = c.messageParser.parse(m);
+          archive.add(
+            RejectedMessageItem(
+              message: m,
+              category: RejectionCategories.all,
+              reason: 'تمت معالجة الرسالة بنجاح',
+              isNew: false,
+              amount: parse is Success<ParsedTransfer> ? parse.value.amount : null,
+              phone: parse is Success<ParsedTransfer>
+                  ? parse.value.customerIdentifier
+                  : m.customerIdentifier,
+              reference:
+                  parse is Success<ParsedTransfer> ? parse.value.reference : null,
+            ),
+          );
+        }
+      }
+    }
+    archive.sort((a, b) => b.message.receivedAt.compareTo(a.message.receivedAt));
+
     if (markViewed) {
       await c.settings.save(
         AppSetting(
@@ -103,6 +137,7 @@ class _RejectedMessagesScreenState extends State<RejectedMessagesScreen> {
       _loading = false;
       _items = items;
       _newCount = newCount;
+      _archiveItems = archive;
     });
   }
 
@@ -213,10 +248,12 @@ class _RejectedMessagesScreenState extends State<RejectedMessagesScreen> {
           actions: [
             IconButton(
               tooltip: 'أرشيف',
-              onPressed: () {},
+              onPressed: () => setState(() => _showArchive = !_showArchive),
               icon: Icon(
-                Icons.inventory_2_outlined,
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                _showArchive ? Icons.chat_bubble_outline : Icons.inventory_2_outlined,
+                color: _showArchive
+                    ? context.kayan.primary
+                    : Theme.of(context).colorScheme.onSurfaceVariant,
               ),
             ),
             IconButton(
@@ -232,7 +269,7 @@ class _RejectedMessagesScreenState extends State<RejectedMessagesScreen> {
         body: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            if (!_loading && _error == null) ...[
+            if (!_loading && _error == null && !_showArchive) ...[
               // شرائح التصنيف — مطابقة الفيديو
               SizedBox(
                 height: 48,
@@ -318,7 +355,9 @@ class _RejectedMessagesScreenState extends State<RejectedMessagesScreen> {
                   ? const AsyncLoadingView()
                   : _error != null
                       ? AsyncErrorView(message: _error!, onRetry: () => _load())
-                      : _filtered.isEmpty
+                      : _showArchive
+                          ? _archiveList()
+                          : _filtered.isEmpty
                           ? AsyncEmptyView(
                               message: _items.isEmpty
                                   ? 'لا توجد رسائل مرفوضة'
@@ -368,6 +407,102 @@ class _RejectedMessagesScreenState extends State<RejectedMessagesScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  /// قائمة الأرشيف: بطاقة عدد + تجميع باليوم + بطاقات «تمت المعالجة».
+  Widget _archiveList() {
+    final groups = <String, List<RejectedMessageItem>>{};
+    for (final i in _archiveItems) {
+      final t = i.message.receivedAt.toLocal();
+      final key =
+          '${t.year}-${t.month.toString().padLeft(2, '0')}-${t.day.toString().padLeft(2, '0')}';
+      groups.putIfAbsent(key, () => []).add(i);
+    }
+    final keys = groups.keys.toList();
+    return RefreshIndicator(
+      color: context.kayan.primary,
+      onRefresh: () => _load(markViewed: false),
+      child: ListView.builder(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+        itemCount: keys.isEmpty ? 1 : keys.length + 1,
+        itemBuilder: (_, gi) {
+          if (gi == 0) {
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                decoration: BoxDecoration(
+                  color: context.netColors.successContainer,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: context.netColors.success.withValues(alpha: 0.4),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.verified_outlined,
+                      color: context.netColors.success,
+                      size: 22,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'مراجعة الرسائل التي تم حلها بنجاح',
+                            style: TextStyle(
+                              fontFamily: 'Tajawal',
+                              fontSize: 12,
+                              color: context.netColors.success,
+                            ),
+                          ),
+                          Text(
+                            '${_archiveItems.length} رسالة محلولة',
+                            style: TextStyle(
+                              fontFamily: 'Tajawal',
+                              fontWeight: FontWeight.w800,
+                              fontSize: 16,
+                              color: context.netColors.success,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }
+          final day = keys[gi - 1];
+          final dayItems = groups[day]!;
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(top: 8, bottom: 8),
+                child: Text(
+                  '$day (${dayItems.length})',
+                  textAlign: TextAlign.left,
+                  style: TextStyle(
+                    fontFamily: 'Tajawal',
+                    fontSize: 12,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+              ...dayItems.map(
+                (item) => Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: _RejectedCard(item: item, resolved: true),
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -445,11 +580,14 @@ class _SummaryBanner extends StatelessWidget {
   }
 }
 
-/// بطاقة رسالة مرفوضة مطابقة للإطار.
+/// بطاقة رسالة مرفوضة/محلولة مطابقة للإطار.
 class _RejectedCard extends StatelessWidget {
-  const _RejectedCard({required this.item});
+  const _RejectedCard({required this.item, this.resolved = false});
 
   final RejectedMessageItem item;
+
+  /// تلوين أخضر + نص «تمت المعالجة» لبطاقات الأرشيف.
+  final bool resolved;
 
   String _fmtTime(DateTime t) {
     final local = t.toLocal();
@@ -464,6 +602,8 @@ class _RejectedCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final m = item.message;
     final wallet = m.sender.isEmpty ? '—' : m.sender;
+    final accent =
+        resolved ? context.netColors.success : context.netColors.rejected;
 
     return Container(
       decoration: BoxDecoration(
@@ -510,13 +650,13 @@ class _RejectedCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 10),
-              // نقطة حمراء يسار (حافة البطاقة)
+              // نقطة ملونة حسب الحالة (حافة البطاقة)
               Container(
                 width: 8,
                 height: 8,
                 margin: const EdgeInsets.only(top: 6),
                 decoration: BoxDecoration(
-                  color: context.netColors.rejected,
+                  color: accent,
                   shape: BoxShape.circle,
                 ),
               ),
@@ -582,7 +722,7 @@ class _RejectedCard extends StatelessWidget {
                   ],
                 ),
               ),
-              if (item.isNew) ...[
+              if (item.isNew && !resolved) ...[
                 const SizedBox(width: 8),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -597,6 +737,25 @@ class _RejectedCard extends StatelessWidget {
                       fontSize: 11,
                       fontWeight: FontWeight.w700,
                       color: context.netColors.rejected,
+                    ),
+                  ),
+                ),
+              ],
+              if (resolved) ...[
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: context.netColors.successContainer,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    'تمت المعالجة',
+                    style: TextStyle(
+                      fontFamily: 'Tajawal',
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: context.netColors.success,
                     ),
                   ),
                 ),
