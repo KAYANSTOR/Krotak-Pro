@@ -4,8 +4,11 @@ import '../entities/setting.dart';
 import '../repositories/repositories.dart';
 import 'local_advance_service.dart';
 
-/// Seeds default *outbound* SMS bodies used by product features (سلفني, عروض).
-/// Operators can edit them later from Settings screens.
+/// Seeds default *outbound* SMS bodies used across the product:
+/// العملاء · العروض · النظام / نقاط البيع · سلفني.
+///
+/// Bodies follow the product video catalog and [docs/screenshot-spec-appendix.md].
+/// Operators can edit any template later from Settings → قوالب الرسائل.
 final class DefaultOutboundTemplatesSeeder {
   const DefaultOutboundTemplatesSeeder({
     required this.settings,
@@ -15,22 +18,49 @@ final class DefaultOutboundTemplatesSeeder {
   final SettingsRepository settings;
   final Clock clock;
 
-  static const seededKey = 'default_outbound_templates_seeded_v1';
+  /// Bump when new catalog keys are added so existing installs backfill.
+  static const seededKey = 'default_outbound_templates_seeded_v2';
+
+  /// Full catalog keyed by [SettingKeys] → default body.
+  static Map<String, String> catalog() => <String, String>{
+        // —— العملاء ——
+        SettingKeys.voucherDeliverySmsTemplate:
+            SettingDefaults.voucherDeliverySmsTemplate,
+        SettingKeys.customerDebtPaymentTemplate:
+            SettingDefaults.customerDebtPaymentTemplate,
+
+        // —— العروض ——
+        SettingKeys.promotionRewardSmsTemplate:
+            SettingDefaults.promotionRewardSmsTemplate,
+
+        // —— سلفني ——
+        SettingKeys.salafniAcceptedTemplate: LocalAdvanceService.defaultAccepted,
+        SettingKeys.salafniRejectedTemplate: LocalAdvanceService.defaultRejected,
+        SettingKeys.salafniSettledTemplate: LocalAdvanceService.defaultSettled,
+
+        // —— النظام / نقاط البيع ——
+        SettingKeys.posBalanceResponseTemplate:
+            SettingDefaults.posBalanceResponseTemplate,
+        SettingKeys.posCreditLimitExceededTemplate:
+            SettingDefaults.posCreditLimitExceededTemplate,
+        SettingKeys.dailyPosSummaryTemplate:
+            SettingDefaults.dailyPosSummaryTemplate,
+        SettingKeys.posSettlementSuccessTemplate:
+            SettingDefaults.posSettlementSuccessTemplate,
+        SettingKeys.posSettlementFailedTemplate:
+            SettingDefaults.posSettlementFailedTemplate,
+        SettingKeys.posSettlementUnknownTemplate:
+            SettingDefaults.posSettlementUnknownTemplate,
+        SettingKeys.posRequestRejectedTemplate:
+            SettingDefaults.posRequestRejectedTemplate,
+        SettingKeys.posCustomerSmsTailTemplate:
+            SettingDefaults.posCustomerSmsTailTemplate,
+        SettingKeys.lowStockAlertTemplate:
+            SettingDefaults.lowStockAlertTemplate,
+      };
 
   Future<Result<void>> seedIfNeeded() async {
-    final flag = await settings.find(seededKey);
-    if (flag is Success<AppSetting?> && flag.value?.value == 'true') {
-      return const Success(null);
-    }
-
-    final defaults = <String, String>{
-      SettingKeys.salafniAcceptedTemplate: LocalAdvanceService.defaultAccepted,
-      SettingKeys.salafniRejectedTemplate: LocalAdvanceService.defaultRejected,
-      SettingKeys.salafniSettledTemplate: LocalAdvanceService.defaultSettled,
-      SettingKeys.promotionRewardSmsTemplate:
-          SettingDefaults.promotionRewardSmsTemplate,
-    };
-
+    final defaults = catalog();
     for (final e in defaults.entries) {
       final existing = await settings.find(e.key);
       final has = existing is Success<AppSetting?> &&
