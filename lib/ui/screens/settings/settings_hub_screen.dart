@@ -15,6 +15,7 @@ import 'low_stock_settings_screen.dart';
 import 'network_name_settings_screen.dart';
 import 'renew_subscription_screen.dart';
 import 'salafni_templates_screen.dart';
+import 'outbound_message_templates_screen.dart';
 import 'sim_settings_screen.dart';
 import 'template_simulation_screen.dart';
 import 'templates_screen.dart';
@@ -209,6 +210,16 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
                                     await _saveBool(SettingKeys.salafniEnabled, v);
                                   },
                                 ),
+                                SettingsGroupNavRow(
+                                  icon: Icons.message_outlined,
+                                  title: 'قوالب رسائل العملاء والعروض والنظام',
+                                  subtitle: 'صيغ SMS الجاهزة للعملاء والعروض ونقاط البيع — قابلة للتعديل',
+                                  onTap: () => Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (_) => const OutboundMessageTemplatesScreen(),
+                                    ),
+                                  ),
+                                ),
                                 if (_salafni)
                                   SettingsGroupNavRow(
                                     icon: Icons.sms_outlined,
@@ -344,9 +355,9 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
                             SettingsGroupCard(
                               children: [
                                 SettingsGroupNavRow(
-                                  icon: Icons.mark_email_unread_outlined,
+                                  icon: Icons.pending_actions_outlined,
                                   title: 'الرسائل المعلّقة',
-                                  subtitle: 'رسائل تحتاج تأكيداً يدوياً قبل المعالجة',
+                                  subtitle: 'رسائل بانتظار تدخل يدوي قبل المعالجة',
                                   onTap: () => AppRoutes.openPendingMessages(context),
                                 ),
                                 SettingsGroupNavRow(
@@ -398,43 +409,24 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
 
 class _Header extends StatelessWidget {
   const _Header({required this.onBack});
-
   final VoidCallback onBack;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(8, 8, 16, 4),
+      padding: const EdgeInsets.fromLTRB(8, 8, 8, 4),
       child: Row(
         children: [
-          IconButton(
-            onPressed: onBack,
-            icon: const Icon(Icons.arrow_forward, color: KayanColors.textPrimary),
-            tooltip: 'رجوع',
-          ),
+          IconButton(onPressed: onBack, icon: const Icon(Icons.arrow_back)),
           const Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Text(
-                  'الإعدادات',
-                  style: TextStyle(
-                    fontFamily: 'Tajawal',
-                    fontSize: 20,
-                    fontWeight: FontWeight.w800,
-                    color: KayanColors.textPrimary,
-                  ),
-                ),
-                SizedBox(height: 2),
-                Text(
-                  'تخصيص النظام وإدارة البيانات',
-                  style: TextStyle(
-                    fontFamily: 'Tajawal',
-                    fontSize: 13,
-                    color: KayanColors.textSecondary,
-                  ),
-                ),
-              ],
+            child: Text(
+              'الإعدادات',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontFamily: 'Tajawal',
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
           const SizedBox(width: 48),
