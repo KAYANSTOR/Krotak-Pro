@@ -4,9 +4,9 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 
-import '../core/result.dart';
-import '../domain/entities/setting.dart';
-import '../platform/system_diagnostics_bridge.dart';
+import '../../core/result.dart';
+import '../../domain/entities/setting.dart';
+import '../../platform/system_diagnostics_bridge.dart';
 import '../app_scope.dart';
 import '../theme/kayan_palette.dart';
 import '../theme/net_semantic_colors.dart';

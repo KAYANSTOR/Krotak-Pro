@@ -139,7 +139,6 @@ ThemeData _buildNetTheme({required bool isDark}) {
       backgroundColor: palette.surface,
       surfaceTintColor: Colors.transparent,
       modalBackgroundColor: palette.surface,
-      modalSurfaceTintColor: Colors.transparent,
       elevation: 0,
       modalElevation: 0,
       shape: const RoundedRectangleBorder(borderRadius: NetRadii.sheetTop),

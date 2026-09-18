@@ -200,8 +200,11 @@ class _SalesPeriodSheetState extends State<SalesPeriodSheet> {
                 child: AsyncErrorView(message: _error!, onRetry: _load),
               )
             else if (_rows.isEmpty)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 48, horizontal: 24),
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  vertical: 48,
+                  horizontal: 24,
+                ),
                 child: Text(
                   _emptyMessage,
                   textAlign: TextAlign.center,
