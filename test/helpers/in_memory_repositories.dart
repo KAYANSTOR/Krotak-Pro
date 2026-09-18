@@ -153,6 +153,10 @@ final class InMemoryCardRepository implements CardRepository {
   }
 
   @override
+  Future<Result<List<Card>>> listAll() async =>
+      Success(_cards.values.toList(growable: false));
+
+  @override
   Future<Result<Set<String>>> existingSerialsAmong(Iterable<String> serials) async {
     final set = serials.toSet();
     return Success(_cards.values.map((c) => c.serialNumber).where(set.contains).toSet());
