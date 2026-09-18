@@ -5,35 +5,22 @@ import '../../theme/net_tokens.dart';
 
 /// ورقة الإجراءات السريعة — تُفتح من الزر الوسطي في الشريط السفلي.
 ///
-/// لا تنفّذ شيئًا بنفسها: تستدعي الـcallbacks الممرّرة فقط (نفس سلوك السابق).
+/// إجراءان فقط كما في التصميم المرجعي: البيع المباشر وإضافة عميل.
+/// لا تنفّذ شيئًا بنفسها: تستدعي الـcallbacks الممرّرة فقط.
 class QuickActionsSheet extends StatelessWidget {
   const QuickActionsSheet({
     super.key,
     required this.onDirectSale,
-    required this.onPosAccounts,
     required this.onAddCustomer,
-    this.onCreateCustomer,
-    this.onOffers,
-    this.onCards,
   });
 
   final VoidCallback onDirectSale;
-  final VoidCallback onPosAccounts;
   final VoidCallback onAddCustomer;
-
-  /// إنشاء حساب مشترك جديد (نموذج 1.0.9) — اختياري للتوافق الخلفي.
-  final VoidCallback? onCreateCustomer;
-  final VoidCallback? onOffers;
-  final VoidCallback? onCards;
 
   static Future<void> show(
     BuildContext context, {
     required VoidCallback onDirectSale,
-    required VoidCallback onPosAccounts,
     required VoidCallback onAddCustomer,
-    VoidCallback? onCreateCustomer,
-    VoidCallback? onOffers,
-    VoidCallback? onCards,
   }) {
     return showModalBottomSheet<void>(
       context: context,
@@ -41,11 +28,7 @@ class QuickActionsSheet extends StatelessWidget {
       isScrollControlled: true,
       builder: (ctx) => QuickActionsSheet(
         onDirectSale: onDirectSale,
-        onPosAccounts: onPosAccounts,
         onAddCustomer: onAddCustomer,
-        onCreateCustomer: onCreateCustomer,
-        onOffers: onOffers,
-        onCards: onCards,
       ),
     );
   }
@@ -67,12 +50,10 @@ class QuickActionsSheet extends StatelessWidget {
           NetSpacing.xl,
           NetSpacing.sm,
           NetSpacing.xl,
-          NetSpacing.lg + bottom,
+          NetSpacing.xl + bottom,
         ),
-        // Scrollable so the six actions never overflow a short viewport.
-        child: ListView(
-          shrinkWrap: true,
-          padding: EdgeInsets.zero,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
             Center(
               child: Container(
@@ -96,57 +77,33 @@ class QuickActionsSheet extends StatelessWidget {
               ),
             ),
             const SizedBox(height: NetSpacing.lg),
-            _ActionTile(
-              icon: Icons.point_of_sale_outlined,
-              label: 'البيع المباشر',
-              onTap: () {
-                Navigator.of(context).pop();
-                onDirectSale();
-              },
+            Row(
+              children: [
+                Expanded(
+                  child: _QuickActionCard(
+                    icon: Icons.point_of_sale_rounded,
+                    label: 'بيع مباشر',
+                    hint: 'بيع كرت فورًا',
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      onDirectSale();
+                    },
+                  ),
+                ),
+                const SizedBox(width: NetSpacing.sm),
+                Expanded(
+                  child: _QuickActionCard(
+                    icon: Icons.person_add_alt_rounded,
+                    label: 'إضافة عميل',
+                    hint: 'حساب عميل جديد',
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      onAddCustomer();
+                    },
+                  ),
+                ),
+              ],
             ),
-            _ActionTile(
-              icon: Icons.storefront_outlined,
-              label: 'حسابات نقاط البيع',
-              onTap: () {
-                Navigator.of(context).pop();
-                onPosAccounts();
-              },
-            ),
-            _ActionTile(
-              icon: Icons.person_add_alt_1_outlined,
-              label: 'إضافة عميل',
-              onTap: () {
-                Navigator.of(context).pop();
-                onAddCustomer();
-              },
-            ),
-            if (onCreateCustomer != null)
-              _ActionTile(
-                icon: Icons.person_add_alt_rounded,
-                label: 'إنشاء حساب مشترك جديد',
-                onTap: () {
-                  Navigator.of(context).pop();
-                  onCreateCustomer!();
-                },
-              ),
-            if (onOffers != null)
-              _ActionTile(
-                icon: Icons.local_offer_outlined,
-                label: 'العروض الترويجية',
-                onTap: () {
-                  Navigator.of(context).pop();
-                  onOffers!();
-                },
-              ),
-            if (onCards != null)
-              _ActionTile(
-                icon: Icons.style_outlined,
-                label: 'مخزون الكروت',
-                onTap: () {
-                  Navigator.of(context).pop();
-                  onCards!();
-                },
-              ),
           ],
         ),
       ),
@@ -154,59 +111,68 @@ class QuickActionsSheet extends StatelessWidget {
   }
 }
 
-class _ActionTile extends StatelessWidget {
-  const _ActionTile({
+class _QuickActionCard extends StatelessWidget {
+  const _QuickActionCard({
     required this.icon,
     required this.label,
+    required this.hint,
     required this.onTap,
   });
 
   final IconData icon;
   final String label;
+  final String hint;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final palette = KayanPalette.of(context);
-    return Padding(
-      padding: const EdgeInsets.only(bottom: NetSpacing.sm),
-      child: Material(
-        color: palette.surfaceVariant,
-        borderRadius: NetRadii.smAll,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: NetRadii.smAll,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: NetSpacing.md,
-              vertical: NetSpacing.md,
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: palette.surface,
-                    borderRadius: NetRadii.xsAll,
+    return Material(
+      color: palette.surfaceVariant,
+      borderRadius: NetRadii.mdAll,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: NetRadii.mdAll,
+        child: Padding(
+          padding: const EdgeInsets.all(NetSpacing.md),
+          child: Column(
+            children: [
+              Container(
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(
+                  color: palette.primary.withValues(
+                    alpha: palette.isDark ? 0.24 : 0.12,
                   ),
-                  child: Icon(icon, color: palette.primary),
+                  borderRadius: NetRadii.smAll,
                 ),
-                const SizedBox(width: NetSpacing.md),
-                Expanded(
-                  child: Text(
-                    label,
-                    style: TextStyle(
-                      fontFamily: NetTypography.family,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                      color: palette.textPrimary,
-                    ),
-                  ),
+                child: Icon(icon, color: palette.primary),
+              ),
+              const SizedBox(height: NetSpacing.sm),
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontFamily: NetTypography.family,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                  color: palette.textPrimary,
                 ),
-                Icon(Icons.chevron_left_rounded, color: palette.textSecondary),
-              ],
-            ),
+              ),
+              const SizedBox(height: NetSpacing.xxs),
+              Text(
+                hint,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontFamily: NetTypography.family,
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w600,
+                  color: palette.textSecondary,
+                ),
+              ),
+            ],
           ),
         ),
       ),

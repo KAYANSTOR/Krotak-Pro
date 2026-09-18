@@ -64,12 +64,12 @@ final class LocalAdvanceService implements AdvanceService {
     final customerResult = await customers.findById(customerId);
     if (customerResult is Failure<Customer?>) return Failure(customerResult.error);
     final customer = (customerResult as Success<Customer?>).value;
-    if (customer == null) return _reject('customer_not_found', 'المشترك غير موجود', customerId: customerId);
-    if (customer.status != CustomerStatus.active) return _reject('customer_not_active', 'المشترك غير نشط', customerId: customerId);
+    if (customer == null) return _reject('customer_not_found', 'العميل غير موجود', customerId: customerId);
+    if (customer.status != CustomerStatus.active) return _reject('customer_not_active', 'العميل غير نشط', customerId: customerId);
 
     final open = await advances.findOpenByCustomer(customerId: customerId, currencyCode: currencyCode);
     if (open is Failure<Advance?>) return Failure(open.error);
-    if ((open as Success<Advance?>).value != null) return _reject('advance_already_open', 'لدى المشترك سلفة غير مسددة', customerId: customerId);
+    if ((open as Success<Advance?>).value != null) return _reject('advance_already_open', 'لدى العميل سلفة غير مسددة', customerId: customerId);
 
     final balance = await _balance(customerId, currencyCode);
     if (balance is Failure<Money>) return Failure(balance.error);
@@ -181,7 +181,7 @@ final class LocalAdvanceService implements AdvanceService {
     final customerResult = await customers.findByIdentifier(value);
     if (customerResult is Failure<Customer?>) return Failure(customerResult.error);
     final customer = (customerResult as Success<Customer?>).value;
-    if (customer == null) return _reject('customer_not_found', 'المشترك غير موجود', destination: PhoneNormalizer.isPhoneLike(identifier) ? value : null);
+    if (customer == null) return _reject('customer_not_found', 'العميل غير موجود', destination: PhoneNormalizer.isPhoneLike(identifier) ? value : null);
     return request(customerId: customer.id, currencyCode: currencyCode, operationId: operationId);
   }
 

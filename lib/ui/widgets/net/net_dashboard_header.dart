@@ -4,8 +4,8 @@ import '../../theme/kayan_palette.dart';
 import '../../theme/net_tokens.dart';
 import 'net_tab_header.dart';
 
-/// ترويسة لوحة التحكم — ترحيب بارز في جهة البداية وأزرار دائرية في الجهة
-/// المقابلة (تنبيهات · دعم · إعدادات) بهوية NET ومسمياتها.
+/// ترويسة لوحة التحكم — اسم الشبكة هو العنوان الرئيسي في جهة البداية وأزرار
+/// دائرية في الجهة المقابلة (تنبيهات · دعم · إعدادات) بهوية NET ومسمياتها.
 class NetDashboardHeader extends StatelessWidget {
   const NetDashboardHeader({
     super.key,
@@ -18,10 +18,13 @@ class NetDashboardHeader extends StatelessWidget {
     this.notificationsCount = 0,
     this.subscriptionLabel,
     this.remainingMessages,
+    this.showGreeting = true,
   });
 
   final String networkName;
   final String dateLabel;
+
+  /// تحية صغيرة فوق اسم الشبكة — تُخفى بتمرير [showGreeting] بقيمة false.
   final String? greeting;
   final VoidCallback? onSettings;
   final VoidCallback? onHelp;
@@ -33,6 +36,9 @@ class NetDashboardHeader extends StatelessWidget {
 
   /// عدد الرسائل المتبقية (اختياري؛ null يخفي العنصر).
   final int? remainingMessages;
+
+  /// اسم الشبكة هو العنوان الرئيسي؛ التحية سطر صغير اختياري فوقه.
+  final bool showGreeting;
 
   @override
   Widget build(BuildContext context) {
@@ -55,27 +61,30 @@ class NetDashboardHeader extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
+                if (showGreeting) ...[
+                  Text(
+                    greet,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontFamily: NetTypography.family,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 12,
+                      color: palette.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                ],
                 Text(
-                  greet,
+                  displayName,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontFamily: NetTypography.family,
                     fontWeight: FontWeight.w800,
-                    fontSize: 21,
+                    fontSize: 22,
+                    height: 1.15,
                     color: palette.textPrimary,
-                  ),
-                ),
-                const SizedBox(height: NetSpacing.xxs),
-                Text(
-                  'شبكة $displayName',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontFamily: NetTypography.family,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 13.5,
-                    color: palette.primary,
                   ),
                 ),
                 const SizedBox(height: 2),

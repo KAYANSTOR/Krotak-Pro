@@ -148,3 +148,135 @@ class NetServiceGrid extends StatelessWidget {
     );
   }
 }
+
+/// بطاقة خدمة كبيرة — 2×2 على الرئيسية: أيقونة كبيرة في شارة ملوّنة، اسم بارز،
+/// ووصف قصير. نفس لغة التصميم العامة بحجم أضخم ليناسب الشاشة.
+class NetServiceBigTile extends StatelessWidget {
+  const NetServiceBigTile({
+    super.key,
+    required this.label,
+    required this.description,
+    required this.icon,
+    required this.onTap,
+    this.tint,
+    this.badgeCount = 0,
+  });
+
+  final String label;
+  final String description;
+  final IconData icon;
+  final VoidCallback onTap;
+
+  /// لون الأيقونة والشارة؛ الافتراضي أساس الهوية.
+  final Color? tint;
+
+  /// Optional attention count rendered as a small pill (0 hides it).
+  final int badgeCount;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = KayanPalette.of(context);
+    final color = tint ?? palette.primary;
+
+    return Material(
+      color: palette.surface,
+      borderRadius: NetRadii.mdAll,
+      child: InkWell(
+        onTap: () {
+          HapticFeedback.selectionClick();
+          onTap();
+        },
+        borderRadius: NetRadii.mdAll,
+        child: Container(
+          padding: const EdgeInsets.all(NetSpacing.md),
+          decoration: BoxDecoration(
+            borderRadius: NetRadii.mdAll,
+            border: Border.all(color: palette.border),
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Stack(
+                clipBehavior: Clip.none,
+                alignment: Alignment.center,
+                children: [
+                  Container(
+                    width: 52,
+                    height: 52,
+                    decoration: BoxDecoration(
+                      color: color.withValues(alpha: 0.12),
+                      borderRadius: NetRadii.smAll,
+                    ),
+                    child: Icon(icon, size: 30, color: color),
+                  ),
+                  if (badgeCount > 0)
+                    Positioned(
+                      top: -7,
+                      left: -10,
+                      child: _ServiceBadge(count: badgeCount),
+                    ),
+                ],
+              ),
+              const SizedBox(height: NetSpacing.sm),
+              Text(
+                label,
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontFamily: NetTypography.family,
+                  fontSize: 14.5,
+                  fontWeight: FontWeight.w800,
+                  height: 1.2,
+                  color: palette.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                description,
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontFamily: NetTypography.family,
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w600,
+                  color: palette.textSecondary,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// شبكة 2×2 لبطاقات الخدمات الكبيرة على الرئيسية.
+class NetServiceBigGrid extends StatelessWidget {
+  const NetServiceBigGrid({
+    super.key,
+    required this.tiles,
+    this.padding = NetSpacing.pageH,
+  });
+
+  final List<Widget> tiles;
+  final EdgeInsetsGeometry padding;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: padding,
+      child: GridView.count(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        crossAxisCount: 2,
+        mainAxisSpacing: NetSpacing.sm,
+        crossAxisSpacing: NetSpacing.sm,
+        // نسبة قصيرة نسبيًا حتى لا يتجاوز محتوى البطاقة الشاشات الضيقة.
+        childAspectRatio: 1.05,
+        children: tiles,
+      ),
+    );
+  }
+}

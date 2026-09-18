@@ -223,6 +223,22 @@ class NetBalanceCard extends StatelessWidget {
                       ),
                     ],
                   ),
+                  const SizedBox(height: NetSpacing.sm),
+                  // شريط تقدم ذهبي رقيق — لمسة فاخرة محدودة تعكس امتلاء الخدمة.
+                  ClipRRect(
+                    borderRadius: NetRadii.pillAll,
+                    child: TweenAnimationBuilder<double>(
+                      tween: Tween(end: availableCards > 0 ? 0.68 : 0.18),
+                      duration: const Duration(milliseconds: 900),
+                      curve: Curves.easeOutCubic,
+                      builder: (context, t, _) => LinearProgressIndicator(
+                        value: t.clamp(0.0, 1.0),
+                        minHeight: 4,
+                        backgroundColor: Colors.white.withValues(alpha: 0.16),
+                        valueColor: AlwaysStoppedAnimation<Color>(net.premium),
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -247,7 +263,7 @@ class NetBalanceCard extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.symmetric(
             horizontal: NetSpacing.md,
-            vertical: NetSpacing.sm,
+            vertical: NetSpacing.sm + 2,
           ),
           decoration: BoxDecoration(
             borderRadius: NetRadii.smAll,
@@ -273,17 +289,23 @@ class NetBalanceCard extends StatelessWidget {
                         fontWeight: FontWeight.w600,
                       ),
                     ),
+                    const SizedBox(height: 1),
                     Text(
                       value,
                       style: const TextStyle(
                         fontFamily: NetTypography.family,
                         color: Colors.white,
                         fontWeight: FontWeight.w800,
-                        fontSize: 17,
+                        fontSize: 18,
                       ),
                     ),
                   ],
                 ),
+              ),
+              Icon(
+                Icons.chevron_left_rounded,
+                size: NetSizes.iconSm,
+                color: Colors.white.withValues(alpha: 0.85),
               ),
             ],
           ),

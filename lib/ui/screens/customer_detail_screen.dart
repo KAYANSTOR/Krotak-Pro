@@ -114,7 +114,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text(
-                'الرجاء إدخال رقم جوال المشترك لإرسال الكروت المعلّقة وتأكيد المعاملات المستقبلية.',
+                'الرجاء إدخال رقم جوال العميل لإرسال الكروت المعلّقة وتأكيد المعاملات المستقبلية.',
                 style: TextStyle(
                   fontFamily: 'Tajawal',
                   fontSize: 13,
@@ -328,7 +328,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                 ),
               ),
               Text(
-                'كشف حساب المشترك والعمليات',
+                'كشف حساب العميل والعمليات',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontFamily: 'Tajawal',
