@@ -604,10 +604,10 @@ class _StepIndicator extends StatelessWidget {
       height: 32,
       alignment: Alignment.center,
       decoration: BoxDecoration(
-        color: done || active ? teal : Colors.white,
+        color: done || active ? teal : Theme.of(context).colorScheme.surfaceVariant,
         shape: BoxShape.circle,
         border: Border.all(
-          color: done || active ? teal : const Color(0xFFCBD5E1),
+          color: done || active ? teal : Theme.of(context).colorScheme.outlineVariant,
           width: 2,
         ),
         boxShadow: active
@@ -630,7 +630,7 @@ class _StepIndicator extends StatelessWidget {
                     fontFamily: 'Tajawal',
                     fontWeight: FontWeight.w800,
                     fontSize: 13,
-                    color: active ? Colors.white : const Color(0xFF94A3B8),
+                    color: active ? Colors.white : Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
                 ),
     );

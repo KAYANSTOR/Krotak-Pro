@@ -384,7 +384,7 @@ class _PendingMessagesScreenState extends State<PendingMessagesScreen>
                   prefixIcon:
                       const Icon(Icons.search, color: Color(0xFF94A3B8)),
                   filled: true,
-                  fillColor: const Color(0xFFF1F5F9),
+                  fillColor: Theme.of(context).colorScheme.surface,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(14),
                     borderSide: BorderSide.none,

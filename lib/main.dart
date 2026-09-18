@@ -105,6 +105,9 @@ class _NetAppState extends State<NetApp> with WidgetsBindingObserver {
             theme: buildKayanLightTheme(),
             darkTheme: buildKayanDarkTheme(),
             themeMode: mode,
+            // Smooth, token-based light/dark switch instead of an instant flip.
+            themeAnimationDuration: const Duration(milliseconds: 220),
+            themeAnimationCurve: Curves.easeOutCubic,
             locale: const Locale('ar'),
             supportedLocales: const [Locale('ar')],
             localeResolutionCallback: (locale, supported) => const Locale('ar'),
