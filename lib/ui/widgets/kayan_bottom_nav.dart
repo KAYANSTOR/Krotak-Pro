@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../theme/kayan_colors.dart';
+import '../theme/kayan_palette.dart';
 
-/// Mirrors KayanBottomNavigation / DashboardBottomNavigation from Kotlin:
-/// الرئيسية | التقارير | العروض | الحسابات | الكروت
+/// شريط تنقل سفلي: الرئيسية | التقارير | العروض | الحسابات | الكروت
 class KayanBottomNav extends StatelessWidget {
   const KayanBottomNav({
     super.key,
@@ -15,28 +15,30 @@ class KayanBottomNav extends StatelessWidget {
   final ValueChanged<String> onSelect;
 
   static const items = [
-    (id: 'dashboard', label: 'الرئيسية', icon: Icons.home_outlined, activeIcon: Icons.home),
-    (id: 'reports', label: 'التقارير', icon: Icons.bar_chart_outlined, activeIcon: Icons.bar_chart),
-    (id: 'offers', label: 'العروض', icon: Icons.local_offer_outlined, activeIcon: Icons.local_offer),
-    (id: 'accounts', label: 'الحسابات', icon: Icons.people_outline, activeIcon: Icons.people),
-    (id: 'cards', label: 'الكروت', icon: Icons.credit_card_outlined, activeIcon: Icons.credit_card),
+    (id: 'dashboard', label: 'الرئيسية', icon: Icons.home_outlined, activeIcon: Icons.home_rounded),
+    (id: 'reports', label: 'التقارير', icon: Icons.insights_outlined, activeIcon: Icons.insights_rounded),
+    (id: 'offers', label: 'العروض', icon: Icons.local_offer_outlined, activeIcon: Icons.local_offer_rounded),
+    (id: 'accounts', label: 'الحسابات', icon: Icons.groups_outlined, activeIcon: Icons.groups_rounded),
+    (id: 'cards', label: 'الكروت', icon: Icons.style_outlined, activeIcon: Icons.style_rounded),
   ];
 
   @override
   Widget build(BuildContext context) {
+    final kayan = KayanPalette.of(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       decoration: BoxDecoration(
-        color: KayanColors.surface,
-        border: const Border(top: BorderSide(color: KayanColors.borderGray)),
+        color: kayan.surface,
+        border: Border(top: BorderSide(color: kayan.border)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.03),
-            blurRadius: 10,
+            color: Colors.black.withValues(alpha: isDark ? 0.25 : 0.04),
+            blurRadius: 12,
             offset: const Offset(0, -2),
           ),
         ],
       ),
-      padding: const EdgeInsets.only(top: 8, bottom: 16),
+      padding: const EdgeInsets.only(top: 8, bottom: 10),
       child: SafeArea(
         top: false,
         child: Row(
@@ -77,7 +79,8 @@ class _NavItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = active ? KayanColors.primary : KayanColors.textSecondary;
+    final kayan = KayanPalette.of(context);
+    final color = active ? KayanColors.primary : kayan.textSecondary;
     return InkWell(
       onTap: onTap,
       splashColor: Colors.transparent,
@@ -85,10 +88,13 @@ class _NavItem extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             decoration: BoxDecoration(
-              color: active ? KayanColors.lightBackground : Colors.transparent,
+              color: active
+                  ? KayanColors.primary.withValues(alpha: 0.12)
+                  : Colors.transparent,
               borderRadius: BorderRadius.circular(999),
             ),
             child: Icon(active ? activeIcon : icon, size: 22, color: color),
@@ -98,8 +104,8 @@ class _NavItem extends StatelessWidget {
             label,
             style: TextStyle(
               fontFamily: 'Tajawal',
-              fontSize: 12,
-              fontWeight: FontWeight.bold,
+              fontSize: 11.5,
+              fontWeight: active ? FontWeight.w800 : FontWeight.w600,
               color: color,
             ),
           ),
