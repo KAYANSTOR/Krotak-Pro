@@ -10,11 +10,7 @@ import 'widgets/dashboard/quick_actions_sheet.dart';
 import 'widgets/kayan_bottom_nav.dart';
 import 'widgets/permissions_onboarding.dart';
 
-/// Bottom navigation: dashboard | reports | offers | accounts | cards
-///
-/// Pages are created lazily on first visit. This avoids surfacing runtime
-/// failures from inactive tabs while the visible tab is rendering. State is
-/// preserved after a tab has been visited once.
+/// Shell with bottom navigation matching the product video tabs.
 class HomeShell extends StatefulWidget {
   const HomeShell({super.key});
 
@@ -23,13 +19,7 @@ class HomeShell extends StatefulWidget {
 }
 
 class _HomeShellState extends State<HomeShell> {
-  static const _ids = <String>[
-    'dashboard',
-    'reports',
-    'offers',
-    'accounts',
-    'cards',
-  ];
+  static const _ids = ['dashboard', 'reports', 'offers', 'accounts', 'cards'];
 
   static const _titles = <String, String>{
     'dashboard': 'لوحة التحكم',
@@ -37,6 +27,14 @@ class _HomeShellState extends State<HomeShell> {
     'offers': 'العروض',
     'accounts': 'الحسابات',
     'cards': 'الكروت',
+  };
+
+  static const _icons = <String, IconData>{
+    'dashboard': Icons.space_dashboard_rounded,
+    'reports': Icons.insights_rounded,
+    'offers': Icons.local_offer_rounded,
+    'accounts': Icons.groups_rounded,
+    'cards': Icons.style_rounded,
   };
 
   int _index = 0;
@@ -85,7 +83,6 @@ class _HomeShellState extends State<HomeShell> {
 
   @override
   Widget build(BuildContext context) {
-    // Dashboard and cards use their own headers (match Z Net video).
     final hideAppBar = _currentId == 'dashboard' || _currentId == 'cards';
     final children = <Widget>[
       for (var i = 0; i < _pages.length; i++)
@@ -94,12 +91,24 @@ class _HomeShellState extends State<HomeShell> {
             : (_pages[i] ?? const SizedBox.shrink()),
     ];
 
+    final scheme = Theme.of(context).colorScheme;
     return Scaffold(
-      backgroundColor: const Color(0xFFF6F8F9),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: hideAppBar
           ? null
           : AppBar(
-              title: Text(_titles[_currentId] ?? 'NET'),
+              title: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(_icons[_currentId] ?? Icons.apps_rounded, color: scheme.primary, size: 22),
+                  const SizedBox(width: 8),
+                  Text(
+                    _titles[_currentId] ?? 'NET',
+                    style: const TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w800),
+                  ),
+                ],
+              ),
             ),
       body: SafeArea(
         top: hideAppBar,
@@ -120,7 +129,7 @@ class _HomeShellState extends State<HomeShell> {
                 );
               },
               tooltip: 'إجراءات سريعة',
-              child: const Icon(Icons.add),
+              child: const Icon(Icons.add_rounded),
             )
           : null,
       bottomNavigationBar: KayanBottomNav(
