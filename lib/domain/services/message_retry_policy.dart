@@ -5,7 +5,7 @@ import '../entities/message.dart';
 final class MessageRetryPolicy {
   const MessageRetryPolicy({
     this.maxAttempts = 3,
-    this.baseDelay = const Duration(seconds: 3),
+    this.baseDelay = const Duration(seconds: 2),
     this.maxDelay = const Duration(minutes: 30),
     this.confirmPendingTimeout = const Duration(minutes: 15),
   });
