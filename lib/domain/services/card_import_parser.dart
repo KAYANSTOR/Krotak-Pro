@@ -3,21 +3,20 @@ import 'services.dart';
 /// Parses pasted/imported card lines into [CardImportDraft]s.
 ///
 /// Supported line formats (one card per line):
-/// - `serial,secret`
-/// - `serial;secret`
-/// - `serial\tsecret`
-/// - `serial secret` (whitespace)
+/// - `serial,secret` / `serial;secret` / `serial\tsecret` / `serial secret`
+/// - `serial` alone when [CardImportFormat.serialOnly]
 ///
 /// Blank lines and lines starting with `#` are skipped.
-/// Returns both accepted drafts and per-line error messages (1-based).
 final class CardImportParseResult {
   const CardImportParseResult({
     required this.drafts,
     required this.errors,
+    required this.format,
   });
 
   final List<CardImportDraft> drafts;
   final List<String> errors;
+  final CardImportFormat format;
 
   bool get hasDrafts => drafts.isNotEmpty;
   bool get hasErrors => errors.isNotEmpty;
@@ -27,24 +26,60 @@ abstract final class CardImportParser {
   static final _fieldSeparator = RegExp(r'[,;\t]+');
   static final _whitespaceSeparator = RegExp(r'\s+');
 
-  static CardImportParseResult parse(String raw) {
+  static CardImportParseResult parse(
+    String raw, {
+    CardImportFormat format = CardImportFormat.serialAndPin,
+  }) {
     final drafts = <CardImportDraft>[];
     final errors = <String>[];
     final seen = <String>{};
-    final lines = raw.replaceAll('\r\n', '\n').replaceAll('\r', '\n').split('\n');
+    final lines =
+        raw.replaceAll('\r\n', '\n').replaceAll('\r', '\n').split('\n');
 
     for (var i = 0; i < lines.length; i++) {
       final lineNo = i + 1;
       final line = lines[i].trim();
       if (line.isEmpty || line.startsWith('#')) continue;
 
-      // Treat a line as a header only when it clearly contains both field
-      // names; this prevents a real serial such as `onlyserial` being lost.
       final lower = line.toLowerCase();
       final looksLikeHeader =
-          (lower.contains('serial') && lower.contains('pin')) ||
-          (line.contains('تسلسل') && line.contains('رمز'));
+          (lower.contains('serial') &&
+              (lower.contains('pin') || lower.contains('secret'))) ||
+          (line.contains('تسلسل') &&
+              (line.contains('رمز') || line.contains('سري'))) ||
+          (lineNo == 1 &&
+              (lower == 'serial' ||
+                  lower == 'رقم' ||
+                  lower.contains('رقم الكرت')));
       if (lineNo == 1 && looksLikeHeader) continue;
+
+      if (format == CardImportFormat.serialOnly) {
+        var serial = line;
+        final delimited = line
+            .split(_fieldSeparator)
+            .map((e) => e.trim())
+            .where((e) => e.isNotEmpty)
+            .toList(growable: false);
+        if (delimited.isNotEmpty) serial = delimited.first;
+        serial = serial.trim();
+        if (serial.isEmpty) {
+          errors.add('سطر $lineNo: رقم كرت فارغ');
+          continue;
+        }
+        if (seen.contains(serial)) {
+          errors.add('سطر $lineNo: تكرار رقم الكرت $serial');
+          continue;
+        }
+        seen.add(serial);
+        drafts.add(
+          CardImportDraft(
+            serialNumber: serial,
+            secretCode: '',
+            format: CardImportFormat.serialOnly,
+          ),
+        );
+        continue;
+      }
 
       List<String> parts = line
           .split(_fieldSeparator)
@@ -66,7 +101,7 @@ abstract final class CardImportParser {
       }
 
       if (parts.length < 2) {
-        errors.add('سطر $lineNo: يُتوقَّع رقم تسلسلي ورمز سري');
+        errors.add('سطر $lineNo: يُتوقَّع رقم كرت ورمز سري');
         continue;
       }
 
@@ -77,13 +112,23 @@ abstract final class CardImportParser {
         continue;
       }
       if (seen.contains(serial)) {
-        errors.add('سطر $lineNo: تكرار الرقم التسلسلي $serial');
+        errors.add('سطر $lineNo: تكرار رقم الكرت $serial');
         continue;
       }
       seen.add(serial);
-      drafts.add(CardImportDraft(serialNumber: serial, secretCode: secret));
+      drafts.add(
+        CardImportDraft(
+          serialNumber: serial,
+          secretCode: secret,
+          format: CardImportFormat.serialAndPin,
+        ),
+      );
     }
 
-    return CardImportParseResult(drafts: drafts, errors: errors);
+    return CardImportParseResult(
+      drafts: drafts,
+      errors: errors,
+      format: format,
+    );
   }
 }
