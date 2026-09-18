@@ -11,7 +11,7 @@ import '../../theme/net_semantic_colors.dart';
 import '../../theme/net_tokens.dart';
 import '../net/net_sheet.dart';
 
-/// حقول إنشاء حساب مشترك جديد — مطابقة لتصميم «إنشاء حساب مشترك جديد».
+/// حقول إنشاء حساب عميل جديد — مطابقة لتصميم «إنشاء حساب عميل جديد».
 ///
 /// كل الحقول اختيارية عدا واحد على الأقل من: جوال، استلام الرسائل، رقم بديل.
 /// نفس استدعاءات `CustomerService.create` + `addIdentifier` الحالية تمامًا.
@@ -52,7 +52,7 @@ const _custFields = <_CustField>[
   ),
   _CustField(
     key: 'name',
-    label: 'اسم المشترك',
+    label: 'اسم العميل',
     icon: Icons.person_rounded,
   ),
   _CustField(
@@ -163,7 +163,7 @@ class _CustomerCreateSheetState extends State<CustomerCreateSheet> {
     });
 
     final c = AppScope.of(context);
-    final displayName = _name ?? _primaryPhone ?? _primaryExternal ?? 'مشترك';
+    final displayName = _name ?? _primaryPhone ?? _primaryExternal ?? 'عميل';
     final primaryType = _primaryPhone != null
         ? CustomerIdentifierType.phoneNumber
         : CustomerIdentifierType.externalReference;
@@ -235,8 +235,8 @@ class _CustomerCreateSheetState extends State<CustomerCreateSheet> {
   Widget build(BuildContext context) {
     final palette = KayanPalette.of(context);
     return NetSheet(
-      title: 'إنشاء حساب مشترك جديد',
-      subtitle: 'أدخل بيانات المشترك لإنشاء حساب جديد له في دفتر الحسابات:',
+      title: 'إنشاء حساب عميل جديد',
+      subtitle: 'أدخل بيانات العميل لإنشاء حساب جديد له في دفتر الحسابات:',
       icon: Icons.person_add_alt_rounded,
       body: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(

@@ -25,15 +25,13 @@ void main() {
         mode: ThemeMode.dark,
         child: QuickActionsSheet(
           onDirectSale: () {},
-          onPosAccounts: () {},
           onAddCustomer: () {},
         ),
       ),
     );
 
     expect(find.text('إجراءات سريعة'), findsOneWidget);
-    expect(find.text('البيع المباشر'), findsOneWidget);
-    expect(find.text('حسابات نقاط البيع'), findsOneWidget);
+    expect(find.text('بيع مباشر'), findsOneWidget);
     expect(find.text('إضافة عميل'), findsOneWidget);
 
     late KayanPalette palette;

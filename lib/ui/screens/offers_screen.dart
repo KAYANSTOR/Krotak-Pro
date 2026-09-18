@@ -119,7 +119,7 @@ class _OffersScreenState extends State<OffersScreen>
           builder: (ctx, setModal) {
             return NetSheet(
               title: existing == null ? 'عرض ترويجي جديد' : 'تعديل العرض',
-              subtitle: 'عند بلوغ المشترك عتبة التراكم يُصرف كرت من فئة المكافأة.',
+              subtitle: 'عند بلوغ العميل عتبة التراكم يُصرف كرت من فئة المكافأة.',
               icon: Icons.local_offer_rounded,
               body: SingleChildScrollView(
                 padding: const EdgeInsets.fromLTRB(

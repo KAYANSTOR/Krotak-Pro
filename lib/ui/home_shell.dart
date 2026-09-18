@@ -98,25 +98,16 @@ class _HomeShellState extends State<HomeShell> {
     if (mounted) _bumpRefresh();
   }
 
-  Future<void> _openWalletsAndPos() async {
-    await AppRoutes.openWalletsAndPos(context);
-    if (mounted) _bumpRefresh();
-  }
-
-  /// Center button of the bottom bar — the same quick actions the dashboard
-  /// exposes, so every tab reaches them without extra navigation.
+  /// Center button of the bottom bar — إجراءان فقط كما هو مطلوب: البيع المباشر
+  /// وإضافة عميل (نفس معنى إنشاء حساب عميل الجديد).
   void _openQuickActions() {
     QuickActionsSheet.show(
       context,
       onDirectSale: _openDirectSale,
-      onPosAccounts: _openWalletsAndPos,
-      onAddCustomer: () => _goToId('accounts'),
-      onCreateCustomer: () async {
+      onAddCustomer: () async {
         await CustomerCreateSheet.show(context);
         if (mounted) _bumpRefresh();
       },
-      onOffers: () => _goToId('offers'),
-      onCards: () => _goToId('cards'),
     );
   }
 

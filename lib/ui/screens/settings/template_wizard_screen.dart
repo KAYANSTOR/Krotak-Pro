@@ -330,7 +330,7 @@ class _TemplateWizardScreenState extends State<TemplateWizardScreen> {
           onChanged: (v) => setState(() => _walletId = v),
         ),
         const SizedBox(height: 14),
-        _label('نوع معرّف المشترك للرسالة'),
+        _label('نوع معرّف العميل للرسالة'),
         DropdownButtonFormField<TemplateIdentifierKind>(
           value: _kind,
           decoration: _dec(),

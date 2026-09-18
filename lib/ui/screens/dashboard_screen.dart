@@ -18,8 +18,6 @@ import '../theme/net_semantic_colors.dart';
 import '../theme/net_tokens.dart';
 import '../widgets/async_views.dart';
 import '../widgets/dashboard/card_stock_sheet.dart';
-import '../widgets/dashboard/customer_create_sheet.dart';
-import '../widgets/dashboard/quick_actions_sheet.dart';
 import '../widgets/dashboard/sales_period_sheet.dart';
 import '../widgets/net/net_alert_banner.dart';
 import '../widgets/net/net_balance_card.dart';
@@ -361,21 +359,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _notifyMutation();
   }
 
-  void _openMoreActions() {
-    QuickActionsSheet.show(
-      context,
-      onDirectSale: _openDirectSale,
-      onPosAccounts: _openWalletsAndPos,
-      onAddCustomer: () => widget.onNavigateToTab?.call('accounts'),
-      onCreateCustomer: () async {
-        await CustomerCreateSheet.show(context);
-        _notifyMutation();
-      },
-      onOffers: () => widget.onNavigateToTab?.call('offers'),
-      onCards: () => widget.onNavigateToTab?.call('cards'),
-    );
-  }
-
   String? get _lowStockBannerMessage {
     if (_lowStock.isEmpty) return null;
     final parts = _lowStock
@@ -430,6 +413,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
           children: [
             NetDashboardHeader(
               networkName: _networkName,
+              // العنوان الرئيسي هو اسم الشبكة المحفوظ في الإعدادات — بلا سطر
+              // تحية (صباح/مساء الخير) كما طُلب.
+              showGreeting: false,
               dateLabel: _dateLabel.isEmpty
                   ? formatArabicDashboardDate(DateTime.now())
                   : _dateLabel,
@@ -486,11 +472,49 @@ class _DashboardScreenState extends State<DashboardScreen> {
               onTapCards: _openCardStockSheet,
             ),
 
-            // ── مبيعات اليوم / الشهر ──
+            // ── الخدمات: 4 كروت كبيرة 2×2 (اثنان وتحتهم اثنان) ──
+            NetSectionHeader(
+              title: 'الخدمات',
+              icon: Icons.grid_view_rounded,
+            ),
+            NetServiceBigGrid(
+              tiles: [
+                NetServiceBigTile(
+                  label: 'نقاط البيع',
+                  description: 'حسابات النقاط والقوالب',
+                  icon: Icons.storefront_rounded,
+                  onTap: _openWalletsAndPos,
+                ),
+                NetServiceBigTile(
+                  label: 'بيع مباشر',
+                  description: 'بيع فوري للعملاء',
+                  icon: Icons.point_of_sale_rounded,
+                  onTap: _openDirectSale,
+                ),
+                NetServiceBigTile(
+                  label: 'العروض',
+                  description: 'كروت وهدايا ترويجية',
+                  icon: Icons.card_giftcard_rounded,
+                  tint: net.premium,
+                  onTap: () => widget.onNavigateToTab?.call('offers'),
+                ),
+                NetServiceBigTile(
+                  label: 'توليد كروت',
+                  description: 'إضافة مخزون جديد',
+                  icon: Icons.style_rounded,
+                  tint: net.success,
+                  onTap: () => widget.onNavigateToTab?.call('cards'),
+                ),
+              ],
+            ),
+
+            // ── مبيعات اليوم / الشهر (تحت الخدمات) ──
             Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: NetSpacing.lg,
-                vertical: NetSpacing.sm,
+              padding: const EdgeInsets.fromLTRB(
+                NetSpacing.lg,
+                NetSpacing.sm,
+                NetSpacing.lg,
+                NetSpacing.xs,
               ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -519,69 +543,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ),
                 ],
               ),
-            ),
-
-            // ── الخدمات (شبكة أيقونات كما في الواجهة المرجعية) ──
-            NetSectionHeader(
-              title: 'الخدمات',
-              icon: Icons.grid_view_rounded,
-              actionLabel: 'المزيد',
-              onAction: _openMoreActions,
-            ),
-            NetServiceGrid(
-              tiles: [
-                NetServiceTile(
-                  label: 'الحسابات',
-                  icon: Icons.groups_rounded,
-                  onTap: () => widget.onNavigateToTab?.call('accounts'),
-                ),
-                NetServiceTile(
-                  label: 'الكروت',
-                  icon: Icons.style_rounded,
-                  onTap: () => widget.onNavigateToTab?.call('cards'),
-                ),
-                NetServiceTile(
-                  label: 'سجل العمليات',
-                  icon: Icons.receipt_long_rounded,
-                  tint: net.info,
-                  onTap: () => AppRoutes.openTransactionsLog(context),
-                ),
-                NetServiceTile(
-                  label: 'بيع مباشر',
-                  icon: Icons.point_of_sale_rounded,
-                  onTap: _openDirectSale,
-                ),
-                NetServiceTile(
-                  label: 'نقاط البيع',
-                  icon: Icons.storefront_rounded,
-                  onTap: _openWalletsAndPos,
-                ),
-                NetServiceTile(
-                  label: 'العروض',
-                  icon: Icons.card_giftcard_rounded,
-                  tint: net.premium,
-                  onTap: () => widget.onNavigateToTab?.call('offers'),
-                ),
-                NetServiceTile(
-                  label: 'التقارير',
-                  icon: Icons.insights_rounded,
-                  tint: net.info,
-                  onTap: () => widget.onNavigateToTab?.call('reports'),
-                ),
-                NetServiceTile(
-                  label: 'الرسائل',
-                  icon: Icons.mark_email_unread_rounded,
-                  tint: net.warning,
-                  badgeCount: _attentionMessagesCount,
-                  onTap: _openAttentionMessages,
-                ),
-                NetServiceTile(
-                  label: 'فحص النظام',
-                  icon: Icons.health_and_safety_rounded,
-                  tint: net.success,
-                  onTap: _openSystemCheck,
-                ),
-              ],
             ),
 
             NetSectionHeader(
