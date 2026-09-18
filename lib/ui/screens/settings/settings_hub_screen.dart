@@ -4,8 +4,11 @@ import '../../../core/result.dart';
 import '../../../domain/entities/setting.dart';
 import '../../app_scope.dart';
 import '../../routing/app_routes.dart';
-import '../../theme/kayan_colors.dart';
 import '../../theme/kayan_palette.dart';
+import '../../theme/net_semantic_colors.dart';
+import '../../theme/net_tokens.dart';
+import '../../widgets/async_views.dart';
+import '../../widgets/net/net_surface_card.dart';
 import '../../widgets/settings/settings_cards.dart';
 import '../../widgets/settings/settings_section_header.dart';
 import '../system_check_screen.dart';
@@ -43,10 +46,176 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
   bool _autoPosSettlement = SettingDefaults.autoPosSettlementEnabled;
   int _lowStock = SettingDefaults.lowStockThreshold;
 
+  // ── Settings search (presentation only) ──
+  final _searchCtrl = TextEditingController();
+  String _query = '';
+
+  static const _systemKeywords =
+      'اسم الشبكة المعالجة التلقائية الفئات الرسائل القديمة تنبيه العمليات سلفني قوالب رسائل انخفاض مخزون شرائح الاتصال فحص النظام';
+  static const _licenseKeywords = 'تجديد الاشتراك الترخيص رصيد الرسائل الباقة';
+  static const _themeKeywords = 'الوضع الداكن المظهر الثيم ليلي فاتح';
+  static const _walletsKeywords =
+      'المحافظ نقاط البيع محاكاة القوالب قوالب التحويل طلبات الرصيد ملخص العمليات اليومي التسوية التلقائية';
+  static const _maintenanceKeywords = 'تنظيف السجلات تصدير السجل الأرشفة';
+
+  bool _sectionVisible(String keywords) {
+    final q = _query.trim().toLowerCase();
+    if (q.isEmpty) return true;
+    return keywords.toLowerCase().contains(q);
+  }
+
+  bool get _anySectionVisible =>
+      _sectionVisible(_systemKeywords) ||
+      _sectionVisible(_licenseKeywords) ||
+      _sectionVisible(_themeKeywords) ||
+      _sectionVisible(_walletsKeywords) ||
+      _sectionVisible(_maintenanceKeywords);
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) => _load());
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  Widget _searchField(BuildContext context) {
+    final palette = KayanPalette.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: NetSpacing.sm),
+      child: TextField(
+        controller: _searchCtrl,
+        onChanged: (v) => setState(() => _query = v),
+        style: TextStyle(
+          fontFamily: NetTypography.family,
+          color: palette.textPrimary,
+        ),
+        decoration: InputDecoration(
+          hintText: 'ابحث في الإعدادات...',
+          hintStyle: TextStyle(
+            fontFamily: NetTypography.family,
+            color: palette.textTertiary,
+            fontSize: 13,
+          ),
+          prefixIcon: Icon(Icons.search_rounded, color: palette.textTertiary),
+          suffixIcon: _query.isEmpty
+              ? null
+              : IconButton(
+                  tooltip: 'مسح',
+                  icon: const Icon(Icons.close_rounded, size: 18),
+                  onPressed: () {
+                    _searchCtrl.clear();
+                    setState(() => _query = '');
+                  },
+                ),
+          filled: true,
+          fillColor: palette.surface,
+          border: OutlineInputBorder(
+            borderRadius: NetRadii.pillAll,
+            borderSide: BorderSide.none,
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: NetRadii.pillAll,
+            borderSide: BorderSide(color: palette.border),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: NetRadii.pillAll,
+            borderSide: BorderSide(color: palette.primary, width: 1.4),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Operational readiness at a glance (derived from the settings already loaded).
+  Widget _readinessCard(BuildContext context) {
+    final net = context.netColors;
+    final palette = KayanPalette.of(context);
+    final pills = <({String label, bool ok, IconData icon})>[
+      (label: 'المعالجة التلقائية', ok: _autoSms, icon: Icons.bolt_rounded),
+      (label: 'تنبيه التدخل', ok: _interventionAlert, icon: Icons.notifications_active_rounded),
+      (label: 'سلفني', ok: _salafni, icon: Icons.card_giftcard_rounded),
+      (label: 'المظهر الداكن', ok: _darkMode, icon: Icons.dark_mode_rounded),
+    ];
+
+    return NetSurfaceCard(
+      margin: const EdgeInsets.only(top: NetSpacing.sm, bottom: NetSpacing.sm),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.health_and_safety_rounded,
+                size: NetSizes.iconSm,
+                color: palette.primary,
+              ),
+              const SizedBox(width: NetSpacing.sm),
+              Expanded(
+                child: Text(
+                  'جاهزية التشغيل',
+                  style: TextStyle(
+                    fontFamily: NetTypography.family,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 14.5,
+                    color: palette.textPrimary,
+                  ),
+                ),
+              ),
+              TextButton.icon(
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const SystemCheckScreen()),
+                ),
+                icon: const Icon(Icons.chevron_left_rounded, size: NetSizes.iconSm),
+                label: const Text('فحص النظام'),
+              ),
+            ],
+          ),
+          const SizedBox(height: NetSpacing.sm),
+          Wrap(
+            spacing: NetSpacing.sm,
+            runSpacing: NetSpacing.sm,
+            children: [
+              for (final pill in pills)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: NetSpacing.sm,
+                    vertical: NetSpacing.xs,
+                  ),
+                  decoration: BoxDecoration(
+                    color: pill.ok ? net.successContainer : palette.surfaceVariant,
+                    borderRadius: NetRadii.pillAll,
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        pill.ok ? Icons.check_circle_rounded : Icons.cancel_outlined,
+                        size: 13,
+                        color: pill.ok ? net.success : palette.textSecondary,
+                      ),
+                      const SizedBox(width: NetSpacing.xs),
+                      Text(
+                        pill.label,
+                        style: TextStyle(
+                          fontFamily: NetTypography.family,
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w700,
+                          color: pill.ok ? net.success : palette.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _load() async {
@@ -151,15 +320,29 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
               _Header(onBack: () => Navigator.of(context).maybePop()),
               Expanded(
                 child: _loading
-                    ? const Center(child: CircularProgressIndicator(color: KayanColors.primary))
+                    ? const AsyncLoadingView(skeleton: true, skeletonCount: 5)
                     : RefreshIndicator(
                         onRefresh: _load,
-                        color: KayanColors.primary,
+                        color: KayanPalette.of(context).primary,
                         child: ListView(
                           padding: const EdgeInsets.fromLTRB(16, 4, 16, 40),
                           children: [
-                            const SettingsSectionHeader(title: 'النظام'),
-                            SettingsGroupCard(
+                            _readinessCard(context),
+                            _searchField(context),
+                            if (!_anySectionVisible)
+                              Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 24),
+                                child: AsyncEmptyView(
+                                  message: 'لا توجد إعدادات مطابقة للبحث',
+                                  icon: Icons.search_off_rounded,
+                                  hint: 'جرّب كلمة أخرى مثل: الرسائل، المظهر، المحافظ',
+                                  compact: true,
+                                ),
+                              ),
+                            if (_sectionVisible(_systemKeywords))
+                              const SettingsSectionHeader(title: 'النظام'),
+                            if (_sectionVisible(_systemKeywords))
+                              SettingsGroupCard(
                               children: [
                                 SettingsGroupNavRow(
                                   icon: Icons.badge_outlined,
@@ -271,7 +454,9 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
                                 ),
                               ],
                             ),
-                            const SettingsSectionHeader(title: 'الترخيص'),
+                            if (_sectionVisible(_licenseKeywords))
+                              const SettingsSectionHeader(title: 'الترخيص'),
+                            if (_sectionVisible(_licenseKeywords))
                             SettingsGroupCard(
                               children: [
                                 SettingsGroupNavRow(
@@ -287,7 +472,9 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
                                 ),
                               ],
                             ),
-                            const SettingsSectionHeader(title: 'المظهر'),
+                            if (_sectionVisible(_themeKeywords))
+                              const SettingsSectionHeader(title: 'المظهر'),
+                            if (_sectionVisible(_themeKeywords))
                             SettingsGroupCard(
                               children: [
                                 SettingsGroupSwitchRow(
@@ -303,7 +490,9 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
                                 ),
                               ],
                             ),
-                            const SettingsSectionHeader(title: 'إعدادات المحافظ ونقاط البيع'),
+                            if (_sectionVisible(_walletsKeywords))
+                              const SettingsSectionHeader(title: 'إعدادات المحافظ ونقاط البيع'),
+                            if (_sectionVisible(_walletsKeywords))
                             SettingsGroupCard(
                               children: [
                                 SettingsGroupNavRow(
@@ -368,7 +557,9 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
                                 ),
                               ],
                             ),
-                            const SettingsSectionHeader(title: 'الصيانة'),
+                            if (_sectionVisible(_maintenanceKeywords))
+                              const SettingsSectionHeader(title: 'الصيانة'),
+                            if (_sectionVisible(_maintenanceKeywords))
                             SettingsGroupCard(
                               children: [
                                 SettingsGroupNavRow(
@@ -413,19 +604,34 @@ class _Header extends StatelessWidget {
       child: Row(
         children: [
           IconButton(
+            tooltip: 'رجوع',
             onPressed: onBack,
-            icon: Icon(Icons.arrow_forward, color: scheme.onSurface),
+            icon: Icon(Icons.arrow_forward_rounded, color: scheme.onSurface),
           ),
           Expanded(
-            child: Text(
-              'الإعدادات',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontFamily: 'Tajawal',
-                fontSize: 18,
-                fontWeight: FontWeight.w700,
-                color: scheme.onSurface,
-              ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'الإعدادات',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontFamily: NetTypography.family,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                    color: scheme.onSurface,
+                  ),
+                ),
+                Text(
+                  'تحكم كامل بالشبكة والتشغيل والمظهر',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontFamily: NetTypography.family,
+                    fontSize: 11.5,
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
             ),
           ),
           const SizedBox(width: 48),
