@@ -8,6 +8,7 @@ import '../../domain/entities/transaction.dart';
 import '../../domain/services/local_promotion_progress_service.dart';
 import '../app_scope.dart';
 import '../theme/kayan_colors.dart';
+import '../theme/kayan_palette.dart';
 import '../theme/net_semantic_colors.dart';
 import '../widgets/async_views.dart';
 import '../widgets/customer_promotion_progress.dart';
@@ -405,7 +406,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                     ),
                     Text(
                       _fmtMoney(_balance),
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontFamily: 'Tajawal',
                         fontSize: 26,
                         fontWeight: FontWeight.w800,

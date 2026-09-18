@@ -268,7 +268,7 @@ class _CategoryStockTile extends StatelessWidget {
             const SizedBox(width: 8),
             Text(
               '${row.reserved} محجوز',
-              style: const TextStyle(
+              style: TextStyle(
                 fontFamily: 'Tajawal',
                 fontSize: 12,
                 color: context.netColors.warning,

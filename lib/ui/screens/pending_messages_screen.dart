@@ -8,6 +8,7 @@ import '../../domain/entities/transaction.dart';
 import '../../domain/services/pending_attention_alarm_service.dart';
 import '../app_scope.dart';
 import '../theme/kayan_colors.dart';
+import '../theme/kayan_palette.dart';
 import '../theme/net_semantic_colors.dart';
 import '../widgets/async_views.dart';
 

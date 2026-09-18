@@ -65,7 +65,7 @@ class CustomerPromotionProgressSection extends StatelessWidget {
                             ),
                           ),
                           if (p.qualified)
-                            const Text(
+                            Text(
                               'مستحق',
                               style: TextStyle(
                                 fontFamily: 'Tajawal',

@@ -5,6 +5,7 @@ import '../../domain/entities/money.dart';
 import '../../domain/entities/setting.dart';
 import '../../domain/services/rejected_message_catalog.dart';
 import '../app_scope.dart';
+import '../theme/kayan_palette.dart';
 import '../theme/net_semantic_colors.dart';
 import '../widgets/async_views.dart';
 

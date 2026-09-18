@@ -249,7 +249,7 @@ class _WalletsPosScreenState extends State<WalletsPosScreen>
                       Text(
                         existing == null ? 'محفظة جديدة' : 'تعديل محفظة',
                         textAlign: TextAlign.center,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontFamily: 'Tajawal',
                           fontWeight: FontWeight.w800,
                           fontSize: 18,
