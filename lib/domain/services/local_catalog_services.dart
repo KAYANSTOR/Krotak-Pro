@@ -93,11 +93,20 @@ final class LocalCardCatalogService implements CardCatalogService {
       for (final draft in drafts) {
         final serial = draft.serialNumber.trim();
         final secret = draft.secretCode.trim();
-        if (serial.isEmpty || secret.isEmpty) {
+        final serialOnly = draft.format == CardImportFormat.serialOnly;
+        if (serial.isEmpty) {
           return const Failure(
             AppFailure(
               code: 'invalid_card_import',
-              message: 'Serial number and secret are required',
+              message: 'رقم الكرت مطلوب',
+            ),
+          );
+        }
+        if (!serialOnly && secret.isEmpty) {
+          return const Failure(
+            AppFailure(
+              code: 'invalid_card_import',
+              message: 'رمز الكرت (PIN) مطلوب في وضع الرقم والرمز',
             ),
           );
         }
@@ -106,7 +115,7 @@ final class LocalCardCatalogService implements CardCatalogService {
         if (existingSerial is Failure<Card?>) return Failure(existingSerial.error);
         if ((existingSerial as Success<Card?>).value != null) {
           return const Failure(
-            AppFailure(code: 'duplicate_serial', message: 'Card serial already exists'),
+            AppFailure(code: 'duplicate_serial', message: 'رقم الكرت موجود مسبقاً'),
           );
         }
 
@@ -115,7 +124,7 @@ final class LocalCardCatalogService implements CardCatalogService {
             id: ids.next('card'),
             categoryId: categoryId,
             serialNumber: serial,
-            secretCode: secret,
+            secretCode: serialOnly ? '' : secret,
             status: CardStatus.available,
           ),
         );
@@ -245,6 +254,11 @@ final class LocalPointOfSaleCatalogService implements PointOfSaleCatalogService 
   final AuditLogRepository auditLogs;
   final Clock clock;
   final IdGenerator ids;
+
+  @override
+  Future<Result<PointOfSale>> savePointOfSale({required String id, required String name, required PointOfSaleStatus status}) async {
+    throw UnimplementedError();
+  }
 
   @override
   Future<Result<PointOfSale>> savePointOfSale({required String name}) async {
