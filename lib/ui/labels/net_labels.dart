@@ -111,6 +111,22 @@ Color messageStatusColor(MessageProcessingStatus status, NetSemanticColors net) 
       MessageProcessingStatus.failed => net.error,
     };
 
+Color messageStatusContainer(
+  MessageProcessingStatus status,
+  NetSemanticColors net,
+) =>
+    switch (status) {
+      MessageProcessingStatus.received => net.infoContainer,
+      MessageProcessingStatus.parsed => net.pendingContainer,
+      MessageProcessingStatus.pending => net.pendingContainer,
+      MessageProcessingStatus.sending => net.pendingContainer,
+      MessageProcessingStatus.processed => net.successContainer,
+      MessageProcessingStatus.failedMaxAttempts => net.rejectedContainer,
+      MessageProcessingStatus.rejected => net.rejectedContainer,
+      MessageProcessingStatus.recovered => net.warningContainer,
+      MessageProcessingStatus.failed => net.errorContainer,
+    };
+
 String promotionStatusLabel(PromotionStatus status) => switch (status) {
       PromotionStatus.active => 'نشط',
       PromotionStatus.disabled => 'معطّل',
