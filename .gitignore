@@ -44,5 +44,9 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 
+# Android stable upload keystore + credentials (secret) — see docs/.
+android/key.properties
+android/app/keystore/
+
 # Widget Preview related
 .widget_preview/
