@@ -4,6 +4,7 @@ import '../../../core/result.dart';
 import '../../../domain/entities/message.dart';
 import '../../../domain/entities/wallet.dart';
 import '../../app_scope.dart';
+import '../../theme/kayan_palette.dart';
 import '../../theme/net_semantic_colors.dart';
 import '../../widgets/async_views.dart';
 import 'template_simulation_screen.dart';
@@ -127,7 +128,9 @@ class _TemplatesScreenState extends State<TemplatesScreen> {
               child: const Text('إلغاء', style: TextStyle(fontFamily: 'Tajawal')),
             ),
             FilledButton(
-              style: FilledButton.styleFrom(backgroundColor: const Color(0xFFDC2626)),
+              style: FilledButton.styleFrom(
+                backgroundColor: context.netColors.rejected,
+              ),
               onPressed: () => Navigator.pop(ctx, true),
               child: const Text('حذف', style: TextStyle(fontFamily: 'Tajawal')),
             ),
@@ -178,7 +181,10 @@ class _TemplatesScreenState extends State<TemplatesScreen> {
                   ),
                 ),
                 ListTile(
-                  leading: const Icon(Icons.edit_outlined, color: Color(0xFF0F766E)),
+                  leading: Icon(
+                    Icons.edit_outlined,
+                    color: context.kayan.primary,
+                  ),
                   title: const Text(
                     'تعديل',
                     style: TextStyle(
@@ -192,13 +198,16 @@ class _TemplatesScreenState extends State<TemplatesScreen> {
                   },
                 ),
                 ListTile(
-                  leading: const Icon(Icons.delete_outline, color: Color(0xFFDC2626)),
+                  leading: Icon(
+                    Icons.delete_outline_rounded,
+                    color: context.netColors.rejected,
+                  ),
                   title: const Text(
                     'حذف',
                     style: TextStyle(
                       fontFamily: 'Tajawal',
                       fontWeight: FontWeight.w600,
-                      color: Color(0xFFDC2626),
+                      color: context.netColors.rejected,
                     ),
                   ),
                   onTap: () {
@@ -274,7 +283,7 @@ class _TemplatesScreenState extends State<TemplatesScreen> {
                   ),
                 ),
               ),
-              icon: const Icon(Icons.science_outlined, color: Color(0xFF0F766E)),
+              icon: Icon(Icons.science_outlined, color: context.kayan.primary),
             ),
           ],
         ),
@@ -304,7 +313,7 @@ class _TemplatesScreenState extends State<TemplatesScreen> {
                         onAction: () => _openWizard(),
                       )
                     : RefreshIndicator(
-                        color: const Color(0xFF0F766E),
+                        color: context.kayan.primary,
                         onRefresh: _load,
                         child: ListView.separated(
                           padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
@@ -378,7 +387,7 @@ class _TemplateCard extends StatelessWidget {
             // Switch
             Switch.adaptive(
               value: active,
-              activeColor: const Color(0xFF0F766E),
+              activeColor: context.kayan.primary,
               onChanged: onToggle,
             ),
             const SizedBox(width: 4),

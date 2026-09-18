@@ -361,7 +361,7 @@ class _IconBadge extends StatelessWidget {
       decoration: BoxDecoration(
         color: isDark
             ? KayanColors.primary.withValues(alpha: 0.18)
-            : const Color(0xFFE8F5F5),
+            : KayanColors.lightBackground,
         borderRadius: BorderRadius.circular(12),
       ),
       child: Icon(icon, color: KayanColors.primary, size: 22),

@@ -7,6 +7,7 @@ import '../../domain/entities/setting.dart';
 import '../../domain/entities/transaction.dart';
 import '../../domain/services/pending_attention_alarm_service.dart';
 import '../app_scope.dart';
+import '../theme/kayan_colors.dart';
 import '../theme/net_semantic_colors.dart';
 import '../widgets/async_views.dart';
 
@@ -172,7 +173,7 @@ class _PendingMessagesScreenState extends State<PendingMessagesScreen>
           'تم الاعتماد وتسجيل الإيداع',
           style: TextStyle(fontFamily: 'Tajawal'),
         ),
-        backgroundColor: Color(0xFF059669),
+        backgroundColor: KayanColors.success,
       ),
     );
     await _load();
@@ -200,7 +201,7 @@ class _PendingMessagesScreenState extends State<PendingMessagesScreen>
             ),
             FilledButton(
               style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFFDC2626),
+                backgroundColor: KayanColors.error,
               ),
               onPressed: () => Navigator.pop(ctx, true),
               child: const Text('رفض', style: TextStyle(fontFamily: 'Tajawal')),
@@ -287,8 +288,8 @@ class _PendingMessagesScreenState extends State<PendingMessagesScreen>
                 tooltip: _alarm.isMuted ? 'تشغيل التنبيه' : 'كتم التنبيه',
                 onPressed: _toggleMute,
                 icon: Icon(
-                  _alarm.isMuted ? Icons.volume_off : Icons.volume_up,
-                  color: const Color(0xFF0F766E),
+                  _alarm.isMuted ? Icons.volume_off_rounded : Icons.volume_up_rounded,
+                  color: context.kayan.primary,
                 ),
               ),
           ],
@@ -415,7 +416,7 @@ class _PendingMessagesScreenState extends State<PendingMessagesScreen>
                               icon: Icons.mark_email_unread_outlined,
                             )
                           : RefreshIndicator(
-                              color: const Color(0xFF0F766E),
+                              color: context.kayan.primary,
                               onRefresh: _load,
                               child: ListView.separated(
                                 padding:
@@ -596,7 +597,7 @@ class _PendingCard extends StatelessWidget {
                   child: OutlinedButton(
                     onPressed: onReject,
                     style: OutlinedButton.styleFrom(
-                      foregroundColor: const Color(0xFFDC2626),
+                      foregroundColor: context.netColors.rejected,
                       side: BorderSide(
                         color: context.netColors.rejected.withValues(alpha: 0.4),
                       ),
@@ -620,7 +621,6 @@ class _PendingCard extends StatelessWidget {
                   child: FilledButton(
                     onPressed: onApprove,
                     style: FilledButton.styleFrom(
-                      backgroundColor: const Color(0xFF0F766E),
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),

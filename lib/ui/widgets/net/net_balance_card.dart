@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../../theme/kayan_colors.dart';
 import '../../theme/net_semantic_colors.dart';
 import '../../theme/net_tokens.dart';
 import 'net_animated_counter.dart';

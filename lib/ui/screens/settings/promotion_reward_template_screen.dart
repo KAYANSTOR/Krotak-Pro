@@ -4,7 +4,6 @@ import '../../../core/result.dart';
 import '../../../domain/entities/setting.dart';
 import '../../../domain/services/local_promotion_fulfillment_service.dart';
 import '../../app_scope.dart';
-import '../../theme/kayan_colors.dart';
 import '../../widgets/async_views.dart';
 
 class PromotionRewardTemplateScreen extends StatefulWidget {

@@ -4,7 +4,6 @@ import '../../../core/result.dart';
 import '../../../domain/entities/setting.dart';
 import '../../../domain/services/local_advance_service.dart';
 import '../../app_scope.dart';
-import '../../theme/kayan_colors.dart';
 import '../../theme/net_semantic_colors.dart';
 import '../../widgets/async_views.dart';
 
@@ -162,7 +161,6 @@ class _SalafniTemplatesScreenState extends State<SalafniTemplatesScreen> {
                   const SizedBox(height: 8),
                   FilledButton.icon(
                     style: FilledButton.styleFrom(
-                      backgroundColor: const Color(0xFF0F766E),
                       minimumSize: const Size.fromHeight(48),
                     ),
                     onPressed: _saving ? null : _save,

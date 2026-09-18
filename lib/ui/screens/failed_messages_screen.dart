@@ -223,7 +223,7 @@ class _FailedMessagesScreenState extends State<FailedMessagesScreen> {
                                         style: const TextStyle(
                                           fontFamily: 'Tajawal',
                                           fontSize: 12,
-                                          color: Color(0xFFB45309),
+                                          color: context.netColors.warning,
                                         ),
                                       ),
                                     ],

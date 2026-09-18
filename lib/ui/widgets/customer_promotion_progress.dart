@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../theme/net_semantic_colors.dart';
+
 import '../../domain/services/local_promotion_progress_service.dart';
 
 /// بطاقات تقدم العروض لشاشة تفاصيل الحساب.
@@ -43,7 +45,7 @@ class CustomerPromotionProgressSection extends StatelessWidget {
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
                       color: p.qualified
-                          ? const Color(0xFF059669).withValues(alpha: 0.45)
+                          ? context.netColors.available.withValues(alpha: 0.45)
                           : Theme.of(context).colorScheme.outlineVariant,
                     ),
                   ),
@@ -68,7 +70,7 @@ class CustomerPromotionProgressSection extends StatelessWidget {
                               style: TextStyle(
                                 fontFamily: 'Tajawal',
                                 fontSize: 11,
-                                color: Color(0xFF059669),
+                                color: context.netColors.available,
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
@@ -81,7 +83,7 @@ class CustomerPromotionProgressSection extends StatelessWidget {
                         borderRadius: BorderRadius.circular(6),
                         backgroundColor: Theme.of(context).colorScheme.outlineVariant,
                         color: p.qualified
-                            ? const Color(0xFF059669)
+                            ? context.netColors.available
                             : Theme.of(context).colorScheme.primary,
                       ),
                       const SizedBox(height: 4),

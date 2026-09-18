@@ -29,7 +29,7 @@ class NetAppBarTitle extends StatelessWidget {
           decoration: BoxDecoration(
             color: isDark
                 ? KayanColors.primary.withValues(alpha: 0.22)
-                : const Color(0xFFE8F5F5),
+                : KayanColors.lightBackground,
             borderRadius: BorderRadius.circular(11),
           ),
           child: Icon(icon, size: 20, color: KayanColors.primary),

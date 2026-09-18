@@ -7,6 +7,7 @@ import '../../domain/entities/money.dart';
 import '../../domain/entities/transaction.dart';
 import '../../domain/services/local_promotion_progress_service.dart';
 import '../app_scope.dart';
+import '../theme/kayan_colors.dart';
 import '../theme/net_semantic_colors.dart';
 import '../widgets/async_views.dart';
 import '../widgets/customer_promotion_progress.dart';
@@ -91,10 +92,10 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
         textDirection: TextDirection.rtl,
         child: AlertDialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Row(
+          title: Row(
             children: [
-              Icon(Icons.phone_android, color: Color(0xFF0F766E)),
-              SizedBox(width: 8),
+              Icon(Icons.phone_android, color: context.kayan.primary),
+              const SizedBox(width: 8),
               Expanded(
                 child: Text(
                   'ربط رقم جوال (GSM)',
@@ -148,9 +149,6 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
               child: const Text('إلغاء', style: TextStyle(fontFamily: 'Tajawal')),
             ),
             FilledButton(
-              style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFF0F766E),
-              ),
               onPressed: () => Navigator.pop(ctx, true),
               child: const Text(
                 'ربط وصرف الكروت',
@@ -186,7 +184,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text('تم ربط الجوال', style: TextStyle(fontFamily: 'Tajawal')),
-        backgroundColor: Color(0xFF059669),
+        backgroundColor: KayanColors.success,
       ),
     );
     await _load();
@@ -233,7 +231,6 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                 child: const Text('إلغاء', style: TextStyle(fontFamily: 'Tajawal')),
               ),
               FilledButton(
-                style: FilledButton.styleFrom(backgroundColor: const Color(0xFF0F766E)),
                 onPressed: () => Navigator.pop(ctx, true),
                 child: const Text('تنفيذ', style: TextStyle(fontFamily: 'Tajawal')),
               ),
@@ -343,12 +340,12 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
           actions: [
             IconButton(
               onPressed: _load,
-              icon: const Icon(Icons.refresh, color: Color(0xFF0F766E)),
+              icon: Icon(Icons.refresh_rounded, color: context.kayan.primary),
             ),
           ],
         ),
         body: RefreshIndicator(
-          color: const Color(0xFF0F766E),
+          color: context.kayan.primary,
           onRefresh: _load,
           child: ListView(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
@@ -412,7 +409,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                         fontFamily: 'Tajawal',
                         fontSize: 26,
                         fontWeight: FontWeight.w800,
-                        color: Color(0xFF0F766E),
+                        color: context.kayan.primary,
                       ),
                     ),
                   ],
@@ -425,10 +422,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                 children: [
                   FilledButton.icon(
                     onPressed: _linkPhone,
-                    style: FilledButton.styleFrom(
-                      backgroundColor: const Color(0xFF0F766E),
-                    ),
-                    icon: const Icon(Icons.link, size: 18),
+                    icon: const Icon(Icons.link_rounded, size: 18),
                     label: Text(
                       _hasPrimaryPhone ? 'تغيير الجوال' : 'ربط الجوال',
                       style: const TextStyle(fontFamily: 'Tajawal'),
@@ -486,11 +480,11 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                     child: Row(
                       children: [
                         Icon(
-                          credit ? Icons.arrow_downward : Icons.arrow_upward,
+                          credit ? Icons.arrow_downward_rounded : Icons.arrow_upward_rounded,
                           size: 18,
                           color: credit
-                              ? const Color(0xFF059669)
-                              : const Color(0xFFDC2626),
+                              ? context.netColors.available
+                              : context.netColors.rejected,
                         ),
                         const SizedBox(width: 8),
                         Expanded(
@@ -522,8 +516,8 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                             fontFamily: 'Tajawal',
                             fontWeight: FontWeight.w700,
                             color: credit
-                                ? const Color(0xFF059669)
-                                : const Color(0xFFDC2626),
+                                ? context.netColors.available
+                                : context.netColors.rejected,
                           ),
                         ),
                       ],

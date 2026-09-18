@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../core/result.dart';
 import '../../../domain/entities/setting.dart';
 import '../../app_scope.dart';
+import '../../theme/kayan_palette.dart';
 import '../../widgets/async_views.dart';
 
 /// إعدادات شرائح الاتصال المزدوجة + Auto-Failover — مطابق فيديو Z Net.
@@ -207,7 +208,7 @@ class _SimSettingsScreenState extends State<SimSettingsScreen> {
                               style: TextStyle(fontFamily: 'Tajawal', fontSize: 12),
                             ),
                             value: _listen,
-                            activeColor: const Color(0xFF0F766E),
+                            activeColor: context.kayan.primary,
                             onChanged: (v) => setState(() => _listen = v),
                           ),
                           const Divider(height: 20),
@@ -222,7 +223,7 @@ class _SimSettingsScreenState extends State<SimSettingsScreen> {
                               style: TextStyle(fontFamily: 'Tajawal', fontSize: 12),
                             ),
                             value: _failover,
-                            activeColor: const Color(0xFF0F766E),
+                            activeColor: context.kayan.primary,
                             onChanged: (v) => setState(() => _failover = v),
                           ),
                         ],
@@ -230,7 +231,6 @@ class _SimSettingsScreenState extends State<SimSettingsScreen> {
                       const SizedBox(height: 20),
                       FilledButton(
                         style: FilledButton.styleFrom(
-                          backgroundColor: const Color(0xFF0F766E),
                           padding: const EdgeInsets.symmetric(vertical: 14),
                         ),
                         onPressed: _saving ? null : _save,

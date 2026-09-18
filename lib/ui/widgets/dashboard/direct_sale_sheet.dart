@@ -154,7 +154,9 @@ class _DirectSaleSheetState extends State<DirectSaleSheet> {
                         label: Text(_label(m), style: const TextStyle(fontFamily: 'Tajawal')),
                         selected: _method == m,
                         onSelected: (_) => setState(() => _method = m),
-                        selectedColor: const Color(0xFFCCFBF1),
+                        selectedColor: Theme.of(context)
+                            .colorScheme
+                            .primaryContainer,
                       ),
                   ],
                 ),
