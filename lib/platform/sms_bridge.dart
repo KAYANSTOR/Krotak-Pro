@@ -33,6 +33,26 @@ class SmsBridge {
     await _methods.invokeMethod<void>('sendSms', {'to': to, 'body': body});
   }
 
+  /// SMS stored by the Android receiver while Flutter was not listening.
+  Future<List<IncomingSmsEvent>> peekPendingSms() async {
+    final raw = await _methods.invokeMethod<List<dynamic>>('peekPendingSms');
+    if (raw == null) return const [];
+    return raw.map((e) {
+      final map = Map<String, dynamic>.from(e as Map);
+      return IncomingSmsEvent(
+        sender: map['sender'] as String? ?? '',
+        body: map['body'] as String? ?? '',
+        timestampMillis: (map['timestampMillis'] as num?)?.toInt() ?? 0,
+        pendingId: map['id'] as String?,
+      );
+    }).toList(growable: false);
+  }
+
+  Future<void> ackPendingSms(List<String> ids) async {
+    if (ids.isEmpty) return;
+    await _methods.invokeMethod<void>('ackPendingSms', {'ids': ids});
+  }
+
   Stream<IncomingSmsEvent> get incomingSms {
     return _stream ??= _events.receiveBroadcastStream().map((event) {
       final map = Map<String, dynamic>.from(event as Map);
@@ -50,11 +70,13 @@ final class IncomingSmsEvent {
     required this.sender,
     required this.body,
     required this.timestampMillis,
+    this.pendingId,
   });
 
   final String sender;
   final String body;
   final int timestampMillis;
+  final String? pendingId;
 
   DateTime get receivedAt =>
       DateTime.fromMillisecondsSinceEpoch(timestampMillis, isUtc: true);
