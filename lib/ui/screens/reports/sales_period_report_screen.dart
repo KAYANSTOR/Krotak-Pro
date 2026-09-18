@@ -9,6 +9,7 @@ import '../../theme/kayan_palette.dart';
 import '../../theme/net_semantic_colors.dart';
 import '../../theme/net_tokens.dart';
 import '../../widgets/async_views.dart';
+import '../../widgets/net/net_indicators.dart';
 import '../../widgets/net/net_initial_avatar.dart';
 import '../../widgets/net/net_surface_card.dart';
 
@@ -159,6 +160,27 @@ class _SalesPeriodReportScreenState extends State<SalesPeriodReportScreen> {
     );
   }
 
+  List<NetBarDatum> _topCustomerBars(BuildContext context) {
+    final net = context.netColors;
+    final totals = <String, int>{};
+    for (final row in _rows) {
+      totals[row.customerName] =
+          (totals[row.customerName] ?? 0) + row.sale.amount.minorUnits;
+    }
+    final ranked = totals.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    final top = ranked.take(8).toList();
+    return [
+      for (var i = 0; i < top.length; i++)
+        NetBarDatum(
+          label: top[i].key,
+          value: top[i].value / 100,
+          color: i == 0 ? net.success : net.info,
+          valueLabel: formatMoneyMinor(top[i].value),
+        ),
+    ];
+  }
+
   @override
   Widget build(BuildContext context) {
     final palette = KayanPalette.of(context);
@@ -210,58 +232,71 @@ class _SalesPeriodReportScreenState extends State<SalesPeriodReportScreen> {
               padding: NetSpacing.pageH,
               child: NetSurfaceCard(
                 padding: NetSpacing.cardTight,
-                child: Row(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Icon(
-                      Icons.receipt_long_rounded,
-                      size: 20,
-                      color: palette.primary,
-                    ),
-                    const SizedBox(width: NetSpacing.sm),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'إجمالي المبيعات المكتملة',
-                            style: TextStyle(
-                              fontFamily: NetTypography.family,
-                              fontSize: 12.5,
-                              color: palette.textSecondary,
-                            ),
-                          ),
-                          const SizedBox(height: NetSpacing.xxs),
-                          Text(
-                            formatMoneyMinor(_totalMinor),
-                            style: TextStyle(
-                              fontFamily: NetTypography.family,
-                              fontSize: 18,
-                              fontWeight: FontWeight.w800,
-                              color: palette.textPrimary,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: NetSpacing.sm,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: context.netColors.availableContainer,
-                        borderRadius: BorderRadius.circular(NetRadii.xs),
-                      ),
-                      child: Text(
-                        '${_rows.length} كرت',
-                        style: TextStyle(
-                          fontFamily: NetTypography.family,
-                          fontSize: 11.5,
-                          fontWeight: FontWeight.w700,
-                          color: context.netColors.available,
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.receipt_long_rounded,
+                          size: 20,
+                          color: palette.primary,
                         ),
-                      ),
+                        const SizedBox(width: NetSpacing.sm),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'إجمالي المبيعات المكتملة',
+                                style: TextStyle(
+                                  fontFamily: NetTypography.family,
+                                  fontSize: 12.5,
+                                  color: palette.textSecondary,
+                                ),
+                              ),
+                              const SizedBox(height: NetSpacing.xxs),
+                              Text(
+                                formatMoneyMinor(_totalMinor),
+                                style: TextStyle(
+                                  fontFamily: NetTypography.family,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w800,
+                                  color: palette.textPrimary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: NetSpacing.sm,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: context.netColors.availableContainer,
+                            borderRadius: BorderRadius.circular(NetRadii.xs),
+                          ),
+                          child: Text(
+                            '${_rows.length} كرت',
+                            style: TextStyle(
+                              fontFamily: NetTypography.family,
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w700,
+                              color: context.netColors.available,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
+                    if (_rows.isNotEmpty) ...[
+                      const SizedBox(height: NetSpacing.md),
+                      NetHorizontalBars(
+                        labelWidth: 88,
+                        emptyMessage: 'لا توجد مبيعات لهذه الفترة',
+                        data: _topCustomerBars(context),
+                      ),
+                    ],
                   ],
                 ),
               ),
