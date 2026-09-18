@@ -93,16 +93,19 @@ class _BroadcastScreenState extends State<BroadcastScreen> {
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
-        backgroundColor: KayanColors.appBackground,
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         appBar: AppBar(
           title: const NetAppBarTitle(icon: Icons.campaign_rounded, title: 'بث SMS للعملاء'),
         ),
         body: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            const Text(
+            Text(
               'أرسل رسالة جماعية للعملاء المؤهلين. يتم استبعاد المحظورين والأرقام غير الصالحة وغير النشطين.',
-              style: TextStyle(fontFamily: 'Tajawal', color: KayanColors.textSecondary),
+              style: TextStyle(
+                fontFamily: 'Tajawal',
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
             ),
             const SizedBox(height: 16),
             TextField(

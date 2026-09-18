@@ -171,9 +171,9 @@ class _RejectedMessagesScreenState extends State<RejectedMessagesScreen> {
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
-        backgroundColor: const Color(0xFFF0F9F8),
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         appBar: AppBar(
-          backgroundColor: Colors.white,
+          backgroundColor: Theme.of(context).colorScheme.surface,
           elevation: 0,
           surfaceTintColor: Colors.transparent,
           leading: IconButton(
@@ -240,12 +240,14 @@ class _RejectedMessagesScreenState extends State<RejectedMessagesScreen> {
                           fontFamily: 'Tajawal',
                           fontSize: 12,
                           fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                          color: selected ? Colors.white : const Color(0xFF334155),
+                          color: selected
+                              ? Colors.white
+                              : Theme.of(context).colorScheme.onSurface,
                         ),
                       ),
                       selected: selected,
-                      selectedColor: const Color(0xFF0F766E),
-                      backgroundColor: Colors.white,
+                      selectedColor: Theme.of(context).colorScheme.primary,
+                      backgroundColor: Theme.of(context).colorScheme.surface,
                       side: BorderSide(
                         color: selected
                             ? const Color(0xFF0F766E)
@@ -445,9 +447,9 @@ class _RejectedCard extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.03),

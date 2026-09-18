@@ -224,8 +224,8 @@ class _WalletsPosScreenState extends State<WalletsPosScreen>
               return Padding(
                 padding: EdgeInsets.only(bottom: inset),
                 child: Container(
-                  decoration: const BoxDecoration(
-                    color: Colors.white,
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.surface,
                     borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
                   ),
                   padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
@@ -451,7 +451,7 @@ class _WalletsPosScreenState extends State<WalletsPosScreen>
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
-        backgroundColor: const Color(0xFFF8FAFC),
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         appBar: AppBar(
           title: const Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -462,8 +462,8 @@ class _WalletsPosScreenState extends State<WalletsPosScreen>
                   style: TextStyle(fontFamily: 'Tajawal', fontSize: 12, color: Color(0xFF64748B))),
             ],
           ),
-          backgroundColor: const Color(0xFFF8FAFC),
-          foregroundColor: const Color(0xFF0F172A),
+          backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+          foregroundColor: Theme.of(context).colorScheme.onSurface,
           elevation: 0,
         ),
         body: _loading
@@ -481,7 +481,7 @@ class _WalletsPosScreenState extends State<WalletsPosScreen>
                             hintStyle: const TextStyle(fontFamily: 'Tajawal'),
                             prefixIcon: const Icon(Icons.search),
                             filled: true,
-                            fillColor: Colors.white,
+                            fillColor: Theme.of(context).colorScheme.surface,
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(12),
                               borderSide: BorderSide.none,
@@ -541,7 +541,7 @@ class _WalletsPosScreenState extends State<WalletsPosScreen>
           final color = _colorFor(w);
           final isNotif = w.sourceMode == WalletSourceMode.notification;
           return Material(
-            color: Colors.white,
+            color: Theme.of(context).colorScheme.surface,
             borderRadius: BorderRadius.circular(16),
             child: Container(
               decoration: BoxDecoration(
@@ -637,7 +637,7 @@ class _WalletsPosScreenState extends State<WalletsPosScreen>
           final phone = acc?.notifyPhone ??
               (acc != null && acc.identifiers.isNotEmpty ? acc.identifiers.first : null);
           return Material(
-            color: Colors.white,
+            color: Theme.of(context).colorScheme.surface,
             borderRadius: BorderRadius.circular(16),
             child: Container(
               decoration: BoxDecoration(

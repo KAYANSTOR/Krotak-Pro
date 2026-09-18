@@ -128,7 +128,7 @@ class _SalesPeriodReportScreenState extends State<SalesPeriodReportScreen> {
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
-        backgroundColor: KayanColors.appBackground,
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         appBar: AppBar(
           title: const Text(
             'تقرير المبيعات التفصيلي',

@@ -159,8 +159,8 @@ class _TemplatesScreenState extends State<TemplatesScreen> {
       builder: (ctx) => Directionality(
         textDirection: TextDirection.rtl,
         child: Container(
-          decoration: const BoxDecoration(
-            color: Colors.white,
+          decoration: BoxDecoration(
+            color: Theme.of(ctx).colorScheme.surface,
             borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
           ),
           child: SafeArea(
@@ -226,9 +226,9 @@ class _TemplatesScreenState extends State<TemplatesScreen> {
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
-        backgroundColor: const Color(0xFFF0F9F8),
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         appBar: AppBar(
-          backgroundColor: Colors.white,
+          backgroundColor: Theme.of(context).colorScheme.surface,
           elevation: 0,
           surfaceTintColor: Colors.transparent,
           leading: IconButton(
@@ -276,7 +276,7 @@ class _TemplatesScreenState extends State<TemplatesScreen> {
         ),
         floatingActionButton: FloatingActionButton.extended(
           onPressed: () => _openWizard(),
-          backgroundColor: const Color(0xFFA855F7),
+          backgroundColor: Theme.of(context).colorScheme.primary,
           foregroundColor: Colors.white,
           elevation: 2,
           icon: const Icon(Icons.add, size: 22),
@@ -342,14 +342,14 @@ class _TemplateCard extends StatelessWidget {
     final active = t.isActive;
 
     return Material(
-      color: Colors.white,
+      color: Theme.of(context).colorScheme.surface,
       elevation: 0,
       borderRadius: BorderRadius.circular(16),
       child: Container(
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: Theme.of(context).colorScheme.surface,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFFE2E8F0)),
+          border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withValues(alpha: 0.03),

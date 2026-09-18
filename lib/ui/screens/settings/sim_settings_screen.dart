@@ -114,14 +114,14 @@ class _SimSettingsScreenState extends State<SimSettingsScreen> {
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
-        backgroundColor: const Color(0xFFF8FAFC),
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         appBar: AppBar(
           title: const Text(
             'إعدادات شرائح الاتصال',
             style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w700),
           ),
-          backgroundColor: const Color(0xFFF8FAFC),
-          foregroundColor: const Color(0xFF0F172A),
+          backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+          foregroundColor: Theme.of(context).colorScheme.onSurface,
           elevation: 0,
         ),
         body: _loading
@@ -261,9 +261,9 @@ class _SimSettingsScreenState extends State<SimSettingsScreen> {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
