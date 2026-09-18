@@ -18,14 +18,14 @@ class _CategoriesSheetState extends State<_CategoriesSheet> {
         minChildSize: 0.4,
         maxChildSize: 0.9,
         builder: (ctx, scroll) => Container(
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          decoration: BoxDecoration(
+            color: KayanPalette.of(ctx).surface,
+            borderRadius: NetRadii.sheetTop,
           ),
           child: Column(
             children: [
               const SizedBox(height: 10),
-              Container(width: 40, height: 4, decoration: BoxDecoration(color: const Color(0xFFCBD5E1), borderRadius: BorderRadius.circular(4))),
+              Container(width: 40, height: 4, decoration: BoxDecoration(color: KayanPalette.of(ctx).border, borderRadius: NetRadii.pillAll)),
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
                 child: Row(
@@ -41,12 +41,11 @@ class _CategoriesSheetState extends State<_CategoriesSheet> {
               ),
               Expanded(
                 child: widget.categories.isEmpty
-                    ? const Center(
-                        child: Text(
-                          'لا توجد فئات بعد — أنشئ فئة بقيمة اسمية موجبة',
-                          style: TextStyle(fontFamily: 'Tajawal', color: KayanColors.textSecondary),
-                          textAlign: TextAlign.center,
-                        ),
+                    ? const AsyncEmptyView(
+                        message: 'لا توجد فئات بعد',
+                        hint: 'أنشئ فئة بقيمة اسمية موجبة أولًا',
+                        icon: Icons.category_outlined,
+                        compact: true,
                       )
                     : ListView.builder(
                         controller: scroll,
@@ -55,13 +54,14 @@ class _CategoriesSheetState extends State<_CategoriesSheet> {
                         itemBuilder: (context, i) {
                           final cat = widget.categories[i];
                           final major = cat.faceValue.minorUnits / 100.0;
+                          final palette = KayanPalette.of(context);
                           return ListTile(
                             contentPadding: EdgeInsets.zero,
                             leading: CircleAvatar(
-                              backgroundColor: KayanColors.lightBackground,
+                              backgroundColor: palette.iconBadgeBackground,
                               child: Text(
                                 major == major.roundToDouble() ? major.toInt().toString() : major.toStringAsFixed(0),
-                                style: const TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w700, color: KayanColors.primary, fontSize: 12),
+                                style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w700, color: palette.primary, fontSize: 12),
                               ),
                             ),
                             title: Text(cat.name, style: const TextStyle(fontFamily: 'Tajawal')),
@@ -291,14 +291,14 @@ class _AddCardsSheetState extends State<_AddCardsSheet> {
       child: Padding(
         padding: EdgeInsets.only(bottom: bottom),
         child: Container(
-          decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+          decoration: BoxDecoration(color: KayanPalette.of(context).surface, borderRadius: NetRadii.sheetTop),
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
           child: SingleChildScrollView(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               mainAxisSize: MainAxisSize.min,
               children: [
-                Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: const Color(0xFFCBD5E1), borderRadius: BorderRadius.circular(4)))),
+                Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: KayanPalette.of(context).border, borderRadius: NetRadii.pillAll))),
                 const SizedBox(height: 12),
                 const Text('إضافة الكروت', style: TextStyle(fontFamily: 'Tajawal', fontSize: 18, fontWeight: FontWeight.w800)),
                 const SizedBox(height: 12),
@@ -363,7 +363,7 @@ class _AddCardsSheetState extends State<_AddCardsSheet> {
                     _format == CardImportFormat.serialOnly
                         ? 'وضع رقم فقط: سطر واحد = رقم كرت. الفواصل تُتجاهل ويُؤخذ الحقل الأول.'
                         : 'وضع رقم+رمز: serial,secret أو serial;secret. سطر لكل كرت.',
-                    style: const TextStyle(fontFamily: 'Tajawal', fontSize: 11, color: KayanColors.textSecondary),
+                    style: TextStyle(fontFamily: 'Tajawal', fontSize: 11, color: KayanPalette.of(context).textSecondary),
                   ),
                   const SizedBox(height: 10),
                   OutlinedButton.icon(
@@ -378,7 +378,7 @@ class _AddCardsSheetState extends State<_AddCardsSheet> {
                 const SizedBox(height: 16),
                 FilledButton(
                   onPressed: _busy ? null : (_tab == 0 ? _saveSingle : _saveBatch),
-                  style: FilledButton.styleFrom(backgroundColor: KayanColors.primary, padding: const EdgeInsets.symmetric(vertical: 14)),
+                  style: FilledButton.styleFrom(backgroundColor: KayanPalette.of(context).primary, padding: const EdgeInsets.symmetric(vertical: 14)),
                   child: _busy
                       ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                       : const Text('استيراد', style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w700)),
