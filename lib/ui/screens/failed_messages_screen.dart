@@ -220,7 +220,7 @@ class _FailedMessagesScreenState extends State<FailedMessagesScreen> {
                                       const SizedBox(height: 6),
                                       Text(
                                         'رمز الرفض: ${retry!.lastErrorCode}',
-                                        style: const TextStyle(
+                                        style: TextStyle(
                                           fontFamily: 'Tajawal',
                                           fontSize: 12,
                                           color: context.netColors.warning,

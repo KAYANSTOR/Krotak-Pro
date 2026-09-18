@@ -2,6 +2,13 @@ import 'package:flutter/material.dart';
 
 import '../theme/kayan_palette.dart';
 
+/// يفتح درجة اللون في الوضع الداكن حتى يبقى التباين مقروءًا على الأسطح الداكنة.
+Color _tone(BuildContext context, Color color) {
+  if (Theme.of(context).brightness != Brightness.dark) return color;
+  final hsl = HSLColor.fromColor(color);
+  return hsl.withLightness((hsl.lightness + 0.24).clamp(0.0, 0.82)).toColor();
+}
+
 /// مركز المساعدة — مطابقة تصميم فيديو Z Net.
 ///
 /// المصدر الوحيد للمحتوى:
@@ -536,13 +543,6 @@ class _ItemCard extends StatelessWidget {
       ),
     );
   }
-}
-
-final /// يفتح درجة اللون في الوضع الداكن حتى يبقى التباين مقروءًا على الأسطح الداكنة.
-Color _tone(BuildContext context, Color color) {
-  if (Theme.of(context).brightness != Brightness.dark) return color;
-  final hsl = HSLColor.fromColor(color);
-  return hsl.withLightness((hsl.lightness + 0.24).clamp(0.0, 0.82)).toColor();
 }
 
 class _HelpGroup {

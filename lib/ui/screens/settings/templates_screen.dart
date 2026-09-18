@@ -202,7 +202,7 @@ class _TemplatesScreenState extends State<TemplatesScreen> {
                     Icons.delete_outline_rounded,
                     color: context.netColors.rejected,
                   ),
-                  title: const Text(
+                  title: Text(
                     'حذف',
                     style: TextStyle(
                       fontFamily: 'Tajawal',
