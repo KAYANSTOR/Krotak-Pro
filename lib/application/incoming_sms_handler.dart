@@ -46,6 +46,25 @@ final class IncomingSmsHandler {
 
   void start() {
     _sub ??= bridge.incomingSms.listen(_onEvent, onError: (_) {});
+    // Drain SMS captured while the UI process was not listening.
+    // ignore: discarded_futures
+    _drainPending();
+  }
+
+  Future<void> _drainPending() async {
+    try {
+      final pending = await bridge.peekPendingSms();
+      if (pending.isEmpty) return;
+      final acked = <String>[];
+      for (final event in pending) {
+        await _onEvent(event);
+        final id = event.pendingId;
+        if (id != null && id.isNotEmpty) acked.add(id);
+      }
+      await bridge.ackPendingSms(acked);
+    } catch (_) {
+      // Platform channel may be unavailable on non-Android; ignore.
+    }
   }
 
   void stop() {
