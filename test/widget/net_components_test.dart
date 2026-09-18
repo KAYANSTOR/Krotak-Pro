@@ -56,6 +56,8 @@ void main() {
     await tester.pumpWidget(
       _wrap(const NetBalanceCard(balanceMinor: 150050, accountsCount: 7, availableCards: 12)),
     );
+    // The amount animates from 0 to its target value.
+    await tester.pumpAndSettle();
     expect(find.textContaining('1500.5'), findsOneWidget);
     expect(find.text('7'), findsOneWidget);
     expect(find.text('12'), findsOneWidget);
@@ -129,9 +131,10 @@ void main() {
       reference: 'ref-1',
     );
     await tester.pumpWidget(_wrap(NetRecentTransactionCard(transaction: transaction)));
-    expect(find.textContaining('sale'), findsOneWidget);
+    // Arabic labels are rendered instead of raw enum names.
+    expect(find.text('صرف كرت'), findsOneWidget);
     expect(find.textContaining('200'), findsOneWidget);
-    expect(find.text('completed'), findsOneWidget);
+    expect(find.text('مكتملة'), findsOneWidget);
   });
 
   testWidgets('NetDashboardHeader RTL layout', (tester) async {

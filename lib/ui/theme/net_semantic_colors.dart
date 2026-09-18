@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'kayan_colors.dart';
+
 /// Semantic status colors for NET inventory, messaging, and finance UI.
 @immutable
 class NetSemanticColors extends ThemeExtension<NetSemanticColors> {
@@ -20,6 +22,8 @@ class NetSemanticColors extends ThemeExtension<NetSemanticColors> {
     required this.pendingContainer,
     required this.rejected,
     required this.rejectedContainer,
+    required this.info,
+    required this.infoContainer,
     required this.balanceGradientStart,
     required this.balanceGradientEnd,
     required this.alertBackground,
@@ -42,6 +46,8 @@ class NetSemanticColors extends ThemeExtension<NetSemanticColors> {
   final Color pendingContainer;
   final Color rejected;
   final Color rejectedContainer;
+  final Color info;
+  final Color infoContainer;
   final Color balanceGradientStart;
   final Color balanceGradientEnd;
   final Color alertBackground;
@@ -64,8 +70,10 @@ class NetSemanticColors extends ThemeExtension<NetSemanticColors> {
     pendingContainer: Color(0xFFDBEAFE),
     rejected: Color(0xFFB91C1C),
     rejectedContainer: Color(0xFFFEE2E2),
-    balanceGradientStart: Color(0xFF247A7B),
-    balanceGradientEnd: Color(0xFFA4508B),
+    info: KayanColors.info,
+    infoContainer: KayanColors.infoBackground,
+    balanceGradientStart: KayanColors.brandGradientStart,
+    balanceGradientEnd: KayanColors.brandGradientEnd,
     alertBackground: Color(0xFFFEF3C7),
     alertForeground: Color(0xFF92400E),
   );
@@ -87,8 +95,10 @@ class NetSemanticColors extends ThemeExtension<NetSemanticColors> {
     pendingContainer: Color(0xFF1E3A8A),
     rejected: Color(0xFFF87171),
     rejectedContainer: Color(0xFF7F1D1D),
-    balanceGradientStart: Color(0xFF1E6667),
-    balanceGradientEnd: Color(0xFF7B3F6A),
+    info: Color(0xFF93C5FD),
+    infoContainer: Color(0xFF1E3A8A),
+    balanceGradientStart: KayanColors.darkBrandGradientStart,
+    balanceGradientEnd: KayanColors.darkBrandGradientEnd,
     alertBackground: Color(0xFF78350F),
     alertForeground: Color(0xFFFEF3C7),
   );
@@ -111,6 +121,8 @@ class NetSemanticColors extends ThemeExtension<NetSemanticColors> {
     Color? pendingContainer,
     Color? rejected,
     Color? rejectedContainer,
+    Color? info,
+    Color? infoContainer,
     Color? balanceGradientStart,
     Color? balanceGradientEnd,
     Color? alertBackground,
@@ -133,6 +145,8 @@ class NetSemanticColors extends ThemeExtension<NetSemanticColors> {
       pendingContainer: pendingContainer ?? this.pendingContainer,
       rejected: rejected ?? this.rejected,
       rejectedContainer: rejectedContainer ?? this.rejectedContainer,
+      info: info ?? this.info,
+      infoContainer: infoContainer ?? this.infoContainer,
       balanceGradientStart: balanceGradientStart ?? this.balanceGradientStart,
       balanceGradientEnd: balanceGradientEnd ?? this.balanceGradientEnd,
       alertBackground: alertBackground ?? this.alertBackground,
@@ -161,6 +175,8 @@ class NetSemanticColors extends ThemeExtension<NetSemanticColors> {
       pendingContainer: l(pendingContainer, other.pendingContainer),
       rejected: l(rejected, other.rejected),
       rejectedContainer: l(rejectedContainer, other.rejectedContainer),
+      info: l(info, other.info),
+      infoContainer: l(infoContainer, other.infoContainer),
       balanceGradientStart: l(balanceGradientStart, other.balanceGradientStart),
       balanceGradientEnd: l(balanceGradientEnd, other.balanceGradientEnd),
       alertBackground: l(alertBackground, other.alertBackground),

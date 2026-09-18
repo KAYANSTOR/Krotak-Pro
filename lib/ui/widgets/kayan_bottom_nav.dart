@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
-import '../theme/kayan_colors.dart';
 import '../theme/kayan_palette.dart';
+import '../theme/net_tokens.dart';
 
 /// شريط تنقل سفلي: الرئيسية | التقارير | العروض | الحسابات | الكروت
 class KayanBottomNav extends StatelessWidget {
@@ -24,21 +25,14 @@ class KayanBottomNav extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final kayan = KayanPalette.of(context);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final palette = KayanPalette.of(context);
     return Container(
       decoration: BoxDecoration(
-        color: kayan.surface,
-        border: Border(top: BorderSide(color: kayan.border)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: isDark ? 0.25 : 0.04),
-            blurRadius: 12,
-            offset: const Offset(0, -2),
-          ),
-        ],
+        color: palette.surface,
+        border: Border(top: BorderSide(color: palette.border)),
+        boxShadow: NetElevation.soft(context),
       ),
-      padding: const EdgeInsets.only(top: 8, bottom: 10),
+      padding: const EdgeInsets.only(top: NetSpacing.sm, bottom: NetSpacing.sm),
       child: SafeArea(
         top: false,
         child: Row(
@@ -79,37 +73,57 @@ class _NavItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final kayan = KayanPalette.of(context);
-    final color = active ? KayanColors.primary : kayan.textSecondary;
+    final palette = KayanPalette.of(context);
+    final color = active ? palette.primary : palette.textSecondary;
+    final duration = NetMotion.scale(context, NetDurations.fast);
+
     return InkWell(
-      onTap: onTap,
+      onTap: () {
+        HapticFeedback.selectionClick();
+        onTap();
+      },
       splashColor: Colors.transparent,
       highlightColor: Colors.transparent,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 180),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              color: active
-                  ? KayanColors.primary.withValues(alpha: 0.12)
-                  : Colors.transparent,
-              borderRadius: BorderRadius.circular(999),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: NetSpacing.xs),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AnimatedContainer(
+              duration: duration,
+              curve: NetMotion.standard,
+              padding: const EdgeInsets.symmetric(
+                horizontal: NetSpacing.md,
+                vertical: 6,
+              ),
+              decoration: BoxDecoration(
+                color: active
+                    ? palette.primary.withValues(alpha: palette.isDark ? 0.20 : 0.12)
+                    : Colors.transparent,
+                borderRadius: NetRadii.pillAll,
+              ),
+              child: AnimatedSize(
+                duration: duration,
+                curve: NetMotion.standard,
+                child: Icon(
+                  active ? activeIcon : icon,
+                  size: active ? 23 : 22,
+                  color: color,
+                ),
+              ),
             ),
-            child: Icon(active ? activeIcon : icon, size: 22, color: color),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            style: TextStyle(
-              fontFamily: 'Tajawal',
-              fontSize: 11.5,
-              fontWeight: active ? FontWeight.w800 : FontWeight.w600,
-              color: color,
+            const SizedBox(height: NetSpacing.xs),
+            Text(
+              label,
+              style: TextStyle(
+                fontFamily: NetTypography.family,
+                fontSize: 11.5,
+                fontWeight: active ? FontWeight.w800 : FontWeight.w600,
+                color: color,
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
