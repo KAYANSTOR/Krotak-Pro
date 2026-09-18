@@ -106,16 +106,20 @@ class _NetAppState extends State<NetApp> with WidgetsBindingObserver {
             darkTheme: buildKayanDarkTheme(),
             themeMode: mode,
             locale: const Locale('ar'),
-            supportedLocales: const [Locale('ar'), Locale('en')],
+            supportedLocales: const [Locale('ar')],
+            localeResolutionCallback: (locale, supported) => const Locale('ar'),
             localizationsDelegates: const [
               GlobalMaterialLocalizations.delegate,
               GlobalWidgetsLocalizations.delegate,
               GlobalCupertinoLocalizations.delegate,
             ],
-            builder: (context, child) => Directionality(
-              textDirection: TextDirection.rtl,
-              child: child ?? const SizedBox.shrink(),
-            ),
+            builder: (context, child) {
+              // Force RTL for the entire app tree (Yemen / Arabic UX).
+              return Directionality(
+                textDirection: TextDirection.rtl,
+                child: child ?? const SizedBox.shrink(),
+              );
+            },
             home: const HomeShell(),
           ),
         ),
