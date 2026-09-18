@@ -88,8 +88,8 @@ class _DirectSaleSheetState extends State<DirectSaleSheet> {
         padding: EdgeInsets.only(bottom: inset),
         child: Container(
           constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.92),
-          decoration: const BoxDecoration(
-            color: Colors.white,
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surface,
             borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
           ),
           child: SingleChildScrollView(
@@ -102,7 +102,7 @@ class _DirectSaleSheetState extends State<DirectSaleSheet> {
                     width: 48,
                     height: 5,
                     margin: const EdgeInsets.only(bottom: 8),
-                    decoration: BoxDecoration(color: const Color(0xFFE5E7EB), borderRadius: BorderRadius.circular(50)),
+                    decoration: BoxDecoration(color: Theme.of(context).colorScheme.outlineVariant, borderRadius: BorderRadius.circular(50)),
                   ),
                 ),
                 const Text(
