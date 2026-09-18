@@ -72,7 +72,7 @@ class QuickActionsSheet extends StatelessWidget {
         // Scrollable so the six actions never overflow a short viewport.
         child: ListView(
           shrinkWrap: true,
-          padding: const EdgeInsets.zero,
+          padding: EdgeInsets.zero,
           children: [
             Center(
               child: Container(
