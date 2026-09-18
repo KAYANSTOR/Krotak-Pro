@@ -514,10 +514,12 @@ class _CustomersScreenState extends State<CustomersScreen> {
                                 const SizedBox(height: NetSpacing.sm),
                             itemBuilder: (_, i) {
                               final row = visible[i];
-                              void open() => AppRoutes.openCustomerDetail(
-                                    context,
-                                    row.customer.id,
-                                  ).then((_) => _load(_searchCtrl.text));
+                              void open() {
+                                AppRoutes.openCustomerDetail(
+                                  context,
+                                  row.customer.id,
+                                ).then((_) => _load(_searchCtrl.text));
+                              }
                               return _AccountCard(
                                 row: row,
                                 onTap: open,
