@@ -342,6 +342,11 @@ final class _PassthroughUnitOfWork implements UnitOfWork {
 
 final class _FakeMessages implements MessageRepository {
   final store = <String, IncomingMessage>{};
+  @override
+  Future<Result<void>> delete(String id) async {
+    store.remove(id);
+    return const Success(null);
+  }
 
   @override
   Future<Result<void>> save(IncomingMessage message) async {
