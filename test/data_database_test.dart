@@ -14,8 +14,8 @@ void main() {
     await database.close();
   });
 
-  test('creates schema version 3 and starts empty', () async {
-    expect(database.schemaVersion, 3);
+  test('creates current schema version 4 and starts empty', () async {
+    expect(database.schemaVersion, 4);
     expect(await database.select(database.customers).get(), isEmpty);
     expect(await database.select(database.cards).get(), isEmpty);
     expect(await database.select(database.incomingMessages).get(), isEmpty);
