@@ -5,7 +5,7 @@ import '../../../core/result.dart';
 import '../../../domain/entities/customer.dart';
 import '../../../domain/phone_normalizer.dart';
 import '../../app_scope.dart';
-import '../../platform/contact_picker_bridge.dart';
+import '../../../platform/contact_picker_bridge.dart';
 import '../../theme/kayan_palette.dart';
 import '../../theme/net_semantic_colors.dart';
 import '../../theme/net_tokens.dart';
