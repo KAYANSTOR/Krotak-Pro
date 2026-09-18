@@ -4,6 +4,7 @@ import '../../../core/result.dart';
 import '../../../domain/entities/license.dart';
 import '../../app_scope.dart';
 import '../../theme/kayan_palette.dart';
+import '../../theme/net_semantic_colors.dart';
 import '../../theme/net_tokens.dart';
 import '../../widgets/async_views.dart';
 import '../../widgets/net/net_surface_card.dart';
@@ -70,12 +71,13 @@ class _RenewSubscriptionScreenState extends State<RenewSubscriptionScreen> {
               padding: NetSpacing.screen,
               children: [
                 NetSurfaceCard(
+                  borderColor: context.netColors.premium.withValues(alpha: 0.45),
                   child: Row(
                     children: [
                       Icon(
-                        Icons.workspace_premium_outlined,
+                        Icons.workspace_premium_rounded,
                         size: 20,
-                        color: KayanPalette.of(context).primary,
+                        color: context.netColors.premium,
                       ),
                       const SizedBox(width: NetSpacing.sm),
                       Expanded(

@@ -29,6 +29,13 @@ abstract final class KayanColors {
   static const logoGradient2 = Color(0xFF7B61FF);
   static const logoGradient3 = Color(0xFFE04096);
 
+  // Premium accent — ذهب فاخر يُستخدم بحدود ضيقة (الترخيص/المكافآت/الجاهزية)
+  // ولا يُستخدم كلون أساسي أو خلفية عامة.
+  static const gold = Color(0xFF9A7B24);
+  static const goldContainer = Color(0xFFFDF6E3);
+  static const darkGold = Color(0xFFE3C77A);
+  static const darkGoldContainer = Color(0xFF43391A);
+
   // Brand gradient — one definition for every hero surface in the app.
   static const brandGradientStart = Color(0xFF247A7B);
   static const brandGradientEnd = Color(0xFFA4508B);

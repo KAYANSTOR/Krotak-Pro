@@ -24,6 +24,8 @@ class NetSemanticColors extends ThemeExtension<NetSemanticColors> {
     required this.rejectedContainer,
     required this.info,
     required this.infoContainer,
+    required this.premium,
+    required this.premiumContainer,
     required this.balanceGradientStart,
     required this.balanceGradientEnd,
     required this.alertBackground,
@@ -48,6 +50,10 @@ class NetSemanticColors extends ThemeExtension<NetSemanticColors> {
   final Color rejectedContainer;
   final Color info;
   final Color infoContainer;
+
+  /// لمسة ذهبية محدودة: الترخيص، المكافآت، وحالات الجاهزية الكاملة.
+  final Color premium;
+  final Color premiumContainer;
   final Color balanceGradientStart;
   final Color balanceGradientEnd;
   final Color alertBackground;
@@ -72,6 +78,8 @@ class NetSemanticColors extends ThemeExtension<NetSemanticColors> {
     rejectedContainer: Color(0xFFFEE2E2),
     info: KayanColors.info,
     infoContainer: KayanColors.infoBackground,
+    premium: KayanColors.gold,
+    premiumContainer: KayanColors.goldContainer,
     balanceGradientStart: KayanColors.brandGradientStart,
     balanceGradientEnd: KayanColors.brandGradientEnd,
     alertBackground: Color(0xFFFEF3C7),
@@ -97,6 +105,8 @@ class NetSemanticColors extends ThemeExtension<NetSemanticColors> {
     rejectedContainer: Color(0xFF7F1D1D),
     info: Color(0xFF93C5FD),
     infoContainer: Color(0xFF1E3A8A),
+    premium: KayanColors.darkGold,
+    premiumContainer: KayanColors.darkGoldContainer,
     balanceGradientStart: KayanColors.darkBrandGradientStart,
     balanceGradientEnd: KayanColors.darkBrandGradientEnd,
     alertBackground: Color(0xFF78350F),
@@ -123,6 +133,8 @@ class NetSemanticColors extends ThemeExtension<NetSemanticColors> {
     Color? rejectedContainer,
     Color? info,
     Color? infoContainer,
+    Color? premium,
+    Color? premiumContainer,
     Color? balanceGradientStart,
     Color? balanceGradientEnd,
     Color? alertBackground,
@@ -147,6 +159,8 @@ class NetSemanticColors extends ThemeExtension<NetSemanticColors> {
       rejectedContainer: rejectedContainer ?? this.rejectedContainer,
       info: info ?? this.info,
       infoContainer: infoContainer ?? this.infoContainer,
+      premium: premium ?? this.premium,
+      premiumContainer: premiumContainer ?? this.premiumContainer,
       balanceGradientStart: balanceGradientStart ?? this.balanceGradientStart,
       balanceGradientEnd: balanceGradientEnd ?? this.balanceGradientEnd,
       alertBackground: alertBackground ?? this.alertBackground,
@@ -177,6 +191,8 @@ class NetSemanticColors extends ThemeExtension<NetSemanticColors> {
       rejectedContainer: l(rejectedContainer, other.rejectedContainer),
       info: l(info, other.info),
       infoContainer: l(infoContainer, other.infoContainer),
+      premium: l(premium, other.premium),
+      premiumContainer: l(premiumContainer, other.premiumContainer),
       balanceGradientStart: l(balanceGradientStart, other.balanceGradientStart),
       balanceGradientEnd: l(balanceGradientEnd, other.balanceGradientEnd),
       alertBackground: l(alertBackground, other.alertBackground),
