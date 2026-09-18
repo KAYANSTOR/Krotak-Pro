@@ -159,8 +159,8 @@ class _SalesPeriodSheetState extends State<SalesPeriodSheet> {
         constraints: BoxConstraints(
           maxHeight: MediaQuery.sizeOf(context).height * 0.72,
         ),
-        decoration: const BoxDecoration(
-          color: Colors.white,
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surface,
           borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
         ),
         child: Column(
@@ -171,7 +171,7 @@ class _SalesPeriodSheetState extends State<SalesPeriodSheet> {
               width: 48,
               height: 5,
               decoration: BoxDecoration(
-                color: const Color(0xFFE5E7EB),
+                color: Theme.of(context).colorScheme.outlineVariant,
                 borderRadius: BorderRadius.circular(50),
               ),
             ),

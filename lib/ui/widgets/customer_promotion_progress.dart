@@ -32,7 +32,7 @@ class CustomerPromotionProgressSection extends StatelessWidget {
           return Padding(
             padding: const EdgeInsets.only(bottom: 8),
             child: Material(
-              color: Colors.white,
+              color: Theme.of(context).colorScheme.surface,
               borderRadius: BorderRadius.circular(12),
               child: InkWell(
                 onTap: onOpenAll,
@@ -43,8 +43,8 @@ class CustomerPromotionProgressSection extends StatelessWidget {
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
                       color: p.qualified
-                          ? const Color(0xFFA7F3D0)
-                          : const Color(0xFFE2E8F0),
+                          ? const Color(0xFF059669).withValues(alpha: 0.45)
+                          : Theme.of(context).colorScheme.outlineVariant,
                     ),
                   ),
                   child: Column(
@@ -79,10 +79,10 @@ class CustomerPromotionProgressSection extends StatelessWidget {
                         value: p.ratio,
                         minHeight: 6,
                         borderRadius: BorderRadius.circular(6),
-                        backgroundColor: const Color(0xFFE2E8F0),
+                        backgroundColor: Theme.of(context).colorScheme.outlineVariant,
                         color: p.qualified
                             ? const Color(0xFF059669)
-                            : const Color(0xFF0F766E),
+                            : Theme.of(context).colorScheme.primary,
                       ),
                       const SizedBox(height: 4),
                       Text(

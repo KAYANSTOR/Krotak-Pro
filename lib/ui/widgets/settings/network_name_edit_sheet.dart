@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 import '../../../core/result.dart';
 import '../../../domain/entities/setting.dart';
 import '../../app_scope.dart';
-import '../../theme/kayan_colors.dart';
+import '../../theme/kayan_palette.dart';
+import '../../theme/net_tokens.dart';
+import '../net/net_sheet.dart';
 
 /// Bottom sheet — PD-07 Q6 / PD-02.
 class NetworkNameEditSheet extends StatefulWidget {
@@ -13,10 +15,8 @@ class NetworkNameEditSheet extends StatefulWidget {
 
   /// Returns the saved name on success, null on cancel.
   static Future<String?> show(BuildContext context, {required String initialName}) {
-    return showModalBottomSheet<String>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
+    return NetSheet.show<String>(
+      context,
       builder: (ctx) => NetworkNameEditSheet(initialName: initialName),
     );
   }
@@ -71,133 +71,88 @@ class _NetworkNameEditSheetState extends State<NetworkNameEditSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final bottom = MediaQuery.paddingOf(context).bottom;
-    final inset = MediaQuery.viewInsetsOf(context).bottom;
+    final palette = KayanPalette.of(context);
 
-    return Directionality(
-      textDirection: TextDirection.rtl,
-      child: Padding(
-        padding: EdgeInsets.only(bottom: inset),
-        child: Container(
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-          ),
-          padding: EdgeInsets.fromLTRB(24, 8, 24, 16 + bottom),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Center(
-                child: Container(
-                  width: 48,
-                  height: 5,
-                  margin: const EdgeInsets.only(bottom: 12),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFE5E7EB),
-                    borderRadius: BorderRadius.circular(50),
-                  ),
+    return NetSheet(
+      title: 'تعديل اسم الشبكة',
+      subtitle: 'سيتم استخدام هذا الاسم في نهاية رسائل SMS المرسلة للعملاء.',
+      icon: Icons.edit_rounded,
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(
+          NetSpacing.xl,
+          NetSpacing.lg,
+          NetSpacing.xl,
+          NetSpacing.lg,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            TextField(
+              controller: _controller,
+              enabled: !_saving,
+              maxLength: 48,
+              textInputAction: TextInputAction.done,
+              onSubmitted: (_) => _save(),
+              style: TextStyle(
+                fontFamily: NetTypography.family,
+                fontSize: 15,
+                color: palette.textPrimary,
+              ),
+              decoration: InputDecoration(
+                labelText: 'اسم الشبكة',
+                labelStyle: const TextStyle(fontFamily: NetTypography.family),
+                hintText: SettingDefaults.networkName,
+                counterText: '',
+                border: const OutlineInputBorder(),
+                focusedBorder: OutlineInputBorder(
+                  borderSide: BorderSide(color: palette.primary, width: 1.4),
                 ),
               ),
-              const Text(
-                'تعديل اسم الشبكة',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontFamily: 'Tajawal',
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: KayanColors.textPrimary,
-                ),
-              ),
-              const SizedBox(height: 12),
-              const Text(
-                'سيتم استخدام هذا الاسم في نهاية رسائل SMS المرسلة للعملاء.',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontFamily: 'Tajawal',
-                  fontSize: 13,
-                  color: KayanColors.textSecondary,
-                  height: 1.4,
-                ),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: _controller,
-                enabled: !_saving,
-                maxLength: 48,
-                textInputAction: TextInputAction.done,
-                onSubmitted: (_) => _save(),
-                style: const TextStyle(fontFamily: 'Tajawal', fontSize: 15),
-                decoration: InputDecoration(
-                  labelText: 'اسم الشبكة',
-                  labelStyle: const TextStyle(fontFamily: 'Tajawal'),
-                  hintText: SettingDefaults.networkName,
-                  counterText: '',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: KayanColors.primary),
-                  ),
-                ),
-              ),
-              if (_error != null) ...[
-                const SizedBox(height: 8),
-                Text(
-                  _error!,
-                  style: const TextStyle(
-                    fontFamily: 'Tajawal',
-                    fontSize: 13,
-                    color: KayanColors.error,
-                  ),
-                ),
-              ],
-              const SizedBox(height: 16),
+            ),
+            if (_error != null) ...[
+              const SizedBox(height: NetSpacing.sm),
               Row(
                 children: [
-                  Expanded(
-                    child: TextButton(
-                      onPressed: _saving ? null : () => Navigator.pop(context),
-                      child: const Text(
-                        'إلغاء',
-                        style: TextStyle(
-                          fontFamily: 'Tajawal',
-                          fontSize: 15,
-                          color: KayanColors.textPrimary,
-                        ),
-                      ),
-                    ),
+                  Icon(
+                    Icons.error_outline_rounded,
+                    size: NetSizes.iconSm,
+                    color: Theme.of(context).colorScheme.error,
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: NetSpacing.sm),
                   Expanded(
-                    flex: 2,
-                    child: SizedBox(
-                      height: 48,
-                      child: FilledButton(
-                        style: FilledButton.styleFrom(
-                          backgroundColor: KayanColors.primary,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        onPressed: _saving ? null : _save,
-                        child: Text(
-                          _saving ? 'جاري الحفظ…' : 'حفظ',
-                          style: const TextStyle(
-                            fontFamily: 'Tajawal',
-                            fontSize: 15,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
+                    child: Text(
+                      _error!,
+                      style: TextStyle(
+                        fontFamily: NetTypography.family,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: Theme.of(context).colorScheme.error,
                       ),
                     ),
                   ),
                 ],
               ),
             ],
-          ),
+          ],
         ),
+      ),
+      footer: Row(
+        children: [
+          Expanded(
+            child: OutlinedButton(
+              onPressed: _saving ? null : () => Navigator.pop(context),
+              child: const Text('إلغاء'),
+            ),
+          ),
+          const SizedBox(width: NetSpacing.md),
+          Expanded(
+            flex: 2,
+            child: FilledButton(
+              onPressed: _saving ? null : _save,
+              child: Text(_saving ? 'جاري الحفظ…' : 'حفظ'),
+            ),
+          ),
+        ],
       ),
     );
   }
