@@ -2,6 +2,11 @@ import 'package:flutter/material.dart';
 import '../../../core/result.dart';
 import '../../../domain/entities/payment_event.dart';
 import '../../app_scope.dart';
+import '../../theme/kayan_palette.dart';
+import '../../theme/net_semantic_colors.dart';
+import '../../theme/net_tokens.dart';
+import '../../widgets/async_views.dart';
+import '../../widgets/net/net_surface_card.dart';
 
 class WalletNotificationSettingsScreen extends StatefulWidget {
   const WalletNotificationSettingsScreen({super.key});
@@ -67,34 +72,169 @@ class _WalletNotificationSettingsScreenState extends State<WalletNotificationSet
   }
 
   @override
-  Widget build(BuildContext context) => Directionality(
-    textDirection: TextDirection.rtl,
-    child: Scaffold(
-      appBar: AppBar(title: const Text('إشعارات المحافظ', style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.bold))),
-      body: _loading ? const Center(child: CircularProgressIndicator()) : RefreshIndicator(
-        onRefresh: _load,
-        child: ListView(padding: const EdgeInsets.all(16), children: [
-          Card(child: ListTile(
-            leading: Icon(_accessGranted ? Icons.notifications_active : Icons.notifications_off_outlined),
-            title: Text(_accessGranted ? 'وصول الإشعارات مفعّل' : 'وصول الإشعارات غير مفعّل', style: const TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.bold)),
-            subtitle: const Text('يتم قراءة إشعارات مصادر الدفع التي يحددها المشغّل فقط.', style: TextStyle(fontFamily: 'Tajawal')),
-            trailing: FilledButton(onPressed: _openAccess, child: const Text('فتح الإعدادات')),
-          )),
-          const SizedBox(height: 12),
-          Row(children: [const Expanded(child: Text('مصادر الدفع عبر الإشعارات', style: TextStyle(fontFamily: 'Tajawal', fontSize: 17, fontWeight: FontWeight.bold))), IconButton(onPressed: _add, icon: const Icon(Icons.add_circle_outline))]),
-          if (_sources.isEmpty)
-            const Card(child: Padding(padding: EdgeInsets.all(20), child: Text('لم تتم إضافة أي مصدر. لا يتم تخمين اسم الحزمة أو معالجة تطبيقات غير مهيأة.', style: TextStyle(fontFamily: 'Tajawal'))))
-          else
-            ..._sources.map((source) => Card(child: ListTile(
-              leading: const Icon(Icons.account_balance_wallet_outlined),
-              title: Text(source.displayName, style: const TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.bold)),
-              subtitle: Text(source.packageName!, style: const TextStyle(fontSize: 12)),
-              trailing: Row(mainAxisSize: MainAxisSize.min, children: [Switch(value: source.enabled, onChanged: (v) => _toggle(source, v)), IconButton(onPressed: () => _remove(source), icon: const Icon(Icons.delete_outline))]),
-            ))),
-          const SizedBox(height: 12),
-          const Text('يُحفظ الإشعار مؤقتًا في طابور نقل مشفّر، ثم يُمرر إلى محرك الدفع الموحد. الفشل في المعالجة لا يحذف الحركة من سجل المراجعة.', style: TextStyle(fontFamily: 'Tajawal', fontSize: 12)),
-        ]),
+  Widget build(BuildContext context) {
+    final palette = KayanPalette.of(context);
+    final net = context.netColors;
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Scaffold(
+        appBar: AppBar(title: const Text('إشعارات المحافظ')),
+        body: _loading
+            ? const AsyncLoadingView(skeleton: true, skeletonCount: 3)
+            : RefreshIndicator(
+                onRefresh: _load,
+                color: palette.primary,
+                child: ListView(
+                  padding: NetSpacing.screen,
+                  children: [
+                    NetSurfaceCard(
+                      borderColor: (_accessGranted ? net.available : net.rejected)
+                          .withValues(alpha: 0.5),
+                      child: Row(
+                        children: [
+                          Icon(
+                            _accessGranted
+                                ? Icons.notifications_active_rounded
+                                : Icons.notifications_off_rounded,
+                            color: _accessGranted ? net.available : net.rejected,
+                            size: 24,
+                          ),
+                          const SizedBox(width: NetSpacing.md),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  _accessGranted
+                                      ? 'وصول الإشعارات مفعّل'
+                                      : 'وصول الإشعارات غير مفعّل',
+                                  style: TextStyle(
+                                    fontFamily: NetTypography.family,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w700,
+                                    color: palette.textPrimary,
+                                  ),
+                                ),
+                                const SizedBox(height: NetSpacing.xs),
+                                Text(
+                                  'يتم قراءة إشعارات مصادر الدفع التي يحددها المشغّل فقط.',
+                                  style: TextStyle(
+                                    fontFamily: NetTypography.family,
+                                    fontSize: 12,
+                                    height: 1.35,
+                                    color: palette.textSecondary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (!_accessGranted) ...[
+                      const SizedBox(height: NetSpacing.md),
+                      FilledButton.icon(
+                        onPressed: _openAccess,
+                        icon: const Icon(Icons.settings_rounded, size: 18),
+                        label: const Text('فتح إعدادات الوصول'),
+                      ),
+                    ],
+                    const SizedBox(height: NetSpacing.lg),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            'مصادر الدفع عبر الإشعارات',
+                            style: TextStyle(
+                              fontFamily: NetTypography.family,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w800,
+                              color: palette.textPrimary,
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          tooltip: 'إضافة مصدر',
+                          onPressed: _add,
+                          icon: Icon(
+                            Icons.add_circle_outline_rounded,
+                            color: palette.primary,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: NetSpacing.sm),
+                    if (_sources.isEmpty)
+                      AsyncEmptyView(
+                        message: 'لم تتم إضافة أي مصدر',
+                        hint:
+                            'لا يتم تخمين اسم الحزمة أو معالجة تطبيقات غير مهيأة — أضف المصدر بعد التحقق منه على الجهاز.',
+                        icon: Icons.account_balance_wallet_outlined,
+                        actionLabel: 'إضافة مصدر',
+                        onAction: _add,
+                        compact: true,
+                      )
+                    else
+                      for (final source in _sources) ...[
+                        NetSurfaceCard(
+                          margin: const EdgeInsets.only(bottom: NetSpacing.sm),
+                          padding: EdgeInsets.zero,
+                          child: ListTile(
+                            contentPadding: NetSpacing.row,
+                            leading: Icon(
+                              Icons.account_balance_wallet_outlined,
+                              color: palette.primary,
+                            ),
+                            title: Text(
+                              source.displayName,
+                              style: TextStyle(
+                                fontFamily: NetTypography.family,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                                color: palette.textPrimary,
+                              ),
+                            ),
+                            subtitle: Text(
+                              source.packageName ?? '—',
+                              textDirection: TextDirection.ltr,
+                              textAlign: TextAlign.right,
+                              style: TextStyle(
+                                fontFamily: NetTypography.family,
+                                fontSize: 12,
+                                color: palette.textTertiary,
+                              ),
+                            ),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Switch.adaptive(
+                                  value: source.enabled,
+                                  activeTrackColor: palette.primary,
+                                  onChanged: (v) => _toggle(source, v),
+                                ),
+                                IconButton(
+                                  tooltip: 'حذف المصدر',
+                                  onPressed: () => _remove(source),
+                                  icon: Icon(
+                                    Icons.delete_outline_rounded,
+                                    color: net.rejected,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    const SizedBox(height: NetSpacing.lg),
+                    NetInlineNotice(
+                      message:
+                          'يُحفظ الإشعار مؤقتًا في طابور نقل مشفّر، ثم يُمرر إلى محرك الدفع الموحد. الفشل في المعالجة لا يحذف الحركة من سجل المراجعة.',
+                      icon: Icons.shield_outlined,
+                    ),
+                  ],
+                ),
+              ),
       ),
-    ),
-  );
+    );
+  }
 }

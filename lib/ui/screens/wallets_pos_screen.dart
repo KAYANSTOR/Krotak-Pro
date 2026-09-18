@@ -5,6 +5,7 @@ import '../../domain/entities/pos_account.dart';
 import '../../domain/entities/wallet.dart';
 import '../app_scope.dart';
 import '../theme/kayan_colors.dart';
+import '../theme/kayan_palette.dart';
 import '../theme/net_semantic_colors.dart';
 import '../widgets/async_views.dart';
 import 'settings/templates_screen.dart';
@@ -252,7 +253,7 @@ class _WalletsPosScreenState extends State<WalletsPosScreen>
                           fontFamily: 'Tajawal',
                           fontWeight: FontWeight.w800,
                           fontSize: 18,
-                          color: Color(0xFF0F766E),
+                          color: context.kayan.primary,
                         ),
                       ),
                       const SizedBox(height: 16),
@@ -323,7 +324,6 @@ class _WalletsPosScreenState extends State<WalletsPosScreen>
                             flex: 2,
                             child: FilledButton(
                               style: FilledButton.styleFrom(
-                                backgroundColor: const Color(0xFF0F766E),
                                 minimumSize: const Size.fromHeight(48),
                               ),
                               onPressed: () {
@@ -397,7 +397,7 @@ class _WalletsPosScreenState extends State<WalletsPosScreen>
             mainAxisSize: MainAxisSize.min,
             children: [
               ListTile(
-                leading: const Icon(Icons.edit_outlined, color: Color(0xFF0F766E)),
+                leading: Icon(Icons.edit_outlined, color: context.kayan.primary),
                 title: const Text('تعديل', style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w600)),
                 onTap: () {
                   Navigator.pop(ctx);
@@ -405,7 +405,7 @@ class _WalletsPosScreenState extends State<WalletsPosScreen>
                 },
               ),
               ListTile(
-                leading: const Icon(Icons.settings_suggest_outlined, color: Color(0xFF0F766E)),
+                leading: Icon(Icons.settings_suggest_outlined, color: context.kayan.primary),
                 title: const Text('إدارة القوالب', style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w600)),
                 onTap: () {
                   Navigator.pop(ctx);
@@ -417,8 +417,17 @@ class _WalletsPosScreenState extends State<WalletsPosScreen>
                 },
               ),
               ListTile(
-                leading: const Icon(Icons.delete_outline, color: Color(0xFFDC2626)),
-                title: const Text('حذف', style: TextStyle(fontFamily: 'Tajawal', color: Color(0xFFDC2626))),
+                leading: Icon(
+                  Icons.delete_outline_rounded,
+                  color: context.netColors.rejected,
+                ),
+                title: Text(
+                  'حذف',
+                  style: TextStyle(
+                    fontFamily: 'Tajawal',
+                    color: context.netColors.rejected,
+                  ),
+                ),
                 onTap: () async {
                   Navigator.pop(ctx);
                   final r = await AppScope.of(context).walletCatalog.updateWallet(
@@ -496,7 +505,7 @@ class _WalletsPosScreenState extends State<WalletsPosScreen>
                       ),
                       TabBar(
                         controller: _tabs,
-                        labelColor: const Color(0xFF0F766E),
+                        labelColor: context.kayan.primary,
                         labelStyle: const TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w700),
                         tabs: const [Tab(text: 'المحافظ'), Tab(text: 'نقاط البيع')],
                       ),
@@ -509,7 +518,7 @@ class _WalletsPosScreenState extends State<WalletsPosScreen>
                     ],
                   ),
         floatingActionButton: FloatingActionButton(
-          backgroundColor: const Color(0xFFDB2777),
+          backgroundColor: context.kayan.primary,
           onPressed: () {
             if (_tabs.index == 0) {
               _editWallet(null);
@@ -534,7 +543,7 @@ class _WalletsPosScreenState extends State<WalletsPosScreen>
     }
     return RefreshIndicator(
       onRefresh: _load,
-      color: const Color(0xFF0F766E),
+      color: context.kayan.primary,
       child: ListView.separated(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
         itemCount: items.length,
@@ -567,7 +576,7 @@ class _WalletsPosScreenState extends State<WalletsPosScreen>
                   ),
                   Switch.adaptive(
                     value: active,
-                    activeColor: const Color(0xFF0F766E),
+                    activeColor: context.kayan.primary,
                     onChanged: _togglingIds.contains(w.id) ? null : (_) => _toggleWallet(w),
                   ),
                   const SizedBox(width: 4),
@@ -670,7 +679,7 @@ class _WalletsPosScreenState extends State<WalletsPosScreen>
                 children: [
                   Switch.adaptive(
                     value: active,
-                    activeColor: const Color(0xFF0F766E),
+                    activeColor: context.kayan.primary,
                     onChanged: _togglingIds.contains(p.id) ? null : (_) => _togglePos(p),
                   ),
                   Expanded(
@@ -690,7 +699,10 @@ class _WalletsPosScreenState extends State<WalletsPosScreen>
                       ],
                     ),
                   ),
-                  const Icon(Icons.storefront_outlined, color: Color(0xFF0F766E)),
+                  Icon(
+                    Icons.storefront_outlined,
+                    color: context.kayan.primary,
+                  ),
                 ],
               ),
             ),

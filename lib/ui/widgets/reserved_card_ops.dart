@@ -4,6 +4,7 @@ import '../../core/result.dart';
 import '../../domain/entities/card.dart' as domain;
 import '../../domain/entities/customer.dart';
 import '../app_scope.dart';
+import '../theme/net_semantic_colors.dart';
 
 /// تدخل يدوي على كرت محجوز: تأكيد تسليم أو إلغاء حجز + Rollback.
 Future<void> showReservedCardOps({
@@ -26,7 +27,10 @@ Future<void> showReservedCardOps({
             subtitle: Text(category.name, style: const TextStyle(fontFamily: 'Tajawal')),
           ),
           ListTile(
-            leading: const Icon(Icons.check_circle_outline, color: Color(0xFF059669)),
+            leading: Icon(
+              Icons.check_circle_outline,
+              color: context.netColors.available,
+            ),
             title: const Text('تأكيد التسليم يدويًا', style: TextStyle(fontFamily: 'Tajawal')),
             subtitle: const Text(
               'تسجيل الكرت كمباع بعد تسليمه خارج SMS',
@@ -38,7 +42,7 @@ Future<void> showReservedCardOps({
             },
           ),
           ListTile(
-            leading: const Icon(Icons.undo, color: Color(0xFFDC2626)),
+            leading: Icon(Icons.undo_rounded, color: context.netColors.rejected),
             title: const Text('إلغاء الحجز وإعادة للمخزون', style: TextStyle(fontFamily: 'Tajawal')),
             subtitle: const Text(
               'تحرير الكرت مع إمكانية إرجاع المبلغ للعميل',

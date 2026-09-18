@@ -5,6 +5,7 @@ import '../../../domain/entities/message.dart';
 import '../../../domain/entities/wallet.dart';
 import '../../../domain/services/local_message_parser.dart';
 import '../../app_scope.dart';
+import '../../theme/net_semantic_colors.dart';
 import '../../theme/kayan_palette.dart';
 
 /// معالج إعداد/تعديل قالب التحويل — 4 مراحل مطابق لفيديو Z Net.
@@ -198,7 +199,7 @@ class _TemplateWizardScreenState extends State<TemplateWizardScreen> {
           leading: TextButton.icon(
             style: TextButton.styleFrom(
               padding: const EdgeInsets.symmetric(horizontal: 8),
-              foregroundColor: const Color(0xFF0F766E),
+              foregroundColor: context.kayan.primary,
             ),
             onPressed: () {
               ScaffoldMessenger.of(context).showSnackBar(
@@ -288,7 +289,6 @@ class _TemplateWizardScreenState extends State<TemplateWizardScreen> {
                       child: FilledButton(
                         onPressed: _saving ? null : _next,
                         style: FilledButton.styleFrom(
-                          backgroundColor: const Color(0xFF0F766E),
                           padding: const EdgeInsets.symmetric(vertical: 14),
                         ),
                         child: _saving
@@ -437,10 +437,10 @@ class _TemplateWizardScreenState extends State<TemplateWizardScreen> {
         final t = r.value;
         resultText =
             '✓ تطابق ناجح\nالمبلغ: ${t.amount.minorUnits / 100} ${t.amount.currencyCode}\nالمعرّف: ${t.customerIdentifier} (${t.identifierType.name})\nالمرجع: ${t.reference}';
-        resultColor = const Color(0xFF059669);
+        resultColor = context.netColors.available;
       } else {
         resultText = '✗ لم يتطابق النمط مع الرسالة النموذجية\n${(r as Failure).error.message}';
-        resultColor = const Color(0xFFDC2626);
+        resultColor = context.netColors.rejected;
       }
     }
 
@@ -553,7 +553,7 @@ class _StepIndicator extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const teal = Color(0xFF0F766E);
+    final teal = context.kayan.primary;
     return Column(
       children: [
         SizedBox(
@@ -649,10 +649,17 @@ class _Chip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: const Color(0xFF0F766E).withValues(alpha: 0.1),
+        color: context.kayan.primary.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(8),
       ),
-      child: Text(text, style: const TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w600, color: Color(0xFF0F766E))),
+      child: Text(
+        text,
+        style: TextStyle(
+          fontFamily: 'Tajawal',
+          fontWeight: FontWeight.w600,
+          color: context.kayan.primary,
+        ),
+      ),
     );
   }
 }

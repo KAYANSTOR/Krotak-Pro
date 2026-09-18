@@ -97,7 +97,14 @@ class _CategoriesSheetState extends State<_CategoriesSheet> {
                 TextField(controller: valueCtrl, keyboardType: const TextInputType.numberWithOptions(decimal: true), inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))], decoration: const InputDecoration(labelText: 'القيمة الاسمية (ر.ي)', border: OutlineInputBorder()), style: const TextStyle(fontFamily: 'Tajawal')),
                 if (localError != null) ...[
                   const SizedBox(height: 10),
-                  Text(localError!, style: const TextStyle(fontFamily: 'Tajawal', color: Color(0xFFDC2626), fontSize: 13)),
+                  Text(
+                    localError!,
+                    style: TextStyle(
+                      fontFamily: 'Tajawal',
+                      color: context.netColors.rejected,
+                      fontSize: 13,
+                    ),
+                  ),
                 ],
               ],
             ),

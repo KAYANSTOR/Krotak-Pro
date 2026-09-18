@@ -7,7 +7,8 @@ import '../../../domain/entities/setting.dart';
 import '../../../domain/entities/transaction.dart';
 import '../../../domain/entities/wallet.dart';
 import '../../app_scope.dart';
-import '../../theme/kayan_colors.dart';
+import '../../theme/kayan_palette.dart';
+import '../../theme/net_semantic_colors.dart';
 import '../../widgets/async_views.dart';
 
 class _PosRow {
@@ -253,8 +254,8 @@ class _PosReportScreenState extends State<PosReportScreen> {
                                         fontFamily: 'Tajawal',
                                         fontWeight: FontWeight.w700,
                                         color: row.debtMinor > 0
-                                            ? const Color(0xFFB45309)
-                                            : KayanColors.primary,
+                                            ? context.netColors.warning
+                                            : context.kayan.primary,
                                       ),
                                     ),
                                     if (row.account != null && row.debtMinor > 0)

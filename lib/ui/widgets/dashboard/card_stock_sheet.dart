@@ -5,6 +5,7 @@ import '../../../domain/entities/card.dart' as domain;
 import '../../app_scope.dart';
 import '../../theme/kayan_colors.dart';
 import '../../theme/kayan_palette.dart';
+import '../../theme/net_semantic_colors.dart';
 import '../async_views.dart';
 import '../reserved_card_ops.dart';
 
@@ -187,9 +188,9 @@ class _CardStockSheetState extends State<CardStockSheet> {
                                 final cat = _catsById[card.categoryId];
                                 return ListTile(
                                   contentPadding: EdgeInsets.zero,
-                                  leading: const Icon(
+                                  leading: Icon(
                                     Icons.lock_clock,
-                                    color: Color(0xFFD97706),
+                                    color: context.netColors.warning,
                                   ),
                                   title: Text(
                                     card.serialNumber,
@@ -270,7 +271,7 @@ class _CategoryStockTile extends StatelessWidget {
               style: const TextStyle(
                 fontFamily: 'Tajawal',
                 fontSize: 12,
-                color: Color(0xFFD97706),
+                color: context.netColors.warning,
               ),
             ),
           ],

@@ -4,7 +4,6 @@ import '../../../core/result.dart';
 import '../../../domain/entities/customer.dart';
 import '../../../domain/entities/transaction.dart';
 import '../../app_scope.dart';
-import '../../theme/kayan_colors.dart';
 import '../../widgets/async_views.dart';
 
 enum SalesReportRange { today, month, custom }

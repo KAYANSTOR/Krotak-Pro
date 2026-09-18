@@ -260,7 +260,7 @@ class _RejectedMessagesScreenState extends State<RejectedMessagesScreen> {
                       backgroundColor: Theme.of(context).colorScheme.surface,
                       side: BorderSide(
                         color: selected
-                            ? const Color(0xFF0F766E)
+                            ? context.kayan.primary
                             : Theme.of(context).colorScheme.outlineVariant,
                       ),
                       shape: RoundedRectangleBorder(
@@ -325,7 +325,7 @@ class _RejectedMessagesScreenState extends State<RejectedMessagesScreen> {
                               icon: Icons.archive_outlined,
                             )
                           : RefreshIndicator(
-                              color: const Color(0xFF0F766E),
+                              color: context.kayan.primary,
                               onRefresh: () => _load(markViewed: false),
                               child: ListView.builder(
                                 padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),

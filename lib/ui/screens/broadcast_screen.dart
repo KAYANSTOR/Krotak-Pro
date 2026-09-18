@@ -5,7 +5,6 @@ import '../widgets/net/net_app_bar_title.dart';
 import '../../core/result.dart';
 import '../../domain/entities/broadcast.dart';
 import '../app_scope.dart';
-import '../theme/kayan_colors.dart';
 import '../widgets/async_views.dart';
 
 class BroadcastScreen extends StatefulWidget {
