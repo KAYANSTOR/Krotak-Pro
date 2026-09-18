@@ -8,8 +8,8 @@ import 'services.dart';
 /// Placeholders (both styles supported, same engine — no second parser):
 /// - `{amount}` / `%amount` → digits with optional decimal/comma; Arabic-Indic digits OK
 /// - `{phone}` / `%phone` → sendable phone token
-/// - `{account}` / `%account` → non-phone account/name/code
-/// - `{ref}` / `%ref` → operation reference for idempotency
+/// - `{account}` / `%account` → account/name (spaces allowed, non-greedy)
+/// - `{ref}` / `%ref` → operation reference (allows decimals like 68488.36)
 ///
 /// Active templates are tried in ascending [TransferTemplate.priority] order.
 /// Call [replaceTemplates] after saving templates so SMS path picks them up
@@ -37,7 +37,7 @@ final class LocalMessageParser implements MessageParser {
       if (byPriority != 0) return byPriority;
       return a.name.compareTo(b.name);
     });
-    return List<TransferTemplate>.unmodifiable(list);
+    return List.unmodifiable(list);
   }
 
   static final Set<String> _regexMeta = <String>{
@@ -69,7 +69,7 @@ final class LocalMessageParser implements MessageParser {
       );
     }
 
-    final body = _normalizeDigits(message.body.trim());
+    final body = _normalizeBody(message.body);
     for (final template in active) {
       final parsed = _tryMatch(template, message.id, body);
       if (parsed != null) return Success(parsed);
@@ -101,68 +101,45 @@ final class LocalMessageParser implements MessageParser {
     final phone = _group(match, 'phone');
     final account = _group(match, 'account');
     final ref = _group(match, 'ref');
+    if (ref == null || ref.isEmpty) return null;
 
-    final resolved = _resolveIdentifier(
-      phone: phone,
-      account: account,
-      ref: ref,
-    );
-    if (resolved == null || ref == null || ref.isEmpty) return null;
+    String? identifier;
+    TransferIdentifierType type;
+    if (phone != null && phone.isNotEmpty) {
+      final normalizedPhone = _normalizePhone(phone);
+      if (normalizedPhone == null) return null;
+      identifier = normalizedPhone;
+      type = TransferIdentifierType.phone;
+    } else if (account != null && account.isNotEmpty) {
+      identifier = account.trim();
+      type = TransferIdentifierType.account;
+    } else {
+      return null;
+    }
 
     return ParsedTransfer(
       messageId: messageId,
       amount: Money(minorUnits: minor, currencyCode: defaultCurrencyCode),
-      customerIdentifier: resolved.value,
-      identifierType: resolved.type,
+      customerIdentifier: identifier,
+      identifierType: type,
       reference: ref,
       templateId: template.id,
-      rawIdentifier: resolved.raw,
+      rawIdentifier: phone ?? account,
     );
   }
 
   String? _group(RegExpMatch match, String name) {
     try {
       final v = match.namedGroup(name);
-      if (v == null) return null;
-      final t = v.trim();
-      return t.isEmpty ? null : t;
+      if (v == null || v.trim().isEmpty) return null;
+      return v.trim();
     } catch (_) {
       return null;
     }
   }
 
-  ({String value, TransferIdentifierType type, String raw})? _resolveIdentifier({
-    required String? phone,
-    required String? account,
-    required String? ref,
-  }) {
-    if (phone != null && phone.isNotEmpty) {
-      final normalized = _normalizePhone(phone);
-      if (normalized == null) return null;
-      return (value: normalized, type: TransferIdentifierType.phone, raw: phone);
-    }
-    if (account != null && account.isNotEmpty) {
-      final type = _classifyAccountToken(account);
-      return (value: account, type: type, raw: account);
-    }
-    return null;
-  }
-
-  TransferIdentifierType _classifyAccountToken(String token) {
-    if (RegExp(r'^[\d]+$').hasMatch(token) && token.length >= 4) {
-      return TransferIdentifierType.account;
-    }
-    if (RegExp(r'^[\w\-]+$').hasMatch(token) && !RegExp(r'^\d+$').hasMatch(token)) {
-      if (RegExp(r'\d').hasMatch(token) && RegExp(r'[A-Za-z]').hasMatch(token)) {
-        return TransferIdentifierType.reference;
-      }
-      return TransferIdentifierType.name;
-    }
-    return TransferIdentifierType.account;
-  }
-
   String? _normalizePhone(String raw) {
-    var s = raw.trim();
+    final s = raw.trim();
     if (s.startsWith('+')) {
       final rest = s.substring(1).replaceAll(RegExp(r'\D'), '');
       if (rest.length < 7 || rest.length > 15) return null;
@@ -174,7 +151,7 @@ final class LocalMessageParser implements MessageParser {
   }
 
   RegExp _patternToRegex(String pattern) {
-    final unified = pattern
+    final unified = _normalizeBody(pattern)
         .replaceAll('%amount', '{amount}')
         .replaceAll('%phone', '{phone}')
         .replaceAll('%account', '{account}')
@@ -194,12 +171,14 @@ final class LocalMessageParser implements MessageParser {
         continue;
       }
       if (unified.startsWith('{account}', i)) {
-        buf.write(r'(?<account>[^\s]{2,64})');
+        // Allow Arabic names with spaces (e.g. شيماء عثمان) — non-greedy.
+        buf.write(r'(?<account>.+?)');
         i += '{account}'.length;
         continue;
       }
       if (unified.startsWith('{ref}', i)) {
-        buf.write(r'(?<ref>[\w\-]{3,64})');
+        // Allow decimal refs like 68488.36 (common in Yemen wallet SMS).
+        buf.write(r'(?<ref>\S{1,64})');
         i += '{ref}'.length;
         continue;
       }
@@ -222,6 +201,17 @@ final class LocalMessageParser implements MessageParser {
     }
 
     return RegExp(buf.toString(), caseSensitive: false, unicode: true);
+  }
+
+  /// Collapse whitespace, strip bidi marks, and map Eastern digits.
+  String _normalizeBody(String input) {
+    var s = _normalizeDigits(input.trim());
+    s = s
+        .replaceAll(RegExp(r'[\u200e\u200f\u202a-\u202e\u2066-\u2069]'), '')
+        .replaceAll(RegExp(r'\u00a0'), ' ')
+        .replaceAll(RegExp(r'[ \t\u00a0]+'), ' ')
+        .replaceAll(RegExp(r'\s*\n\s*'), ' ');
+    return s.trim();
   }
 
   String _normalizeDigits(String input) {
