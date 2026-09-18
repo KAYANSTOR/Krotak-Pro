@@ -298,7 +298,7 @@ class _PendingMessagesScreenState extends State<PendingMessagesScreen>
           children: [
             if (_alertEnabled && _rows.isNotEmpty && !_alarm.isMuted)
               Material(
-                color: netColors.warningContainer,
+                color: context.netColors.warningContainer,
                 child: Padding(
                   padding:
                       const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -306,7 +306,7 @@ class _PendingMessagesScreenState extends State<PendingMessagesScreen>
                     children: [
                       Icon(
                         Icons.notification_important,
-                        color: netColors.warning,
+                        color: context.netColors.warning,
                         size: 20,
                       ),
                       const SizedBox(width: 8),
@@ -316,7 +316,7 @@ class _PendingMessagesScreenState extends State<PendingMessagesScreen>
                           style: TextStyle(
                             fontFamily: 'Tajawal',
                             fontSize: 12,
-                            color: netColors.warning,
+                            color: context.netColors.warning,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
@@ -327,7 +327,7 @@ class _PendingMessagesScreenState extends State<PendingMessagesScreen>
                           'كتم',
                           style: TextStyle(
                             fontFamily: 'Tajawal',
-                            color: netColors.warning,
+                            color: context.netColors.warning,
                             fontWeight: FontWeight.w700,
                           ),
                         ),
@@ -343,17 +343,17 @@ class _PendingMessagesScreenState extends State<PendingMessagesScreen>
                   padding:
                       const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                   decoration: BoxDecoration(
-                    color: netColors.warningContainer,
+                    color: context.netColors.warningContainer,
                     borderRadius: BorderRadius.circular(14),
                     border: Border.all(
-                      color: netColors.warning.withValues(alpha: 0.35),
+                      color: context.netColors.warning.withValues(alpha: 0.35),
                     ),
                   ),
                   child: Row(
                     children: [
                       Icon(
                         Icons.hourglass_top,
-                        color: netColors.warning,
+                        color: context.netColors.warning,
                         size: 22,
                       ),
                       const SizedBox(width: 10),
@@ -364,7 +364,7 @@ class _PendingMessagesScreenState extends State<PendingMessagesScreen>
                             fontFamily: 'Tajawal',
                             fontWeight: FontWeight.w700,
                             fontSize: 13,
-                            color: netColors.warning,
+                            color: context.netColors.warning,
                           ),
                         ),
                       ),
@@ -516,13 +516,13 @@ class _PendingCard extends StatelessWidget {
                 width: 36,
                 height: 36,
                 decoration: BoxDecoration(
-                  color: netColors.warningContainer,
+                  color: context.netColors.warningContainer,
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Icon(
                   Icons.hourglass_top,
                   size: 20,
-                  color: netColors.warning,
+                  color: context.netColors.warning,
                 ),
               ),
               const SizedBox(width: 10),
@@ -554,7 +554,7 @@ class _PendingCard extends StatelessWidget {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: netColors.warningContainer,
+                  color: context.netColors.warningContainer,
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
@@ -563,18 +563,23 @@ class _PendingCard extends StatelessWidget {
                     fontFamily: 'Tajawal',
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
-                    color: netColors.warning,
+                    color: context.netColors.warning,
                   ),
                 ),
               ),
             ],
           ),
           const SizedBox(height: 12),
-          _infoRow(Icons.phone_android, 'الجوال', row.phone ?? '—'),
-          _infoRow(Icons.payments_outlined, 'المبلغ', _fmtAmount(row.amount)),
+          _infoRow(context, Icons.phone_android, 'الجوال', row.phone ?? '—'),
+          _infoRow(
+            context,
+            Icons.payments_outlined,
+            'المبلغ',
+            _fmtAmount(row.amount),
+          ),
           if (row.reference != null && row.reference!.isNotEmpty)
-            _infoRow(Icons.tag, 'المرجع', row.reference!),
-          _infoRow(Icons.info_outline, 'السبب', row.reason),
+            _infoRow(context, Icons.tag, 'المرجع', row.reference!),
+          _infoRow(context, Icons.info_outline, 'السبب', row.reason),
           const SizedBox(height: 14),
           if (busy)
             const Center(
@@ -593,7 +598,7 @@ class _PendingCard extends StatelessWidget {
                     style: OutlinedButton.styleFrom(
                       foregroundColor: const Color(0xFFDC2626),
                       side: BorderSide(
-                        color: netColors.rejected.withValues(alpha: 0.4),
+                        color: context.netColors.rejected.withValues(alpha: 0.4),
                       ),
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       shape: RoundedRectangleBorder(
@@ -637,7 +642,12 @@ class _PendingCard extends StatelessWidget {
     );
   }
 
-  Widget _infoRow(IconData icon, String label, String value) {
+  Widget _infoRow(
+    BuildContext context,
+    IconData icon,
+    String label,
+    String value,
+  ) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 6),
       child: Row(

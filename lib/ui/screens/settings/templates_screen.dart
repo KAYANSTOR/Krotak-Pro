@@ -406,7 +406,7 @@ class _TemplateCard extends StatelessWidget {
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                         decoration: BoxDecoration(
                           color: active
-                              ? netColors.available.withValues(alpha: 0.14)
+                              ? context.netColors.available.withValues(alpha: 0.14)
                               : Theme.of(context)
                                   .colorScheme
                                   .surfaceContainerHighest,
@@ -421,7 +421,7 @@ class _TemplateCard extends StatelessWidget {
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
                                 color: active
-                                    ? netColors.available
+                                    ? context.netColors.available
                                     : Theme.of(context)
                                         .colorScheme
                                         .onSurfaceVariant,
@@ -435,7 +435,7 @@ class _TemplateCard extends StatelessWidget {
                                 fontSize: 11,
                                 fontWeight: FontWeight.w600,
                                 color: active
-                                    ? netColors.available
+                                    ? context.netColors.available
                                     : Theme.of(context)
                                         .colorScheme
                                         .onSurfaceVariant,
@@ -476,7 +476,7 @@ class _TemplateCard extends StatelessWidget {
               height: 36,
               decoration: BoxDecoration(
                 color: active
-                    ? netColors.availableContainer
+                    ? context.netColors.availableContainer
                     : Theme.of(context).colorScheme.surfaceContainerHighest,
                 borderRadius: BorderRadius.circular(10),
               ),
@@ -484,7 +484,7 @@ class _TemplateCard extends StatelessWidget {
                 Icons.check_circle,
                 size: 22,
                 color: active
-                    ? netColors.available
+                    ? context.netColors.available
                     : Theme.of(context).colorScheme.onSurfaceVariant,
               ),
             ),

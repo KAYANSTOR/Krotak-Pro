@@ -384,15 +384,15 @@ class _SummaryBanner extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
-        color: netColors.warningContainer,
+        color: context.netColors.warningContainer,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: netColors.warning.withValues(alpha: 0.4),
+          color: context.netColors.warning.withValues(alpha: 0.4),
         ),
       ),
       child: Row(
         children: [
-          Icon(Icons.chat_bubble_outline, color: netColors.warning, size: 22),
+          Icon(Icons.chat_bubble_outline, color: context.netColors.warning, size: 22),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -403,7 +403,7 @@ class _SummaryBanner extends StatelessWidget {
                   style: TextStyle(
                     fontFamily: 'Tajawal',
                     fontSize: 12,
-                    color: netColors.warning,
+                    color: context.netColors.warning,
                   ),
                 ),
                 Text(
@@ -412,7 +412,7 @@ class _SummaryBanner extends StatelessWidget {
                     fontFamily: 'Tajawal',
                     fontWeight: FontWeight.w800,
                     fontSize: 16,
-                    color: netColors.warning,
+                    color: context.netColors.warning,
                   ),
                 ),
               ],
@@ -422,10 +422,10 @@ class _SummaryBanner extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
               decoration: BoxDecoration(
-                color: netColors.rejectedContainer,
+                color: context.netColors.rejectedContainer,
                 borderRadius: BorderRadius.circular(20),
                 border: Border.all(
-                  color: netColors.rejected.withValues(alpha: 0.4),
+                  color: context.netColors.rejected.withValues(alpha: 0.4),
                 ),
               ),
               child: Text(
@@ -434,7 +434,7 @@ class _SummaryBanner extends StatelessWidget {
                   fontFamily: 'Tajawal',
                   fontWeight: FontWeight.w700,
                   fontSize: 12,
-                  color: netColors.rejected,
+                  color: context.netColors.rejected,
                 ),
               ),
             ),
@@ -515,7 +515,7 @@ class _RejectedCard extends StatelessWidget {
                 height: 8,
                 margin: const EdgeInsets.only(top: 6),
                 decoration: BoxDecoration(
-                  color: netColors.rejected,
+                  color: context.netColors.rejected,
                   shape: BoxShape.circle,
                 ),
               ),
@@ -586,7 +586,7 @@ class _RejectedCard extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: netColors.rejectedContainer,
+                    color: context.netColors.rejectedContainer,
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
@@ -595,7 +595,7 @@ class _RejectedCard extends StatelessWidget {
                       fontFamily: 'Tajawal',
                       fontSize: 11,
                       fontWeight: FontWeight.w700,
-                      color: netColors.rejected,
+                      color: context.netColors.rejected,
                     ),
                   ),
                 ),

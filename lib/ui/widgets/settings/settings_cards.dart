@@ -47,14 +47,15 @@ class SettingsGroupCard extends StatelessWidget {
     if (children.isEmpty) return const SizedBox.shrink();
     final kayan = KayanPalette.of(context);
     final query = SettingsSearchScope.maybeQueryOf(context).trim().toLowerCase();
-    final visible = query.isEmpty
-        ? children
-        : [
-            for (final child in children)
-              if (child is! SettingsSearchable ||
-                  child.searchableText.toLowerCase().contains(query))
-                child,
-          ];
+    final visible = <Widget>[];
+    for (final child in children) {
+      if (child is SettingsSearchable) {
+        final matches = query.isEmpty ||
+            child.searchableText.toLowerCase().contains(query);
+        if (!matches) continue;
+      }
+      visible.add(child);
+    }
     if (visible.isEmpty) return const SizedBox.shrink();
     final rows = <Widget>[];
     for (var i = 0; i < visible.length; i++) {

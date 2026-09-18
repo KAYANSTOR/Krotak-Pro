@@ -454,7 +454,7 @@ class _WalletsPosScreenState extends State<WalletsPosScreen>
       child: Scaffold(
         backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         appBar: AppBar(
-          title: const Column(
+          title: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text('إدارة المحافظ ونقاط البيع',
@@ -575,7 +575,7 @@ class _WalletsPosScreenState extends State<WalletsPosScreen>
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
                       color: isNotif
-                          ? netColors.soldContainer
+                          ? context.netColors.soldContainer
                           : Theme.of(context).colorScheme.surfaceContainerHighest,
                       borderRadius: BorderRadius.circular(8),
                     ),
@@ -586,7 +586,7 @@ class _WalletsPosScreenState extends State<WalletsPosScreen>
                         fontSize: 11,
                         fontWeight: FontWeight.w700,
                         color: isNotif
-                            ? netColors.sold
+                            ? context.netColors.sold
                             : Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
                     ),

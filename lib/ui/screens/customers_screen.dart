@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/result.dart';
 import '../../domain/entities/customer.dart';
@@ -605,6 +606,84 @@ class _SummaryStat extends StatelessWidget {
   }
 }
 
+/// يفتح تطبيق الاتصال أو الرسائل على رقم المشترك — إجراء واجهة فقط.
+///
+/// لا يرسل شيئاً بنفسه: يعرض الرقم في تطبيق النظام المناسب.
+Future<void> _openContact(
+  BuildContext context,
+  String scheme,
+  String phone,
+) async {
+  final messenger = ScaffoldMessenger.of(context);
+  var opened = false;
+  try {
+    opened = await launchUrl(
+      Uri(scheme: scheme, path: phone),
+      mode: LaunchMode.externalApplication,
+    );
+  } on Object {
+    opened = false;
+  }
+  if (!opened) {
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          scheme == 'tel' ? 'تعذّر فتح تطبيق الاتصال' : 'تعذّر فتح تطبيق الرسائل',
+        ),
+      ),
+    );
+  }
+}
+
+/// زر إجراء صغير داخل بطاقة الحساب.
+class _ContactButton extends StatelessWidget {
+  const _ContactButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = KayanPalette.of(context);
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(NetRadii.sm),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 9),
+          decoration: BoxDecoration(
+            color: palette.surfaceVariant,
+            borderRadius: BorderRadius.circular(NetRadii.sm),
+            border: Border.all(color: palette.border),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 16, color: palette.primary),
+              const SizedBox(width: NetSpacing.xs),
+              Text(
+                label,
+                style: TextStyle(
+                  fontFamily: NetTypography.family,
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w700,
+                  color: palette.textPrimary,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 final class _AccountRow {
   const _AccountRow({
     required this.customer,
@@ -707,6 +786,30 @@ class _AccountCard extends StatelessWidget {
               NetBalancePill(amountMinor: row.balance?.minorUnits ?? 0),
             ],
           ),
+          if (row.hasPhone) ...[
+            const SizedBox(height: NetSpacing.md),
+            Row(
+              children: [
+                Expanded(
+                  child: _ContactButton(
+                    icon: Icons.call_rounded,
+                    label: 'اتصال',
+                    onTap: () =>
+                        _openContact(context, 'tel', row.phone!.trim()),
+                  ),
+                ),
+                const SizedBox(width: NetSpacing.sm),
+                Expanded(
+                  child: _ContactButton(
+                    icon: Icons.sms_outlined,
+                    label: 'رسالة',
+                    onTap: () =>
+                        _openContact(context, 'sms', row.phone!.trim()),
+                  ),
+                ),
+              ],
+            ),
+          ],
           if (!row.hasPhone) ...[
             const SizedBox(height: NetSpacing.sm),
             Row(
