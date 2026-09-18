@@ -45,9 +45,6 @@ class _SalesPeriodReportScreenState extends State<SalesPeriodReportScreen> {
   List<_Row> _rows = const [];
   int _totalMinor = 0;
 
-  /// الفئات بالاسم لربط كل بيع بفئته (قراءة فقط لأغراض العرض).
-  Map<String, String> _categoryNames = const {};
-
   @override
   void initState() {
     super.initState();
