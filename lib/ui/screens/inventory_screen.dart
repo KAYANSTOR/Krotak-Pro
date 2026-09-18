@@ -12,9 +12,7 @@ import '../../domain/services/services.dart';
 import '../app_scope.dart';
 import '../theme/kayan_colors.dart';
 import '../widgets/async_views.dart';
-import '../widgets/reserved_card_ops.dart';
 
-part 'inventory_widgets.dart';
 part 'inventory_sheets.dart';
 
 /// شاشة إدارة الكروت — مطابقة لتصميم فيديو Z Net + الصورة المرجعية.
