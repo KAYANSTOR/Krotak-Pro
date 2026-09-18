@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/result.dart';
@@ -9,23 +10,39 @@ import '../../domain/entities/setting.dart';
 import '../../domain/entities/system_capability.dart';
 import '../../domain/entities/transaction.dart';
 import '../app_scope.dart';
+import '../labels/net_labels.dart';
 import '../routing/app_routes.dart';
-import '../theme/kayan_colors.dart';
+import '../theme/kayan_palette.dart';
+import '../theme/net_semantic_colors.dart';
+import '../theme/net_tokens.dart';
 import '../widgets/async_views.dart';
 import '../widgets/dashboard/card_stock_sheet.dart';
+import '../widgets/dashboard/quick_actions_sheet.dart';
 import '../widgets/dashboard/sales_period_sheet.dart';
 import '../widgets/net/net_alert_banner.dart';
 import '../widgets/net/net_balance_card.dart';
 import '../widgets/net/net_dashboard_header.dart';
 import '../widgets/net/net_metric_card.dart';
+import '../widgets/net/net_quick_action_card.dart';
 import '../widgets/net/net_recent_transaction_card.dart';
 import '../widgets/net/net_section_header.dart';
+import '../widgets/net/net_surface_card.dart';
 
 /// لوحة التحكم — مطابقة بصرية وسلوكية لفيديو Z Net (المرحلة 1).
+///
+/// البيانات تُقرأ من نفس الخدمات والمستودعات كما قبل التحديث البصري؛
+/// التغييرات محصورة في العرض والتنسيق والحركة.
 class DashboardScreen extends StatefulWidget {
-  const DashboardScreen({super.key, this.onNavigateToTab});
+  const DashboardScreen({
+    super.key,
+    this.onNavigateToTab,
+    this.refreshSignal,
+  });
 
   final ValueChanged<String>? onNavigateToTab;
+
+  /// Bumped by the shell when another screen mutates data this dashboard shows.
+  final ValueListenable<int>? refreshSignal;
 
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
@@ -51,6 +68,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
   List<({String name, int available})> _lowStock = const [];
   SystemHealthSnapshot? _health;
 
+  /// Last 7 days of completed-sales totals (major units) for the KPI sparkline.
+  List<double> _weeklySalesSeries = const [0, 0, 0, 0, 0, 0, 0];
+
+  /// Locally dismissed alert banners (presentation-only state).
+  final Set<String> _dismissedAlerts = <String>{};
+
   static const _attentionStatuses = <MessageProcessingStatus>[
     MessageProcessingStatus.rejected,
     MessageProcessingStatus.received,
@@ -61,7 +84,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   void initState() {
     super.initState();
+    widget.refreshSignal?.addListener(_onExternalRefresh);
     WidgetsBinding.instance.addPostFrameCallback((_) => _load());
+  }
+
+  @override
+  void dispose() {
+    widget.refreshSignal?.removeListener(_onExternalRefresh);
+    super.dispose();
+  }
+
+  void _onExternalRefresh() {
+    if (!mounted) return;
+    _load();
   }
 
   Future<void> _load() async {
@@ -73,6 +108,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final now = c.clock.now();
     final dayStart = DateTime(now.year, now.month, now.day);
     final monthStart = DateTime(now.year, now.month, 1);
+    final weekStart = dayStart.subtract(const Duration(days: 6));
     final dateLabel = formatArabicDashboardDate(now);
 
     try {
@@ -99,6 +135,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
       );
 
       final healthResult = await c.systemHealth.check();
+
+      // Read-only extra query used purely for the KPI trend sparkline.
+      final weeklySales = await c.sales.listCompletedBetween(weekStart, now);
 
       final categories = await c.categories.listAll();
       final low = <({String name, int available})>[];
@@ -162,6 +201,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
         defaultValue: SettingDefaults.processCategoryAmountsOnly,
       );
 
+      final weeklySeries = _bucketDailyTotals(weeklySales, weekStart);
+
       if (!mounted) return;
       setState(() {
         _loading = false;
@@ -185,6 +226,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _recent =
             recent is Success<List<Transaction>> ? recent.value : const [];
         _lowStock = low;
+        _weeklySalesSeries = weeklySeries;
         _health = healthResult is Success<SystemHealthSnapshot>
             ? healthResult.value
             : null;
@@ -206,6 +248,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _error = e.toString();
       });
     }
+  }
+
+  /// Buckets completed sales into 7 daily totals (major units), oldest first.
+  static List<double> _bucketDailyTotals(Result<List<Sale>> result, DateTime start) {
+    final totals = List<double>.filled(7, 0);
+    if (result is! Success<List<Sale>>) return totals;
+    for (final sale in result.value) {
+      final local = sale.createdAt.toLocal();
+      final index = DateTime(local.year, local.month, local.day)
+          .difference(DateTime(start.year, start.month, start.day))
+          .inDays;
+      if (index < 0 || index > 6) continue;
+      totals[index] += sale.amount.minorUnits / 100.0;
+    }
+    return totals;
   }
 
   void _openCardStockSheet() {
@@ -255,6 +312,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (mounted) await _load();
   }
 
+  Future<void> _openDirectSale() async {
+    await AppRoutes.openDirectSale(context);
+    if (mounted) await _load();
+  }
+
+  Future<void> _openWalletsAndPos() async {
+    await AppRoutes.openWalletsAndPos(context);
+    if (mounted) await _load();
+  }
+
+  void _openMoreActions() {
+    QuickActionsSheet.show(
+      context,
+      onDirectSale: _openDirectSale,
+      onPosAccounts: _openWalletsAndPos,
+      onAddCustomer: () => widget.onNavigateToTab?.call('accounts'),
+    );
+  }
+
   String? get _lowStockBannerMessage {
     if (_lowStock.isEmpty) return null;
     final parts = _lowStock
@@ -270,12 +346,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return h.bannerMessage;
   }
 
+  /// Groups recent transactions by calendar day, newest first.
+  List<({String label, List<Transaction> items})> get _recentGroups {
+    final groups = <({String label, List<Transaction> items})>[];
+    for (final tx in _recent) {
+      final label = arabicDayLabel(tx.createdAt);
+      if (groups.isNotEmpty && groups.last.label == label) {
+        groups.last.items.add(tx);
+      } else {
+        groups.add((label: label, items: <Transaction>[tx]));
+      }
+    }
+    return groups;
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_loading) {
-      return const SafeArea(
-        child: AsyncLoadingView(message: 'جاري تحميل اللوحة…'),
-      );
+      return const SafeArea(child: AsyncLoadingView(skeleton: true, skeletonCount: 5));
     }
     if (_error != null && _accountsCount == 0 && _recent.isEmpty) {
       return SafeArea(child: AsyncErrorView(message: _error!, onRetry: _load));
@@ -283,14 +371,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     final lowStockMessage = _lowStockBannerMessage;
     final healthMessage = _healthBannerMessage;
+    final groups = _recentGroups;
 
     return SafeArea(
+      bottom: false,
       child: RefreshIndicator(
         onRefresh: _load,
-        color: KayanColors.primary,
+        color: KayanPalette.of(context).primary,
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.only(bottom: 88),
+          padding: NetSpacing.listBottomInset,
           children: [
             NetDashboardHeader(
               networkName: _networkName,
@@ -300,6 +390,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
               onSettings: _openSettings,
               onHelp: _openHelp,
             ),
+
+            if (_error != null)
+              NetAlertBanner(
+                key: const ValueKey('dashboard-partial-error'),
+                message: _error!,
+                icon: Icons.warning_amber_rounded,
+                style: NetAlertStyle.warning,
+                onDismiss: () => setState(() => _error = null),
+              ),
 
             // ── حالة معالجة الرسائل + المرفوضة (مطابق للفيديو) ──
             _MessageStatusCard(
@@ -311,19 +410,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
               onAttentionTap: _openAttentionMessages,
             ),
 
-            if (healthMessage != null)
+            if (healthMessage != null && !_dismissedAlerts.contains('health'))
               NetAlertBanner(
                 message: healthMessage,
                 icon: Icons.health_and_safety_outlined,
                 onTap: _openSystemCheck,
+                onDismiss: () => setState(() => _dismissedAlerts.add('health')),
                 style: NetAlertStyle.warning,
               ),
 
-            if (lowStockMessage != null)
+            if (lowStockMessage != null && !_dismissedAlerts.contains('stock'))
               NetAlertBanner(
                 message: lowStockMessage,
                 icon: Icons.warning_amber_rounded,
                 onTap: () => widget.onNavigateToTab?.call('cards'),
+                onDismiss: () => setState(() => _dismissedAlerts.add('stock')),
                 style: NetAlertStyle.danger,
               ),
 
@@ -337,8 +438,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
             // ── مبيعات اليوم / الشهر ──
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              padding: const EdgeInsets.symmetric(
+                horizontal: NetSpacing.lg,
+                vertical: NetSpacing.sm,
+              ),
               child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Expanded(
                     child: NetMetricCard(
@@ -346,16 +451,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       value: formatMoneyMinor(_dailySalesMinor),
                       subtitle: '$_dailyCards كرت',
                       icon: Icons.trending_up_rounded,
+                      sparkline: _weeklySalesSeries,
                       onTap: _openDailySalesSheet,
                     ),
                   ),
-                  const SizedBox(width: 10),
+                  const SizedBox(width: NetSpacing.md),
                   Expanded(
                     child: NetMetricCard(
                       title: 'مبيعات الشهر',
                       value: formatMoneyMinor(_monthlySalesMinor),
                       subtitle: '$_monthlyCards كرت',
                       icon: Icons.calendar_month_outlined,
+                      accent: const Color(0xFF7C3AED),
+                      trailingLabel: 'هذا الشهر',
                       onTap: _openMonthlySalesSheet,
                     ),
                   ),
@@ -363,38 +471,46 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
             ),
 
-            // ── إجراءات سريعة (شبكة 2×2 كالفيديو) ──
-            const NetSectionHeader(title: 'إجراءات سريعة'),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: GridView.count(
-                crossAxisCount: 2,
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                mainAxisSpacing: 10,
-                crossAxisSpacing: 10,
-                childAspectRatio: 1.55,
+            // ── إجراءات سريعة (شريط أفقي موحّد) ──
+            const NetSectionHeader(title: 'إجراءات سريعة', icon: Icons.bolt_rounded),
+            SizedBox(
+              height: 108,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                padding: NetSpacing.pageH,
                 children: [
-                  _GridAction(
-                    label: 'بيع مباشر يدوي',
-                    icon: Icons.add_circle_outline,
-                    onTap: () =>
-                        AppRoutes.openDirectSale(context).then((_) => _load()),
+                  NetQuickActionCard(
+                    label: 'بيع مباشر',
+                    icon: Icons.add_shopping_cart_rounded,
+                    onTap: _openDirectSale,
                   ),
-                  _GridAction(
-                    label: 'حسابات نقاط البيع',
-                    icon: Icons.storefront_outlined,
-                    onTap: () => AppRoutes.openWalletsAndPos(context),
+                  const SizedBox(width: NetSpacing.sm),
+                  NetQuickActionCard(
+                    label: 'نقاط البيع',
+                    icon: Icons.storefront_rounded,
+                    accent: const Color(0xFF0EA5E9),
+                    onTap: _openWalletsAndPos,
                   ),
-                  _GridAction(
+                  const SizedBox(width: NetSpacing.sm),
+                  NetQuickActionCard(
                     label: 'سجل العمليات',
-                    icon: Icons.receipt_long_outlined,
+                    icon: Icons.receipt_long_rounded,
+                    accent: const Color(0xFF6366F1),
                     onTap: () => AppRoutes.openTransactionsLog(context),
                   ),
-                  _GridAction(
+                  const SizedBox(width: NetSpacing.sm),
+                  NetQuickActionCard(
                     label: 'فحص النظام',
-                    icon: Icons.health_and_safety_outlined,
+                    icon: Icons.health_and_safety_rounded,
+                    accent: const Color(0xFF059669),
                     onTap: _openSystemCheck,
+                  ),
+                  const SizedBox(width: NetSpacing.sm),
+                  NetQuickActionCard(
+                    label: 'المزيد',
+                    icon: Icons.more_horiz_rounded,
+                    accent: KayanPalette.of(context).textSecondary,
+                    onTap: _openMoreActions,
                   ),
                 ],
               ),
@@ -402,23 +518,65 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
             NetSectionHeader(
               title: 'آخر العمليات',
+              icon: Icons.history_rounded,
               actionLabel: 'الكل',
               onAction: () => AppRoutes.openTransactionsLog(context),
             ),
             if (_recent.isEmpty)
               const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 12),
-                child: AsyncEmptyView(message: 'لا توجد عمليات حديثة'),
+                padding: EdgeInsets.symmetric(horizontal: NetSpacing.md),
+                child: AsyncEmptyView(
+                  message: 'لا توجد عمليات حديثة',
+                  icon: Icons.receipt_long_outlined,
+                  hint: 'ستظهر هنا أول عملية إيداع أو صرف كرت',
+                  compact: true,
+                ),
               )
             else
-              ..._recent.map(
-                (tx) => NetRecentTransactionCard(
-                  transaction: tx,
-                  onTap: () => AppRoutes.openTransactionsLog(context),
-                ),
-              ),
+              for (final group in groups) ...[
+                _DayGroupLabel(label: group.label),
+                for (final tx in group.items)
+                  NetRecentTransactionCard(
+                    transaction: tx,
+                    onTap: () => AppRoutes.openTransactionsLog(context),
+                  ),
+              ],
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _DayGroupLabel extends StatelessWidget {
+  const _DayGroupLabel({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = KayanPalette.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        NetSpacing.xl,
+        NetSpacing.md,
+        NetSpacing.xl,
+        NetSpacing.xs,
+      ),
+      child: Row(
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontFamily: NetTypography.family,
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+              color: palette.textSecondary,
+            ),
+          ),
+          const SizedBox(width: NetSpacing.sm),
+          Expanded(child: Divider(height: 1, color: palette.border)),
+        ],
       ),
     );
   }
@@ -444,219 +602,183 @@ class _MessageStatusCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: KayanColors.borderGray),
-        ),
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
+    final net = context.netColors;
+    final palette = KayanPalette.of(context);
+    final statusColor = autoProcessing ? net.success : net.error;
+    final statusBg = autoProcessing ? net.successContainer : net.errorContainer;
+
+    return NetSurfaceCard(
+      margin: const EdgeInsets.fromLTRB(
+        NetSpacing.lg,
+        6,
+        NetSpacing.lg,
+        NetSpacing.xs,
+      ),
+      padding: EdgeInsets.zero,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              NetSpacing.md,
+              NetSpacing.md,
+              NetSpacing.md,
+              NetSpacing.sm,
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'حالة معالجة الرسائل',
+                        style: TextStyle(
+                          fontFamily: NetTypography.family,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 14,
+                          color: palette.textPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: NetSpacing.xs),
+                      Text(
+                        categoryOnly
+                            ? 'معالجة مبالغ الفئات المعرفة فقط'
+                            : 'معالجة جميع مبالغ الرسائل',
+                        style: TextStyle(
+                          fontFamily: NetTypography.family,
+                          fontSize: 12,
+                          color: palette.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: NetSpacing.sm,
+                    vertical: NetSpacing.xs,
+                  ),
+                  decoration: BoxDecoration(
+                    color: statusBg,
+                    borderRadius: NetRadii.pillAll,
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        autoProcessing
+                            ? Icons.play_circle_filled_rounded
+                            : Icons.pause_circle_filled_rounded,
+                        size: 15,
+                        color: statusColor,
+                      ),
+                      const SizedBox(width: NetSpacing.xs),
+                      Text(
+                        autoProcessing ? 'نشطة' : 'متوقفة',
+                        style: TextStyle(
+                          fontFamily: NetTypography.family,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                          color: statusColor,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Divider(height: 1, color: palette.border),
+          InkWell(
+            onTap: onRejectedTap,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: NetSpacing.md,
+                vertical: NetSpacing.md,
+              ),
               child: Row(
                 children: [
+                  Icon(
+                    Icons.mark_email_unread_rounded,
+                    size: 20,
+                    color: palette.primary,
+                  ),
+                  const SizedBox(width: NetSpacing.sm),
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'حالة معالجة الرسائل',
-                          style: TextStyle(
-                            fontFamily: 'Tajawal',
-                            fontWeight: FontWeight.w800,
-                            fontSize: 14,
-                            color: KayanColors.textPrimary,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          categoryOnly
-                              ? 'معالجة مبالغ الفئات المعرفة فقط'
-                              : 'معالجة جميع مبالغ الرسائل',
-                          style: const TextStyle(
-                            fontFamily: 'Tajawal',
-                            fontSize: 12,
-                            color: KayanColors.textSecondary,
-                          ),
-                        ),
-                      ],
+                    child: Text(
+                      'الرسائل المرفوضة',
+                      style: TextStyle(
+                        fontFamily: NetTypography.family,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13,
+                        color: palette.textPrimary,
+                      ),
                     ),
                   ),
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: autoProcessing
-                          ? const Color(0xFFD1FAE5)
-                          : const Color(0xFFFEE2E2),
-                      borderRadius: BorderRadius.circular(20),
+                  if (rejectedCount > 0)
+                    _CountPill(
+                      label: '$rejectedCount أخطاء',
+                      color: net.rejected,
+                      background: net.rejectedContainer,
+                    )
+                  else if (attentionCount > 0)
+                    _CountPill(
+                      label: '$attentionCount معلّقة',
+                      color: net.warning,
+                      background: net.warningContainer,
+                    )
+                  else
+                    _CountPill(
+                      label: 'لا أخطاء',
+                      color: net.success,
+                      background: net.successContainer,
                     ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          autoProcessing
-                              ? Icons.check_circle
-                              : Icons.pause_circle_filled,
-                          size: 16,
-                          color: autoProcessing
-                              ? const Color(0xFF059669)
-                              : const Color(0xFFDC2626),
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          autoProcessing ? 'نشطة' : 'متوقفة',
-                          style: TextStyle(
-                            fontFamily: 'Tajawal',
-                            fontSize: 12,
-                            fontWeight: FontWeight.w800,
-                            color: autoProcessing
-                                ? const Color(0xFF059669)
-                                : const Color(0xFFDC2626),
-                          ),
-                        ),
-                      ],
-                    ),
+                  const SizedBox(width: NetSpacing.xs),
+                  Icon(
+                    Icons.chevron_left_rounded,
+                    size: NetSizes.iconSm,
+                    color: palette.textTertiary,
                   ),
                 ],
               ),
             ),
-            const Divider(height: 1),
-            InkWell(
-              onTap: onRejectedTap,
-              borderRadius: const BorderRadius.vertical(
-                bottom: Radius.circular(16),
-              ),
-              child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                child: Row(
-                  children: [
-                    const Icon(
-                      Icons.mark_email_unread_outlined,
-                      size: 20,
-                      color: KayanColors.primary,
-                    ),
-                    const SizedBox(width: 10),
-                    const Expanded(
-                      child: Text(
-                        'الرسائل المرفوضة',
-                        style: TextStyle(
-                          fontFamily: 'Tajawal',
-                          fontWeight: FontWeight.w700,
-                          fontSize: 13,
-                          color: KayanColors.textPrimary,
-                        ),
-                      ),
-                    ),
-                    if (rejectedCount > 0)
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFFEE2E2),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Text(
-                          '$rejectedCount أخطاء',
-                          style: const TextStyle(
-                            fontFamily: 'Tajawal',
-                            fontSize: 11,
-                            fontWeight: FontWeight.w800,
-                            color: Color(0xFFDC2626),
-                          ),
-                        ),
-                      )
-                    else if (attentionCount > 0)
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFFEF3C7),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Text(
-                          '$attentionCount معلّقة',
-                          style: const TextStyle(
-                            fontFamily: 'Tajawal',
-                            fontSize: 11,
-                            fontWeight: FontWeight.w800,
-                            color: Color(0xFFD97706),
-                          ),
-                        ),
-                      ),
-                    const SizedBox(width: 4),
-                    const Icon(
-                      Icons.chevron_left,
-                      size: 18,
-                      color: KayanColors.textTertiary,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 }
 
-class _GridAction extends StatelessWidget {
-  const _GridAction({
+class _CountPill extends StatelessWidget {
+  const _CountPill({
     required this.label,
-    required this.icon,
-    required this.onTap,
+    required this.color,
+    required this.background,
   });
 
   final String label;
-  final IconData icon;
-  final VoidCallback onTap;
+  final Color color;
+  final Color background;
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(16),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: KayanColors.borderGray),
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: KayanColors.lightBackground,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(icon, color: KayanColors.primary, size: 22),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                label,
-                textAlign: TextAlign.center,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontFamily: 'Tajawal',
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: KayanColors.textPrimary,
-                ),
-              ),
-            ],
-          ),
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: NetSpacing.sm,
+        vertical: NetSpacing.xxs,
+      ),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: NetRadii.pillAll,
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontFamily: NetTypography.family,
+          fontSize: 11,
+          fontWeight: FontWeight.w800,
+          color: color,
         ),
       ),
     );

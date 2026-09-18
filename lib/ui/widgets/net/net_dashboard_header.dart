@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
-import '../../theme/kayan_colors.dart';
+import '../../theme/kayan_palette.dart';
+import '../../theme/net_tokens.dart';
 import 'net_app_logo.dart';
+import 'net_tab_header.dart';
 
 /// ترويسة لوحة التحكم — مطابقة لفيديو Z Net.
 class NetDashboardHeader extends StatelessWidget {
@@ -22,57 +24,74 @@ class NetDashboardHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final displayName =
-        networkName.trim().isEmpty ? 'NET' : networkName.trim();
+    final palette = KayanPalette.of(context);
+    final displayName = networkName.trim().isEmpty ? 'NET' : networkName.trim();
     final greet = greeting ?? _defaultGreeting(DateTime.now());
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+      padding: const EdgeInsets.fromLTRB(
+        NetSpacing.lg,
+        NetSpacing.sm,
+        NetSpacing.lg,
+        NetSpacing.xs,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
             children: [
-              const NetAppLogo(size: 36),
-              const SizedBox(width: 8),
+              const NetAppLogo(size: NetSizes.logo),
+              const SizedBox(width: NetSpacing.sm),
               Expanded(
                 child: Text(
                   'شبكة $displayName',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontFamily: 'Tajawal',
+                  style: TextStyle(
+                    fontFamily: NetTypography.family,
                     fontWeight: FontWeight.w800,
                     fontSize: 18,
-                    color: KayanColors.primary,
+                    color: palette.primary,
                   ),
                 ),
               ),
               if (onHelp != null)
-                _RoundHeaderButton(
+                NetHeaderAction(
                   icon: Icons.help_outline_rounded,
                   tooltip: 'المساعدة',
-                  onPressed: onHelp!,
+                  onPressed: onHelp,
                 ),
-              if (onSettings != null) ...[
-                const SizedBox(width: 8),
-                _RoundHeaderButton(
+              if (onSettings != null)
+                NetHeaderAction(
                   icon: Icons.settings_outlined,
                   tooltip: 'الإعدادات',
-                  onPressed: onSettings!,
+                  onPressed: onSettings,
                 ),
-              ],
             ],
           ),
-          const SizedBox(height: 10),
-          Text(
-            '$greet — $dateLabel',
-            style: const TextStyle(
-              fontFamily: 'Tajawal',
-              fontSize: 13,
-              color: KayanColors.textSecondary,
-              fontWeight: FontWeight.w500,
-            ),
+          const SizedBox(height: NetSpacing.sm),
+          Row(
+            children: [
+              Icon(
+                Icons.wb_sunny_outlined,
+                size: 14,
+                color: palette.textTertiary,
+              ),
+              const SizedBox(width: NetSpacing.xs),
+              Expanded(
+                child: Text(
+                  '$greet — $dateLabel',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontFamily: NetTypography.family,
+                    fontSize: 13,
+                    color: palette.textSecondary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -83,42 +102,6 @@ class NetDashboardHeader extends StatelessWidget {
     final h = now.hour;
     if (h >= 5 && h < 12) return 'صباح الخير';
     return 'مساء الخير';
-  }
-}
-
-class _RoundHeaderButton extends StatelessWidget {
-  const _RoundHeaderButton({
-    required this.icon,
-    required this.tooltip,
-    required this.onPressed,
-  });
-
-  final IconData icon;
-  final String tooltip;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.white,
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: const BorderSide(color: KayanColors.borderGray),
-      ),
-      child: InkWell(
-        onTap: onPressed,
-        borderRadius: BorderRadius.circular(12),
-        child: Tooltip(
-          message: tooltip,
-          child: SizedBox(
-            width: 40,
-            height: 40,
-            child: Icon(icon, size: 22, color: KayanColors.textPrimary),
-          ),
-        ),
-      ),
-    );
   }
 }
 
