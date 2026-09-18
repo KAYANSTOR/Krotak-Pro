@@ -7,22 +7,22 @@ import android.provider.Telephony
 import android.util.Log
 
 /**
- * Receives SMS_RECEIVED broadcasts and forwards them to [MainActivity]
- * via a static listener so Flutter MethodChannel can process them.
- *
- * Permissions required: RECEIVE_SMS, READ_SMS (declared in AndroidManifest).
+ * Receives SMS_RECEIVED broadcasts, persists them to [SmsInboxStore], and
+ * optionally forwards to a live [SmsListener] (MainActivity) when present.
  */
 class SmsReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != Telephony.Sms.Intents.SMS_RECEIVED_ACTION) return
 
         val messages = Telephony.Sms.Intents.getMessagesFromIntent(intent) ?: return
+        val store = SmsInboxStore(context)
         for (sms in messages) {
             val sender = sms.displayOriginatingAddress ?: continue
             val body = sms.messageBody ?: continue
             val timestamp = sms.timestampMillis
 
             Log.d(TAG, "SMS from=$sender len=${body.length}")
+            store.append(sender, body, timestamp)
             listener?.onSmsReceived(sender, body, timestamp)
         }
     }
