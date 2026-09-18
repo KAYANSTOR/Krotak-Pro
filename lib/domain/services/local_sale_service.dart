@@ -24,6 +24,7 @@ final class LocalSaleService implements SaleService, ReservedSaleService {
     required this.unitOfWork,
     required this.clock,
     required this.ids,
+    this.messageSender,
     this.reservationTtl = const Duration(minutes: 5),
   });
 
@@ -38,6 +39,7 @@ final class LocalSaleService implements SaleService, ReservedSaleService {
   final UnitOfWork unitOfWork;
   final Clock clock;
   final IdGenerator ids;
+  final MessageSender? messageSender;
   final Duration reservationTtl;
 
   @override
