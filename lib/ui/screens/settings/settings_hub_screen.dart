@@ -6,8 +6,10 @@ import '../../app_scope.dart';
 import '../../routing/app_routes.dart';
 import '../../theme/kayan_palette.dart';
 import '../../theme/net_semantic_colors.dart';
+import '../../theme/net_theme_schedule.dart';
 import '../../theme/net_tokens.dart';
 import '../../widgets/async_views.dart';
+import '../../widgets/dashboard/theme_mode_sheet.dart';
 import '../../widgets/net/net_surface_card.dart';
 import '../../widgets/settings/settings_cards.dart';
 import '../../widgets/settings/settings_section_header.dart';
@@ -42,6 +44,7 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
   bool _salafni = SettingDefaults.salafniEnabled;
   bool _interventionAlert = SettingDefaults.pendingAttentionAlertEnabled;
   bool _darkMode = false;
+  NetThemeMode _themeMode = NetThemeMode.light;
   bool _dailySummary = SettingDefaults.dailyOpsSummaryAutoSend;
   bool _autoPosSettlement = SettingDefaults.autoPosSettlementEnabled;
   int _lowStock = SettingDefaults.lowStockThreshold;
@@ -254,12 +257,11 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
       _autoPosSettlement = SettingBool.read(settle, defaultValue: SettingDefaults.autoPosSettlementEnabled);
       _lowStock = SettingInt.read(low, defaultValue: SettingDefaults.lowStockThreshold);
       final t = (theme ?? SettingDefaults.themeMode).toLowerCase();
+      // `system` القديمة تُقرأ كوضع نهاري ثابت (توافق خلفي).
+      _themeMode = NetThemeSchedule.parse(theme);
       _darkMode = t == 'dark';
-      if (t == 'dark') {
-        c.themeModeNotifier.value = ThemeMode.dark;
-      } else if (t == 'light') {
-        c.themeModeNotifier.value = ThemeMode.light;
-      }
+      c.themeModeNotifier.value =
+          NetThemeSchedule.resolve(_themeMode, c.clock.now());
     });
   }
 
@@ -270,19 +272,31 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
     );
   }
 
-  Future<void> _setDarkMode(bool enabled) async {
+  /// يفتح ورقة اختيار المظهر (نهار / ليل / تلقائي) ويطبّق الاختيار فورًا.
+  Future<void> _openThemePicker() async {
+    final picked = await ThemeModeSheet.show(context, _themeMode);
+    if (!mounted || picked == null || picked == _themeMode) return;
     final c = AppScope.of(context);
-    final mode = enabled ? ThemeMode.dark : ThemeMode.light;
-    final value = ThemeModeCodec.encode(mode);
-    setState(() => _darkMode = enabled);
-    c.themeModeNotifier.value = mode;
+    final previous = _themeMode;
+    setState(() {
+      _themeMode = picked;
+      _darkMode = picked == NetThemeMode.dark;
+    });
+    c.themeModeNotifier.value = NetThemeSchedule.resolve(picked, c.clock.now());
     final result = await c.settings.save(
-      AppSetting(key: SettingKeys.themeMode, value: value, updatedAt: c.clock.now()),
+      AppSetting(
+        key: SettingKeys.themeMode,
+        value: NetThemeSchedule.encode(picked),
+        updatedAt: c.clock.now(),
+      ),
     );
     if (!mounted) return;
     if (result is Failure) {
-      setState(() => _darkMode = !enabled);
-      c.themeModeNotifier.value = enabled ? ThemeMode.light : ThemeMode.dark;
+      setState(() {
+        _themeMode = previous;
+        _darkMode = previous == NetThemeMode.dark;
+      });
+      c.themeModeNotifier.value = NetThemeSchedule.resolve(previous, c.clock.now());
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
@@ -291,7 +305,9 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
           ),
         ),
       );
+      return;
     }
+    NetThemeRawCache.raw = NetThemeSchedule.encode(picked);
   }
 
   Future<void> _openNetworkName() async {
@@ -480,17 +496,16 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
                             if (_sectionVisible(_themeKeywords))
                             SettingsGroupCard(
                               children: [
-                                SettingsGroupSwitchRow(
+                                SettingsGroupNavRow(
                                   icon: _darkMode
                                       ? Icons.dark_mode_rounded
                                       : Icons.light_mode_rounded,
-                                  title: 'الوضع الداكن',
-                                  subtitle: _darkMode
-                                      ? 'المظهر الداكن مفعّل — اضغط للإرجاع للفاتح'
-                                      : 'المظهر الفاتح مفعّل — اضغط لتفعيل الداكن',
-                                  searchText: 'المظهر الثيم ليلي فاتح دارك مظهر',
-                                  value: _darkMode,
-                                  onChanged: (v) => _setDarkMode(v),
+                                  title: 'المظهر',
+                                  subtitle:
+                                      '${NetThemeSchedule.label(_themeMode)} — ${NetThemeSchedule.hint(_themeMode)}',
+                                  searchText:
+                                      'المظهر الثيم ليلي فاتح نهاري تلقائي دارك ${NetThemeSchedule.label(_themeMode)}',
+                                  onTap: _openThemePicker,
                                 ),
                               ],
                             ),

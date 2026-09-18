@@ -4,12 +4,15 @@ import '../../theme/kayan_palette.dart';
 import '../../theme/net_tokens.dart';
 
 /// ورقة الإجراءات السريعة — تُفتح من الزر الوسطي في الشريط السفلي.
+///
+/// لا تنفّذ شيئًا بنفسها: تستدعي الـcallbacks الممرّرة فقط (نفس سلوك السابق).
 class QuickActionsSheet extends StatelessWidget {
   const QuickActionsSheet({
     super.key,
     required this.onDirectSale,
     required this.onPosAccounts,
     required this.onAddCustomer,
+    this.onCreateCustomer,
     this.onOffers,
     this.onCards,
   });
@@ -17,6 +20,9 @@ class QuickActionsSheet extends StatelessWidget {
   final VoidCallback onDirectSale;
   final VoidCallback onPosAccounts;
   final VoidCallback onAddCustomer;
+
+  /// إنشاء حساب مشترك جديد (نموذج 1.0.9) — اختياري للتوافق الخلفي.
+  final VoidCallback? onCreateCustomer;
   final VoidCallback? onOffers;
   final VoidCallback? onCards;
 
@@ -25,6 +31,7 @@ class QuickActionsSheet extends StatelessWidget {
     required VoidCallback onDirectSale,
     required VoidCallback onPosAccounts,
     required VoidCallback onAddCustomer,
+    VoidCallback? onCreateCustomer,
     VoidCallback? onOffers,
     VoidCallback? onCards,
   }) {
@@ -35,6 +42,7 @@ class QuickActionsSheet extends StatelessWidget {
         onDirectSale: onDirectSale,
         onPosAccounts: onPosAccounts,
         onAddCustomer: onAddCustomer,
+        onCreateCustomer: onCreateCustomer,
         onOffers: onOffers,
         onCards: onCards,
       ),
@@ -110,6 +118,15 @@ class QuickActionsSheet extends StatelessWidget {
                 onAddCustomer();
               },
             ),
+            if (onCreateCustomer != null)
+              _ActionTile(
+                icon: Icons.person_add_alt_rounded,
+                label: 'إنشاء حساب مشترك جديد',
+                onTap: () {
+                  Navigator.of(context).pop();
+                  onCreateCustomer!();
+                },
+              ),
             if (onOffers != null)
               _ActionTile(
                 icon: Icons.local_offer_outlined,

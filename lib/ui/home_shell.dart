@@ -7,6 +7,7 @@ import 'screens/dashboard_screen.dart';
 import 'screens/inventory_screen.dart';
 import 'screens/offers_screen.dart';
 import 'screens/reports_screen.dart';
+import 'widgets/dashboard/customer_create_sheet.dart';
 import 'widgets/dashboard/quick_actions_sheet.dart';
 import 'widgets/kayan_bottom_nav.dart';
 import 'widgets/permissions_onboarding.dart';
@@ -103,6 +104,10 @@ class _HomeShellState extends State<HomeShell> {
       onDirectSale: _openDirectSale,
       onPosAccounts: _openWalletsAndPos,
       onAddCustomer: () => _goToId('accounts'),
+      onCreateCustomer: () async {
+        await CustomerCreateSheet.show(context);
+        if (mounted) _dashboardRefresh.value++;
+      },
       onOffers: () => _goToId('offers'),
       onCards: () => _goToId('cards'),
     );

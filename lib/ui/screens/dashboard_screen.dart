@@ -17,6 +17,7 @@ import '../theme/net_semantic_colors.dart';
 import '../theme/net_tokens.dart';
 import '../widgets/async_views.dart';
 import '../widgets/dashboard/card_stock_sheet.dart';
+import '../widgets/dashboard/customer_create_sheet.dart';
 import '../widgets/dashboard/quick_actions_sheet.dart';
 import '../widgets/dashboard/sales_period_sheet.dart';
 import '../widgets/net/net_alert_banner.dart';
@@ -329,6 +330,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
       onDirectSale: _openDirectSale,
       onPosAccounts: _openWalletsAndPos,
       onAddCustomer: () => widget.onNavigateToTab?.call('accounts'),
+      onCreateCustomer: () async {
+        await CustomerCreateSheet.show(context);
+        if (mounted) await _load();
+      },
       onOffers: () => widget.onNavigateToTab?.call('offers'),
       onCards: () => widget.onNavigateToTab?.call('cards'),
     );
