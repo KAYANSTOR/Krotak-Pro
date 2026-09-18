@@ -203,6 +203,31 @@ final class ManualSaleRunner {
         ),
       );
       if (audited is Failure<void>) return Failure(audited.error);
+
+      // Deliver voucher SMS to customer phone (same body as auto-transfer path).
+      final sender = host.messageSender;
+      if (sender != null) {
+        final body = cardDeliverySmsBody(
+          serialNumber: card.serialNumber,
+          secretCode: card.secretCode,
+        );
+        final sent = await sender.send(destination: phoneTrim, body: body);
+        await host.auditLogs.append(
+          AuditLog(
+            id: host.ids.next('audit'),
+            entityType: 'sale',
+            entityId: sale.id,
+            action: sent is Success<void>
+                ? 'manual_sale_sms_sent'
+                : 'manual_sale_sms_failed',
+            occurredAt: host.clock.now(),
+            payloadJson:
+                '{"phone":"$phoneTrim","cardId":"${card.id}","code":"${sent is Failure<void> ? sent.error.code : 'ok'}"}',
+          ),
+        );
+        // Sale stays committed even if SMS fails — delivery worker / resend can retry.
+      }
+
       return Success(sale);
     });
   }
