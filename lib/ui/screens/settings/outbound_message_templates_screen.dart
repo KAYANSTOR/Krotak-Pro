@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 
-import '../../../application/app_scope.dart';
-import '../../../domain/entities/setting.dart';
-import '../../../domain/services/local_advance_service.dart';
-import '../../../domain/services/default_outbound_templates_seeder.dart';
 import '../../../core/result.dart';
+import '../../../domain/entities/setting.dart';
+import '../../../domain/services/default_outbound_templates_seeder.dart';
+import '../../../domain/services/local_advance_service.dart';
+import '../../app_scope.dart';
 
 /// شاشة قوالب رسائل العملاء والعروض والنظام — مطابقة كتالوج الفيديو.
 ///
