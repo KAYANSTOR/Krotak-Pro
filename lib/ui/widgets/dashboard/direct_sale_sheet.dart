@@ -328,7 +328,7 @@ class _DirectSaleSheetState extends State<DirectSaleSheet> {
                                 ),
                                 const SizedBox(width: NetSpacing.xs),
                                 Text(
-                                  'عميل موجود · ${_existingCustomerName}',
+                                  'عميل موجود · $_existingCustomerName',
                                   style: TextStyle(
                                     fontFamily: NetTypography.family,
                                     fontSize: 12,

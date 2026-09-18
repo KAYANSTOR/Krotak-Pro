@@ -233,7 +233,9 @@ class _FailedMessagesScreenState extends State<FailedMessagesScreen> {
                                         style: TextStyle(
                                           fontFamily: 'Tajawal',
                                           fontSize: 12,
-                                          color: Colors.grey.shade600,
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .onSurfaceVariant,
                                         ),
                                       ),
                                     const SizedBox(height: 8),

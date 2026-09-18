@@ -88,3 +88,26 @@ CI على main — analyze + test + Android debug APK build
 
 الاختبارات: `test/widget/theme_schedule_test.dart`،
 `test/platform/contact_picker_bridge_test.dart` (تحليل + تشغيل في CI).
+
+### إغلاق اتساق الهوية البصرية — الجولة الختامية (2026-09-18) ✅ برمجيًا
+
+> UI/Presentation فقط. لم يُعدّل أي ملف من `lib/domain/**` أو `lib/data/**` أو
+> `lib/application/**` أو `lib/platform/**`، ولا أي مسار أو معالج حدث أو استدعاء خدمة.
+
+1. **إغلاق آخر الألوان الثابتة:** استُبدلت بقايا `Colors.grey.shade600/300` برموز
+   الثيم (`Theme.of(context).colorScheme.onSurfaceVariant` للنص الثانوي،
+   `KayanPalette.of(...).border` لمقابض الأوراق) في `failed_messages_screen`،
+   `salafni_templates_screen`، `sim_settings_screen`، `templates_screen`،
+   `wallets_pos_screen`. النتيجة: صفر `Colors.grey` في `lib/ui`.
+2. **إغلاق مصفوفة التغطية:** لم تبقَ أي شاشة على التصميم القديم؛ تمّت مراجعة
+   `sales_period_report_screen`، `outbound_message_templates_screen`،
+   `sales_period_sheet`، `direct_sale_sheet` وكلها الآن على `KayanPalette` +
+   `NetSemanticColors` + `NetSurfaceCard` + `NetSpacing/NetRadii`.
+3. **إصلاح بوابة CI:** حُذف المعامل غير المستخدم `hint` في `_CustField`
+   (`customer_create_sheet`) وهو التحذير الوحيد الذي كان يُفشل `flutter analyze`،
+   مع تنظيف الاستيراد/العضو/التحويل الزائدة.
+
+المرجع: [ui-design-refresh-plan.md](ui-design-refresh-plan.md) §3.1.
+
+**بانتظار جهاز حقيقي:** التدقيق البصري النهائي (فاتح + داكن) وحزمة أدلة لقطات
+الشاشات — لا تُخترع نتائج جهاز.
