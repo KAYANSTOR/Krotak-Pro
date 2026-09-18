@@ -35,11 +35,13 @@ final class PaymentSourceGuard {
     Wallet? wallet;
     if (event.channel == PaymentChannel.sms) {
       final incomingSender = _normalize(event.sourceKey);
+      // Match any active wallet whose senderId relates to the SMS origin.
+      // Do not require sourceMode==sms only — operators may receive the same
+      // wallet alerts over SMS short-codes even when UI mode is notification.
       wallet = activeWallets.where((w) {
-        if (w.sourceMode != WalletSourceMode.sms) return false;
         final sender = w.senderId;
-        return sender != null && sender.trim().isNotEmpty &&
-            _normalize(sender) == incomingSender;
+        if (sender == null || sender.trim().isEmpty) return false;
+        return _senderMatches(incomingSender, _normalize(sender));
       }).firstOrNull;
     } else if (event.channel == PaymentChannel.notification) {
       final package = event.packageName?.trim();
@@ -91,5 +93,22 @@ final class PaymentSourceGuard {
     return const Success(null);
   }
 
-  String _normalize(String raw) => raw.trim().replaceAll(RegExp(r'\s+'), '').toLowerCase();
+  bool _senderMatches(String incoming, String configured) {
+    if (incoming.isEmpty || configured.isEmpty) return false;
+    if (incoming == configured) return true;
+    if (incoming.contains(configured) || configured.contains(incoming)) {
+      return true;
+    }
+    final incDigits = incoming.replaceAll(RegExp(r'[^0-9]'), '');
+    final cfgDigits = configured.replaceAll(RegExp(r'[^0-9]'), '');
+    if (incDigits.length >= 4 && cfgDigits.length >= 4) {
+      if (incDigits.endsWith(cfgDigits) || cfgDigits.endsWith(incDigits)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  String _normalize(String raw) =>
+      raw.trim().replaceAll(RegExp(r'\s+'), '').toLowerCase();
 }
