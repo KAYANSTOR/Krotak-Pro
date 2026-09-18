@@ -27,6 +27,8 @@ class MainActivity : FlutterActivity(), SmsListener {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        // Keep receiver linked as soon as Flutter engine is up.
+        SmsReceiver.listener = this
         if (BootReceiver.consumePendingRecovery(this)) {
             android.util.Log.i("NetMain", "pending recovery after boot — Flutter resume will run recovery pass")
         }
@@ -38,6 +40,22 @@ class MainActivity : FlutterActivity(), SmsListener {
                     result.success(hasSmsPermissions())
                 }
                 "hasPermissions" -> result.success(hasSmsPermissions())
+                "peekPendingSms" -> {
+                    val items = SmsInboxStore(applicationContext).peek()
+                    result.success(items.map { item ->
+                        mapOf(
+                            "id" to item.id,
+                            "sender" to item.sender,
+                            "body" to item.body,
+                            "timestampMillis" to item.timestampMillis,
+                        )
+                    })
+                }
+                "ackPendingSms" -> {
+                    val ids = call.argument<List<String>>("ids")?.toSet() ?: emptySet()
+                    SmsInboxStore(applicationContext).ack(ids)
+                    result.success(true)
+                }
                 "sendSms" -> {
                     val to = call.argument<String>("to")
                     val body = call.argument<String>("body")
