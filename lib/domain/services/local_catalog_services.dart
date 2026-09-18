@@ -256,11 +256,6 @@ final class LocalPointOfSaleCatalogService implements PointOfSaleCatalogService 
   final IdGenerator ids;
 
   @override
-  Future<Result<PointOfSale>> savePointOfSale({required String id, required String name, required PointOfSaleStatus status}) async {
-    throw UnimplementedError();
-  }
-
-  @override
   Future<Result<PointOfSale>> savePointOfSale({required String name}) async {
     final trimmed = name.trim();
     if (trimmed.isEmpty) {
