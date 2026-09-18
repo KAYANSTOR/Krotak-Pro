@@ -8,7 +8,10 @@ import '../../../domain/device_verification_gate.dart';
 import '../../../domain/services/local_device_verification_service.dart';
 import '../../app_scope.dart';
 import '../../theme/kayan_palette.dart';
+import '../../theme/net_semantic_colors.dart';
+import '../../theme/net_tokens.dart';
 import '../../widgets/async_views.dart';
+import '../../widgets/net/net_surface_card.dart';
 import '../../widgets/settings/settings_section_header.dart';
 
 class DeviceVerificationScreen extends StatefulWidget {
@@ -91,7 +94,7 @@ class _DeviceVerificationScreenState extends State<DeviceVerificationScreen> {
       context: context,
       builder: (ctx) {
         return AlertDialog(
-          title: Text(title, style: const TextStyle(fontFamily: 'Tajawal')),
+          title: Text(title),
           content: TextField(
             controller: controller,
             maxLines: 3,
@@ -117,12 +120,8 @@ class _DeviceVerificationScreenState extends State<DeviceVerificationScreen> {
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
-        backgroundColor: palette.appBackground,
         appBar: AppBar(
-          title: const Text('تحقق الجهاز', style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.bold)),
-          backgroundColor: palette.appBackground,
-          foregroundColor: palette.textPrimary,
-          elevation: 0,
+          title: const Text('تحقق الجهاز'),
           actions: [
             IconButton(
               tooltip: 'نسخ حزمة الأدلة',
@@ -132,24 +131,42 @@ class _DeviceVerificationScreenState extends State<DeviceVerificationScreen> {
           ],
         ),
         body: _loading
-            ? const AsyncLoadingView()
+            ? const AsyncLoadingView(skeleton: true, skeletonCount: 4)
             : _error != null
                 ? AsyncErrorView(message: _error!, onRetry: _load)
                 : ListView(
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+                    padding: NetSpacing.screen,
                     children: [
-                      Text(
-                        'بوابات الإنتاج الصفراء — ${_snapshot.passedCount}/${_snapshot.total} مؤكدة على جهاز حقيقي',
-                        style: TextStyle(fontFamily: 'Tajawal', fontSize: 14, color: palette.textSecondary),
-                      ),
-                      if (_snapshot.readyForRelease)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 8),
-                          child: Text(
-                            'جاهز للإصدار: كل البوابات مررة مع أدلة قياس.',
-                            style: TextStyle(fontFamily: 'Tajawal', fontSize: 13, color: palette.textPrimary),
-                          ),
+                      NetSurfaceCard(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Text(
+                              'بوابات الإنتاج — ${_snapshot.passedCount}/${_snapshot.total} مؤكدة على جهاز حقيقي',
+                              style: TextStyle(
+                                fontFamily: NetTypography.family,
+                                fontSize: 13.5,
+                                fontWeight: FontWeight.w700,
+                                color: palette.textPrimary,
+                              ),
+                            ),
+                            const SizedBox(height: NetSpacing.xs),
+                            Text(
+                              _snapshot.readyForRelease
+                                  ? 'جاهز للإصدار: كل البوابات مُرّرت مع أدلة قياس.'
+                                  : 'أكمل البوابات المتبقية على جهاز حقيقي قبل الإصدار.',
+                              style: TextStyle(
+                                fontFamily: NetTypography.family,
+                                fontSize: 12.5,
+                                height: 1.4,
+                                color: _snapshot.readyForRelease
+                                    ? context.netColors.available
+                                    : palette.textSecondary,
+                              ),
+                            ),
+                          ],
                         ),
+                      ),
                       const SettingsSectionHeader(title: 'البوابات'),
                       for (final item in DeviceVerificationCatalog.items)
                         _GateCard(
@@ -187,63 +204,116 @@ class _GateCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = KayanPalette.of(context);
-    final label = switch (status) {
-      DeviceVerificationStatus.passed => 'مؤكد',
-      DeviceVerificationStatus.blocked => 'موقوف',
-      DeviceVerificationStatus.pending => 'بانتظار الجهاز',
-    };
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Material(
-        color: palette.surface,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-          side: BorderSide(color: palette.border),
+    final net = context.netColors;
+    final (label, tone, container) = switch (status) {
+      DeviceVerificationStatus.passed => (
+          'مؤكد',
+          net.available,
+          net.availableContainer,
         ),
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+      DeviceVerificationStatus.blocked => (
+          'موقوف',
+          net.rejected,
+          net.rejectedContainer,
+        ),
+      DeviceVerificationStatus.pending => (
+          'بانتظار الجهاز',
+          net.warning,
+          net.warningContainer,
+        ),
+    };
+    return NetSurfaceCard(
+      margin: const EdgeInsets.only(bottom: NetSpacing.sm),
+      padding: NetSpacing.cardTight,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
             children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      item.title,
-                      style: TextStyle(
-                        fontFamily: 'Tajawal',
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                        color: palette.textPrimary,
-                      ),
-                    ),
+              Expanded(
+                child: Text(
+                  item.title,
+                  style: TextStyle(
+                    fontFamily: NetTypography.family,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: palette.textPrimary,
                   ),
-                  Text(label, style: TextStyle(fontFamily: 'Tajawal', fontSize: 12, color: palette.textSecondary)),
-                ],
-              ),
-              const SizedBox(height: 6),
-              Text(item.detail, style: TextStyle(fontFamily: 'Tajawal', fontSize: 13, color: palette.textSecondary)),
-              const SizedBox(height: 4),
-              Text(item.phaseRef, style: TextStyle(fontFamily: 'Tajawal', fontSize: 12, color: palette.textTertiary)),
-              if (evidence.hasOperatorNote) ...[
-                const SizedBox(height: 6),
-                Text(
-                  evidence.note!,
-                  style: TextStyle(fontFamily: 'Tajawal', fontSize: 12, color: palette.textPrimary),
                 ),
-              ],
-              const SizedBox(height: 10),
-              Wrap(
-                spacing: 8,
-                children: [
-                  TextButton(onPressed: onPassed, child: const Text('تم على الجهاز')),
-                  TextButton(onPressed: onBlocked, child: const Text('موقوف')),
-                  TextButton(onPressed: onReset, child: const Text('إعادة')),
-                ],
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: NetSpacing.sm,
+                  vertical: 3,
+                ),
+                decoration: BoxDecoration(
+                  color: container,
+                  borderRadius: BorderRadius.circular(NetRadii.xs),
+                ),
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    fontFamily: NetTypography.family,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: tone,
+                  ),
+                ),
               ),
             ],
           ),
-        ),
+          const SizedBox(height: NetSpacing.xs),
+          Text(
+            item.detail,
+            style: TextStyle(
+              fontFamily: NetTypography.family,
+              fontSize: 13,
+              height: 1.4,
+              color: palette.textSecondary,
+            ),
+          ),
+          const SizedBox(height: NetSpacing.xxs),
+          Text(
+            item.phaseRef,
+            style: TextStyle(
+              fontFamily: NetTypography.family,
+              fontSize: 12,
+              color: palette.textTertiary,
+            ),
+          ),
+          if (evidence.hasOperatorNote) ...[
+            const SizedBox(height: NetSpacing.xs),
+            Text(
+              evidence.note!,
+              style: TextStyle(
+                fontFamily: NetTypography.family,
+                fontSize: 12,
+                color: palette.textPrimary,
+              ),
+            ),
+          ],
+          const SizedBox(height: NetSpacing.sm),
+          Wrap(
+            spacing: NetSpacing.sm,
+            children: [
+              TextButton.icon(
+                onPressed: onPassed,
+                icon: const Icon(Icons.check_rounded, size: 16),
+                label: const Text('تم على الجهاز'),
+              ),
+              TextButton.icon(
+                onPressed: onBlocked,
+                icon: const Icon(Icons.block_rounded, size: 16),
+                label: const Text('موقوف'),
+              ),
+              TextButton.icon(
+                onPressed: onReset,
+                icon: const Icon(Icons.restart_alt_rounded, size: 16),
+                label: const Text('إعادة'),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
