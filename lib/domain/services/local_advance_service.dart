@@ -115,15 +115,64 @@ final class LocalAdvanceService implements AdvanceService {
     final audit = await auditLogs.append(AuditLog(id: ids.next('audit'), entityType: 'advance', entityId: advanceId, action: 'issued', occurredAt: now, payloadJson: '{"customerId":"$customerId","cardId":"${selectedCard.id}","operationId":"${_escape(op)}"}'));
     if (audit is Failure<void>) return Failure(audit.error);
 
+    // Card is already committed (sold + ledger + sale). Delivery is best-effort:
+    // never reverse the issue if SMS fails — resend / operator can retry.
+    final issued = AdvanceIssue(
+      advance: Advance(
+        id: advanceId,
+        customerId: customerId,
+        cardId: selectedCard.id,
+        amount: selectedCategory.faceValue,
+        outstanding: selectedCategory.faceValue,
+        reference: advanceTx.reference!,
+        createdAt: now,
+        status: AdvanceStatus.open,
+      ),
+      card: selectedCard,
+    );
     final destination = await _deliveryPhone(customerId);
-    if (destination.isEmpty) return const Failure(AppFailure(code: 'delivery_phone_missing', message: 'المشترك لا يملك رقمًا صالحًا للتسليم'));
-    final send = await messageSender.send(destination: destination, body: await _render(acceptedTemplateKey, defaultAccepted, {'amount': _money(selectedCategory.faceValue), 'serial': selectedCard.serialNumber, 'code': selectedCard.secretCode}));
-    if (send is Failure<void>) {
-      await auditLogs.append(AuditLog(id: ids.next('audit'), entityType: 'advance', entityId: advanceId, action: 'delivery_failed', occurredAt: clock.now(), payloadJson: '{"error":"${_escape(send.error.message)}"}'));
-      return Failure(send.error);
+    if (destination.isEmpty) {
+      await auditLogs.append(AuditLog(
+        id: ids.next('audit'),
+        entityType: 'advance',
+        entityId: advanceId,
+        action: 'delivery_failed',
+        occurredAt: clock.now(),
+        payloadJson: '{"error":"delivery_phone_missing"}',
+      ));
+      return Success(issued);
     }
-    await auditLogs.append(AuditLog(id: ids.next('audit'), entityType: 'advance', entityId: advanceId, action: 'delivery_succeeded', occurredAt: clock.now(), payloadJson: '{"destination":"${_escape(destination)}"}'));
-    return Success(AdvanceIssue(advance: Advance(id: advanceId, customerId: customerId, cardId: selectedCard.id, amount: selectedCategory.faceValue, outstanding: selectedCategory.faceValue, reference: advanceTx.reference!, createdAt: now, status: AdvanceStatus.open), card: selectedCard));
+    final body = await _render(
+      acceptedTemplateKey,
+      defaultAccepted,
+      {
+        'amount': _money(selectedCategory.faceValue),
+        'serial': selectedCard.serialNumber,
+        'code': selectedCard.secretCode,
+      },
+    );
+    final send = await messageSender.send(destination: destination, body: body);
+    if (send is Failure<void>) {
+      await auditLogs.append(AuditLog(
+        id: ids.next('audit'),
+        entityType: 'advance',
+        entityId: advanceId,
+        action: 'delivery_failed',
+        occurredAt: clock.now(),
+        payloadJson:
+            '{"error":"${_escape(send.error.message)}","destination":"${_escape(destination)}"}',
+      ));
+      return Success(issued);
+    }
+    await auditLogs.append(AuditLog(
+      id: ids.next('audit'),
+      entityType: 'advance',
+      entityId: advanceId,
+      action: 'delivery_succeeded',
+      occurredAt: clock.now(),
+      payloadJson: '{"destination":"${_escape(destination)}"}',
+    ));
+    return Success(issued);
   }
 
   @override
