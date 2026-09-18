@@ -168,10 +168,37 @@ abstract interface class AdvanceService {
   Future<Result<List<Advance>>> listCustomerAdvances(String customerId);
 }
 
+/// How card stock lines are structured at import time.
+enum CardImportFormat {
+  /// Serial + PIN/secret required.
+  serialAndPin,
+  /// Serial only (PIN-less voucher).
+  serialOnly,
+}
+
 final class CardImportDraft {
-  const CardImportDraft({required this.serialNumber, required this.secretCode});
+  const CardImportDraft({
+    required this.serialNumber,
+    required this.secretCode,
+    this.format = CardImportFormat.serialAndPin,
+  });
   final String serialNumber;
+  /// Empty when [format] is [CardImportFormat.serialOnly].
   final String secretCode;
+  final CardImportFormat format;
+
+  bool get hasSecret => secretCode.trim().isNotEmpty;
+}
+
+/// Builds customer SMS body for a delivered voucher.
+/// Serial-only cards omit the PIN line.
+String cardDeliverySmsBody({required String serialNumber, required String secretCode}) {
+  final serial = serialNumber.trim();
+  final secret = secretCode.trim();
+  if (secret.isEmpty) {
+    return 'بطاقة الإنترنت\nالرقم: $serial';
+  }
+  return 'بطاقة الإنترنت\nالرقم: $serial\nالرمز: $secret';
 }
 
 final class UnresolvedDomainDecision implements Exception {
