@@ -4,8 +4,12 @@ import '../../core/result.dart';
 import '../../domain/services/ops_report_service.dart';
 import '../app_scope.dart';
 import '../routing/app_routes.dart';
-import '../theme/kayan_colors.dart';
+import '../theme/kayan_palette.dart';
+import '../theme/net_semantic_colors.dart';
+import '../theme/net_tokens.dart';
 import '../widgets/async_views.dart';
+import '../widgets/net/net_surface_card.dart';
+import '../widgets/net/net_tab_header.dart';
 import 'failed_messages_screen.dart';
 import 'pending_messages_screen.dart';
 import 'rejected_messages_screen.dart';
@@ -15,7 +19,8 @@ import 'transactions_log_screen.dart';
 
 /// التقارير والمراقبة — مطابقة فيديو المنتج (أقسام الرسائل / التقارير).
 ///
-/// الأرقام من [OpsReportService] فقط (لا بيانات وهمية).
+/// الأرقام من [OpsReportService] فقط (لا بيانات وهمية). التحديث البصري لا
+/// يغيّر أي استعلام أو ربط.
 class ReportsScreen extends StatefulWidget {
   const ReportsScreen({super.key});
 
@@ -68,145 +73,234 @@ class _ReportsScreenState extends State<ReportsScreen> {
   @override
   Widget build(BuildContext context) {
     if (_loading) {
-      return const AsyncLoadingView(message: 'جاري تحميل التقارير…');
+      return const AsyncLoadingView(skeleton: true, skeletonCount: 5);
     }
     if (_error != null) {
       return AsyncErrorView(message: _error!, onRetry: _load);
     }
     final s = _snap!;
+    final net = context.netColors;
 
-    return Directionality(
-      textDirection: TextDirection.rtl,
-      child: ColoredBox(
-        color: KayanColors.appBackground,
-        child: RefreshIndicator(
-          onRefresh: _load,
-          child: ListView(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-            children: [
-              const Text(
-                'التقارير والمراقبة',
-                style: TextStyle(
-                  fontFamily: 'Tajawal',
-                  fontWeight: FontWeight.w800,
-                  fontSize: 20,
-                ),
+    return RefreshIndicator(
+      onRefresh: _load,
+      color: KayanPalette.of(context).primary,
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: NetSpacing.listBottomInset,
+        children: [
+          NetTabHeader(
+            title: 'التقارير والمراقبة',
+            subtitle: 'سجلات العمليات وأخطاء النظام وتقرير المبيعات',
+            icon: Icons.insights_rounded,
+            actions: [
+              NetHeaderAction(
+                icon: Icons.refresh_rounded,
+                tooltip: 'تحديث',
+                onPressed: _load,
               ),
-              const SizedBox(height: 4),
-              Text(
-                'سجلات العمليات وأخطاء النظام وتقرير المبيعات',
-                style: TextStyle(
-                  fontFamily: 'Tajawal',
-                  fontSize: 13,
-                  color: Colors.grey.shade600,
-                ),
-              ),
-              const SizedBox(height: 20),
-              _sectionTitle('الرسائل'),
-              _groupCard([
-                _row(
-                  icon: Icons.chat_bubble_outline,
-                  iconBg: const Color(0xFFFDE68A),
-                  iconColor: const Color(0xFFB45309),
-                  title: 'الرسائل المرفوضة',
-                  subtitle: '${s.rejectedCount} رسالة مرفوضة',
-                  onTap: () => _open(const RejectedMessagesScreen()),
-                ),
-                _row(
-                  icon: Icons.pending_actions_outlined,
-                  iconBg: const Color(0xFFE0F2FE),
-                  iconColor: const Color(0xFF0369A1),
-                  title: 'الرسائل المعلقة (قيد المعالجة)',
-                  subtitle:
-                      'مراقبة الرسائل التي تم تسليمها للشبكة وبانتظار تأكيد الاستلام · ${s.pipelineOpenCount + s.sendingCount}',
-                  onTap: () => _open(const PendingMessagesScreen()),
-                ),
-                _row(
-                  icon: Icons.error_outline,
-                  iconBg: const Color(0xFFFEE2E2),
-                  iconColor: const Color(0xFFB91C1C),
-                  title: 'الرسائل الفاشلة / مستنفدة',
-                  subtitle:
-                      'إعادة محاولة ${s.failedRetryCount} · مستنفد ${s.failedMaxCount}',
-                  onTap: () => _open(const FailedMessagesScreen()),
-                ),
-              ]),
-              const SizedBox(height: 18),
-              _sectionTitle('التقارير'),
-              _groupCard([
-                _row(
-                  icon: Icons.receipt_long_outlined,
-                  iconBg: const Color(0xFFE0F2FE),
-                  iconColor: const Color(0xFF0369A1),
-                  title: 'سجل العمليات',
-                  subtitle:
-                      'عرض وتتبع كامل لسجلات حركات الإيداعات وصرف الكروت للعملاء · ${s.completedTxRecent}',
-                  onTap: () => _open(const TransactionsLogScreen()),
-                ),
-                _row(
-                  icon: Icons.show_chart,
-                  iconBg: const Color(0xFFD1FAE5),
-                  iconColor: const Color(0xFF047857),
-                  title: 'تقرير المبيعات',
-                  subtitle:
-                      'مبيعات الكروت اليومية والشهرية · اليوم ${formatMoneyMinor(s.dailySalesMinor)} · ${s.dailySalesCount} كرت',
-                  onTap: () => _open(
-                    const SalesPeriodReportScreen(
-                      initialRange: SalesReportRange.today,
-                    ),
-                  ),
-                ),
-                _row(
-                  icon: Icons.point_of_sale_outlined,
-                  iconBg: const Color(0xFFE5E7EB),
-                  iconColor: const Color(0xFF374151),
-                  title: 'حسابات نقاط البيع',
-                  subtitle: 'تقرير التسوية المالية والعمولات لنقاط البيع',
-                  onTap: () => _open(const PosReportScreen()),
-                ),
-                _row(
-                  icon: Icons.calendar_month_outlined,
-                  iconBg: const Color(0xFFF3E8FF),
-                  iconColor: const Color(0xFF7C3AED),
-                  title: 'تقرير المبيعات التفصيلي',
-                  subtitle:
-                      'شهر ${formatMoneyMinor(s.monthlySalesMinor)} · ${s.monthlySalesCount} كرت · مخزون ${s.availableCards}',
-                  onTap: () => AppRoutes.openSalesPeriodReport(context),
-                ),
-              ]),
             ],
           ),
-        ),
+
+          // ── ملخص سريع (KPI) ──
+          Padding(
+            padding: NetSpacing.pageH,
+            child: Row(
+              children: [
+                Expanded(
+                  child: _KpiTile(
+                    label: 'مرفوضة',
+                    value: '${s.rejectedCount}',
+                    icon: Icons.error_outline_rounded,
+                    color: net.rejected,
+                    background: net.rejectedContainer,
+                    onTap: () => _open(const RejectedMessagesScreen()),
+                  ),
+                ),
+                const SizedBox(width: NetSpacing.sm),
+                Expanded(
+                  child: _KpiTile(
+                    label: 'قيد المعالجة',
+                    value: '${s.pipelineOpenCount + s.sendingCount}',
+                    icon: Icons.pending_actions_rounded,
+                    color: net.pending,
+                    background: net.pendingContainer,
+                    onTap: () => _open(const PendingMessagesScreen()),
+                  ),
+                ),
+                const SizedBox(width: NetSpacing.sm),
+                Expanded(
+                  child: _KpiTile(
+                    label: 'فاشلة',
+                    value: '${s.failedRetryCount + s.failedMaxCount}',
+                    icon: Icons.report_gmailerrorred_rounded,
+                    color: net.error,
+                    background: net.errorContainer,
+                    onTap: () => _open(const FailedMessagesScreen()),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: NetSpacing.sm),
+
+          // ── ملخص المبيعات ──
+          NetSurfaceCard(
+            margin: NetSpacing.pageH,
+            padding: NetSpacing.card,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.show_chart_rounded, size: NetSizes.iconSm, color: net.available),
+                    const SizedBox(width: NetSpacing.sm),
+                    Expanded(
+                      child: Text(
+                        'ملخص المبيعات',
+                        style: TextStyle(
+                          fontFamily: NetTypography.family,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 14.5,
+                          color: KayanPalette.of(context).textPrimary,
+                        ),
+                      ),
+                    ),
+                    Text(
+                      'مخزون ${s.availableCards}',
+                      style: TextStyle(
+                        fontFamily: NetTypography.family,
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w700,
+                        color: KayanPalette.of(context).textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: NetSpacing.md),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _MiniStat(
+                        label: 'مبيعات اليوم',
+                        value: formatMoneyMinor(s.dailySalesMinor),
+                        hint: '${s.dailySalesCount} كرت',
+                      ),
+                    ),
+                    Container(
+                      width: 1,
+                      height: 40,
+                      color: KayanPalette.of(context).border,
+                    ),
+                    Expanded(
+                      child: _MiniStat(
+                        label: 'مبيعات الشهر',
+                        value: formatMoneyMinor(s.monthlySalesMinor),
+                        hint: '${s.monthlySalesCount} كرت',
+                        alignEnd: true,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+
+          const NetSectionTitle(title: 'الرسائل', icon: Icons.chat_bubble_outline_rounded),
+          _group(
+            children: [
+              _row(
+                context: context,
+                icon: Icons.mark_email_unread_rounded,
+                tint: net.rejected,
+                title: 'الرسائل المرفوضة',
+                subtitle: '${s.rejectedCount} رسالة رفضها قواعد العمل',
+                onTap: () => _open(const RejectedMessagesScreen()),
+              ),
+              _row(
+                context: context,
+                icon: Icons.pending_actions_rounded,
+                tint: net.pending,
+                title: 'الرسائل المعلقة (قيد المعالجة)',
+                subtitle:
+                    'مراقبة الرسائل التي تم تسليمها للشبكة وبانتظار تأكيد الاستلام · ${s.pipelineOpenCount + s.sendingCount}',
+                onTap: () => _open(const PendingMessagesScreen()),
+              ),
+              _row(
+                context: context,
+                icon: Icons.report_gmailerrorred_rounded,
+                tint: net.error,
+                title: 'الرسائل الفاشلة / مستنفدة',
+                subtitle: 'إعادة محاولة ${s.failedRetryCount} · مستنفد ${s.failedMaxCount}',
+                onTap: () => _open(const FailedMessagesScreen()),
+              ),
+            ],
+          ),
+
+          const NetSectionTitle(title: 'التقارير', icon: Icons.description_outlined),
+          _group(
+            children: [
+              _row(
+                context: context,
+                icon: Icons.receipt_long_rounded,
+                tint: net.info,
+                title: 'سجل العمليات',
+                subtitle:
+                    'عرض وتتبع كامل لسجلات حركات الإيداعات وصرف الكروت للعملاء · ${s.completedTxRecent}',
+                onTap: () => _open(const TransactionsLogScreen()),
+              ),
+              _row(
+                context: context,
+                icon: Icons.show_chart_rounded,
+                tint: net.available,
+                title: 'تقرير المبيعات',
+                subtitle:
+                    'مبيعات الكروت اليومية · اليوم ${formatMoneyMinor(s.dailySalesMinor)} · ${s.dailySalesCount} كرت',
+                onTap: () => _open(
+                  const SalesPeriodReportScreen(
+                    initialRange: SalesReportRange.today,
+                  ),
+                ),
+              ),
+              _row(
+                context: context,
+                icon: Icons.calendar_month_rounded,
+                tint: const Color(0xFF7C3AED),
+                title: 'تقرير المبيعات التفصيلي',
+                subtitle:
+                    'شهر ${formatMoneyMinor(s.monthlySalesMinor)} · ${s.monthlySalesCount} كرت',
+                onTap: () => AppRoutes.openSalesPeriodReport(context),
+              ),
+              _row(
+                context: context,
+                icon: Icons.point_of_sale_rounded,
+                tint: KayanPalette.of(context).textSecondary,
+                title: 'حسابات نقاط البيع',
+                subtitle: 'تقرير التسوية المالية والعمولات لنقاط البيع',
+                onTap: () => _open(const PosReportScreen()),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
 
-  Widget _sectionTitle(String text) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8, right: 4),
-      child: Text(
-        text,
-        style: TextStyle(
-          fontFamily: 'Tajawal',
-          fontWeight: FontWeight.w700,
-          fontSize: 14,
-          color: Colors.teal.shade700,
-        ),
-      ),
-    );
-  }
-
-  Widget _groupCard(List<Widget> children) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
-      ),
+  Widget _group({required List<Widget> children}) {
+    return NetSurfaceCard(
+      margin: NetSpacing.pageH,
+      padding: EdgeInsets.zero,
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           for (var i = 0; i < children.length; i++) ...[
-            if (i > 0) const Divider(height: 1, indent: 16, endIndent: 16),
+            if (i > 0)
+              Divider(
+                height: 1,
+                indent: NetSpacing.md,
+                endIndent: NetSpacing.md,
+                color: KayanPalette.of(context).border,
+              ),
             children[i],
           ],
         ],
@@ -215,59 +309,222 @@ class _ReportsScreenState extends State<ReportsScreen> {
   }
 
   Widget _row({
+    required BuildContext context,
     required IconData icon,
-    required Color iconBg,
-    required Color iconColor,
+    required Color tint,
     required String title,
     required String subtitle,
     required VoidCallback onTap,
   }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-        child: Row(
-          children: [
-            Container(
-              width: 42,
-              height: 42,
-              decoration: BoxDecoration(
-                color: iconBg,
-                borderRadius: BorderRadius.circular(12),
+    final palette = KayanPalette.of(context);
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: NetSpacing.md,
+            vertical: NetSpacing.md,
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: NetSizes.badge,
+                height: NetSizes.badge,
+                decoration: BoxDecoration(
+                  color: tint.withValues(alpha: palette.isDark ? 0.22 : 0.12),
+                  borderRadius: NetRadii.smAll,
+                ),
+                child: Icon(icon, color: tint, size: 20),
               ),
-              child: Icon(icon, color: iconColor, size: 22),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      fontFamily: 'Tajawal',
-                      fontWeight: FontWeight.w800,
-                      fontSize: 15,
+              const SizedBox(width: NetSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        fontFamily: NetTypography.family,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 14.5,
+                        color: palette.textPrimary,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    style: TextStyle(
-                      fontFamily: 'Tajawal',
-                      fontSize: 12,
-                      height: 1.35,
-                      color: Colors.grey.shade600,
+                    const SizedBox(height: NetSpacing.xxs),
+                    Text(
+                      subtitle,
+                      style: TextStyle(
+                        fontFamily: NetTypography.family,
+                        fontSize: 12,
+                        height: 1.35,
+                        color: palette.textSecondary,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-            Icon(Icons.chevron_left, color: Colors.grey.shade400),
-          ],
+              Icon(
+                Icons.chevron_left_rounded,
+                color: palette.textTertiary,
+                size: NetSizes.iconMd,
+              ),
+            ],
+          ),
         ),
       ),
+    );
+  }
+}
+
+class NetSectionTitle extends StatelessWidget {
+  const NetSectionTitle({super.key, required this.title, this.icon});
+
+  final String title;
+  final IconData? icon;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = KayanPalette.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        NetSpacing.xl,
+        NetSpacing.xl,
+        NetSpacing.xl,
+        NetSpacing.sm,
+      ),
+      child: Row(
+        children: [
+          if (icon != null) ...[
+            Icon(icon, size: NetSizes.iconSm, color: palette.primary),
+            const SizedBox(width: NetSpacing.sm),
+          ],
+          Text(
+            title,
+            style: TextStyle(
+              fontFamily: NetTypography.family,
+              fontWeight: FontWeight.w800,
+              fontSize: 15,
+              color: palette.primary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _KpiTile extends StatelessWidget {
+  const _KpiTile({
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.color,
+    required this.background,
+    this.onTap,
+  });
+
+  final String label;
+  final String value;
+  final IconData icon;
+  final Color color;
+  final Color background;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return NetSurfaceCard(
+      onTap: onTap,
+      padding: const EdgeInsets.symmetric(
+        horizontal: NetSpacing.sm,
+        vertical: NetSpacing.md,
+      ),
+      radius: NetRadii.md,
+      child: Column(
+        children: [
+          Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: background,
+              borderRadius: NetRadii.xsAll,
+            ),
+            child: Icon(icon, size: 18, color: color),
+          ),
+          const SizedBox(height: NetSpacing.sm),
+          Text(
+            value,
+            style: TextStyle(
+              fontFamily: NetTypography.family,
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+              color: color,
+            ),
+          ),
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontFamily: NetTypography.family,
+              fontSize: 11.5,
+              fontWeight: FontWeight.w600,
+              color: KayanPalette.of(context).textSecondary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MiniStat extends StatelessWidget {
+  const _MiniStat({
+    required this.label,
+    required this.value,
+    required this.hint,
+    this.alignEnd = false,
+  });
+
+  final String label;
+  final String value;
+  final String hint;
+  final bool alignEnd;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = KayanPalette.of(context);
+    return Column(
+      crossAxisAlignment:
+          alignEnd ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontFamily: NetTypography.family,
+            fontSize: 12,
+            color: palette.textSecondary,
+          ),
+        ),
+        const SizedBox(height: NetSpacing.xxs),
+        Text(
+          value,
+          style: TextStyle(
+            fontFamily: NetTypography.family,
+            fontSize: 16,
+            fontWeight: FontWeight.w800,
+            color: palette.textPrimary,
+          ),
+        ),
+        Text(
+          hint,
+          style: TextStyle(
+            fontFamily: NetTypography.family,
+            fontSize: 11,
+            color: palette.textTertiary,
+          ),
+        ),
+      ],
     );
   }
 }
