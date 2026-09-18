@@ -183,7 +183,7 @@ class AsyncEmptyView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = KayanPalette.of(context);
-    return Center(
+    return _ScrollableCenter(
       child: Padding(
         padding: EdgeInsets.all(compact ? NetSpacing.lg : NetSpacing.xxl),
         child: Column(
@@ -250,7 +250,7 @@ class AsyncErrorView extends StatelessWidget {
     final palette = KayanPalette.of(context);
     final errorColor = Theme.of(context).colorScheme.error;
 
-    return Center(
+    return _ScrollableCenter(
       child: Padding(
         padding: const EdgeInsets.all(NetSpacing.xxl),
         child: Column(
@@ -354,6 +354,29 @@ class NetInlineNotice extends StatelessWidget {
               ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Centres its [child] when the viewport is tall enough and scrolls it when it
+/// is not — an empty/error state must never overflow on short screens.
+class _ScrollableCenter extends StatelessWidget {
+  const _ScrollableCenter({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) => SingleChildScrollView(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            minHeight:
+                constraints.maxHeight.isFinite ? constraints.maxHeight : 0,
+          ),
+          child: Center(child: child),
         ),
       ),
     );

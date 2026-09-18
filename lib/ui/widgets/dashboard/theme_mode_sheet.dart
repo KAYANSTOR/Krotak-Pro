@@ -37,19 +37,23 @@ class ThemeModeSheet extends StatelessWidget {
           NetSpacing.xl,
           NetSpacing.sm,
         ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            for (var i = 0; i < options.length; i++) ...[
-              if (i > 0) const SizedBox(width: NetSpacing.md),
-              Expanded(
-                child: _ThemeOptionCard(
-                  mode: options[i],
-                  selected: current == options[i],
+        // IntrinsicHeight keeps the three options equal-height while giving the
+        // stretched Row a bounded height inside the vertical scroll view.
+        child: IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (var i = 0; i < options.length; i++) ...[
+                if (i > 0) const SizedBox(width: NetSpacing.md),
+                Expanded(
+                  child: _ThemeOptionCard(
+                    mode: options[i],
+                    selected: current == options[i],
+                  ),
                 ),
-              ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
       footer: Text(
