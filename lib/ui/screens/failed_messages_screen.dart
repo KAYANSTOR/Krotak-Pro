@@ -4,6 +4,7 @@ import '../../core/result.dart';
 import '../../domain/entities/message.dart';
 import '../../domain/services/local_message_retry_service.dart';
 import '../app_scope.dart';
+import '../theme/net_semantic_colors.dart';
 import '../widgets/async_views.dart';
 
 /// الرسائل الفاشلة + Bulk Reset/Retry + تفاصيل رمز الرفض — 1.0.9.
@@ -194,15 +195,15 @@ class _FailedMessagesScreenState extends State<FailedMessagesScreen> {
                                               vertical: 2,
                                             ),
                                             decoration: BoxDecoration(
-                                              color: const Color(0xFFFEE2E2),
+                                              color: netColors.rejectedContainer,
                                               borderRadius: BorderRadius.circular(8),
                                             ),
-                                            child: const Text(
+                                            child: Text(
                                               'استنفدت المحاولات',
                                               style: TextStyle(
                                                 fontFamily: 'Tajawal',
                                                 fontSize: 11,
-                                                color: Color(0xFFDC2626),
+                                                color: netColors.rejected,
                                               ),
                                             ),
                                           ),

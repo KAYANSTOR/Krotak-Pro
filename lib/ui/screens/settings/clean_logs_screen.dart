@@ -175,7 +175,9 @@ class _CleanLogsScreenState extends State<CleanLogsScreen> {
                                 palette,
                                 title: 'مرفوضة',
                                 value: '$_rejected',
-                                color: const Color(0xFF64748B),
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.onSurfaceVariant,
                               ),
                             ),
                             const SizedBox(width: 8),

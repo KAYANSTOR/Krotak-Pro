@@ -4,6 +4,7 @@ import '../../../core/result.dart';
 import '../../../domain/entities/message.dart';
 import '../../../domain/entities/wallet.dart';
 import '../../app_scope.dart';
+import '../../theme/net_semantic_colors.dart';
 import '../../widgets/async_views.dart';
 import 'template_simulation_screen.dart';
 import 'template_wizard_screen.dart';
@@ -234,7 +235,10 @@ class _TemplatesScreenState extends State<TemplatesScreen> {
           leading: IconButton(
             tooltip: 'رجوع',
             onPressed: () => Navigator.maybePop(context),
-            icon: const Icon(Icons.arrow_forward, color: Color(0xFF0F172A)),
+            icon: Icon(
+              Icons.arrow_forward,
+              color: Theme.of(context).colorScheme.onSurface,
+            ),
           ),
           title: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -242,20 +246,20 @@ class _TemplatesScreenState extends State<TemplatesScreen> {
               Text(
                 title,
                 textAlign: TextAlign.center,
-                style: const TextStyle(
+                style: TextStyle(
                   fontFamily: 'Tajawal',
                   fontWeight: FontWeight.w800,
                   fontSize: 18,
-                  color: Color(0xFF0F172A),
+                  color: Theme.of(context).colorScheme.onSurface,
                 ),
               ),
               Text(
                 subtitle,
                 textAlign: TextAlign.center,
-                style: const TextStyle(
+                style: TextStyle(
                   fontFamily: 'Tajawal',
                   fontSize: 12,
-                  color: Color(0xFF64748B),
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
               ),
             ],
@@ -365,7 +369,11 @@ class _TemplateCard extends StatelessWidget {
             IconButton(
               onPressed: onMenu,
               visualDensity: VisualDensity.compact,
-              icon: const Icon(Icons.more_vert, color: Color(0xFF94A3B8), size: 22),
+              icon: Icon(
+                Icons.more_vert,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                size: 22,
+              ),
             ),
             // Switch
             Switch.adaptive(
@@ -382,11 +390,11 @@ class _TemplateCard extends StatelessWidget {
                   Text(
                     t.name,
                     textAlign: TextAlign.right,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontFamily: 'Tajawal',
                       fontWeight: FontWeight.w700,
                       fontSize: 15,
-                      color: Color(0xFF0F172A),
+                      color: Theme.of(context).colorScheme.onSurface,
                     ),
                   ),
                   const SizedBox(height: 6),
@@ -398,8 +406,10 @@ class _TemplateCard extends StatelessWidget {
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                         decoration: BoxDecoration(
                           color: active
-                              ? const Color(0xFF059669).withValues(alpha: 0.12)
-                              : const Color(0xFFF1F5F9),
+                              ? netColors.available.withValues(alpha: 0.14)
+                              : Theme.of(context)
+                                  .colorScheme
+                                  .surfaceContainerHighest,
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Row(
@@ -411,8 +421,10 @@ class _TemplateCard extends StatelessWidget {
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
                                 color: active
-                                    ? const Color(0xFF059669)
-                                    : const Color(0xFF94A3B8),
+                                    ? netColors.available
+                                    : Theme.of(context)
+                                        .colorScheme
+                                        .onSurfaceVariant,
                               ),
                             ),
                             const SizedBox(width: 5),
@@ -423,8 +435,10 @@ class _TemplateCard extends StatelessWidget {
                                 fontSize: 11,
                                 fontWeight: FontWeight.w600,
                                 color: active
-                                    ? const Color(0xFF059669)
-                                    : const Color(0xFF64748B),
+                                    ? netColors.available
+                                    : Theme.of(context)
+                                        .colorScheme
+                                        .onSurfaceVariant,
                               ),
                             ),
                           ],
@@ -433,20 +447,20 @@ class _TemplateCard extends StatelessWidget {
                       const SizedBox(width: 8),
                       Text(
                         'أولوية: ${t.priority}',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontFamily: 'Tajawal',
                           fontSize: 12,
-                          color: Color(0xFF64748B),
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
                       ),
                       if (walletLabel != null) ...[
                         const SizedBox(width: 8),
                         Text(
                           walletLabel!,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontFamily: 'Tajawal',
                             fontSize: 11,
-                            color: Color(0xFF94A3B8),
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
                           ),
                         ),
                       ],
@@ -462,16 +476,16 @@ class _TemplateCard extends StatelessWidget {
               height: 36,
               decoration: BoxDecoration(
                 color: active
-                    ? const Color(0xFFD1FAE5)
-                    : const Color(0xFFF1F5F9),
+                    ? netColors.availableContainer
+                    : Theme.of(context).colorScheme.surfaceContainerHighest,
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Icon(
                 Icons.check_circle,
                 size: 22,
                 color: active
-                    ? const Color(0xFF10B981)
-                    : const Color(0xFFCBD5E1),
+                    ? netColors.available
+                    : Theme.of(context).colorScheme.onSurfaceVariant,
               ),
             ),
           ],

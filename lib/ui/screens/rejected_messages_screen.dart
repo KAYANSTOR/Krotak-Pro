@@ -5,6 +5,7 @@ import '../../domain/entities/money.dart';
 import '../../domain/entities/setting.dart';
 import '../../domain/services/rejected_message_catalog.dart';
 import '../app_scope.dart';
+import '../theme/net_semantic_colors.dart';
 import '../widgets/async_views.dart';
 
 /// الرسائل المرفوضة — مطابقة إطار الفيديو (`cards_t320s` / `rem_320`).
@@ -179,9 +180,12 @@ class _RejectedMessagesScreenState extends State<RejectedMessagesScreen> {
           leading: IconButton(
             tooltip: 'رجوع',
             onPressed: () => Navigator.maybePop(context),
-            icon: const Icon(Icons.arrow_forward, color: Color(0xFF0F172A)),
+            icon: Icon(
+              Icons.arrow_forward,
+              color: Theme.of(context).colorScheme.onSurface,
+            ),
           ),
-          title: const Column(
+          title: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text(
@@ -191,7 +195,7 @@ class _RejectedMessagesScreenState extends State<RejectedMessagesScreen> {
                   fontFamily: 'Tajawal',
                   fontWeight: FontWeight.w800,
                   fontSize: 18,
-                  color: Color(0xFF0F172A),
+                  color: Theme.of(context).colorScheme.onSurface,
                 ),
               ),
               Text(
@@ -200,7 +204,7 @@ class _RejectedMessagesScreenState extends State<RejectedMessagesScreen> {
                 style: TextStyle(
                   fontFamily: 'Tajawal',
                   fontSize: 12,
-                  color: Color(0xFF64748B),
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
               ),
             ],
@@ -209,12 +213,18 @@ class _RejectedMessagesScreenState extends State<RejectedMessagesScreen> {
             IconButton(
               tooltip: 'أرشيف',
               onPressed: () {},
-              icon: const Icon(Icons.inventory_2_outlined, color: Color(0xFF64748B)),
+              icon: Icon(
+                Icons.inventory_2_outlined,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
             ),
             IconButton(
               tooltip: 'المزيد',
               onPressed: () => _load(markViewed: false),
-              icon: const Icon(Icons.more_horiz, color: Color(0xFF64748B)),
+              icon: Icon(
+                Icons.more_horiz,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
             ),
           ],
         ),
@@ -251,7 +261,7 @@ class _RejectedMessagesScreenState extends State<RejectedMessagesScreen> {
                       side: BorderSide(
                         color: selected
                             ? const Color(0xFF0F766E)
-                            : const Color(0xFFE2E8F0),
+                            : Theme.of(context).colorScheme.outlineVariant,
                       ),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(20),
@@ -280,11 +290,14 @@ class _RejectedMessagesScreenState extends State<RejectedMessagesScreen> {
                   style: const TextStyle(fontFamily: 'Tajawal'),
                   decoration: InputDecoration(
                     hintText: 'بحث بجوال أو محفظة أو سبب',
-                    hintStyle: const TextStyle(
+                    hintStyle: TextStyle(
                       fontFamily: 'Tajawal',
-                      color: Color(0xFF94A3B8),
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
-                    prefixIcon: const Icon(Icons.search, color: Color(0xFF94A3B8)),
+                    prefixIcon: Icon(
+                      Icons.search,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
                     filled: true,
                     fillColor: Theme.of(context).colorScheme.surface,
                     border: OutlineInputBorder(
@@ -331,10 +344,12 @@ class _RejectedMessagesScreenState extends State<RejectedMessagesScreen> {
                                         child: Text(
                                           '$day (${dayItems.length})',
                                           textAlign: TextAlign.left,
-                                          style: const TextStyle(
+                                          style: TextStyle(
                                             fontFamily: 'Tajawal',
                                             fontSize: 12,
-                                            color: Color(0xFF94A3B8),
+                                            color: Theme.of(context)
+                                                .colorScheme
+                                                .onSurfaceVariant,
                                           ),
                                         ),
                                       ),
@@ -369,33 +384,35 @@ class _SummaryBanner extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
-        color: const Color(0xFFFEF3C7),
+        color: netColors.warningContainer,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFFCD34D).withValues(alpha: 0.6)),
+        border: Border.all(
+          color: netColors.warning.withValues(alpha: 0.4),
+        ),
       ),
       child: Row(
         children: [
-          const Icon(Icons.chat_bubble_outline, color: Color(0xFFB45309), size: 22),
+          Icon(Icons.chat_bubble_outline, color: netColors.warning, size: 22),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
+                Text(
                   'إجمالي الرسائل المرفوضة',
                   style: TextStyle(
                     fontFamily: 'Tajawal',
                     fontSize: 12,
-                    color: Color(0xFF92400E),
+                    color: netColors.warning,
                   ),
                 ),
                 Text(
                   '$total رسالة مرفوضة',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontFamily: 'Tajawal',
                     fontWeight: FontWeight.w800,
                     fontSize: 16,
-                    color: Color(0xFF78350F),
+                    color: netColors.warning,
                   ),
                 ),
               ],
@@ -405,17 +422,19 @@ class _SummaryBanner extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
               decoration: BoxDecoration(
-                color: const Color(0xFFFEE2E2),
+                color: netColors.rejectedContainer,
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: const Color(0xFFFECACA)),
+                border: Border.all(
+                  color: netColors.rejected.withValues(alpha: 0.4),
+                ),
               ),
               child: Text(
                 '$newCount جديد',
-                style: const TextStyle(
+                style: TextStyle(
                   fontFamily: 'Tajawal',
                   fontWeight: FontWeight.w700,
                   fontSize: 12,
-                  color: Color(0xFFDC2626),
+                  color: netColors.rejected,
                 ),
               ),
             ),
@@ -470,8 +489,8 @@ class _RejectedCard extends StatelessWidget {
                 width: 8,
                 height: 8,
                 margin: const EdgeInsets.only(top: 6),
-                decoration: const BoxDecoration(
-                  color: Color(0xFFCBD5E1),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.outlineVariant,
                   shape: BoxShape.circle,
                 ),
               ),
@@ -480,11 +499,11 @@ class _RejectedCard extends StatelessWidget {
                 child: Text(
                   item.reason,
                   textAlign: TextAlign.right,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontFamily: 'Tajawal',
                     fontWeight: FontWeight.w700,
                     fontSize: 14,
-                    color: Color(0xFF0F172A),
+                    color: Theme.of(context).colorScheme.onSurface,
                     height: 1.35,
                   ),
                 ),
@@ -495,8 +514,8 @@ class _RejectedCard extends StatelessWidget {
                 width: 8,
                 height: 8,
                 margin: const EdgeInsets.only(top: 6),
-                decoration: const BoxDecoration(
-                  color: Color(0xFFEF4444),
+                decoration: BoxDecoration(
+                  color: netColors.rejected,
                   shape: BoxShape.circle,
                 ),
               ),
@@ -510,21 +529,24 @@ class _RejectedCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF1F5F9),
+                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.account_balance_wallet_outlined,
-                        size: 14, color: Color(0xFF64748B)),
+                    Icon(
+                      Icons.account_balance_wallet_outlined,
+                      size: 14,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
                     const SizedBox(width: 4),
                     Text(
                       wallet,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontFamily: 'Tajawal',
                         fontSize: 11,
-                        color: Color(0xFF475569),
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -536,20 +558,24 @@ class _RejectedCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF1F5F9),
+                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.access_time, size: 14, color: Color(0xFF64748B)),
+                    Icon(
+                      Icons.access_time,
+                      size: 14,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
                     const SizedBox(width: 4),
                     Text(
                       _fmtTime(m.receivedAt),
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontFamily: 'Tajawal',
                         fontSize: 11,
-                        color: Color(0xFF475569),
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
                     ),
                   ],
@@ -560,16 +586,16 @@ class _RejectedCard extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFFEE2E2),
+                    color: netColors.rejectedContainer,
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: const Text(
+                  child: Text(
                     'جديد',
                     style: TextStyle(
                       fontFamily: 'Tajawal',
                       fontSize: 11,
                       fontWeight: FontWeight.w700,
-                      color: Color(0xFFDC2626),
+                      color: netColors.rejected,
                     ),
                   ),
                 ),

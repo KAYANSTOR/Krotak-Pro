@@ -5,6 +5,7 @@ import '../../domain/entities/pos_account.dart';
 import '../../domain/entities/wallet.dart';
 import '../app_scope.dart';
 import '../theme/kayan_colors.dart';
+import '../theme/net_semantic_colors.dart';
 import '../widgets/async_views.dart';
 import 'settings/templates_screen.dart';
 
@@ -459,7 +460,10 @@ class _WalletsPosScreenState extends State<WalletsPosScreen>
               Text('إدارة المحافظ ونقاط البيع',
                   style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w800, fontSize: 17)),
               Text('إعداد وتفعيل المحافظ ونقاط البيع المرتبطة بالرسائل',
-                  style: TextStyle(fontFamily: 'Tajawal', fontSize: 12, color: Color(0xFF64748B))),
+                  style: TextStyle(
+                      fontFamily: 'Tajawal',
+                      fontSize: 12,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant)),
             ],
           ),
           backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -546,13 +550,19 @@ class _WalletsPosScreenState extends State<WalletsPosScreen>
             child: Container(
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFFE2E8F0)),
+                border: Border.all(
+                  color: Theme.of(context).colorScheme.outlineVariant,
+                ),
               ),
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
               child: Row(
                 children: [
                   IconButton(
-                    icon: const Icon(Icons.more_vert, size: 20, color: Color(0xFF94A3B8)),
+                    icon: Icon(
+                      Icons.more_vert,
+                      size: 20,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
                     onPressed: () => _walletMenu(w),
                   ),
                   Switch.adaptive(
@@ -564,7 +574,9 @@ class _WalletsPosScreenState extends State<WalletsPosScreen>
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
-                      color: isNotif ? const Color(0xFFF3E8FF) : const Color(0xFFF1F5F9),
+                      color: isNotif
+                          ? netColors.soldContainer
+                          : Theme.of(context).colorScheme.surfaceContainerHighest,
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
@@ -573,7 +585,9 @@ class _WalletsPosScreenState extends State<WalletsPosScreen>
                         fontFamily: 'Tajawal',
                         fontSize: 11,
                         fontWeight: FontWeight.w700,
-                        color: isNotif ? const Color(0xFF7C3AED) : const Color(0xFF64748B),
+                        color: isNotif
+                            ? netColors.sold
+                            : Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
                     ),
                   ),
@@ -587,14 +601,19 @@ class _WalletsPosScreenState extends State<WalletsPosScreen>
                                 fontFamily: 'Tajawal', fontWeight: FontWeight.w800, fontSize: 15)),
                         Text(
                           'محفظة — ${w.senderId ?? '—'}',
-                          style: const TextStyle(
-                              fontFamily: 'Tajawal', fontSize: 12, color: Color(0xFF64748B)),
+                          style: TextStyle(
+                              fontFamily: 'Tajawal',
+                              fontSize: 12,
+                              color: Theme.of(context).colorScheme.onSurfaceVariant),
                         ),
                         if (w.packageName != null && w.packageName!.isNotEmpty)
                           Text(
                             w.packageName!,
-                            style: const TextStyle(
-                                fontFamily: 'Tajawal', fontSize: 11, color: Color(0xFF94A3B8)),
+                            style: TextStyle(
+                                fontFamily: 'Tajawal',
+                                fontSize: 11,
+                                color:
+                                    Theme.of(context).colorScheme.onSurfaceVariant),
                             textDirection: TextDirection.ltr,
                           ),
                       ],
@@ -642,7 +661,9 @@ class _WalletsPosScreenState extends State<WalletsPosScreen>
             child: Container(
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFFE2E8F0)),
+                border: Border.all(
+                  color: Theme.of(context).colorScheme.outlineVariant,
+                ),
               ),
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               child: Row(
@@ -661,8 +682,10 @@ class _WalletsPosScreenState extends State<WalletsPosScreen>
                                 fontFamily: 'Tajawal', fontWeight: FontWeight.w800)),
                         Text(
                           phone == null ? 'نقطة بيع' : 'نقطة بيع — $phone',
-                          style: const TextStyle(
-                              fontFamily: 'Tajawal', fontSize: 12, color: Color(0xFF64748B)),
+                          style: TextStyle(
+                              fontFamily: 'Tajawal',
+                              fontSize: 12,
+                              color: Theme.of(context).colorScheme.onSurfaceVariant),
                         ),
                       ],
                     ),
