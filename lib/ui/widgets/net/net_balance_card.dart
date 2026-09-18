@@ -9,6 +9,9 @@ import 'net_animated_counter.dart';
 /// Title and semantics fixed by product decision:
 /// إجمالي رصيد العملاء (المعلق) = sum of customer ledger balances (debt),
 /// not network balance. Body has no tap; chips have separate actions.
+///
+/// البصريات فقط: تدرّج أعمق، لمعة ذهبية محدودة، وفواصل أوضح — بلا أي تغيير
+/// في القيم أو الإجراءات.
 class NetBalanceCard extends StatelessWidget {
   const NetBalanceCard({
     super.key,
@@ -33,35 +36,64 @@ class NetBalanceCard extends StatelessWidget {
     final radius = BorderRadius.circular(NetRadii.xl);
 
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: NetSpacing.lg, vertical: NetSpacing.sm),
+      margin: const EdgeInsets.fromLTRB(
+        NetSpacing.lg,
+        NetSpacing.md,
+        NetSpacing.lg,
+        NetSpacing.sm,
+      ),
       decoration: BoxDecoration(
         borderRadius: radius,
         gradient: LinearGradient(
-          colors: [net.balanceGradientStart, net.balanceGradientEnd],
+          colors: [
+            net.balanceGradientStart,
+            Color.lerp(net.balanceGradientStart, net.balanceGradientEnd, 0.55)!,
+            net.balanceGradientEnd,
+          ],
           begin: Alignment.topRight,
           end: Alignment.bottomLeft,
         ),
-        boxShadow: NetElevation.glow(net.balanceGradientStart),
+        boxShadow: NetElevation.glow(net.balanceGradientStart, opacity: 0.30),
       ),
       child: ClipRRect(
         borderRadius: radius,
         child: Stack(
           children: [
+            // Deepening wash keeps the hero surface readable in both themes.
+            Positioned.fill(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      Colors.black.withValues(alpha: 0.10),
+                      Colors.transparent,
+                    ],
+                    begin: Alignment.bottomLeft,
+                    end: Alignment.topCenter,
+                  ),
+                ),
+              ),
+            ),
             // Decorative glow blobs keep the hero surface from looking flat.
             Positioned(
-              top: -34,
-              left: -24,
+              top: -46,
+              left: -30,
               child: _GlowBlob(
-                size: 120,
-                color: Colors.white.withValues(alpha: 0.14),
+                size: 150,
+                color: Colors.white.withValues(alpha: 0.10),
               ),
             ),
             Positioned(
-              bottom: -46,
-              right: -18,
+              top: 14,
+              left: 30,
+              child: _Ring(size: 84, color: Colors.white.withValues(alpha: 0.12)),
+            ),
+            Positioned(
+              bottom: -54,
+              right: -22,
               child: _GlowBlob(
-                size: 140,
-                color: Colors.black.withValues(alpha: 0.10),
+                size: 150,
+                color: Colors.black.withValues(alpha: 0.12),
               ),
             ),
             Padding(
@@ -71,10 +103,18 @@ class NetBalanceCard extends StatelessWidget {
                 children: [
                   Row(
                     children: [
-                      Icon(
-                        Icons.account_balance_wallet_outlined,
-                        size: NetSizes.iconSm,
-                        color: Colors.white.withValues(alpha: 0.85),
+                      Container(
+                        width: 30,
+                        height: 30,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.18),
+                          borderRadius: NetRadii.xsAll,
+                        ),
+                        child: const Icon(
+                          Icons.account_balance_wallet_outlined,
+                          size: 17,
+                          color: Colors.white,
+                        ),
                       ),
                       const SizedBox(width: NetSpacing.sm),
                       Expanded(
@@ -82,15 +122,15 @@ class NetBalanceCard extends StatelessWidget {
                           'إجمالي رصيد العملاء (المعلق)',
                           style: TextStyle(
                             fontFamily: NetTypography.family,
-                            color: Colors.white.withValues(alpha: 0.88),
+                            color: Colors.white.withValues(alpha: 0.92),
                             fontSize: 13,
-                            fontWeight: FontWeight.w600,
+                            fontWeight: FontWeight.w700,
                           ),
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: NetSpacing.sm),
+                  const SizedBox(height: NetSpacing.md),
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
@@ -101,31 +141,65 @@ class NetBalanceCard extends StatelessWidget {
                           style: const TextStyle(
                             fontFamily: NetTypography.family,
                             color: Colors.white,
-                            fontSize: 30,
+                            fontSize: 31,
                             fontWeight: FontWeight.w800,
                             height: 1.1,
+                            letterSpacing: -0.4,
+                            shadows: [
+                              Shadow(
+                                color: Color(0x33000000),
+                                blurRadius: 8,
+                                offset: Offset(0, 2),
+                              ),
+                            ],
                           ),
                         ),
                       ),
                       const SizedBox(width: NetSpacing.xs),
                       Padding(
-                        padding: const EdgeInsets.only(bottom: 4),
-                        child: Text(
-                          'ر.ي',
-                          style: TextStyle(
-                            fontFamily: NetTypography.family,
-                            color: Colors.white.withValues(alpha: 0.9),
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
+                        padding: const EdgeInsets.only(bottom: 5),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: NetSpacing.sm,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.20),
+                            borderRadius: NetRadii.pillAll,
+                          ),
+                          child: Text(
+                            'ر.ي',
+                            style: TextStyle(
+                              fontFamily: NetTypography.family,
+                              color: Colors.white.withValues(alpha: 0.95),
+                              fontSize: 13,
+                              fontWeight: FontWeight.w800,
+                            ),
                           ),
                         ),
                       ),
                     ],
                   ),
                   const SizedBox(height: NetSpacing.lg),
-                  Divider(
-                    height: 1,
-                    color: Colors.white.withValues(alpha: 0.18),
+                  // Limited gold accent: a short accent bar, not a full gold rule.
+                  Row(
+                    children: [
+                      Container(
+                        width: 42,
+                        height: 3,
+                        decoration: BoxDecoration(
+                          color: net.premium,
+                          borderRadius: NetRadii.pillAll,
+                        ),
+                      ),
+                      const SizedBox(width: NetSpacing.sm),
+                      Expanded(
+                        child: Divider(
+                          height: 1,
+                          color: Colors.white.withValues(alpha: 0.20),
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: NetSpacing.md),
                   Row(
@@ -170,14 +244,18 @@ class NetBalanceCard extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         borderRadius: NetRadii.smAll,
-        child: Padding(
+        child: Container(
           padding: const EdgeInsets.symmetric(
             horizontal: NetSpacing.md,
             vertical: NetSpacing.sm,
           ),
+          decoration: BoxDecoration(
+            borderRadius: NetRadii.smAll,
+            border: Border.all(color: Colors.white.withValues(alpha: 0.22)),
+          ),
           child: Row(
             children: [
-              Icon(icon, size: NetSizes.iconSm, color: Colors.white.withValues(alpha: 0.85)),
+              Icon(icon, size: NetSizes.iconSm, color: Colors.white.withValues(alpha: 0.92)),
               const SizedBox(width: NetSpacing.sm),
               Expanded(
                 child: Column(
@@ -190,7 +268,7 @@ class NetBalanceCard extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         fontFamily: NetTypography.family,
-                        color: Colors.white.withValues(alpha: 0.85),
+                        color: Colors.white.withValues(alpha: 0.88),
                         fontSize: 11,
                         fontWeight: FontWeight.w600,
                       ),
@@ -201,7 +279,7 @@ class NetBalanceCard extends StatelessWidget {
                         fontFamily: NetTypography.family,
                         color: Colors.white,
                         fontWeight: FontWeight.w800,
-                        fontSize: 16,
+                        fontSize: 17,
                       ),
                     ),
                   ],
@@ -229,6 +307,25 @@ class _GlowBlob extends StatelessWidget {
       decoration: BoxDecoration(
         color: color,
         shape: BoxShape.circle,
+      ),
+    );
+  }
+}
+
+class _Ring extends StatelessWidget {
+  const _Ring({required this.size, required this.color});
+
+  final double size;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: Border.all(color: color, width: 10),
       ),
     );
   }

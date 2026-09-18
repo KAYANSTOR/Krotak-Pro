@@ -9,6 +9,7 @@ import '../theme/net_semantic_colors.dart';
 import '../theme/net_tokens.dart';
 import '../widgets/async_views.dart';
 import '../widgets/net/net_surface_card.dart';
+import '../widgets/net/net_transaction_detail_sheet.dart';
 
 /// سجل العمليات — مطابقة إطارات الفيديو (`frame_t500s` / `inv_t480s`).
 ///
@@ -394,6 +395,8 @@ class _TransactionsLogScreenState extends State<TransactionsLogScreen> {
                                       label: _typeLabel(tx.type),
                                       inflow: _isInflow(tx.type),
                                       amountLabel: _fmtMinor(tx.amount.minorUnits),
+                                      onTap: () =>
+                                          NetTransactionDetailSheet.show(context, tx),
                                     ),
                                   ],
                                 );
@@ -707,12 +710,14 @@ class _TxCard extends StatelessWidget {
     required this.label,
     required this.inflow,
     required this.amountLabel,
+    this.onTap,
   });
 
   final Transaction tx;
   final String label;
   final bool inflow;
   final String amountLabel;
+  final VoidCallback? onTap;
 
   String _fmtTime(DateTime t) {
     final local = t.toLocal();
@@ -738,6 +743,7 @@ class _TxCard extends StatelessWidget {
         NetSpacing.sm,
       ),
       padding: const EdgeInsets.all(NetSpacing.md),
+      onTap: onTap,
       child: Row(
         children: [
           Container(

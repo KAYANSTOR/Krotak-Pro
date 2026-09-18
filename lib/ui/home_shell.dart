@@ -1,11 +1,13 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import 'routing/app_routes.dart';
 import 'screens/customers_screen.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/inventory_screen.dart';
 import 'screens/offers_screen.dart';
 import 'screens/reports_screen.dart';
+import 'widgets/dashboard/quick_actions_sheet.dart';
 import 'widgets/kayan_bottom_nav.dart';
 import 'widgets/permissions_onboarding.dart';
 
@@ -83,6 +85,29 @@ class _HomeShellState extends State<HomeShell> {
     if (id == 'dashboard') _dashboardRefresh.value++;
   }
 
+  Future<void> _openDirectSale() async {
+    await AppRoutes.openDirectSale(context);
+    if (mounted) _dashboardRefresh.value++;
+  }
+
+  Future<void> _openWalletsAndPos() async {
+    await AppRoutes.openWalletsAndPos(context);
+    if (mounted) _dashboardRefresh.value++;
+  }
+
+  /// Center button of the bottom bar — the same quick actions the dashboard
+  /// exposes, so every tab reaches them without extra navigation.
+  void _openQuickActions() {
+    QuickActionsSheet.show(
+      context,
+      onDirectSale: _openDirectSale,
+      onPosAccounts: _openWalletsAndPos,
+      onAddCustomer: () => _goToId('accounts'),
+      onOffers: () => _goToId('offers'),
+      onCards: () => _goToId('cards'),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final children = <Widget>[
@@ -105,6 +130,7 @@ class _HomeShellState extends State<HomeShell> {
       bottomNavigationBar: KayanBottomNav(
         currentId: _currentId,
         onSelect: _goToId,
+        onQuickActions: _openQuickActions,
       ),
     );
   }

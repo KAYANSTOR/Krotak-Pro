@@ -83,10 +83,31 @@ void main() {
     expect(id, 'cards');
     await tester.tap(find.text('التقارير'));
     expect(id, 'reports');
-    await tester.tap(find.text('العروض'));
-    expect(id, 'offers');
     await tester.tap(find.text('الرئيسية'));
     expect(id, 'dashboard');
+  });
+
+  testWidgets('KayanBottomNav center button opens quick actions', (tester) async {
+    var opened = false;
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: buildKayanLightTheme(),
+        home: Directionality(
+          textDirection: TextDirection.rtl,
+          child: Scaffold(
+            bottomNavigationBar: KayanBottomNav(
+              currentId: 'dashboard',
+              onSelect: (_) {},
+              onQuickActions: () => opened = true,
+            ),
+          ),
+        ),
+      ),
+    );
+    final center = find.byKey(const ValueKey('nav-quick-actions'));
+    expect(center, findsOneWidget);
+    await tester.tap(center);
+    expect(opened, isTrue);
   });
 
   testWidgets('Shell-style tab switch via callback (no SnackBar)', (tester) async {

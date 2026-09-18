@@ -125,12 +125,12 @@ class NetHeaderAction extends StatelessWidget {
       child: Material(
         color: palette.surface,
         shape: RoundedRectangleBorder(
-          borderRadius: NetRadii.smAll,
+          borderRadius: NetRadii.pillAll,
           side: BorderSide(color: palette.border),
         ),
         child: InkWell(
           onTap: onPressed,
-          borderRadius: NetRadii.smAll,
+          borderRadius: NetRadii.pillAll,
           child: Tooltip(
             message: tooltip,
             child: SizedBox(

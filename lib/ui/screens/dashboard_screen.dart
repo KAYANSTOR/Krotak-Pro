@@ -23,10 +23,11 @@ import '../widgets/net/net_alert_banner.dart';
 import '../widgets/net/net_balance_card.dart';
 import '../widgets/net/net_dashboard_header.dart';
 import '../widgets/net/net_metric_card.dart';
-import '../widgets/net/net_quick_action_card.dart';
 import '../widgets/net/net_recent_transaction_card.dart';
+import '../widgets/net/net_service_tile.dart';
 import '../widgets/net/net_section_header.dart';
 import '../widgets/net/net_surface_card.dart';
+import '../widgets/net/net_transaction_detail_sheet.dart';
 
 /// لوحة التحكم — مطابقة بصرية وسلوكية لفيديو Z Net (المرحلة 1).
 ///
@@ -328,6 +329,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
       onDirectSale: _openDirectSale,
       onPosAccounts: _openWalletsAndPos,
       onAddCustomer: () => widget.onNavigateToTab?.call('accounts'),
+      onOffers: () => widget.onNavigateToTab?.call('offers'),
+      onCards: () => widget.onNavigateToTab?.call('cards'),
     );
   }
 
@@ -372,6 +375,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final lowStockMessage = _lowStockBannerMessage;
     final healthMessage = _healthBannerMessage;
     final groups = _recentGroups;
+    final net = context.netColors;
 
     return SafeArea(
       bottom: false,
@@ -389,6 +393,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   : _dateLabel,
               onSettings: _openSettings,
               onHelp: _openHelp,
+              onNotifications: _openAttentionMessages,
+              notificationsCount: _attentionMessagesCount,
             ),
 
             if (_error != null)
@@ -462,7 +468,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       value: formatMoneyMinor(_monthlySalesMinor),
                       subtitle: '$_monthlyCards كرت',
                       icon: Icons.calendar_month_outlined,
-                      accent: const Color(0xFF7C3AED),
+                      accent: net.info,
                       trailingLabel: 'هذا الشهر',
                       onTap: _openMonthlySalesSheet,
                     ),
@@ -471,53 +477,71 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
             ),
 
-            // ── إجراءات سريعة (شريط أفقي موحّد) ──
-            const NetSectionHeader(title: 'إجراءات سريعة', icon: Icons.bolt_rounded),
-            SizedBox(
-              height: 108,
-              child: ListView(
-                scrollDirection: Axis.horizontal,
-                padding: NetSpacing.pageH,
-                children: [
-                  NetQuickActionCard(
-                    label: 'بيع مباشر',
-                    icon: Icons.add_shopping_cart_rounded,
-                    onTap: _openDirectSale,
-                  ),
-                  const SizedBox(width: NetSpacing.sm),
-                  NetQuickActionCard(
-                    label: 'نقاط البيع',
-                    icon: Icons.storefront_rounded,
-                    accent: const Color(0xFF0EA5E9),
-                    onTap: _openWalletsAndPos,
-                  ),
-                  const SizedBox(width: NetSpacing.sm),
-                  NetQuickActionCard(
-                    label: 'سجل العمليات',
-                    icon: Icons.receipt_long_rounded,
-                    accent: const Color(0xFF6366F1),
-                    onTap: () => AppRoutes.openTransactionsLog(context),
-                  ),
-                  const SizedBox(width: NetSpacing.sm),
-                  NetQuickActionCard(
-                    label: 'فحص النظام',
-                    icon: Icons.health_and_safety_rounded,
-                    accent: const Color(0xFF059669),
-                    onTap: _openSystemCheck,
-                  ),
-                  const SizedBox(width: NetSpacing.sm),
-                  NetQuickActionCard(
-                    label: 'المزيد',
-                    icon: Icons.more_horiz_rounded,
-                    accent: KayanPalette.of(context).textSecondary,
-                    onTap: _openMoreActions,
-                  ),
-                ],
-              ),
+            // ── الخدمات (شبكة أيقونات كما في الواجهة المرجعية) ──
+            NetSectionHeader(
+              title: 'الخدمات',
+              icon: Icons.grid_view_rounded,
+              actionLabel: 'المزيد',
+              onAction: _openMoreActions,
+            ),
+            NetServiceGrid(
+              tiles: [
+                NetServiceTile(
+                  label: 'الحسابات',
+                  icon: Icons.groups_rounded,
+                  onTap: () => widget.onNavigateToTab?.call('accounts'),
+                ),
+                NetServiceTile(
+                  label: 'الكروت',
+                  icon: Icons.style_rounded,
+                  onTap: () => widget.onNavigateToTab?.call('cards'),
+                ),
+                NetServiceTile(
+                  label: 'سجل العمليات',
+                  icon: Icons.receipt_long_rounded,
+                  tint: net.info,
+                  onTap: () => AppRoutes.openTransactionsLog(context),
+                ),
+                NetServiceTile(
+                  label: 'بيع مباشر',
+                  icon: Icons.point_of_sale_rounded,
+                  onTap: _openDirectSale,
+                ),
+                NetServiceTile(
+                  label: 'نقاط البيع',
+                  icon: Icons.storefront_rounded,
+                  onTap: _openWalletsAndPos,
+                ),
+                NetServiceTile(
+                  label: 'العروض',
+                  icon: Icons.card_giftcard_rounded,
+                  tint: net.premium,
+                  onTap: () => widget.onNavigateToTab?.call('offers'),
+                ),
+                NetServiceTile(
+                  label: 'التقارير',
+                  icon: Icons.insights_rounded,
+                  tint: net.info,
+                  onTap: () => widget.onNavigateToTab?.call('reports'),
+                ),
+                NetServiceTile(
+                  label: 'الرسائل',
+                  icon: Icons.mark_email_unread_rounded,
+                  tint: net.warning,
+                  badgeCount: _attentionMessagesCount,
+                  onTap: _openAttentionMessages,
+                ),
+                NetServiceTile(
+                  label: 'فحص النظام',
+                  icon: Icons.health_and_safety_rounded,
+                  tint: net.success,
+                  onTap: _openSystemCheck,
+                ),
+              ],
             ),
 
             NetSectionHeader(
-              title: 'آخر العمليات',
+              title: 'العمليات',
               icon: Icons.history_rounded,
               actionLabel: 'الكل',
               onAction: () => AppRoutes.openTransactionsLog(context),
@@ -538,7 +562,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 for (final tx in group.items)
                   NetRecentTransactionCard(
                     transaction: tx,
-                    onTap: () => AppRoutes.openTransactionsLog(context),
+                    onTap: () => NetTransactionDetailSheet.show(context, tx),
                   ),
               ],
           ],
@@ -582,7 +606,7 @@ class _DayGroupLabel extends StatelessWidget {
   }
 }
 
-/// بطاقة حالة الرسائل — مطابقة لإطار الفيديو.
+/// شريط حالة معالجة الرسائل — صف واحد مكثّف كما في الواجهة المرجعية.
 class _MessageStatusCard extends StatelessWidget {
   const _MessageStatusCard({
     required this.autoProcessing,
@@ -615,136 +639,98 @@ class _MessageStatusCard extends StatelessWidget {
         NetSpacing.xs,
       ),
       padding: EdgeInsets.zero,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(
-              NetSpacing.md,
-              NetSpacing.md,
-              NetSpacing.md,
-              NetSpacing.sm,
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'حالة معالجة الرسائل',
-                        style: TextStyle(
-                          fontFamily: NetTypography.family,
-                          fontWeight: FontWeight.w800,
-                          fontSize: 14,
-                          color: palette.textPrimary,
-                        ),
-                      ),
-                      const SizedBox(height: NetSpacing.xs),
-                      Text(
-                        categoryOnly
-                            ? 'معالجة مبالغ الفئات المعرفة فقط'
-                            : 'معالجة جميع مبالغ الرسائل',
-                        style: TextStyle(
-                          fontFamily: NetTypography.family,
-                          fontSize: 12,
-                          color: palette.textSecondary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: NetSpacing.sm,
-                    vertical: NetSpacing.xs,
-                  ),
-                  decoration: BoxDecoration(
-                    color: statusBg,
-                    borderRadius: NetRadii.pillAll,
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        autoProcessing
-                            ? Icons.play_circle_filled_rounded
-                            : Icons.pause_circle_filled_rounded,
-                        size: 15,
-                        color: statusColor,
-                      ),
-                      const SizedBox(width: NetSpacing.xs),
-                      Text(
-                        autoProcessing ? 'نشطة' : 'متوقفة',
-                        style: TextStyle(
-                          fontFamily: NetTypography.family,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w800,
-                          color: statusColor,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Divider(height: 1, color: palette.border),
-          InkWell(
-            onTap: onRejectedTap,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: NetSpacing.md,
-                vertical: NetSpacing.md,
+      onTap: onAttentionTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: NetSpacing.md,
+          vertical: NetSpacing.md,
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: statusBg,
+                borderRadius: NetRadii.smAll,
               ),
-              child: Row(
+              child: Icon(
+                autoProcessing
+                    ? Icons.play_circle_filled_rounded
+                    : Icons.pause_circle_filled_rounded,
+                size: 20,
+                color: statusColor,
+              ),
+            ),
+            const SizedBox(width: NetSpacing.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(
-                    Icons.mark_email_unread_rounded,
-                    size: 20,
-                    color: palette.primary,
-                  ),
-                  const SizedBox(width: NetSpacing.sm),
-                  Expanded(
-                    child: Text(
-                      'الرسائل المرفوضة',
-                      style: TextStyle(
-                        fontFamily: NetTypography.family,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 13,
-                        color: palette.textPrimary,
-                      ),
+                  Text(
+                    'حالة معالجة الرسائل',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontFamily: NetTypography.family,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 13.5,
+                      color: palette.textPrimary,
                     ),
                   ),
-                  if (rejectedCount > 0)
-                    _CountPill(
-                      label: '$rejectedCount أخطاء',
-                      color: net.rejected,
-                      background: net.rejectedContainer,
-                    )
-                  else if (attentionCount > 0)
-                    _CountPill(
-                      label: '$attentionCount معلّقة',
-                      color: net.warning,
-                      background: net.warningContainer,
-                    )
-                  else
-                    _CountPill(
-                      label: 'لا أخطاء',
-                      color: net.success,
-                      background: net.successContainer,
+                  const SizedBox(height: 2),
+                  Text(
+                    autoProcessing
+                        ? (categoryOnly
+                            ? 'نشطة · مبالغ الفئات المعرفة فقط'
+                            : 'نشطة · جميع مبالغ الرسائل')
+                        : 'متوقفة · لن تُعالج الرسائل الواردة',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontFamily: NetTypography.family,
+                      fontSize: 11.5,
+                      color: palette.textSecondary,
                     ),
-                  const SizedBox(width: NetSpacing.xs),
-                  Icon(
-                    Icons.chevron_left_rounded,
-                    size: NetSizes.iconSm,
-                    color: palette.textTertiary,
                   ),
                 ],
               ),
             ),
-          ),
-        ],
+            const SizedBox(width: NetSpacing.sm),
+            if (rejectedCount > 0)
+              _CountPill(
+                label: '$rejectedCount مرفوضة',
+                color: net.rejected,
+                background: net.rejectedContainer,
+              )
+            else if (attentionCount > 0)
+              _CountPill(
+                label: '$attentionCount معلّقة',
+                color: net.warning,
+                background: net.warningContainer,
+              )
+            else
+              _CountPill(
+                label: 'لا أخطاء',
+                color: net.success,
+                background: net.successContainer,
+              ),
+            const SizedBox(width: NetSpacing.xs),
+            InkWell(
+              onTap: onRejectedTap,
+              borderRadius: NetRadii.pillAll,
+              child: Padding(
+                padding: const EdgeInsets.all(NetSpacing.xs),
+                child: Icon(
+                  Icons.chevron_left_rounded,
+                  size: NetSizes.iconSm,
+                  color: palette.textTertiary,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

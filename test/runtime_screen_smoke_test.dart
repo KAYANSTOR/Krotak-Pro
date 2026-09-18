@@ -36,11 +36,10 @@ void main() {
     expect(tester.takeException(), isNull, reason: 'Runtime exception during initial app render');
 
     const navKeys = <String, String>{
-      'التقارير': 'nav-reports',
-      'العروض': 'nav-offers',
       'الحسابات': 'nav-accounts',
+      'التقارير': 'nav-reports',
       'الكروت': 'nav-cards',
-      'لوحة التحكم': 'nav-dashboard',
+      'الرئيسية': 'nav-dashboard',
     };
 
     for (final entry in navKeys.entries) {
@@ -51,6 +50,17 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
       expect(tester.takeException(), isNull, reason: 'Runtime exception while opening ${entry.key}');
     }
+
+    // Center button of the bar opens the quick-actions sheet.
+    final quickActions = find.byKey(const ValueKey('nav-quick-actions'));
+    expect(quickActions, findsOneWidget);
+    await tester.tap(quickActions);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(tester.takeException(), isNull, reason: 'Runtime exception while opening quick actions');
+    expect(find.text('إجراءات سريعة'), findsOneWidget);
+    await tester.tapAt(const Offset(10, 10));
+    await tester.pump(const Duration(milliseconds: 400));
 
     expect(find.byType(HomeShell), findsOneWidget);
   });
