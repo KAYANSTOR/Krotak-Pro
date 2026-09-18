@@ -6,7 +6,8 @@ import '../../../domain/entities/money.dart';
 import '../../../domain/entities/transaction.dart';
 import '../../../domain/services/services.dart';
 import '../../app_scope.dart';
-import '../../theme/kayan_colors.dart';
+import '../../theme/net_semantic_colors.dart';
+import '../../theme/net_tokens.dart';
 
 /// بيع يدوي: نقدي / آجل / هدية / نقطة بيع — 1.0.9.
 class DirectSaleSheet extends StatefulWidget {
@@ -82,18 +83,26 @@ class _DirectSaleSheetState extends State<DirectSaleSheet> {
   Widget build(BuildContext context) {
     final bottom = MediaQuery.paddingOf(context).bottom;
     final inset = MediaQuery.viewInsetsOf(context).bottom;
+    final scheme = Theme.of(context).colorScheme;
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Padding(
         padding: EdgeInsets.only(bottom: inset),
         child: Container(
-          constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.92),
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.sizeOf(context).height * 0.92,
+          ),
           decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surface,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+            color: scheme.surface,
+            borderRadius: NetRadii.sheetTop,
           ),
           child: SingleChildScrollView(
-            padding: EdgeInsets.fromLTRB(24, 8, 24, 16 + bottom),
+            padding: EdgeInsets.fromLTRB(
+              NetSpacing.xxl,
+              NetSpacing.sm,
+              NetSpacing.xxl,
+              NetSpacing.lg + bottom,
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -101,80 +110,132 @@ class _DirectSaleSheetState extends State<DirectSaleSheet> {
                   child: Container(
                     width: 48,
                     height: 5,
-                    margin: const EdgeInsets.only(bottom: 8),
-                    decoration: BoxDecoration(color: Theme.of(context).colorScheme.outlineVariant, borderRadius: BorderRadius.circular(50)),
+                    margin: const EdgeInsets.only(bottom: NetSpacing.sm),
+                    decoration: BoxDecoration(
+                      color: scheme.outlineVariant,
+                      borderRadius: NetRadii.pillAll,
+                    ),
                   ),
                 ),
-                const Text(
+                Text(
                   'بيع مباشر - يدوي',
                   textAlign: TextAlign.center,
-                  style: TextStyle(fontFamily: 'Tajawal', fontSize: 18, fontWeight: FontWeight.bold),
+                  style: TextStyle(
+                    fontFamily: NetTypography.family,
+                    fontSize: 17,
+                    fontWeight: FontWeight.w800,
+                    color: scheme.onSurface,
+                  ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: NetSpacing.lg),
                 TextField(
                   controller: _phoneCtrl,
                   keyboardType: TextInputType.phone,
-                  inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(9)],
+                  inputFormatters: [
+                    FilteringTextInputFormatter.digitsOnly,
+                    LengthLimitingTextInputFormatter(9),
+                  ],
                   decoration: InputDecoration(
                     labelText: 'رقم الجوال',
-                    errorText: _submitted && !_phoneValid ? '9 أرقام تبدأ بـ 7' : null,
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    errorText: _submitted && !_phoneValid
+                        ? '9 أرقام تبدأ بـ 7'
+                        : null,
                   ),
-                  style: const TextStyle(fontFamily: 'Tajawal'),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: NetSpacing.md),
                 TextField(
                   controller: _amountCtrl,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
                   decoration: InputDecoration(
                     labelText: 'المبلغ',
-                    errorText: _submitted && _amountMinor == null ? 'أدخل مبلغًا صالحًا' : null,
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    errorText: _submitted && _amountMinor == null
+                        ? 'أدخل مبلغًا صالحًا'
+                        : null,
                   ),
-                  style: const TextStyle(fontFamily: 'Tajawal'),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: NetSpacing.md),
                 TextField(
                   controller: _nameCtrl,
-                  decoration: InputDecoration(
-                    labelText: 'الاسم',
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  style: const TextStyle(fontFamily: 'Tajawal'),
+                  decoration: const InputDecoration(labelText: 'الاسم'),
                 ),
-                const SizedBox(height: 16),
-                const Text('طريقة البيع', style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w700)),
-                const SizedBox(height: 8),
+                const SizedBox(height: NetSpacing.lg),
+                Text(
+                  'طريقة البيع',
+                  style: TextStyle(
+                    fontFamily: NetTypography.family,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: scheme.onSurface,
+                  ),
+                ),
+                const SizedBox(height: NetSpacing.sm),
                 Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
+                  spacing: NetSpacing.sm,
+                  runSpacing: NetSpacing.sm,
                   children: [
                     for (final m in ManualSaleMethod.values)
                       ChoiceChip(
-                        label: Text(_label(m), style: const TextStyle(fontFamily: 'Tajawal')),
+                        label: Text(
+                          _label(m),
+                          style: TextStyle(
+                            fontFamily: NetTypography.family,
+                            fontSize: 12.5,
+                            fontWeight: _method == m
+                                ? FontWeight.w700
+                                : FontWeight.w500,
+                            color: _method == m ? Colors.white : scheme.onSurface,
+                          ),
+                        ),
                         selected: _method == m,
+                        showCheckmark: false,
+                        selectedColor: scheme.primary,
+                        backgroundColor: scheme.surface,
+                        side: BorderSide(
+                          color: _method == m
+                              ? scheme.primary
+                              : scheme.outlineVariant,
+                        ),
+                        shape: const RoundedRectangleBorder(
+                          borderRadius: NetRadii.pillAll,
+                        ),
                         onSelected: (_) => setState(() => _method = m),
-                        selectedColor: Theme.of(context)
-                            .colorScheme
-                            .primaryContainer,
                       ),
                   ],
                 ),
                 if (_status != null) ...[
-                  const SizedBox(height: 12),
-                  Text(_status!, style: const TextStyle(fontFamily: 'Tajawal', color: KayanColors.error)),
+                  const SizedBox(height: NetSpacing.md),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(
+                        Icons.error_outline_rounded,
+                        size: NetSizes.iconSm,
+                        color: context.netColors.rejected,
+                      ),
+                      const SizedBox(width: NetSpacing.sm),
+                      Expanded(
+                        child: Text(
+                          _status!,
+                          style: TextStyle(
+                            fontFamily: NetTypography.family,
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w600,
+                            color: context.netColors.rejected,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ],
-                const SizedBox(height: 20),
+                const SizedBox(height: NetSpacing.xl),
                 FilledButton(
                   style: FilledButton.styleFrom(
-                    backgroundColor: KayanColors.primary,
                     minimumSize: const Size.fromHeight(52),
                   ),
                   onPressed: _busy ? null : _confirm,
-                  child: Text(
-                    _busy ? 'جاري التنفيذ…' : 'تأكيد البيع المباشر',
-                    style: const TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.bold),
-                  ),
+                  child: Text(_busy ? 'جاري التنفيذ…' : 'تأكيد البيع المباشر'),
                 ),
               ],
             ),

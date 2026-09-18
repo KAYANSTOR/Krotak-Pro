@@ -4,7 +4,13 @@ import '../../../core/result.dart';
 import '../../../domain/entities/customer.dart';
 import '../../../domain/entities/transaction.dart';
 import '../../app_scope.dart';
+import '../../labels/net_labels.dart';
+import '../../theme/kayan_palette.dart';
+import '../../theme/net_semantic_colors.dart';
+import '../../theme/net_tokens.dart';
 import '../../widgets/async_views.dart';
+import '../../widgets/net/net_initial_avatar.dart';
+import '../../widgets/net/net_surface_card.dart';
 
 enum SalesReportRange { today, month, custom }
 
@@ -122,106 +128,229 @@ class _SalesPeriodReportScreenState extends State<SalesPeriodReportScreen> {
     });
   }
 
+  Widget _rangeChip({
+    required BuildContext context,
+    required String label,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    final palette = KayanPalette.of(context);
+    return ChoiceChip(
+      label: Text(
+        label,
+        style: TextStyle(
+          fontFamily: NetTypography.family,
+          fontSize: 12.5,
+          fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+          color: selected ? Colors.white : palette.textPrimary,
+        ),
+      ),
+      selected: selected,
+      showCheckmark: false,
+      selectedColor: palette.primary,
+      backgroundColor: palette.surface,
+      side: BorderSide(
+        color: selected
+            ? palette.primary
+            : Theme.of(context).colorScheme.outlineVariant,
+      ),
+      shape: const RoundedRectangleBorder(borderRadius: NetRadii.pillAll),
+      onSelected: (_) => onTap(),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final palette = KayanPalette.of(context);
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
-        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-        appBar: AppBar(
-          title: const Text(
-            'تقرير المبيعات التفصيلي',
-            style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.bold),
-          ),
-        ),
+        appBar: AppBar(title: const Text('تقرير المبيعات التفصيلي')),
         body: Column(
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+              padding: const EdgeInsets.fromLTRB(
+                NetSpacing.lg,
+                NetSpacing.md,
+                NetSpacing.lg,
+                NetSpacing.sm,
+              ),
               child: Wrap(
-                spacing: 8,
-                runSpacing: 8,
+                spacing: NetSpacing.sm,
+                runSpacing: NetSpacing.sm,
                 children: [
-                  ChoiceChip(
-                    label: const Text('اليوم', style: TextStyle(fontFamily: 'Tajawal')),
+                  _rangeChip(
+                    context: context,
+                    label: 'اليوم',
                     selected: _range == SalesReportRange.today,
-                    onSelected: (_) {
+                    onTap: () {
                       setState(() => _range = SalesReportRange.today);
                       _load();
                     },
                   ),
-                  ChoiceChip(
-                    label: const Text('الشهر', style: TextStyle(fontFamily: 'Tajawal')),
+                  _rangeChip(
+                    context: context,
+                    label: 'الشهر',
                     selected: _range == SalesReportRange.month,
-                    onSelected: (_) {
+                    onTap: () {
                       setState(() => _range = SalesReportRange.month);
                       _load();
                     },
                   ),
-                  ChoiceChip(
-                    label: const Text('فترة مختارة', style: TextStyle(fontFamily: 'Tajawal')),
+                  _rangeChip(
+                    context: context,
+                    label: 'فترة مختارة',
                     selected: _range == SalesReportRange.custom,
-                    onSelected: (_) => _pickCustom(),
+                    onTap: () => _pickCustom(),
                   ),
                 ],
               ),
             ),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Card(
-                child: ListTile(
-                  title: const Text(
-                    'إجمالي المبيعات المكتملة',
-                    style: TextStyle(fontFamily: 'Tajawal'),
-                  ),
-                  subtitle: Text(
-                    '${formatMoneyMinor(_totalMinor)} · ${_rows.length} كرت',
-                    style: const TextStyle(
-                      fontFamily: 'Tajawal',
-                      fontWeight: FontWeight.bold,
+              padding: NetSpacing.pageH,
+              child: NetSurfaceCard(
+                padding: NetSpacing.cardTight,
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.receipt_long_rounded,
+                      size: 20,
+                      color: palette.primary,
                     ),
-                  ),
+                    const SizedBox(width: NetSpacing.sm),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'إجمالي المبيعات المكتملة',
+                            style: TextStyle(
+                              fontFamily: NetTypography.family,
+                              fontSize: 12.5,
+                              color: palette.textSecondary,
+                            ),
+                          ),
+                          const SizedBox(height: NetSpacing.xxs),
+                          Text(
+                            formatMoneyMinor(_totalMinor),
+                            style: TextStyle(
+                              fontFamily: NetTypography.family,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w800,
+                              color: palette.textPrimary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: NetSpacing.sm,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: context.netColors.availableContainer,
+                        borderRadius: BorderRadius.circular(NetRadii.xs),
+                      ),
+                      child: Text(
+                        '${_rows.length} كرت',
+                        style: TextStyle(
+                          fontFamily: NetTypography.family,
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w700,
+                          color: context.netColors.available,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
             Expanded(
               child: _loading
-                  ? const AsyncLoadingView()
+                  ? const AsyncLoadingView(skeleton: true, skeletonCount: 5)
                   : _error != null
                       ? AsyncErrorView(message: _error!, onRetry: _load)
                       : _rows.isEmpty
-                          ? const AsyncEmptyView(
+                          ? AsyncEmptyView(
                               message: 'لا توجد مبيعات مسجلة لهذه الفترة',
+                              hint: 'جرّب تغيير الفترة أو اختر «فترة مختارة».',
+                              icon: Icons.receipt_long_outlined,
+                              actionLabel: 'إعادة التحميل',
+                              onAction: _load,
                             )
                           : RefreshIndicator(
                               onRefresh: _load,
-                              child: ListView.separated(
-                                padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                              color: palette.primary,
+                              child: ListView.builder(
+                                padding: const EdgeInsets.fromLTRB(
+                                  NetSpacing.lg,
+                                  NetSpacing.sm,
+                                  NetSpacing.lg,
+                                  NetSpacing.xxl,
+                                ),
                                 itemCount: _rows.length,
-                                separatorBuilder: (_, __) => const Divider(height: 1),
                                 itemBuilder: (_, i) {
                                   final row = _rows[i];
                                   final dt = row.sale.createdAt;
                                   final stamp =
-                                      '${dt.day}/${dt.month} ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
-                                  return ListTile(
-                                    title: Text(
-                                      row.customerName,
-                                      style: const TextStyle(
-                                        fontFamily: 'Tajawal',
-                                        fontWeight: FontWeight.w700,
-                                      ),
+                                      '${arabicShortDate(dt)} · ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+                                  return NetSurfaceCard(
+                                    margin: const EdgeInsets.only(
+                                      bottom: NetSpacing.sm,
                                     ),
-                                    subtitle: Text(
-                                      stamp,
-                                      style: const TextStyle(fontFamily: 'Tajawal'),
-                                    ),
-                                    trailing: Text(
-                                      formatMoneyMinor(row.sale.amount.minorUnits),
-                                      style: const TextStyle(
-                                        fontFamily: 'Tajawal',
-                                        fontWeight: FontWeight.bold,
-                                      ),
+                                    padding: NetSpacing.cardTight,
+                                    child: Row(
+                                      children: [
+                                        NetInitialAvatar(
+                                          name: row.customerName,
+                                        ),
+                                        const SizedBox(width: NetSpacing.md),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                row.customerName,
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: TextStyle(
+                                                  fontFamily:
+                                                      NetTypography.family,
+                                                  fontSize: 14,
+                                                  fontWeight: FontWeight.w700,
+                                                  color: palette.textPrimary,
+                                                ),
+                                              ),
+                                              const SizedBox(
+                                                height: NetSpacing.xxs,
+                                              ),
+                                              Text(
+                                                stamp,
+                                                style: TextStyle(
+                                                  fontFamily:
+                                                      NetTypography.family,
+                                                  fontSize: 11.5,
+                                                  color: palette.textSecondary,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        const SizedBox(width: NetSpacing.sm),
+                                        Text(
+                                          formatMoneyMinor(
+                                            row.sale.amount.minorUnits,
+                                          ),
+                                          style: TextStyle(
+                                            fontFamily: NetTypography.family,
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w800,
+                                            color: palette.textPrimary,
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   );
                                 },

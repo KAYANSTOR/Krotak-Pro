@@ -5,6 +5,10 @@ import '../../../domain/entities/setting.dart';
 import '../../../domain/services/default_outbound_templates_seeder.dart';
 import '../../../domain/services/local_advance_service.dart';
 import '../../app_scope.dart';
+import '../../theme/kayan_palette.dart';
+import '../../theme/net_tokens.dart';
+import '../../widgets/async_views.dart';
+import '../../widgets/net/net_surface_card.dart';
 
 /// شاشة قوالب رسائل العملاء والعروض والنظام — مطابقة كتالوج الفيديو.
 ///
@@ -186,12 +190,7 @@ class _OutboundMessageTemplatesScreenState
     }
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          'تم حفظ جميع قوالب الرسائل',
-          style: TextStyle(fontFamily: 'Tajawal'),
-        ),
-      ),
+      const SnackBar(content: Text('تم حفظ جميع قوالب الرسائل')),
     );
   }
 
@@ -204,101 +203,94 @@ class _OutboundMessageTemplatesScreenState
 
   @override
   Widget build(BuildContext context) {
+    final palette = KayanPalette.of(context);
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
         appBar: AppBar(
           title: const Text(
             'قوالب رسائل العملاء والعروض والنظام',
-            style: TextStyle(fontFamily: 'Tajawal'),
+            style: TextStyle(fontSize: 15),
           ),
           actions: [
             TextButton(
               onPressed: _loading ? null : _saveAll,
-              child: const Text('حفظ الكل', style: TextStyle(fontFamily: 'Tajawal')),
+              child: const Text('حفظ الكل'),
             ),
           ],
         ),
         body: _loading
-            ? const Center(child: CircularProgressIndicator())
+            ? const AsyncLoadingView(skeleton: true, skeletonCount: 4)
             : ListView(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+                padding: NetSpacing.screen,
                 children: [
-                  Text(
-                    'هذه القوالب تُزرع تلقائياً مع التطبيق (كما في الفيديو). '
-                    'يمكنك تعديل أي نص ثم حفظ الكل، أو استعادة افتراضي القسم.',
-                    style: TextStyle(
-                      fontFamily: 'Tajawal',
-                      color: Colors.grey.shade700,
-                      height: 1.4,
-                    ),
+                  const NetInlineNotice(
+                    message:
+                        'هذه القوالب تُزرع تلقائياً مع التطبيق. يمكنك تعديل أي نص ثم حفظ الكل، أو استعادة افتراضي القسم.',
+                    icon: Icons.info_outline_rounded,
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: NetSpacing.lg),
                   for (final section in _sections) ...[
                     Row(
                       children: [
-                        Icon(section.icon, size: 22),
-                        const SizedBox(width: 8),
+                        Icon(section.icon, size: 20, color: palette.primary),
+                        const SizedBox(width: NetSpacing.sm),
                         Expanded(
                           child: Text(
                             section.title,
-                            style: const TextStyle(
-                              fontFamily: 'Tajawal',
-                              fontWeight: FontWeight.w700,
-                              fontSize: 16,
+                            style: TextStyle(
+                              fontFamily: NetTypography.family,
+                              fontWeight: FontWeight.w800,
+                              fontSize: 15,
+                              color: palette.textPrimary,
                             ),
                           ),
                         ),
                         TextButton(
                           onPressed: () => _resetSection(section),
-                          child: const Text(
-                            'افتراضي',
-                            style: TextStyle(fontFamily: 'Tajawal', fontSize: 12),
-                          ),
+                          child: const Text('افتراضي'),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: NetSpacing.sm),
                     for (final item in section.items)
-                      Card(
-                        margin: const EdgeInsets.only(bottom: 10),
-                        child: Padding(
-                          padding: const EdgeInsets.all(12),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              Text(
-                                item.title,
-                                style: const TextStyle(
-                                  fontFamily: 'Tajawal',
-                                  fontWeight: FontWeight.w600,
-                                ),
+                      NetSurfaceCard(
+                        margin: const EdgeInsets.only(bottom: NetSpacing.sm),
+                        padding: NetSpacing.cardTight,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Text(
+                              item.title,
+                              style: TextStyle(
+                                fontFamily: NetTypography.family,
+                                fontSize: 13.5,
+                                fontWeight: FontWeight.w700,
+                                color: palette.textPrimary,
                               ),
-                              const SizedBox(height: 4),
-                              Text(
-                                'متغيرات: ${item.hint}',
-                                style: TextStyle(
-                                  fontFamily: 'Tajawal',
-                                  fontSize: 11,
-                                  color: Colors.grey.shade600,
-                                ),
+                            ),
+                            const SizedBox(height: NetSpacing.xxs),
+                            Text(
+                              'متغيرات: ${item.hint}',
+                              style: TextStyle(
+                                fontFamily: NetTypography.family,
+                                fontSize: 11,
+                                color: palette.textTertiary,
                               ),
-                              const SizedBox(height: 8),
-                              TextField(
-                                controller: _ctrls[item.keyName],
-                                maxLines: 4,
-                                style: const TextStyle(fontFamily: 'Tajawal'),
-                                decoration: InputDecoration(
-                                  border: const OutlineInputBorder(),
-                                  isDense: true,
-                                  hintText: item.fallback,
-                                ),
+                            ),
+                            const SizedBox(height: NetSpacing.sm),
+                            TextField(
+                              controller: _ctrls[item.keyName],
+                              maxLines: 4,
+                              decoration: InputDecoration(
+                                isDense: true,
+                                hintText: item.fallback,
                               ),
-                            ],
-                          ),
+                            ),
+                          ],
                         ),
                       ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: NetSpacing.md),
                   ],
                 ],
               ),

@@ -4,8 +4,10 @@ import '../../../core/result.dart';
 import '../../../domain/entities/customer.dart';
 import '../../../domain/entities/transaction.dart';
 import '../../app_scope.dart';
-import '../../theme/kayan_colors.dart';
+import '../../theme/net_tokens.dart';
 import '../async_views.dart';
+import '../net/net_initial_avatar.dart';
+import '../net/net_surface_card.dart';
 
 /// Period for Dashboard sales metric sheets (real SaleRepository data only).
 enum SalesPeriod { day, month }
@@ -65,10 +67,6 @@ class _SalesPeriodSheetState extends State<SalesPeriodSheet> {
       : 'تفاصيل مبيعات الشهر';
 
   static const _emptyMessage = 'لا توجد مبيعات مسجلة لهذه الفترة';
-
-  String get _loadingMessage => widget.period == SalesPeriod.day
-      ? 'جاري تحميل مبيعات اليوم…'
-      : 'جاري تحميل مبيعات الشهر…';
 
   @override
   void initState() {
@@ -153,6 +151,7 @@ class _SalesPeriodSheetState extends State<SalesPeriodSheet> {
   @override
   Widget build(BuildContext context) {
     final bottom = MediaQuery.paddingOf(context).bottom;
+    final scheme = Theme.of(context).colorScheme;
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Container(
@@ -160,69 +159,71 @@ class _SalesPeriodSheetState extends State<SalesPeriodSheet> {
           maxHeight: MediaQuery.sizeOf(context).height * 0.72,
         ),
         decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surface,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          color: scheme.surface,
+          borderRadius: NetRadii.sheetTop,
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const SizedBox(height: 10),
+            const SizedBox(height: NetSpacing.sm),
             Container(
               width: 48,
               height: 5,
               decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.outlineVariant,
-                borderRadius: BorderRadius.circular(50),
+                color: scheme.outlineVariant,
+                borderRadius: NetRadii.pillAll,
               ),
             ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(24, 20, 24, 12),
+              padding: const EdgeInsets.fromLTRB(
+                NetSpacing.xxl,
+                NetSpacing.lg,
+                NetSpacing.xxl,
+                NetSpacing.md,
+              ),
               child: Text(
                 _title,
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  fontFamily: 'Tajawal',
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Theme.of(context).colorScheme.onSurface,
+                  fontFamily: NetTypography.family,
+                  fontSize: 17,
+                  fontWeight: FontWeight.w800,
+                  color: scheme.onSurface,
                 ),
               ),
             ),
             if (_loading)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 48),
-                child: AsyncLoadingView(message: _loadingMessage),
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: NetSpacing.xxl),
+                child: AsyncLoadingView(skeleton: true, skeletonCount: 5),
               )
             else if (_error != null)
               Padding(
-                padding:
-                    const EdgeInsets.symmetric(vertical: 32, horizontal: 24),
+                padding: const EdgeInsets.symmetric(
+                  vertical: NetSpacing.xxl,
+                  horizontal: NetSpacing.xxl,
+                ),
                 child: AsyncErrorView(message: _error!, onRetry: _load),
               )
             else if (_rows.isEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(
-                  vertical: 48,
-                  horizontal: 24,
-                ),
-                child: Text(
-                  _emptyMessage,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontFamily: 'Tajawal',
-                    fontSize: 15,
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: NetSpacing.xxl),
+                child: AsyncEmptyView(
+                  message: _emptyMessage,
+                  hint: 'ستظهر هنا كل عمليات البيع المكتملة خلال الفترة المحددة.',
+                  icon: Icons.point_of_sale_rounded,
+                  compact: true,
                 ),
               )
             else
               Flexible(
-                child: ListView.separated(
+                child: ListView.builder(
                   shrinkWrap: true,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: NetSpacing.xl,
+                    vertical: NetSpacing.sm,
+                  ),
                   itemCount: _rows.length,
-                  separatorBuilder: (_, __) => const Divider(height: 1),
                   itemBuilder: (context, i) => _SaleTile(
                     row: _rows[i],
                     timeLabel: _formatTime(_rows[i].sale.createdAt),
@@ -231,40 +232,62 @@ class _SalesPeriodSheetState extends State<SalesPeriodSheet> {
               ),
             const Divider(height: 1),
             Padding(
-              padding: EdgeInsets.fromLTRB(24, 16, 24, 12 + bottom),
+              padding: EdgeInsets.fromLTRB(
+                NetSpacing.xxl,
+                NetSpacing.lg,
+                NetSpacing.xxl,
+                NetSpacing.md + bottom,
+              ),
               child: Column(
                 children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'إجمالي المبيعات',
-                        style: TextStyle(
-                          fontFamily: 'Tajawal',
-                          fontSize: 14,
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  NetSurfaceCard(
+                    padding: NetSpacing.cardTight,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.functions_rounded,
+                              size: NetSizes.iconSm,
+                              color: scheme.onSurfaceVariant,
+                            ),
+                            const SizedBox(width: NetSpacing.sm),
+                            Expanded(
+                              child: Text(
+                                'إجمالي المبيعات',
+                                style: TextStyle(
+                                  fontFamily: NetTypography.family,
+                                  fontSize: 13,
+                                  color: scheme.onSurfaceVariant,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
-                      ),
-                      Text(
-                        _totalValueLabel,
-                        style: TextStyle(
-                          fontFamily: 'Tajawal',
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: Theme.of(context).colorScheme.onSurface,
+                        const SizedBox(height: NetSpacing.xs),
+                        Text(
+                          _totalValueLabel,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontFamily: NetTypography.family,
+                            fontSize: 17,
+                            fontWeight: FontWeight.w800,
+                            color: scheme.onSurface,
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: NetSpacing.md),
                   SizedBox(
                     width: double.infinity,
                     height: 52,
                     child: FilledButton.icon(
                       style: FilledButton.styleFrom(
-                        backgroundColor: KayanColors.primary,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(28),
+                        shape: const RoundedRectangleBorder(
+                          borderRadius: NetRadii.pillAll,
                         ),
                       ),
                       onPressed: () {
@@ -274,11 +297,6 @@ class _SalesPeriodSheetState extends State<SalesPeriodSheet> {
                       icon: const Icon(Icons.bar_chart_rounded, size: 20),
                       label: const Text(
                         'الذهاب إلى تقرير المبيعات التفصيلي',
-                        style: TextStyle(
-                          fontFamily: 'Tajawal',
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                        ),
                       ),
                     ),
                   ),
@@ -303,19 +321,13 @@ class _SaleTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 14),
+      padding: const EdgeInsets.symmetric(vertical: NetSpacing.md),
       child: Row(
         children: [
-          Container(
-            width: 10,
-            height: 10,
-            decoration: const BoxDecoration(
-              color: KayanColors.primary,
-              shape: BoxShape.circle,
-            ),
-          ),
-          const SizedBox(width: 10),
+          NetInitialAvatar(name: row.customerName, size: 36),
+          const SizedBox(width: NetSpacing.md),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -325,31 +337,32 @@ class _SaleTile extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    fontFamily: 'Tajawal',
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                    color: Theme.of(context).colorScheme.onSurface,
+                    fontFamily: NetTypography.family,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: scheme.onSurface,
                   ),
                 ),
-                const SizedBox(height: 2),
+                const SizedBox(height: NetSpacing.xxs),
                 Text(
                   timeLabel,
                   style: TextStyle(
-                    fontFamily: 'Tajawal',
-                    fontSize: 12,
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    fontFamily: NetTypography.family,
+                    fontSize: 11.5,
+                    color: scheme.onSurfaceVariant,
                   ),
                 ),
               ],
             ),
           ),
+          const SizedBox(width: NetSpacing.sm),
           Text(
             formatMoneyMinor(row.sale.amount.minorUnits),
             style: TextStyle(
-              fontFamily: 'Tajawal',
+              fontFamily: NetTypography.family,
               fontSize: 14,
-              fontWeight: FontWeight.bold,
-              color: Theme.of(context).colorScheme.onSurface,
+              fontWeight: FontWeight.w800,
+              color: scheme.onSurface,
             ),
           ),
         ],
