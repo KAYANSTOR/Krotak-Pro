@@ -4,9 +4,18 @@ import '../../core/result.dart';
 import '../../domain/entities/card.dart';
 import '../../domain/entities/promotion.dart';
 import '../app_scope.dart';
+import '../theme/kayan_palette.dart';
+import '../theme/net_semantic_colors.dart';
+import '../theme/net_tokens.dart';
 import '../widgets/async_views.dart';
+import '../widgets/net/net_sheet.dart';
+import '../widgets/net/net_surface_card.dart';
+import '../widgets/net/net_tab_header.dart';
 
 /// إدارة العروض والمكافآت — مطابق فيديو Z Net (نشطة / معطّلة + عرض جديد).
+///
+/// المنطق كما هو (نفس الاستعلامات ونفس عمليات الإنشاء/التعديل/التفعيل/الحذف)،
+/// والتحديث البصري فقط: هوية لونية موحّدة + أوراق وحالات موحّدة.
 class OffersScreen extends StatefulWidget {
   const OffersScreen({super.key});
 
@@ -81,7 +90,7 @@ class _OffersScreenState extends State<OffersScreen>
         const SnackBar(
           content: Text(
             'أنشئ فئة كروت نشطة أولًا قبل تعريف عرض',
-            style: TextStyle(fontFamily: 'Tajawal'),
+            style: TextStyle(fontFamily: NetTypography.family),
           ),
         ),
       );
@@ -101,202 +110,157 @@ class _OffersScreenState extends State<OffersScreen>
         ? existing!.rewardCategoryId
         : categories.first.id;
 
-    final saved = await showModalBottomSheet<bool>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
+    final saved = await NetSheet.show<bool>(
+      context,
       builder: (ctx) {
         var busy = false;
         String? status;
         return StatefulBuilder(
           builder: (ctx, setModal) {
-            return Padding(
-              padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
-              child: Container(
-                decoration: const BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+            return NetSheet(
+              title: existing == null ? 'عرض ترويجي جديد' : 'تعديل العرض',
+              subtitle: 'عند بلوغ المشترك عتبة التراكم يُصرف كرت من فئة المكافأة.',
+              icon: Icons.local_offer_rounded,
+              body: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(
+                  NetSpacing.xl,
+                  NetSpacing.lg,
+                  NetSpacing.xl,
+                  NetSpacing.lg,
                 ),
-                padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
-                child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Center(
-                        child: Container(
-                          width: 40,
-                          height: 4,
-                          decoration: BoxDecoration(
-                            color: Colors.grey.shade300,
-                            borderRadius: BorderRadius.circular(4),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    TextField(
+                      controller: titleCtrl,
+                      decoration: const InputDecoration(
+                        labelText: 'عنوان الحملة',
+                        labelStyle: TextStyle(fontFamily: NetTypography.family),
+                        border: OutlineInputBorder(),
+                      ),
+                      style: const TextStyle(fontFamily: NetTypography.family),
+                    ),
+                    const SizedBox(height: NetSpacing.md),
+                    TextField(
+                      controller: thresholdCtrl,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: 'عتبة التراكم (ر.ي)',
+                        hintText: 'مثال: 50000',
+                        labelStyle: TextStyle(fontFamily: NetTypography.family),
+                        border: OutlineInputBorder(),
+                      ),
+                      style: const TextStyle(fontFamily: NetTypography.family),
+                    ),
+                    const SizedBox(height: NetSpacing.md),
+                    DropdownButtonFormField<String>(
+                      value: rewardId,
+                      decoration: const InputDecoration(
+                        labelText: 'فئة المكافأة',
+                        labelStyle: TextStyle(fontFamily: NetTypography.family),
+                        border: OutlineInputBorder(),
+                      ),
+                      items: [
+                        for (final cat in categories)
+                          DropdownMenuItem(
+                            value: cat.id,
+                            child: Text(
+                              '${cat.name} · ${formatMoneyMinor(cat.faceValue.minorUnits)}',
+                              style: const TextStyle(fontFamily: NetTypography.family),
+                            ),
                           ),
-                        ),
+                      ],
+                      onChanged: (v) {
+                        if (v != null) setModal(() => rewardId = v);
+                      },
+                    ),
+                    const SizedBox(height: NetSpacing.md),
+                    TextField(
+                      controller: notesCtrl,
+                      maxLines: 2,
+                      decoration: const InputDecoration(
+                        labelText: 'ملاحظات (اختياري)',
+                        labelStyle: TextStyle(fontFamily: NetTypography.family),
+                        border: OutlineInputBorder(),
                       ),
-                      const SizedBox(height: 14),
-                      Text(
-                        existing == null
-                            ? 'عرض ترويجي جديد'
-                            : 'تعديل العرض',
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          fontFamily: 'Tajawal',
-                          fontWeight: FontWeight.w800,
-                          fontSize: 18,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        'عند بلوغ المشترك عتبة التراكم يُصرف كرت من فئة المكافأة.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontFamily: 'Tajawal',
-                          fontSize: 12,
-                          color: Colors.grey.shade600,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      TextField(
-                        controller: titleCtrl,
-                        decoration: InputDecoration(
-                          labelText: 'عنوان الحملة',
-                          labelStyle: const TextStyle(fontFamily: 'Tajawal'),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
+                      style: const TextStyle(fontFamily: NetTypography.family),
+                    ),
+                    if (status != null) ...[
+                      const SizedBox(height: NetSpacing.md),
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.error_outline_rounded,
+                            size: NetSizes.iconSm,
+                            color: Theme.of(ctx).colorScheme.error,
                           ),
-                        ),
-                        style: const TextStyle(fontFamily: 'Tajawal'),
-                      ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: thresholdCtrl,
-                        keyboardType: TextInputType.number,
-                        decoration: InputDecoration(
-                          labelText: 'عتبة التراكم (ر.ي)',
-                          hintText: 'مثال: 50000',
-                          labelStyle: const TextStyle(fontFamily: 'Tajawal'),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        style: const TextStyle(fontFamily: 'Tajawal'),
-                      ),
-                      const SizedBox(height: 12),
-                      DropdownButtonFormField<String>(
-                        value: rewardId,
-                        decoration: InputDecoration(
-                          labelText: 'فئة المكافأة',
-                          labelStyle: const TextStyle(fontFamily: 'Tajawal'),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        items: [
-                          for (final cat in categories)
-                            DropdownMenuItem(
-                              value: cat.id,
-                              child: Text(
-                                '${cat.name} · ${formatMoneyMinor(cat.faceValue.minorUnits)} ر.ي',
-                                style: const TextStyle(fontFamily: 'Tajawal'),
+                          const SizedBox(width: NetSpacing.sm),
+                          Expanded(
+                            child: Text(
+                              status!,
+                              style: TextStyle(
+                                fontFamily: NetTypography.family,
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w700,
+                                color: Theme.of(ctx).colorScheme.error,
                               ),
                             ),
+                          ),
                         ],
-                        onChanged: (v) {
-                          if (v != null) setModal(() => rewardId = v);
-                        },
-                      ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: notesCtrl,
-                        maxLines: 2,
-                        decoration: InputDecoration(
-                          labelText: 'ملاحظات (اختياري)',
-                          labelStyle: const TextStyle(fontFamily: 'Tajawal'),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        style: const TextStyle(fontFamily: 'Tajawal'),
-                      ),
-                      if (status != null) ...[
-                        const SizedBox(height: 8),
-                        Text(
-                          status!,
-                          style: const TextStyle(
-                            fontFamily: 'Tajawal',
-                            color: Color(0xFFB45309),
-                          ),
-                        ),
-                      ],
-                      const SizedBox(height: 16),
-                      FilledButton(
-                        style: FilledButton.styleFrom(
-                          backgroundColor: const Color(0xFFA855F7),
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        onPressed: busy
-                            ? null
-                            : () async {
-                                setModal(() => busy = true);
-                                final major = num.tryParse(
-                                  thresholdCtrl.text.trim().replaceAll(',', ''),
-                                );
-                                if (major == null || major <= 0) {
-                                  setModal(() {
-                                    busy = false;
-                                    status = 'أدخل عتبة صحيحة';
-                                  });
-                                  return;
-                                }
-                                final r = existing == null
-                                    ? await c.promotions.create(
-                                        title: titleCtrl.text,
-                                        thresholdMinorUnits:
-                                            (major * 100).round(),
-                                        rewardCategoryId: rewardId,
-                                        notes: notesCtrl.text,
-                                      )
-                                    : await c.promotions.update(
-                                        id: existing.id,
-                                        title: titleCtrl.text,
-                                        thresholdMinorUnits:
-                                            (major * 100).round(),
-                                        rewardCategoryId: rewardId,
-                                        notes: notesCtrl.text,
-                                      );
-                                if (!ctx.mounted) return;
-                                if (r is Success) {
-                                  Navigator.pop(ctx, true);
-                                } else {
-                                  setModal(() {
-                                    busy = false;
-                                    status = (r as Failure).error.message;
-                                  });
-                                }
-                              },
-                        child: busy
-                            ? const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
-                                ),
-                              )
-                            : const Text(
-                                'حفظ العرض',
-                                style: TextStyle(
-                                  fontFamily: 'Tajawal',
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
                       ),
                     ],
-                  ),
+                  ],
                 ),
+              ),
+              footer: FilledButton(
+                onPressed: busy
+                    ? null
+                    : () async {
+                        setModal(() => busy = true);
+                        final major = num.tryParse(
+                          thresholdCtrl.text.trim().replaceAll(',', ''),
+                        );
+                        if (major == null || major <= 0) {
+                          setModal(() {
+                            busy = false;
+                            status = 'أدخل عتبة صحيحة';
+                          });
+                          return;
+                        }
+                        final r = existing == null
+                            ? await c.promotions.create(
+                                title: titleCtrl.text,
+                                thresholdMinorUnits: (major * 100).round(),
+                                rewardCategoryId: rewardId,
+                                notes: notesCtrl.text,
+                              )
+                            : await c.promotions.update(
+                                id: existing.id,
+                                title: titleCtrl.text,
+                                thresholdMinorUnits: (major * 100).round(),
+                                rewardCategoryId: rewardId,
+                                notes: notesCtrl.text,
+                              );
+                        if (!ctx.mounted) return;
+                        if (r is Success) {
+                          Navigator.pop(ctx, true);
+                        } else {
+                          setModal(() {
+                            busy = false;
+                            status = (r as Failure).error.message;
+                          });
+                        }
+                      },
+                child: busy
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Text('حفظ العرض'),
               ),
             );
           },
@@ -317,7 +281,7 @@ class _OffersScreenState extends State<OffersScreen>
         SnackBar(
           content: Text(
             r.error.message,
-            style: const TextStyle(fontFamily: 'Tajawal'),
+            style: const TextStyle(fontFamily: NetTypography.family),
           ),
         ),
       );
@@ -329,19 +293,16 @@ class _OffersScreenState extends State<OffersScreen>
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('حذف العرض؟', style: TextStyle(fontFamily: 'Tajawal')),
-        content: Text(
-          'سيتم حذف «${p.title}» نهائيًا.',
-          style: const TextStyle(fontFamily: 'Tajawal'),
-        ),
+        title: const Text('حذف العرض؟'),
+        content: Text('سيتم حذف «${p.title}» نهائيًا.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('إلغاء', style: TextStyle(fontFamily: 'Tajawal')),
+            child: const Text('إلغاء'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('حذف', style: TextStyle(fontFamily: 'Tajawal')),
+            child: const Text('حذف'),
           ),
         ],
       ),
@@ -354,108 +315,36 @@ class _OffersScreenState extends State<OffersScreen>
   Widget _list(bool active) {
     final items = _filtered(active);
     if (items.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 72,
-                height: 72,
-                decoration: const BoxDecoration(
-                  color: Color(0xFFCCFBF1),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.local_offer_outlined,
-                  size: 36,
-                  color: Color(0xFF0F766E),
-                ),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                active ? 'لا توجد عروض ترويجية' : 'لا عروض معطّلة',
-                style: const TextStyle(
-                  fontFamily: 'Tajawal',
-                  fontWeight: FontWeight.w800,
-                  fontSize: 16,
-                ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                active
-                    ? 'انقر على «عرض جديد» لتهيئة عرض ترويجي تراكمي جديد'
-                    : 'العروض التي تعطّلها تظهر هنا',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontFamily: 'Tajawal',
-                  fontSize: 13,
-                  color: Colors.grey.shade600,
-                ),
-              ),
-            ],
+      return ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: NetSpacing.listBottomInset,
+        children: [
+          const SizedBox(height: NetSpacing.xxl),
+          AsyncEmptyView(
+            message: active ? 'لا توجد عروض ترويجية' : 'لا عروض معطّلة',
+            icon: active ? Icons.local_offer_outlined : Icons.pause_circle_outline_rounded,
+            hint: active
+                ? 'أنشئ عرضًا تراكميًا وحدّد عتبة التراكم وفئة المكافأة'
+                : 'العروض التي تعطّلها تظهر هنا',
+            actionLabel: active ? 'عرض جديد' : null,
+            onAction: active ? _create : null,
           ),
-        ),
+        ],
       );
     }
     return ListView.separated(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 88),
+      padding: const EdgeInsets.only(bottom: 88),
       itemCount: items.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 10),
+      separatorBuilder: (_, __) => const SizedBox(height: NetSpacing.sm),
       itemBuilder: (_, i) {
         final p = items[i];
         final reward = _categoryNames[p.rewardCategoryId] ?? p.rewardCategoryId;
-        return Material(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(14),
-          child: ListTile(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(14),
-              side: const BorderSide(color: Color(0xFFE2E8F0)),
-            ),
-            title: Text(
-              p.title,
-              style: const TextStyle(
-                fontFamily: 'Tajawal',
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            subtitle: Text(
-              'عتبة ${formatMoneyMinor(p.thresholdMinorUnits)} ر.ي · مكافأة: $reward',
-              style: const TextStyle(fontFamily: 'Tajawal', fontSize: 12),
-            ),
-            trailing: PopupMenuButton<String>(
-              onSelected: (v) {
-                if (v == 'edit') _openForm(p);
-                if (v == 'toggle') _toggle(p);
-                if (v == 'delete') _delete(p);
-              },
-              itemBuilder: (_) => [
-                const PopupMenuItem(
-                  value: 'edit',
-                  child: Text(
-                    'تعديل',
-                    style: TextStyle(fontFamily: 'Tajawal'),
-                  ),
-                ),
-                PopupMenuItem(
-                  value: 'toggle',
-                  child: Text(
-                    p.isActive ? 'تعطيل' : 'تفعيل',
-                    style: const TextStyle(fontFamily: 'Tajawal'),
-                  ),
-                ),
-                const PopupMenuItem(
-                  value: 'delete',
-                  child: Text(
-                    'حذف',
-                    style: TextStyle(fontFamily: 'Tajawal', color: Colors.red),
-                  ),
-                ),
-              ],
-            ),
-          ),
+        return _PromotionCard(
+          promotion: p,
+          rewardName: reward,
+          onEdit: () => _openForm(p),
+          onToggle: () => _toggle(p),
+          onDelete: () => _delete(p),
         );
       },
     );
@@ -463,82 +352,241 @@ class _OffersScreenState extends State<OffersScreen>
 
   @override
   Widget build(BuildContext context) {
-    return Directionality(
-      textDirection: TextDirection.rtl,
-      child: Scaffold(
-        backgroundColor: const Color(0xFFF8FAFC),
-        body: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const Padding(
-              padding: EdgeInsets.fromLTRB(16, 12, 16, 0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'إدارة العروض والمكافآت',
-                    style: TextStyle(
-                      fontFamily: 'Tajawal',
-                      fontWeight: FontWeight.w800,
-                      fontSize: 18,
+    final palette = KayanPalette.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        NetTabHeader(
+          title: 'العروض والمكافآت',
+          subtitle: 'إدارة وتتبع حملات الترويج التراكمية',
+          icon: Icons.local_offer_rounded,
+          actions: [
+            NetHeaderAction(
+              icon: Icons.add_rounded,
+              tooltip: 'عرض جديد',
+              onPressed: _create,
+            ),
+          ],
+        ),
+        Padding(
+          padding: NetSpacing.pageH,
+          child: TabBar(
+            controller: _tabs,
+            labelColor: palette.primary,
+            unselectedLabelColor: palette.textSecondary,
+            indicatorColor: palette.primary,
+            indicatorSize: TabBarIndicatorSize.tab,
+            dividerColor: palette.border,
+            labelStyle: const TextStyle(
+              fontFamily: NetTypography.family,
+              fontWeight: FontWeight.w800,
+              fontSize: 14,
+            ),
+            unselectedLabelStyle: const TextStyle(
+              fontFamily: NetTypography.family,
+              fontWeight: FontWeight.w600,
+              fontSize: 14,
+            ),
+            tabs: [
+              Tab(text: 'النشطة (${_filtered(true).length})'),
+              Tab(text: 'المعطّلة (${_filtered(false).length})'),
+            ],
+          ),
+        ),
+        const SizedBox(height: NetSpacing.sm),
+        Expanded(
+          child: _loading
+              ? const AsyncLoadingView(skeleton: true, skeletonCount: 4)
+              : _error != null
+                  ? AsyncErrorView(message: _error!, onRetry: _load)
+                  : TabBarView(
+                      controller: _tabs,
+                      children: [
+                        RefreshIndicator(
+                          onRefresh: _load,
+                          color: palette.primary,
+                          child: _list(true),
+                        ),
+                        RefreshIndicator(
+                          onRefresh: _load,
+                          color: palette.primary,
+                          child: _list(false),
+                        ),
+                      ],
+                    ),
+        ),
+      ],
+    );
+  }
+}
+
+class _PromotionCard extends StatelessWidget {
+  const _PromotionCard({
+    required this.promotion,
+    required this.rewardName,
+    required this.onEdit,
+    required this.onToggle,
+    required this.onDelete,
+  });
+
+  final Promotion promotion;
+  final String rewardName;
+  final VoidCallback onEdit;
+  final VoidCallback onToggle;
+  final VoidCallback onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = KayanPalette.of(context);
+    final net = context.netColors;
+    final isActive = promotion.isActive;
+    final statusBg = isActive ? net.successContainer : palette.surfaceVariant;
+
+    return NetSurfaceCard(
+      margin: NetSpacing.pageH,
+      padding: NetSpacing.card,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: NetSizes.badge,
+                height: NetSizes.badge,
+                decoration: BoxDecoration(
+                  color: palette.primary.withValues(alpha: palette.isDark ? 0.22 : 0.12),
+                  borderRadius: NetRadii.smAll,
+                ),
+                child: Icon(
+                  Icons.card_giftcard_rounded,
+                  size: 20,
+                  color: palette.primary,
+                ),
+              ),
+              const SizedBox(width: NetSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      promotion.title.isEmpty ? 'عرض بدون عنوان' : promotion.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontFamily: NetTypography.family,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 15,
+                        color: palette.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: NetSpacing.xxs),
+                    Text(
+                      'عتبة ${formatMoneyMinor(promotion.thresholdMinorUnits)}',
+                      style: TextStyle(
+                        fontFamily: NetTypography.family,
+                        fontSize: 12,
+                        color: palette.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: NetSpacing.sm,
+                  vertical: NetSpacing.xxs,
+                ),
+                decoration: BoxDecoration(
+                  color: statusBg,
+                  borderRadius: NetRadii.pillAll,
+                ),
+                child: Text(
+                  isActive ? 'نشط' : 'معطّل',
+                  style: TextStyle(
+                    fontFamily: NetTypography.family,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    color: isActive ? net.success : palette.textSecondary,
+                  ),
+                ),
+              ),
+              PopupMenuButton<String>(
+                tooltip: 'خيارات العرض',
+                icon: Icon(Icons.more_vert_rounded, color: palette.textSecondary),
+                onSelected: (v) {
+                  if (v == 'edit') onEdit();
+                  if (v == 'toggle') onToggle();
+                  if (v == 'delete') onDelete();
+                },
+                itemBuilder: (_) => [
+                  const PopupMenuItem(
+                    value: 'edit',
+                    child: Text('تعديل', style: TextStyle(fontFamily: NetTypography.family)),
+                  ),
+                  PopupMenuItem(
+                    value: 'toggle',
+                    child: Text(
+                      isActive ? 'تعطيل' : 'تفعيل',
+                      style: const TextStyle(fontFamily: NetTypography.family),
                     ),
                   ),
-                  Text(
-                    'إدارة وتتبع حملات الترويج التراكمية',
-                    style: TextStyle(
-                      fontFamily: 'Tajawal',
-                      fontSize: 12,
-                      color: Color(0xFF64748B),
+                  PopupMenuItem(
+                    value: 'delete',
+                    child: Text(
+                      'حذف',
+                      style: TextStyle(
+                        fontFamily: NetTypography.family,
+                        color: net.error,
+                      ),
                     ),
                   ),
                 ],
               ),
+            ],
+          ),
+          const SizedBox(height: NetSpacing.md),
+          Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: NetSpacing.md,
+              vertical: NetSpacing.sm,
             ),
-            TabBar(
-              controller: _tabs,
-              labelColor: const Color(0xFF0F766E),
-              unselectedLabelColor: const Color(0xFF94A3B8),
-              indicatorColor: const Color(0xFF0F766E),
-              labelStyle: const TextStyle(
-                fontFamily: 'Tajawal',
-                fontWeight: FontWeight.w700,
-              ),
-              tabs: const [
-                Tab(text: 'النشطة'),
-                Tab(text: 'المعطّلة'),
+            decoration: BoxDecoration(
+              color: palette.surfaceVariant,
+              borderRadius: NetRadii.smAll,
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.redeem_rounded, size: NetSizes.iconSm, color: palette.primary),
+                const SizedBox(width: NetSpacing.sm),
+                Expanded(
+                  child: Text(
+                    'المكافأة: $rewardName',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontFamily: NetTypography.family,
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w700,
+                      color: palette.textPrimary,
+                    ),
+                  ),
+                ),
               ],
             ),
-            Expanded(
-              child: _loading
-                  ? const AsyncLoadingView()
-                  : _error != null
-                      ? AsyncErrorView(message: _error!, onRetry: _load)
-                      : TabBarView(
-                          controller: _tabs,
-                          children: [
-                            RefreshIndicator(
-                              onRefresh: _load,
-                              child: _list(true),
-                            ),
-                            RefreshIndicator(
-                              onRefresh: _load,
-                              child: _list(false),
-                            ),
-                          ],
-                        ),
+          ),
+          if ((promotion.notes ?? '').trim().isNotEmpty) ...[
+            const SizedBox(height: NetSpacing.sm),
+            Text(
+              promotion.notes!.trim(),
+              style: TextStyle(
+                fontFamily: NetTypography.family,
+                fontSize: 12,
+                height: 1.4,
+                color: palette.textSecondary,
+              ),
             ),
           ],
-        ),
-        floatingActionButton: FloatingActionButton.extended(
-          onPressed: _create,
-          backgroundColor: const Color(0xFFA855F7),
-          foregroundColor: Colors.white,
-          icon: const Icon(Icons.add),
-          label: const Text(
-            'عرض جديد',
-            style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w700),
-          ),
-        ),
+        ],
       ),
     );
   }
