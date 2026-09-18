@@ -1,3 +1,6 @@
+import java.io.FileInputStream
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
@@ -15,7 +18,6 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         applicationId = "com.kayan.net_app"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
@@ -29,11 +31,34 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        // مفتاح توقيع ثابت — نفس المفتاح عبر كل بناءات CI والمحلية حتى يثبّت
+        // APK الجديد مباشرة فوق النسخة المثبتة بدون «حزمة التثبيت لا تتوافق».
+        create("upload") {
+            val keystorePropertiesFile = rootProject.file("key.properties")
+            if (keystorePropertiesFile.exists()) {
+                val props = Properties().apply {
+                    load(FileInputStream(keystorePropertiesFile))
+                }
+                keyAlias = props.getProperty("keyAlias")
+                keyPassword = props.getProperty("keyPassword")
+                storeFile = props.getProperty("storeFile")?.let { file(it) }
+                storePassword = props.getProperty("storePassword")
+                // المفتاح محفوظ بصيغة PKCS12؛ نحدّد النوع صراحةً حتى لا يعتمد
+                // البناء على تخمين Gradle من امتداد الملف.
+                storeType = props.getProperty("storeType") ?: "PKCS12"
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = if (rootProject.file("key.properties").exists()) {
+                signingConfigs.getByName("upload")
+            } else {
+                // محلي بلا key.properties: مفتاح debug حتى يبقى flutter run --release يعمل.
+                signingConfigs.getByName("debug")
+            }
         }
     }
 }
