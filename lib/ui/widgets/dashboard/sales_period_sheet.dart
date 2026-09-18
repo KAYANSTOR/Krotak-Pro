@@ -180,11 +180,11 @@ class _SalesPeriodSheetState extends State<SalesPeriodSheet> {
               child: Text(
                 _title,
                 textAlign: TextAlign.center,
-                style: const TextStyle(
+                style: TextStyle(
                   fontFamily: 'Tajawal',
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
-                  color: KayanColors.textPrimary,
+                  color: Theme.of(context).colorScheme.onSurface,
                 ),
               ),
             ),
@@ -208,7 +208,7 @@ class _SalesPeriodSheetState extends State<SalesPeriodSheet> {
                   style: TextStyle(
                     fontFamily: 'Tajawal',
                     fontSize: 15,
-                    color: KayanColors.textSecondary,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
                 ),
               )
@@ -234,21 +234,21 @@ class _SalesPeriodSheetState extends State<SalesPeriodSheet> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text(
+                      Text(
                         'إجمالي المبيعات',
                         style: TextStyle(
                           fontFamily: 'Tajawal',
                           fontSize: 14,
-                          color: KayanColors.textSecondary,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
                       ),
                       Text(
                         _totalValueLabel,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontFamily: 'Tajawal',
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
-                          color: KayanColors.textPrimary,
+                          color: Theme.of(context).colorScheme.onSurface,
                         ),
                       ),
                     ],
@@ -321,20 +321,20 @@ class _SaleTile extends StatelessWidget {
                   row.customerName,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontFamily: 'Tajawal',
                     fontSize: 15,
                     fontWeight: FontWeight.w600,
-                    color: KayanColors.textPrimary,
+                    color: Theme.of(context).colorScheme.onSurface,
                   ),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   timeLabel,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontFamily: 'Tajawal',
                     fontSize: 12,
-                    color: KayanColors.textSecondary,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
                 ),
               ],
@@ -342,11 +342,11 @@ class _SaleTile extends StatelessWidget {
           ),
           Text(
             formatMoneyMinor(row.sale.amount.minorUnits),
-            style: const TextStyle(
+            style: TextStyle(
               fontFamily: 'Tajawal',
               fontSize: 14,
               fontWeight: FontWeight.bold,
-              color: KayanColors.textPrimary,
+              color: Theme.of(context).colorScheme.onSurface,
             ),
           ),
         ],

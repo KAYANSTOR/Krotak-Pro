@@ -279,16 +279,16 @@ class _CategoryStockTile extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
               decoration: BoxDecoration(
-                color: KayanColors.errorBackground,
+                color: Theme.of(context).colorScheme.errorContainer,
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: const Text(
+              child: Text(
                 'منخفض',
                 style: TextStyle(
                   fontFamily: 'Tajawal',
                   fontSize: 12,
                   fontWeight: FontWeight.bold,
-                  color: KayanColors.error,
+                  color: Theme.of(context).colorScheme.error,
                 ),
               ),
             ),

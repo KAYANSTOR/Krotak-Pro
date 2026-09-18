@@ -324,7 +324,7 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> {
       floatingActionButton: _showTop
           ? FloatingActionButton.small(
               heroTag: 'help_scroll_top',
-              backgroundColor: const Color(0xFFA855F7),
+              backgroundColor: Theme.of(context).colorScheme.primary,
               foregroundColor: Colors.white,
               onPressed: () => _scroll.animateTo(
                 0,

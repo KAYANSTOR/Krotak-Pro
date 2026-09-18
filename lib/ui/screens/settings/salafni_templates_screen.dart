@@ -106,14 +106,14 @@ class _SalafniTemplatesScreenState extends State<SalafniTemplatesScreen> {
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
-        backgroundColor: KayanColors.appBackground,
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         appBar: AppBar(
           title: const Text(
             'قوالب رسائل سلفني',
             style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w800),
           ),
-          backgroundColor: KayanColors.appBackground,
-          foregroundColor: const Color(0xFF0F172A),
+          backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+          foregroundColor: Theme.of(context).colorScheme.onSurface,
           elevation: 0,
           actions: [
             TextButton(
@@ -212,7 +212,7 @@ class _SalafniTemplatesScreenState extends State<SalafniTemplatesScreen> {
             style: const TextStyle(fontFamily: 'Tajawal', height: 1.4),
             decoration: InputDecoration(
               filled: true,
-              fillColor: Colors.white,
+              fillColor: Theme.of(context).colorScheme.surface,
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
