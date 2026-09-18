@@ -7,6 +7,8 @@ import '../../theme/kayan_colors.dart';
 import '../../theme/kayan_palette.dart';
 import '../../theme/net_semantic_colors.dart';
 import '../async_views.dart';
+import '../../theme/net_tokens.dart';
+import '../net/net_indicators.dart';
 import '../reserved_card_ops.dart';
 
 class CardStockSheet extends StatefulWidget {
@@ -105,6 +107,14 @@ class _CardStockSheetState extends State<CardStockSheet> {
     });
   }
 
+  int get _availableTotal =>
+      _rows.fold<int>(0, (sum, row) => sum + row.available);
+  int get _reservedTotal =>
+      _rows.fold<int>(0, (sum, row) => sum + row.reserved);
+  int get _soldTotal => _rows.fold<int>(0, (sum, row) => sum + (row.total - row.available - row.reserved));
+  int get _maxAvailable =>
+      _rows.fold<int>(0, (max, row) => row.available > max ? row.available : max);
+
   Future<void> _openReservedOps(domain.Card card) async {
     final cat = _catsById[card.categoryId];
     if (cat == null) return;
@@ -172,7 +182,50 @@ class _CardStockSheetState extends State<CardStockSheet> {
                       : ListView(
                           padding: EdgeInsets.fromLTRB(16, 0, 16, 16 + bottom),
                           children: [
-                            ..._rows.map((row) => _CategoryStockTile(row: row)),
+                            NetIndicatorGrid(
+                              indicators: [
+                                NetIndicatorTile(
+                                  label: 'كروت متوفرة',
+                                  value: '$_availableTotal',
+                                  icon: Icons.style_rounded,
+                                ),
+                                NetIndicatorTile(
+                                  label: 'محجوزة',
+                                  value: '$_reservedTotal',
+                                  icon: Icons.lock_clock_rounded,
+                                  tint: context.netColors.reserved,
+                                ),
+                                NetIndicatorTile(
+                                  label: 'مباعة',
+                                  value: '$_soldTotal',
+                                  icon: Icons.sell_rounded,
+                                  tint: context.netColors.sold,
+                                ),
+                                NetIndicatorTile(
+                                  label: 'فئات نشطة',
+                                  value: '${_rows.length}',
+                                  icon: Icons.category_rounded,
+                                  tint: KayanColors.primary,
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: NetSpacing.md),
+                            Text(
+                              'توزيع المخزون المتاح حسب الفئة',
+                              style: TextStyle(
+                                fontFamily: NetTypography.family,
+                                fontWeight: FontWeight.w800,
+                                fontSize: 14,
+                                color: KayanPalette.of(context).textPrimary,
+                              ),
+                            ),
+                            const SizedBox(height: NetSpacing.xs),
+                            ..._rows.map(
+                              (row) => _CategoryStockBar(
+                                row: row,
+                                maxAvailable: _maxAvailable,
+                              ),
+                            ),
                             if (_reservedCards.isNotEmpty) ...[
                               const SizedBox(height: 16),
                               const Text(
@@ -221,81 +274,52 @@ class _CardStockSheetState extends State<CardStockSheet> {
   }
 }
 
-class _CategoryStockTile extends StatelessWidget {
-  const _CategoryStockTile({required this.row});
+/// صف فئة في رسم المخزون الأفقي: الاسم · الشريط · المتاح (+ تنبيه الانخفاض).
+class _CategoryStockBar extends StatelessWidget {
+  const _CategoryStockBar({required this.row, required this.maxAvailable});
+
   final _CategoryStock row;
+  final int maxAvailable;
 
   @override
   Widget build(BuildContext context) {
-    final palette = KayanPalette.of(context);
+    final net = context.netColors;
     final faceMajor = row.category.faceValue.minorUnits ~/ 100;
     final label = row.category.name.trim().isNotEmpty
         ? row.category.name
         : 'كرت $faceMajor';
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      child: Row(
-        children: [
-          Container(
-            width: 10,
-            height: 10,
-            decoration: BoxDecoration(
-              color: row.isLow ? KayanColors.error : KayanColors.primary,
-              shape: BoxShape.circle,
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              label,
-              style: TextStyle(
-                fontFamily: 'Tajawal',
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
-                color: palette.textPrimary,
-              ),
-            ),
-          ),
-          Text(
-            '${row.available} متاح',
-            style: TextStyle(
-              fontFamily: 'Tajawal',
-              fontSize: 13,
-              color: palette.textSecondary,
-            ),
-          ),
-          if (row.reserved > 0) ...[
-            const SizedBox(width: 8),
-            Text(
-              '${row.reserved} محجوز',
-              style: TextStyle(
-                fontFamily: 'Tajawal',
-                fontSize: 12,
-                color: context.netColors.warning,
-              ),
-            ),
-          ],
-          if (row.isLow) ...[
-            const SizedBox(width: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.errorContainer,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
-                'منخفض',
-                style: TextStyle(
-                  fontFamily: 'Tajawal',
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                  color: Theme.of(context).colorScheme.error,
+
+    return NetBarRow(
+      label: label,
+      value: row.available.toDouble(),
+      maxValue: maxAvailable.toDouble(),
+      color: row.isLow ? net.error : net.available,
+      valueLabel: '${row.available} متاح',
+      labelWidth: 84,
+      trailing: row.isLow
+          ? Padding(
+              padding: const EdgeInsets.only(left: NetSpacing.xs),
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: NetSpacing.sm,
+                  vertical: 1,
+                ),
+                decoration: BoxDecoration(
+                  color: net.errorContainer,
+                  borderRadius: NetRadii.pillAll,
+                ),
+                child: Text(
+                  'منخفض',
+                  style: TextStyle(
+                    fontFamily: NetTypography.family,
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w800,
+                    color: net.error,
+                  ),
                 ),
               ),
-            ),
-          ],
-        ],
-      ),
+            )
+          : null,
     );
   }
 }

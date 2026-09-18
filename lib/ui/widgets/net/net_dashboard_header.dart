@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 
 import '../../theme/kayan_palette.dart';
 import '../../theme/net_tokens.dart';
-import 'net_app_logo.dart';
 import 'net_tab_header.dart';
 
-/// ترويسة لوحة التحكم — مطابقة لفيديو Z Net.
+/// ترويسة لوحة التحكم — ترحيب بارز في جهة البداية وأزرار دائرية في الجهة
+/// المقابلة (تنبيهات · دعم · إعدادات) بهوية NET ومسمياتها.
 class NetDashboardHeader extends StatelessWidget {
   const NetDashboardHeader({
     super.key,
@@ -14,6 +14,8 @@ class NetDashboardHeader extends StatelessWidget {
     this.greeting,
     this.onSettings,
     this.onHelp,
+    this.onNotifications,
+    this.notificationsCount = 0,
   });
 
   final String networkName;
@@ -21,6 +23,8 @@ class NetDashboardHeader extends StatelessWidget {
   final String? greeting;
   final VoidCallback? onSettings;
   final VoidCallback? onHelp;
+  final VoidCallback? onNotifications;
+  final int notificationsCount;
 
   @override
   Widget build(BuildContext context) {
@@ -31,68 +35,76 @@ class NetDashboardHeader extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.fromLTRB(
         NetSpacing.lg,
-        NetSpacing.sm,
+        NetSpacing.md,
         NetSpacing.lg,
-        NetSpacing.xs,
+        NetSpacing.sm,
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              const NetAppLogo(size: NetSizes.logo),
-              const SizedBox(width: NetSpacing.sm),
-              Expanded(
-                child: Text(
-                  'شبكة $displayName',
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  greet,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontFamily: NetTypography.family,
                     fontWeight: FontWeight.w800,
-                    fontSize: 18,
-                    color: palette.primary,
+                    fontSize: 21,
+                    color: palette.textPrimary,
                   ),
                 ),
-              ),
-              if (onHelp != null)
-                NetHeaderAction(
-                  icon: Icons.help_outline_rounded,
-                  tooltip: 'المساعدة',
-                  onPressed: onHelp,
-                ),
-              if (onSettings != null)
-                NetHeaderAction(
-                  icon: Icons.settings_outlined,
-                  tooltip: 'الإعدادات',
-                  onPressed: onSettings,
-                ),
-            ],
-          ),
-          const SizedBox(height: NetSpacing.sm),
-          Row(
-            children: [
-              Icon(
-                Icons.wb_sunny_outlined,
-                size: 14,
-                color: palette.textTertiary,
-              ),
-              const SizedBox(width: NetSpacing.xs),
-              Expanded(
-                child: Text(
-                  '$greet — $dateLabel',
+                const SizedBox(height: NetSpacing.xxs),
+                Text(
+                  'شبكة $displayName',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontFamily: NetTypography.family,
-                    fontSize: 13,
-                    color: palette.textSecondary,
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13.5,
+                    color: palette.primary,
                   ),
                 ),
-              ),
-            ],
+                const SizedBox(height: 2),
+                Text(
+                  dateLabel,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontFamily: NetTypography.family,
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w600,
+                    color: palette.textSecondary,
+                  ),
+                ),
+              ],
+            ),
           ),
+          const SizedBox(width: NetSpacing.sm),
+          if (onNotifications != null)
+            NetHeaderAction(
+              icon: Icons.notifications_none_rounded,
+              tooltip: 'التنبيهات',
+              badgeCount: notificationsCount,
+              onPressed: onNotifications,
+            ),
+          if (onHelp != null)
+            NetHeaderAction(
+              icon: Icons.support_agent_rounded,
+              tooltip: 'المساعدة',
+              onPressed: onHelp,
+            ),
+          if (onSettings != null)
+            NetHeaderAction(
+              icon: Icons.settings_outlined,
+              tooltip: 'الإعدادات',
+              onPressed: onSettings,
+            ),
         ],
       ),
     );

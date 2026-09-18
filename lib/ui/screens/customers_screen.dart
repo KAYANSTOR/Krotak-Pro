@@ -10,6 +10,7 @@ import '../theme/kayan_palette.dart';
 import '../theme/net_semantic_colors.dart';
 import '../theme/net_tokens.dart';
 import '../widgets/async_views.dart';
+import '../widgets/net/net_indicators.dart';
 import '../widgets/net/net_initial_avatar.dart';
 import '../widgets/net/net_sheet.dart';
 import '../widgets/net/net_surface_card.dart';
@@ -342,6 +343,28 @@ class _CustomersScreenState extends State<CustomersScreen> {
     );
   }
 
+  /// مؤشرات + رسم بياني أفقي لأعلى الأرصدة (عرض فقط، من الصفوف المحمّلة).
+  Future<void> _showDistributionSheet() async {
+    final rows = _allRows
+        .where((r) => (r.balance?.minorUnits ?? 0) != 0)
+        .toList(growable: false)
+      ..sort(
+        (a, b) => (b.balance?.minorUnits ?? 0)
+            .abs()
+            .compareTo((a.balance?.minorUnits ?? 0).abs()),
+      );
+    await NetSheet.show<void>(
+      context,
+      builder: (_) => _BalancesDistributionSheet(
+        rows: rows.take(8).toList(growable: false),
+        accountsCount: _allRows.length,
+        debtorTotalMinor: _debtorTotalMinor,
+        creditorTotalMinor: _creditorTotalMinor,
+        unlinkedCount: _allRows.where((r) => !r.hasPhone).length,
+      ),
+    );
+  }
+
   /// Display-only aggregates over the already-loaded rows (no extra queries).
   int get _debtorTotalMinor => _allRows
       .map((r) => r.balance?.minorUnits ?? 0)
@@ -356,6 +379,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
   Widget build(BuildContext context) {
     final visible = _visible;
     final palette = KayanPalette.of(context);
+    final net = context.netColors;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -378,28 +402,68 @@ class _CustomersScreenState extends State<CustomersScreen> {
           ],
         ),
 
-        // ── ملخص الأرصدة (من البيانات المحمّلة) ──
+        // ── مؤشرات الأرصدة (من البيانات المحمّلة، بلا استعلامات إضافية) ──
         Padding(
           padding: NetSpacing.pageH,
           child: NetSurfaceCard(
             padding: NetSpacing.cardTight,
-            child: Row(
+            onTap: _showDistributionSheet,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Expanded(
-                  child: _SummaryStat(
-                    label: 'إجمالي المدين',
-                    value: formatMoneyMinor(_debtorTotalMinor),
-                    tint: Theme.of(context).colorScheme.error,
-                  ),
+                NetIndicatorGrid(
+                  indicators: [
+                    NetIndicatorTile(
+                      label: 'الحسابات',
+                      value: '${_allRows.length}',
+                      icon: Icons.groups_rounded,
+                    ),
+                    NetIndicatorTile(
+                      label: 'غير مربوط',
+                      value: '${_allRows.where((r) => !r.hasPhone).length}',
+                      icon: Icons.link_off_rounded,
+                      tint: net.warning,
+                    ),
+                    NetIndicatorTile(
+                      label: 'إجمالي المدين',
+                      value: formatMoneyMinor(_debtorTotalMinor),
+                      icon: Icons.south_west_rounded,
+                      tint: net.error,
+                    ),
+                    NetIndicatorTile(
+                      label: 'إجمالي الدائن',
+                      value: formatMoneyMinor(_creditorTotalMinor),
+                      icon: Icons.north_east_rounded,
+                      tint: net.success,
+                    ),
+                  ],
                 ),
-                Container(width: 1, height: 34, color: palette.border),
-                Expanded(
-                  child: _SummaryStat(
-                    label: 'إجمالي الدائن',
-                    value: formatMoneyMinor(_creditorTotalMinor),
-                    tint: const Color(0xFF059669),
-                    alignEnd: true,
-                  ),
+                const SizedBox(height: NetSpacing.sm),
+                Row(
+                  children: [
+                    Icon(
+                      Icons.bar_chart_rounded,
+                      size: NetSizes.iconSm,
+                      color: palette.primary,
+                    ),
+                    const SizedBox(width: NetSpacing.xs),
+                    Expanded(
+                      child: Text(
+                        'توزيع الأرصدة — رسم بياني أفقي',
+                        style: TextStyle(
+                          fontFamily: NetTypography.family,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: palette.textSecondary,
+                        ),
+                      ),
+                    ),
+                    Icon(
+                      Icons.chevron_left_rounded,
+                      size: NetSizes.iconSm,
+                      color: palette.textTertiary,
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -561,45 +625,74 @@ class _CustomersScreenState extends State<CustomersScreen> {
   }
 }
 
-class _SummaryStat extends StatelessWidget {
-  const _SummaryStat({
-    required this.label,
-    required this.value,
-    required this.tint,
-    this.alignEnd = false,
+/// ورقة توزيع الأرصدة: مؤشرات مجمّعة + رسم بياني أفقي لأعلى الأرصدة.
+class _BalancesDistributionSheet extends StatelessWidget {
+  const _BalancesDistributionSheet({
+    required this.rows,
+    required this.accountsCount,
+    required this.debtorTotalMinor,
+    required this.creditorTotalMinor,
+    required this.unlinkedCount,
   });
 
-  final String label;
-  final String value;
-  final Color tint;
-  final bool alignEnd;
+  final List<_AccountRow> rows;
+  final int accountsCount;
+  final int debtorTotalMinor;
+  final int creditorTotalMinor;
+  final int unlinkedCount;
 
   @override
   Widget build(BuildContext context) {
-    final palette = KayanPalette.of(context);
-    return Column(
-      crossAxisAlignment:
-          alignEnd ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+    final net = context.netColors;
+    return NetSheet(
+      title: 'توزيع أرصدة الحسابات',
+      subtitle: 'مؤشرات عامة وأعلى الأرصدة المسجّلة — عرض فقط',
+      icon: Icons.bar_chart_rounded,
       children: [
-        Text(
-          label,
-          style: TextStyle(
-            fontFamily: NetTypography.family,
-            fontSize: 11.5,
-            color: palette.textSecondary,
-          ),
+        NetIndicatorGrid(
+          indicators: [
+            NetIndicatorTile(
+              label: 'الحسابات',
+              value: '$accountsCount',
+              icon: Icons.groups_rounded,
+            ),
+            NetIndicatorTile(
+              label: 'غير مربوط',
+              value: '$unlinkedCount',
+              icon: Icons.link_off_rounded,
+              tint: net.warning,
+            ),
+            NetIndicatorTile(
+              label: 'إجمالي المدين',
+              value: formatMoneyMinor(debtorTotalMinor),
+              icon: Icons.south_west_rounded,
+              tint: net.error,
+            ),
+            NetIndicatorTile(
+              label: 'إجمالي الدائن',
+              value: formatMoneyMinor(creditorTotalMinor),
+              icon: Icons.north_east_rounded,
+              tint: net.success,
+            ),
+          ],
         ),
-        const SizedBox(height: NetSpacing.xxs),
-        Text(
-          value,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            fontFamily: NetTypography.family,
-            fontSize: 15,
-            fontWeight: FontWeight.w800,
-            color: tint,
-          ),
+        const SizedBox(height: NetSpacing.lg),
+        NetHorizontalBars(
+          labelWidth: 88,
+          emptyMessage: 'لا توجد أرصدة مسجّلة بعد',
+          data: [
+            for (final row in rows)
+              NetBarDatum(
+                label: row.customer.displayName,
+                value: (row.balance?.minorUnits ?? 0).abs() / 100,
+                color: (row.balance?.minorUnits ?? 0) < 0
+                    ? net.error
+                    : net.success,
+                valueLabel: formatMoneyMinor(
+                  (row.balance?.minorUnits ?? 0).abs(),
+                ),
+              ),
+          ],
         ),
       ],
     );
