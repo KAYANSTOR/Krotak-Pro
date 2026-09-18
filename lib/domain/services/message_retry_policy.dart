@@ -31,6 +31,7 @@ final class MessageRetryPolicy {
         'message_save_failed',
         'message_status_update_failed',
         RejectionRetryHints.voucherSendFailed,
+        RejectionRetryHints.legacyVoucherSendFailed,
       }.contains(code);
 
   bool canRetry(int attempts) => attempts < maxAttempts;
@@ -72,5 +73,9 @@ final class MessageRetryPolicy {
 
 /// Local string aliases so policy does not hard-depend on RejectionCodes catalog.
 abstract final class RejectionRetryHints {
-  static const voucherSendFailed = 'voucher_send_failed';
+  /// Canonical screenshot/domain rejection code.
+  static const voucherSendFailed = 'voucherSendFailed';
+
+  /// Legacy persisted code accepted for backward compatibility.
+  static const legacyVoucherSendFailed = 'voucher_send_failed';
 }
