@@ -30,6 +30,18 @@ final class LocalCardRepository implements CardRepository {
   }
 
   @override
+  Future<Result<List<domain.Card>>> listAll() async {
+    try {
+      final rows = await (database.select(database.cards)
+            ..orderBy([(table) => OrderingTerm(expression: table.serialNumber)]))
+          .get();
+      return Success(rows.map(_toCard).toList(growable: false));
+    } catch (error) {
+      return Failure(_failure('card_list_all_failed', error));
+    }
+  }
+
+  @override
   Future<Result<Set<String>>> existingSerialsAmong(Iterable<String> serials) async {
     try {
       final needles = serials.map((e) => e.trim()).where((e) => e.isNotEmpty).toSet();
