@@ -176,7 +176,7 @@ class _TemplatesScreenState extends State<TemplatesScreen> {
                   width: 40,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: Colors.grey.shade300,
+                    color: KayanPalette.of(ctx).border,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),

@@ -147,7 +147,7 @@ class _SimSettingsScreenState extends State<SimSettingsScreen> {
                           fontFamily: 'Tajawal',
                           fontSize: 12,
                           height: 1.4,
-                          color: Colors.grey.shade600,
+                          color: KayanPalette.of(context).textTertiary,
                         ),
                       ),
                       const SizedBox(height: 16),

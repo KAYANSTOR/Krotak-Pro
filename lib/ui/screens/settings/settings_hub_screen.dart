@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import '../../../core/result.dart';
 import '../../../domain/entities/setting.dart';
 import '../../app_scope.dart';
-import '../../routing/app_routes.dart';
 import '../../theme/kayan_palette.dart';
 import '../../theme/net_semantic_colors.dart';
 import '../../theme/net_theme_schedule.dart';

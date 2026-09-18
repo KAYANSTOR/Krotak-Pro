@@ -240,7 +240,7 @@ class _WalletsPosScreenState extends State<WalletsPosScreen>
                           width: 40,
                           height: 4,
                           decoration: BoxDecoration(
-                            color: Colors.grey.shade300,
+                            color: KayanPalette.of(ctx).border,
                             borderRadius: BorderRadius.circular(2),
                           ),
                         ),

@@ -203,7 +203,11 @@ class _SalafniTemplatesScreenState extends State<SalafniTemplatesScreen> {
           const SizedBox(height: 4),
           Text(
             hint,
-            style: TextStyle(fontFamily: 'Tajawal', fontSize: 12, color: Colors.grey.shade600),
+            style: TextStyle(
+              fontFamily: 'Tajawal',
+              fontSize: 12,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
           ),
           const SizedBox(height: 8),
           TextField(

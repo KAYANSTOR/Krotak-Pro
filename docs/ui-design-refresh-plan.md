@@ -98,8 +98,24 @@ git diff --stat <baseline>..HEAD -- lib/domain lib/data lib/application lib/plat
 |---|---|---|
 | مكتملة تمامًا على النظام | Dashboard, Reports, Offers, Customers, Cards/Inventory, Transactions log, Settings hub, Permissions, System check, Wallet notifications | ✅ |
 | نظام مُطبَّق + بقيت توحيد بطاقات/حالات | customer_detail, pending, rejected, failed, help_center, wallets_pos, templates, template_wizard, sim_settings, template_simulation, clean_logs, low_stock, salafni_templates, pos_report, reserved_card_ops, card_stock_sheet, quick_actions_sheet | 🟡 |
-| بالتصميم القديم (تحتاج ترحيلاً) | `reports/sales_period_report_screen` (236) · `settings/outbound_message_templates_screen` (332) · `dashboard/sales_period_sheet` (359) · `dashboard/direct_sale_sheet` (193) | ❌ |
-| ليست شاشات (مضيف/شعار) | `settings_screen` (غلاف) · `direct_sale_screen` (مضيف ورقة) · `net_app_logo` · `net_app_bar_title` (جزء من النظام) | — |
+| بالتصميم القديم | **لا شيء متبقٍ** — `reports/sales_period_report_screen` · `settings/outbound_message_templates_screen` · `dashboard/sales_period_sheet` · `dashboard/direct_sale_sheet` رُحّلت كلها إلى النظام | ✅ |
+| ليست شاشات (مضيف/شعار) | `settings_screen` (غلاف) · `direct_sale_screen` (مضيف ورقة) · `net_app_logo` · `net_app_bar_title` (جزء من النظام) · `inventory_sheets` (`part of` ترث استيرادات `inventory_screen`) | — |
+
+---
+
+## 3.1) مصفوفة اللون المتبقية (الجولة الختامية 2026-09-18)
+
+بعد استكمال الشاشات، لم يبقَ في `lib/ui` أي استخدام مباشر لألوان Flutter الثابتة للنصوص
+أو الأسطح أو الفواصل:
+
+```
+grep -rn "Colors\.grey" lib/ui --include=*.dart
+→ (فارغ)
+```
+
+البقايا المتبقية من `Colors.white` / `Colors.black` كلها مشروعة: نص/أيقونة بيضاء فوق سطح
+مُلوَّن أو تدرّج (بطاقة الرصيد، الشرائح المحدَّدة، مؤشرات التحميل فوق أزرار مُلوَّنة)، ووشاح
+تعتيم (scrim) خلف الأوراق. وخرائط ألوان العلامات (هوية المحافظ) تبقى كما هي.
 
 ---
 

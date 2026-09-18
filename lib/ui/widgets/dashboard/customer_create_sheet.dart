@@ -21,7 +21,6 @@ class _CustField {
     required this.label,
     required this.icon,
     this.keyboardType = TextInputType.text,
-    this.hint,
     this.maxLength,
     this.digitsOnly = false,
   });
@@ -30,7 +29,6 @@ class _CustField {
   final String label;
   final IconData icon;
   final TextInputType keyboardType;
-  final String? hint;
   final int? maxLength;
   final bool digitsOnly;
 }
@@ -137,8 +135,6 @@ class _CustomerCreateSheetState extends State<CustomerCreateSheet> {
   /// الحساب المالي منقول على الهوية الأساسية إن وُجد؛ وإلا على اسم مرسل واحد.
   String? get _primaryExternal => _onecash ?? _floosak ?? _jaibName;
 
-  bool get _valid => _hasAnyIdentity && _status == null;
-
   Future<void> _pickContact(_CustField field) async {
     if (_picking || field.digitsOnly == false) return;
     setState(() => _picking = true);
@@ -225,7 +221,7 @@ class _CustomerCreateSheetState extends State<CustomerCreateSheet> {
         setState(() {
           _busy = false;
           _status =
-              'الحساب أُنشئ لكن فشل حفظ أحد المعرفات: ${(r as Failure).error.message}';
+              'الحساب أُنشئ لكن فشل حفظ أحد المعرفات: ${r.error.message}';
         });
         return;
       }
