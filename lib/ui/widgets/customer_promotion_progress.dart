@@ -136,8 +136,8 @@ Future<void> showCustomerPromotionSheet({
               ),
               const SizedBox(height: 12),
               if (items.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 24),
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 24),
                   child: Text(
                     'لا توجد عروض نشطة حاليًا',
                     textAlign: TextAlign.center,

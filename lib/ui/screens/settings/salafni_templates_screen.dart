@@ -131,10 +131,10 @@ class _SalafniTemplatesScreenState extends State<SalafniTemplatesScreen> {
                   Container(
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
-                      color: netColors.availableContainer,
+                      color: context.netColors.availableContainer,
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
-                        color: netColors.available.withValues(alpha: 0.35),
+                        color: context.netColors.available.withValues(alpha: 0.35),
                       ),
                     ),
                     child: const Text(

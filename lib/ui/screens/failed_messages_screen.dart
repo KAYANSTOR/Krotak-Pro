@@ -195,7 +195,7 @@ class _FailedMessagesScreenState extends State<FailedMessagesScreen> {
                                               vertical: 2,
                                             ),
                                             decoration: BoxDecoration(
-                                              color: netColors.rejectedContainer,
+                                              color: context.netColors.rejectedContainer,
                                               borderRadius: BorderRadius.circular(8),
                                             ),
                                             child: Text(
@@ -203,7 +203,7 @@ class _FailedMessagesScreenState extends State<FailedMessagesScreen> {
                                               style: TextStyle(
                                                 fontFamily: 'Tajawal',
                                                 fontSize: 11,
-                                                color: netColors.rejected,
+                                                color: context.netColors.rejected,
                                               ),
                                             ),
                                           ),

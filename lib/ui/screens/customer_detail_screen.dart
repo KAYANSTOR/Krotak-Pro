@@ -382,7 +382,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                             decoration: BoxDecoration(
-                              color: netColors.warningContainer,
+                              color: context.netColors.warningContainer,
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Text(
@@ -391,7 +391,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                                 fontFamily: 'Tajawal',
                                 fontSize: 11,
                                 fontWeight: FontWeight.w700,
-                                color: netColors.warning,
+                                color: context.netColors.warning,
                               ),
                             ),
                           ),
