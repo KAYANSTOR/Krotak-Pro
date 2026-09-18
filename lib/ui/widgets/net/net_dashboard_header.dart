@@ -43,7 +43,12 @@ class NetDashboardHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = KayanPalette.of(context);
-    final displayName = networkName.trim().isEmpty ? 'NET' : networkName.trim();
+    // اسم الشبكة المحفوظ في الإعدادات هو العنوان الرئيسي. نضيف كلمة «شبكة»
+    // فقط عندما لا تكون جزءًا من الاسم المحفوظ، حتى لا تتكرر.
+    final rawName = networkName.trim();
+    final displayName = rawName.isEmpty
+        ? 'شبكة NET'
+        : (rawName.startsWith('شبكة') ? rawName : 'شبكة $rawName');
     final greet = greeting ?? _defaultGreeting(DateTime.now());
 
     return Padding(
