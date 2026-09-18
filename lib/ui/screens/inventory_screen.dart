@@ -60,8 +60,8 @@ class _InventoryScreenState extends State<InventoryScreen> {
       setState(() {
         _loading = false;
         _error = cats is Failure
-            ? (cats as Failure).error.message
-            : (cards as Failure).error.message;
+            ? (cats as Failure<dynamic>).error.message
+            : (cards as Failure<dynamic>).error.message;
       });
       return;
     }
