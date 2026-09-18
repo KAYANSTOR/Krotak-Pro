@@ -1,4 +1,4 @@
-name: net_flutter
+name: net_app
 description: NET offline-first commercial SMS voucher system (Flutter).
 publish_to: "none"
 version: 1.0.11+11
