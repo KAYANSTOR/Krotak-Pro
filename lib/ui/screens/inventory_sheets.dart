@@ -161,6 +161,7 @@ class _AddCardsSheetState extends State<_AddCardsSheet> {
   final _secretCtrl = TextEditingController();
   final _batchCtrl = TextEditingController();
   int _tab = 0;
+  CardImportFormat _format = CardImportFormat.serialAndPin;
   bool _busy = false;
 
   @override
@@ -180,10 +181,20 @@ class _AddCardsSheetState extends State<_AddCardsSheet> {
   Future<void> _saveSingle() async {
     final serial = _serialCtrl.text.trim();
     final secret = _secretCtrl.text.trim();
-    if (serial.isEmpty || secret.isEmpty) return;
+    if (serial.isEmpty) return;
+    if (_format == CardImportFormat.serialAndPin && secret.isEmpty) return;
     setState(() => _busy = true);
     final c = AppScope.of(context);
-    final r = await c.catalogService.importCards(categoryId: _categoryId, drafts: [CardImportDraft(serialNumber: serial, secretCode: secret)]);
+    final r = await c.catalogService.importCards(
+      categoryId: _categoryId,
+      drafts: [
+        CardImportDraft(
+          serialNumber: serial,
+          secretCode: _format == CardImportFormat.serialOnly ? '' : secret,
+          format: _format,
+        ),
+      ],
+    );
     if (!mounted) return;
     setState(() => _busy = false);
     if (r is Failure) {
@@ -197,7 +208,7 @@ class _AddCardsSheetState extends State<_AddCardsSheet> {
   }
 
   Future<void> _saveBatch() async {
-    final parsed = CardImportParser.parse(_batchCtrl.text);
+    final parsed = CardImportParser.parse(_batchCtrl.text, format: _format);
     if (!parsed.hasDrafts) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(parsed.hasErrors ? parsed.errors.first : 'لا توجد أسطر صالحة', style: const TextStyle(fontFamily: 'Tajawal'))));
       return;
@@ -253,14 +264,53 @@ class _AddCardsSheetState extends State<_AddCardsSheet> {
                   onSelectionChanged: (s) => setState(() => _tab = s.first),
                 ),
                 const SizedBox(height: 12),
+                const Text('نوع الكرت', style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w700)),
+                const SizedBox(height: 8),
+                SegmentedButton<CardImportFormat>(
+                  segments: const [
+                    ButtonSegment(
+                      value: CardImportFormat.serialAndPin,
+                      label: Text('رقم + رمز', style: TextStyle(fontFamily: 'Tajawal', fontSize: 12)),
+                    ),
+                    ButtonSegment(
+                      value: CardImportFormat.serialOnly,
+                      label: Text('رقم فقط', style: TextStyle(fontFamily: 'Tajawal', fontSize: 12)),
+                    ),
+                  ],
+                  selected: {_format},
+                  onSelectionChanged: (s) => setState(() => _format = s.first),
+                ),
+                const SizedBox(height: 12),
                 if (_tab == 0) ...[
-                  TextField(controller: _serialCtrl, decoration: const InputDecoration(labelText: 'الرقم التسلسلي', border: OutlineInputBorder()), style: const TextStyle(fontFamily: 'Tajawal')),
-                  const SizedBox(height: 10),
-                  TextField(controller: _secretCtrl, decoration: const InputDecoration(labelText: 'رمز الكود / PIN', border: OutlineInputBorder()), style: const TextStyle(fontFamily: 'Tajawal')),
+                  TextField(controller: _serialCtrl, decoration: const InputDecoration(labelText: 'رقم الكرت', border: OutlineInputBorder()), style: const TextStyle(fontFamily: 'Tajawal')),
+                  if (_format == CardImportFormat.serialAndPin) ...[
+                    const SizedBox(height: 10),
+                    TextField(controller: _secretCtrl, decoration: const InputDecoration(labelText: 'رمز الكود / PIN', border: OutlineInputBorder()), style: const TextStyle(fontFamily: 'Tajawal')),
+                  ],
                 ] else ...[
-                  TextField(controller: _batchCtrl, minLines: 6, maxLines: 12, decoration: const InputDecoration(labelText: 'الصق الأسطر (تسلسل,رمز) أو من ملف نصي', alignLabelWithHint: true, border: OutlineInputBorder(), hintText: '776733907,77330393\n8273738,112233'), style: const TextStyle(fontFamily: 'Tajawal', fontSize: 13)),
+                  TextField(
+                    controller: _batchCtrl,
+                    minLines: 6,
+                    maxLines: 12,
+                    decoration: InputDecoration(
+                      labelText: _format == CardImportFormat.serialOnly
+                          ? 'الصق أرقام الكروت (سطر لكل كرت)'
+                          : 'الصق الأسطر (رقم,رمز) أو من ملف نصي',
+                      alignLabelWithHint: true,
+                      border: const OutlineInputBorder(),
+                      hintText: _format == CardImportFormat.serialOnly
+                          ? '776733907\n8273738\n99001122'
+                          : '776733907,77330393\n8273738,112233',
+                    ),
+                    style: const TextStyle(fontFamily: 'Tajawal', fontSize: 13),
+                  ),
                   const SizedBox(height: 6),
-                  const Text('الصيغ: serial,secret أو serial;secret. سطر لكل كرت.', style: TextStyle(fontFamily: 'Tajawal', fontSize: 11, color: KayanColors.textSecondary)),
+                  Text(
+                    _format == CardImportFormat.serialOnly
+                        ? 'وضع رقم فقط: سطر واحد = رقم كرت. الفواصل تُتجاهل ويُؤخذ الحقل الأول.'
+                        : 'وضع رقم+رمز: serial,secret أو serial;secret. سطر لكل كرت.',
+                    style: const TextStyle(fontFamily: 'Tajawal', fontSize: 11, color: KayanColors.textSecondary),
+                  ),
                 ],
                 const SizedBox(height: 16),
                 FilledButton(
