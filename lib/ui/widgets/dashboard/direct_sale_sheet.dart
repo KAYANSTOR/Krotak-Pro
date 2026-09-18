@@ -7,7 +7,7 @@ import '../../../domain/entities/money.dart';
 import '../../../domain/entities/transaction.dart';
 import '../../../domain/services/services.dart';
 import '../../app_scope.dart';
-import '../../platform/contact_picker_bridge.dart';
+import '../../../platform/contact_picker_bridge.dart';
 import '../../theme/net_semantic_colors.dart';
 import '../../theme/net_tokens.dart';
 
