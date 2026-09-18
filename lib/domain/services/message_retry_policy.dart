@@ -5,7 +5,7 @@ import '../entities/message.dart';
 final class MessageRetryPolicy {
   const MessageRetryPolicy({
     this.maxAttempts = 3,
-    this.baseDelay = const Duration(seconds: 30),
+    this.baseDelay = const Duration(seconds: 3),
     this.maxDelay = const Duration(minutes: 30),
     this.confirmPendingTimeout = const Duration(minutes: 15),
   });
@@ -70,7 +70,7 @@ final class MessageRetryPolicy {
   }
 }
 
-/// Local string aliases so policy does not hard-depend on RejectionCodes import order.
+/// Local string aliases so policy does not hard-depend on RejectionCodes catalog.
 abstract final class RejectionRetryHints {
-  static const voucherSendFailed = 'voucherSendFailed';
+  static const voucherSendFailed = 'voucher_send_failed';
 }
