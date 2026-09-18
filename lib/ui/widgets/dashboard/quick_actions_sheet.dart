@@ -38,6 +38,7 @@ class QuickActionsSheet extends StatelessWidget {
     return showModalBottomSheet<void>(
       context: context,
       backgroundColor: Colors.transparent,
+      isScrollControlled: true,
       builder: (ctx) => QuickActionsSheet(
         onDirectSale: onDirectSale,
         onPosAccounts: onPosAccounts,
@@ -68,9 +69,10 @@ class QuickActionsSheet extends StatelessWidget {
           NetSpacing.xl,
           NetSpacing.lg + bottom,
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+        // Scrollable so the six actions never overflow a short viewport.
+        child: ListView(
+          shrinkWrap: true,
+          padding: const EdgeInsets.zero,
           children: [
             Center(
               child: Container(
