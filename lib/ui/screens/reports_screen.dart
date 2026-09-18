@@ -13,6 +13,7 @@ import '../widgets/net/net_tab_header.dart';
 import 'failed_messages_screen.dart';
 import 'pending_messages_screen.dart';
 import 'rejected_messages_screen.dart';
+import 'reports/pos_accounts_ledger_screen.dart';
 import 'reports/pos_report_screen.dart';
 import 'reports/sales_period_report_screen.dart';
 import 'transactions_log_screen.dart';
@@ -277,7 +278,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                 tint: KayanPalette.of(context).textSecondary,
                 title: 'حسابات نقاط البيع',
                 subtitle: 'تقرير التسوية المالية والعمولات لنقاط البيع',
-                onTap: () => _open(const PosReportScreen()),
+                onTap: () => _open(const PosAccountsLedgerScreen()),
               ),
             ],
           ),

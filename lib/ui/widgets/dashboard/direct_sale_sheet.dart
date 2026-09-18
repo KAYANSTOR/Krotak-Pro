@@ -391,6 +391,29 @@ class _DirectSaleSheetState extends State<DirectSaleSheet> {
                     color: scheme.onSurface,
                   ),
                 ),
+                if (_method == ManualSaleMethod.gift) ...[
+                  const SizedBox(height: NetSpacing.xs),
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.redeem_rounded,
+                        size: 14,
+                        color: context.netColors.premium,
+                      ),
+                      const SizedBox(width: NetSpacing.xs),
+                      Expanded(
+                        child: Text(
+                          'فئة كرت الهدية تُحدد تلقائيًا بمطابقة المبلغ مع الفئات النشطة',
+                          style: TextStyle(
+                            fontFamily: NetTypography.family,
+                            fontSize: 11.5,
+                            color: palette.textSecondary,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
                 const SizedBox(height: NetSpacing.md),
 
                 // ── الاسم ──

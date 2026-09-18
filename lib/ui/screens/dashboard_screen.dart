@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../../core/result.dart';
 import '../../domain/entities/card.dart' as domain;
 import '../../domain/entities/customer.dart';
+import '../../domain/entities/license.dart' as domain;
 import '../../domain/entities/message.dart';
 import '../../domain/entities/money.dart';
 import '../../domain/entities/setting.dart';
@@ -39,12 +40,18 @@ class DashboardScreen extends StatefulWidget {
     super.key,
     this.onNavigateToTab,
     this.refreshSignal,
+    this.onMutated,
   });
 
   final ValueChanged<String>? onNavigateToTab;
 
   /// Bumped by the shell when another screen mutates data this dashboard shows.
   final ValueListenable<int>? refreshSignal;
+
+  /// Called after this screen performs a mutation (direct sale, POS settlement,
+  /// customer creation) so the shell can fan out one shared refresh to every
+  /// kept-alive tab. Replaces per-screen reloads that left other tabs stale.
+  final VoidCallback? onMutated;
 
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
@@ -55,6 +62,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
   String? _error;
   String _networkName = SettingDefaults.networkName;
   String _dateLabel = '';
+  String? _subscriptionLabel;
+  int? _remainingMessages;
   int _attentionMessagesCount = 0;
   int _rejectedCount = 0;
   int _customerBalanceMinor = 0;
@@ -141,6 +150,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
       // Read-only extra query used purely for the KPI trend sparkline.
       final weeklySales = await c.sales.listCompletedBetween(weekStart, now);
 
+      // شريط الاشتراك (عرض فقط) — من الترخيص الفعلي إن وُجد.
+      String? subscriptionLabel;
+      int? remainingMessages;
+      final lic = await c.licenseService.current();
+      if (lic is Success<domain.License>) {
+        final license = lic.value;
+        final exp = license.expiresAt;
+        if (exp != null) {
+          final d = formatArabicDashboardDate(exp.toLocal());
+          subscriptionLabel = 'الاشتراك حتى $d';
+        } else if (license.status == domain.LicenseStatus.active) {
+          subscriptionLabel = 'الاشتراك نشط';
+        }
+      }
+
       final categories = await c.categories.listAll();
       final low = <({String name, int available})>[];
       if (categories is Success<List<domain.CardCategory>>) {
@@ -213,6 +237,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _attentionMessagesCount = attentionCount;
         _rejectedCount = rejectedCount;
         _autoProcessing = autoProcessing;
+        _subscriptionLabel = subscriptionLabel;
+        _remainingMessages = remainingMessages;
         _categoryOnly = categoryOnly;
         _customerBalanceMinor = totalBalance is Success<Money>
             ? totalBalance.value.minorUnits
@@ -290,9 +316,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
+  /// Shared shell refresh: bump once after a mutation; every tab listening to
+  /// the signal reloads exactly once (no double reload of this dashboard).
+  void _notifyMutation() {
+    if (!mounted) return;
+    widget.onMutated?.call();
+    if (widget.refreshSignal == null) {
+      // Standalone usage (no shell): keep the old self-reload behaviour.
+      _load();
+    }
+  }
+
   Future<void> _openSettings() async {
     await AppRoutes.openSettings(context);
-    if (mounted) await _load();
+    _notifyMutation();
   }
 
   Future<void> _openHelp() async {
@@ -301,27 +338,27 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Future<void> _openAttentionMessages() async {
     await AppRoutes.openAttentionMessages(context);
-    if (mounted) await _load();
+    _notifyMutation();
   }
 
   Future<void> _openRejectedMessages() async {
     await AppRoutes.openRejectedMessages(context);
-    if (mounted) await _load();
+    _notifyMutation();
   }
 
   Future<void> _openSystemCheck() async {
     await AppRoutes.openSystemCheck(context);
-    if (mounted) await _load();
+    _notifyMutation();
   }
 
   Future<void> _openDirectSale() async {
     await AppRoutes.openDirectSale(context);
-    if (mounted) await _load();
+    _notifyMutation();
   }
 
   Future<void> _openWalletsAndPos() async {
     await AppRoutes.openWalletsAndPos(context);
-    if (mounted) await _load();
+    _notifyMutation();
   }
 
   void _openMoreActions() {
@@ -332,7 +369,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       onAddCustomer: () => widget.onNavigateToTab?.call('accounts'),
       onCreateCustomer: () async {
         await CustomerCreateSheet.show(context);
-        if (mounted) await _load();
+        _notifyMutation();
       },
       onOffers: () => widget.onNavigateToTab?.call('offers'),
       onCards: () => widget.onNavigateToTab?.call('cards'),
@@ -400,6 +437,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
               onHelp: _openHelp,
               onNotifications: _openAttentionMessages,
               notificationsCount: _attentionMessagesCount,
+              subscriptionLabel: _subscriptionLabel,
+              remainingMessages: _remainingMessages,
             ),
 
             if (_error != null)
