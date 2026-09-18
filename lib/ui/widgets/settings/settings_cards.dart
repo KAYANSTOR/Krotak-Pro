@@ -3,6 +3,34 @@ import 'package:flutter/material.dart';
 import '../../theme/kayan_colors.dart';
 import '../../theme/kayan_palette.dart';
 
+/// نص البحث الحالي في لوحة الإعدادات.
+///
+/// يُوفّره لوحة الإعدادات لكل بطاقة مجموعة، فتُخفي الصفوف غير المطابقة
+/// ويبقى البحث على مستوى الصف الواحد لا القسم فقط.
+class SettingsSearchScope extends InheritedWidget {
+  const SettingsSearchScope({
+    super.key,
+    required this.query,
+    required super.child,
+  });
+
+  final String query;
+
+  static String maybeQueryOf(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<SettingsSearchScope>()?.query ??
+      '';
+
+  @override
+  bool updateShouldNotify(SettingsSearchScope oldWidget) =>
+      oldWidget.query != query;
+}
+
+/// صف قابل للبحث داخل بطاقة مجموعة.
+abstract interface class SettingsSearchable {
+  /// النص الذي يُطابَق عليه البحث: العنوان + الوصف + كلمات بديلة.
+  String get searchableText;
+}
+
 /// بطاقة قسم مجمّعة — صفوف داخل حاوية واحدة مع فواصل (مطابق لإطارات الفيديو).
 class SettingsGroupCard extends StatelessWidget {
   const SettingsGroupCard({
@@ -18,10 +46,20 @@ class SettingsGroupCard extends StatelessWidget {
   Widget build(BuildContext context) {
     if (children.isEmpty) return const SizedBox.shrink();
     final kayan = KayanPalette.of(context);
+    final query = SettingsSearchScope.maybeQueryOf(context).trim().toLowerCase();
+    final visible = query.isEmpty
+        ? children
+        : [
+            for (final child in children)
+              if (child is! SettingsSearchable ||
+                  child.searchableText.toLowerCase().contains(query))
+                child,
+          ];
+    if (visible.isEmpty) return const SizedBox.shrink();
     final rows = <Widget>[];
-    for (var i = 0; i < children.length; i++) {
-      rows.add(children[i]);
-      if (i < children.length - 1) {
+    for (var i = 0; i < visible.length; i++) {
+      rows.add(visible[i]);
+      if (i < visible.length - 1) {
         rows.add(Divider(
           height: 1,
           thickness: 1,
@@ -50,19 +88,26 @@ class SettingsGroupCard extends StatelessWidget {
 }
 
 /// صف تنقّل داخل مجموعة: أيقونة يمين + عنوان/وصف + شيفرون.
-class SettingsGroupNavRow extends StatelessWidget {
+class SettingsGroupNavRow extends StatelessWidget implements SettingsSearchable {
   const SettingsGroupNavRow({
     super.key,
     required this.icon,
     required this.title,
     this.subtitle,
     this.onTap,
+    this.searchText,
   });
 
   final IconData icon;
   final String title;
   final String? subtitle;
   final VoidCallback? onTap;
+
+  /// مرادفات إضافية لا تظهر في الواجهة لكن يطابق عليها البحث.
+  final String? searchText;
+
+  @override
+  String get searchableText => '$title ${subtitle ?? ''} ${searchText ?? ''}';
 
   @override
   Widget build(BuildContext context) {
@@ -118,7 +163,8 @@ class SettingsGroupNavRow extends StatelessWidget {
 }
 
 /// صف مفتاح داخل مجموعة: أيقونة + عنوان/وصف + Switch.
-class SettingsGroupSwitchRow extends StatelessWidget {
+class SettingsGroupSwitchRow extends StatelessWidget
+    implements SettingsSearchable {
   const SettingsGroupSwitchRow({
     super.key,
     required this.icon,
@@ -127,6 +173,7 @@ class SettingsGroupSwitchRow extends StatelessWidget {
     required this.value,
     required this.onChanged,
     this.enabled = true,
+    this.searchText,
   });
 
   final IconData icon;
@@ -135,6 +182,12 @@ class SettingsGroupSwitchRow extends StatelessWidget {
   final bool value;
   final ValueChanged<bool>? onChanged;
   final bool enabled;
+
+  /// مرادفات إضافية لا تظهر في الواجهة لكن يطابق عليها البحث.
+  final String? searchText;
+
+  @override
+  String get searchableText => '$title ${subtitle ?? ''} ${searchText ?? ''}';
 
   @override
   Widget build(BuildContext context) {
