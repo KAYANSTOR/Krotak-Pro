@@ -324,7 +324,9 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
                     : RefreshIndicator(
                         onRefresh: _load,
                         color: KayanPalette.of(context).primary,
-                        child: ListView(
+                        child: SettingsSearchScope(
+                            query: _query,
+                            child: ListView(
                           padding: const EdgeInsets.fromLTRB(16, 4, 16, 40),
                           children: [
                             _readinessCard(context),
@@ -348,6 +350,7 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
                                   icon: Icons.badge_outlined,
                                   title: 'اسم الشبكة',
                                   subtitle: 'الاسم الحالي: $_networkName',
+                                  searchText: 'النظام الشبكة الاسم',
                                   onTap: _openNetworkName,
                                 ),
                                 SettingsGroupSwitchRow(
@@ -485,6 +488,7 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
                                   subtitle: _darkMode
                                       ? 'المظهر الداكن مفعّل — اضغط للإرجاع للفاتح'
                                       : 'المظهر الفاتح مفعّل — اضغط لتفعيل الداكن',
+                                  searchText: 'المظهر الثيم ليلي فاتح دارك مظهر',
                                   value: _darkMode,
                                   onChanged: (v) => _setDarkMode(v),
                                 ),
@@ -499,6 +503,7 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
                                   icon: Icons.account_balance_wallet_outlined,
                                   title: 'إدارة المحافظ ونقاط البيع',
                                   subtitle: 'إضافة وتعديل المحافظ ونقاط البيع',
+                                  searchText: 'إعدادات المحافظ ونقاط البيع',
                                   onTap: () => Navigator.of(context).push(
                                     MaterialPageRoute(builder: (_) => const WalletsPosScreen()),
                                   ),
@@ -507,6 +512,7 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
                                   icon: Icons.science_outlined,
                                   title: 'محاكاة القوالب',
                                   subtitle: 'اختبار ومحاكاة استخراج بيانات الرسائل',
+                                  searchText: 'المحاكاة محاكاة القوالب اختبار',
                                   onTap: () => Navigator.of(context).push(
                                     MaterialPageRoute(
                                       builder: (_) => const TemplateSimulationScreen(),
@@ -565,6 +571,7 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
                                 SettingsGroupNavRow(
                                   icon: Icons.cleaning_services_outlined,
                                   title: 'تنظيف السجلات',
+                                  searchText: 'الصيانة حذف السجلات',
                                   subtitle: 'حذف الرسائل القديمة والسجلات حسب سياسة الاحتفاظ',
                                   onTap: () => Navigator.of(context).push(
                                     MaterialPageRoute(builder: (_) => const CleanLogsScreen()),
@@ -574,6 +581,7 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
                                   icon: Icons.file_download_outlined,
                                   title: 'تصدير السجل',
                                   subtitle: 'تصدير سجل العمليات للتحليل أو الأرشفة',
+                                  searchText: 'الصيانة الأرشفة أرشيف',
                                   onTap: () => Navigator.of(context).push(
                                     MaterialPageRoute(builder: (_) => const ExportLedgerScreen()),
                                   ),
@@ -581,7 +589,7 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
                               ],
                             ),
                           ],
-                        ),
+                        )),
                       ),
               ),
             ],
