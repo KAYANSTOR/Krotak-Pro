@@ -28,7 +28,7 @@ class NetDashboardHeader extends StatelessWidget {
   final VoidCallback? onNotifications;
   final int notificationsCount;
 
-  /// شريط الاشتراك — يظهر فقط عند توفر قيمة حقيقية من الترخيص.
+  /// شريط الاشتراك — يظهر دائمًا؛ القيمة الحقيقية أو «الاشتراك غير محدد».
   final String? subscriptionLabel;
 
   /// عدد الرسائل المتبقية (اختياري؛ null يخفي العنصر).
@@ -90,55 +90,52 @@ class NetDashboardHeader extends StatelessWidget {
                     color: palette.textSecondary,
                   ),
                 ),
-                if (subscriptionLabel != null) ...[
-                  const SizedBox(height: NetSpacing.xs),
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.verified_user_outlined,
-                        size: 13,
-                        color: palette.primary,
+                const SizedBox(height: NetSpacing.xs),
+                Row(
+                  children: [
+                    Icon(
+                      Icons.verified_user_outlined,
+                      size: 13,
+                      color: palette.primary,
+                    ),
+                    const SizedBox(width: NetSpacing.xs),
+                    Flexible(
+                      child: Text(
+                        subscriptionLabel ?? 'الاشتراك غير محدد',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontFamily: NetTypography.family,
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w700,
+                          color: palette.primary,
+                        ),
                       ),
-                      const SizedBox(width: NetSpacing.xs),
-                      Flexible(
+                    ),
+                    if (remainingMessages != null) ...[
+                      const SizedBox(width: NetSpacing.sm),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: palette.primary.withValues(alpha: 0.12),
+                          borderRadius: NetRadii.pillAll,
+                        ),
                         child: Text(
-                          subscriptionLabel!,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                          'الرسائل المتبقية: $remainingMessages',
                           style: TextStyle(
                             fontFamily: NetTypography.family,
-                            fontSize: 11.5,
+                            fontSize: 10.5,
                             fontWeight: FontWeight.w700,
                             color: palette.primary,
                           ),
                         ),
                       ),
-                      if (remainingMessages != null) ...[
-                        const SizedBox(width: NetSpacing.sm),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color:
-                                palette.primary.withValues(alpha: 0.12),
-                            borderRadius: NetRadii.pillAll,
-                          ),
-                          child: Text(
-                            'الرسائل المتبقية: $remainingMessages',
-                            style: TextStyle(
-                              fontFamily: NetTypography.family,
-                              fontSize: 10.5,
-                              fontWeight: FontWeight.w700,
-                              color: palette.primary,
-                            ),
-                          ),
-                        ),
-                      ],
                     ],
-                  ),
-                ],
+                  ],
+                ),
               ],
             ),
           ),
