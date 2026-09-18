@@ -173,57 +173,67 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase(super.e);
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
         onCreate: (Migrator migrator) async {
           await migrator.createAll();
-          // Legacy columns that older onCreate paths expected as ALTER after createAll.
-          await customStatement(
-            'ALTER TABLE transfer_templates ADD COLUMN wallet_id TEXT',
-          );
-          await customStatement(
-            'ALTER TABLE transfer_templates ADD COLUMN priority INTEGER NOT NULL DEFAULT 0',
-          );
-          await customStatement(
-            'ALTER TABLE transfer_templates ADD COLUMN sample_body TEXT',
-          );
-          await customStatement(
-            'ALTER TABLE transfer_templates ADD COLUMN sender_code TEXT',
-          );
-          await customStatement(
-            "ALTER TABLE transfer_templates ADD COLUMN identifier_kind TEXT NOT NULL DEFAULT 'phone'",
-          );
+          await _ensureTransferTemplateColumns();
           await _createIdempotencyIndexes();
         },
         onUpgrade: (Migrator migrator, int from, int to) async {
+          // Never wipe data. All steps are additive / IF NOT EXISTS / best-effort.
           if (from < 2) {
-            await customStatement(
-              'ALTER TABLE transfer_templates ADD COLUMN wallet_id TEXT',
-            );
-            await customStatement(
-              'ALTER TABLE transfer_templates ADD COLUMN priority INTEGER NOT NULL DEFAULT 0',
-            );
-            await customStatement(
-              'ALTER TABLE transfer_templates ADD COLUMN sample_body TEXT',
-            );
-            await customStatement(
-              'ALTER TABLE transfer_templates ADD COLUMN sender_code TEXT',
-            );
-            await customStatement(
-              "ALTER TABLE transfer_templates ADD COLUMN identifier_kind TEXT NOT NULL DEFAULT 'phone'",
-            );
+            await _ensureTransferTemplateColumns();
           }
           if (from < 3) {
-            // Phase 2: enforce uniqueness for reservation, message ref, txn ref, one sale per card.
             await _createIdempotencyIndexes();
           }
+          if (from < 4) {
+            // Fix unique index on secret_code that broke upgrades when multiple
+            // serial-only cards share empty secret ('').
+            await customStatement(
+              'DROP INDEX IF EXISTS idx_cards_secret_code',
+            );
+            await _createIdempotencyIndexes();
+            await _ensureTransferTemplateColumns();
+          }
+        },
+        beforeOpen: (details) async {
+          await _ensureTransferTemplateColumns();
+          await _createIdempotencyIndexes();
         },
       );
 
-  /// Unique indexes required by the conversion plan (idempotency).
-  /// Safe to call multiple times (IF NOT EXISTS). Partial indexes allow multiple NULLs.
+  Future<void> _ensureTransferTemplateColumns() async {
+    await _addColumnIfMissing('transfer_templates', 'wallet_id', 'TEXT');
+    await _addColumnIfMissing(
+      'transfer_templates',
+      'priority',
+      'INTEGER NOT NULL DEFAULT 0',
+    );
+    await _addColumnIfMissing('transfer_templates', 'sample_body', 'TEXT');
+    await _addColumnIfMissing('transfer_templates', 'sender_code', 'TEXT');
+    await _addColumnIfMissing(
+      'transfer_templates',
+      'identifier_kind',
+      "TEXT NOT NULL DEFAULT 'phone'",
+    );
+  }
+
+  Future<void> _addColumnIfMissing(
+    String table,
+    String column,
+    String typeSql,
+  ) async {
+    final rows = await customSelect('PRAGMA table_info($table)').get();
+    final exists = rows.any((r) => r.read<String>('name') == column);
+    if (exists) return;
+    await customStatement('ALTER TABLE $table ADD COLUMN $column $typeSql');
+  }
+
+  /// Unique indexes (idempotency). Partial indexes allow multiple NULLs/empties.
   Future<void> _createIdempotencyIndexes() async {
     await customStatement(
       'CREATE UNIQUE INDEX IF NOT EXISTS idx_customer_identifiers_value '
@@ -235,7 +245,8 @@ class AppDatabase extends _$AppDatabase {
     );
     await customStatement(
       'CREATE UNIQUE INDEX IF NOT EXISTS idx_cards_secret_code '
-      'ON cards (secret_code)',
+      'ON cards (secret_code) '
+      "WHERE secret_code IS NOT NULL AND secret_code != ''",
     );
     await customStatement(
       'CREATE UNIQUE INDEX IF NOT EXISTS idx_cards_reservation_id '
