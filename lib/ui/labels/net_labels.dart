@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../domain/entities/broadcast.dart';
 import '../../domain/entities/card.dart';
 import '../../domain/entities/customer.dart';
 import '../../domain/entities/message.dart';
@@ -113,6 +114,29 @@ Color messageStatusColor(MessageProcessingStatus status, NetSemanticColors net) 
 String promotionStatusLabel(PromotionStatus status) => switch (status) {
       PromotionStatus.active => 'نشط',
       PromotionStatus.disabled => 'معطّل',
+    };
+
+String broadcastStatusLabel(BroadcastJobStatus status) => switch (status) {
+      BroadcastJobStatus.draft => 'مسودة',
+      BroadcastJobStatus.confirmed => 'مؤكد',
+      BroadcastJobStatus.running => 'جارٍ الإرسال',
+      BroadcastJobStatus.paused => 'متوقف مؤقتًا',
+      BroadcastJobStatus.completed => 'مكتمل',
+      BroadcastJobStatus.partiallyFailed => 'مكتمل جزئيًا',
+      BroadcastJobStatus.failed => 'فاشل',
+      BroadcastJobStatus.cancelled => 'ملغى',
+    };
+
+Color broadcastStatusColor(BroadcastJobStatus status, NetSemanticColors net) =>
+    switch (status) {
+      BroadcastJobStatus.completed => net.available,
+      BroadcastJobStatus.partiallyFailed => net.warning,
+      BroadcastJobStatus.paused => net.warning,
+      BroadcastJobStatus.failed => net.rejected,
+      BroadcastJobStatus.cancelled => net.rejected,
+      BroadcastJobStatus.running => net.pending,
+      BroadcastJobStatus.draft => net.info,
+      BroadcastJobStatus.confirmed => net.info,
     };
 
 /// Relative Arabic time label used by message and transaction lists.

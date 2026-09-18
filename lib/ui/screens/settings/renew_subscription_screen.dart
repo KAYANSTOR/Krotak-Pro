@@ -3,7 +3,10 @@ import 'package:flutter/material.dart';
 import '../../../core/result.dart';
 import '../../../domain/entities/license.dart';
 import '../../app_scope.dart';
+import '../../theme/kayan_palette.dart';
+import '../../theme/net_tokens.dart';
 import '../../widgets/async_views.dart';
+import '../../widgets/net/net_surface_card.dart';
 
 class RenewSubscriptionScreen extends StatefulWidget {
   const RenewSubscriptionScreen({super.key});
@@ -62,24 +65,71 @@ class _RenewSubscriptionScreenState extends State<RenewSubscriptionScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('تجديد الاشتراك')),
       body: _loading
-          ? const AsyncLoadingView()
+          ? const AsyncLoadingView(skeleton: true, skeletonCount: 3)
           : ListView(
-              padding: const EdgeInsets.all(16),
+              padding: NetSpacing.screen,
               children: [
-                Text('الحالة: $_current', style: const TextStyle(fontFamily: 'Tajawal')),
-                const SizedBox(height: 16),
+                NetSurfaceCard(
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.workspace_premium_outlined,
+                        size: 20,
+                        color: KayanPalette.of(context).primary,
+                      ),
+                      const SizedBox(width: NetSpacing.sm),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'حالة الترخيص',
+                              style: TextStyle(
+                                fontFamily: NetTypography.family,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w800,
+                                color: KayanPalette.of(context).textPrimary,
+                              ),
+                            ),
+                            const SizedBox(height: NetSpacing.xxs),
+                            Text(
+                              _current ?? '—',
+                              style: TextStyle(
+                                fontFamily: NetTypography.family,
+                                fontSize: 12.5,
+                                height: 1.4,
+                                color: KayanPalette.of(context).textSecondary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: NetSpacing.lg),
                 FilledButton(
                   onPressed: _busy ? null : () => _extend(30),
                   child: const Text('تجديد 30 يومًا (محلي)'),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: NetSpacing.sm),
                 OutlinedButton(
                   onPressed: _busy ? null : () => _extend(365),
                   child: const Text('تجديد سنة (محلي)'),
                 ),
                 if (_status != null) ...[
-                  const SizedBox(height: 12),
-                  Text(_status!, style: const TextStyle(fontFamily: 'Tajawal')),
+                  const SizedBox(height: NetSpacing.md),
+                  NetSurfaceCard(
+                    child: Text(
+                      _status!,
+                      style: TextStyle(
+                        fontFamily: NetTypography.family,
+                        fontSize: 13,
+                        height: 1.4,
+                        color: KayanPalette.of(context).textPrimary,
+                      ),
+                    ),
+                  ),
                 ],
               ],
             ),
