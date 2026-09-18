@@ -128,7 +128,7 @@ class _CategoriesSheetState extends State<_CategoriesSheet> {
                     ),
                   );
                   if (r is Failure) {
-                    setLocal(() => localError = (r as Failure).error.message);
+                    setLocal(() => localError = (r as Failure<dynamic>).error.message);
                     return;
                   }
                   if (ctx.mounted) Navigator.pop(ctx);
@@ -178,6 +178,60 @@ class _AddCardsSheetState extends State<_AddCardsSheet> {
     super.dispose();
   }
 
+  Future<void> _pickFile() async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: const ['txt', 'csv', 'text', 'log'],
+        withData: true,
+        allowMultiple: false,
+      );
+      if (result == null || result.files.isEmpty) return;
+      final file = result.files.single;
+      String? content;
+      if (file.bytes != null && file.bytes!.isNotEmpty) {
+        content = String.fromCharCodes(file.bytes!);
+      } else if (file.path != null && file.path!.isNotEmpty) {
+        content = await File(file.path!).readAsString();
+      }
+      if (content == null || content.trim().isEmpty) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'تعذر قراءة الملف أو الملف فارغ',
+              style: TextStyle(fontFamily: 'Tajawal'),
+            ),
+          ),
+        );
+        return;
+      }
+      setState(() {
+        _batchCtrl.text = content!;
+        _tab = 1;
+      });
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'تم تحميل الملف (${content.split(RegExp(r'\r?\n')).where((l) => l.trim().isNotEmpty).length} سطر)',
+            style: const TextStyle(fontFamily: 'Tajawal'),
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'فشل اختيار الملف: $e',
+            style: const TextStyle(fontFamily: 'Tajawal'),
+          ),
+        ),
+      );
+    }
+  }
+
   Future<void> _saveSingle() async {
     final serial = _serialCtrl.text.trim();
     final secret = _secretCtrl.text.trim();
@@ -198,7 +252,7 @@ class _AddCardsSheetState extends State<_AddCardsSheet> {
     if (!mounted) return;
     setState(() => _busy = false);
     if (r is Failure) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text((r as Failure).error.message, style: const TextStyle(fontFamily: 'Tajawal'))));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text((r as Failure<dynamic>).error.message, style: const TextStyle(fontFamily: 'Tajawal'))));
       return;
     }
     final n = (r as Success<int>).value;
@@ -219,7 +273,7 @@ class _AddCardsSheetState extends State<_AddCardsSheet> {
     if (!mounted) return;
     setState(() => _busy = false);
     if (r is Failure) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text((r as Failure).error.message, style: const TextStyle(fontFamily: 'Tajawal'))));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text((r as Failure<dynamic>).error.message, style: const TextStyle(fontFamily: 'Tajawal'))));
       return;
     }
     final n = (r as Success<int>).value;
@@ -310,6 +364,15 @@ class _AddCardsSheetState extends State<_AddCardsSheet> {
                         ? 'وضع رقم فقط: سطر واحد = رقم كرت. الفواصل تُتجاهل ويُؤخذ الحقل الأول.'
                         : 'وضع رقم+رمز: serial,secret أو serial;secret. سطر لكل كرت.',
                     style: const TextStyle(fontFamily: 'Tajawal', fontSize: 11, color: KayanColors.textSecondary),
+                  ),
+                  const SizedBox(height: 10),
+                  OutlinedButton.icon(
+                    onPressed: _busy ? null : _pickFile,
+                    icon: const Icon(Icons.folder_open_outlined),
+                    label: const Text(
+                      'اختيار ملف',
+                      style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w700),
+                    ),
                   ),
                 ],
                 const SizedBox(height: 16),
