@@ -1,0 +1,22 @@
+name: apply-full-processor
+on:
+  workflow_dispatch:
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Apply full processor + tests
+        run: python3 tools/apply_full_processor.py
+      - name: Commit
+        run: |
+          git config user.name KAYANSTOR
+          git config user.email jarallhalkboudi@gmail.com
+          git add lib/domain/services/local_transfer_processor.dart test/services/message_parser_and_transfer_test.dart
+          git diff --staged --quiet && echo 'no changes' || git commit -m "feat(transfer): full LocalTransferProcessor + auto-provision unknown phone customers from enabled wallets"
+          git push origin HEAD:main
