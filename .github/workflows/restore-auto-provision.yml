@@ -1,0 +1,26 @@
+name: Restore auto-provision transfer
+on:
+  workflow_dispatch:
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+      - name: Assemble and restore
+        run: |
+          cat tools/auto_p_proc_*.b64 | tr -d '\n' | base64 -d > lib/domain/services/local_transfer_processor.dart
+          cat tools/auto_p_test_*.b64 | tr -d '\n' | base64 -d > test/services/message_parser_and_transfer_test.dart
+          wc -c lib/domain/services/local_transfer_processor.dart test/services/message_parser_and_transfer_test.dart
+          grep -c auto_provision lib/domain/services/local_transfer_processor.dart
+          grep -c "auto-provisions unknown phone" test/services/message_parser_and_transfer_test.dart
+          head -5 lib/domain/services/local_transfer_processor.dart
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lib/domain/services/local_transfer_processor.dart test/services/message_parser_and_transfer_test.dart
+          git status
+          git commit -m "feat(transfer): auto-provision unknown phone customers from wallet transfers — accept & deliver cards without pre-registration" || exit 0
+          git push
