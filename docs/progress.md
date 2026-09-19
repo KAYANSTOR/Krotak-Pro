@@ -19,4 +19,9 @@ CI على main — analyze + test + Android debug APK build
 - نسخ/حفظ كشف حساب نصي من شاشة تفاصيل العميل.
 - تقرير: [phase-22-customer-file-and-statement-export.md](phase-22-customer-file-and-statement-export.md)
 
+### Phase 23 — مؤشرات لوحة التحكم من مطابقة الفيديو (2026-09-19) ✅ برمجيًا
+- حلقة تقدّم حول عدّاد الحسابات في الكرت الكبير.
+- تمييز بصري لبطاقة مبيعات اليوم / الشهر المختارة.
+- تقرير: [phase-23-dashboard-video-parity-visuals.md](phase-23-dashboard-video-parity-visuals.md)
+
 المراحل السابقة موثقة في المستودع. المتبقي الغير برمجي: تحقق جهاز حقيقي (مرحلة 12).
