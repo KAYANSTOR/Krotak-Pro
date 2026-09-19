@@ -19,6 +19,7 @@ import '../widgets/net/net_sheet.dart';
 import '../widgets/net/net_sparkline.dart';
 import '../widgets/net/net_surface_card.dart';
 import '../widgets/net/net_tab_header.dart';
+import 'inventory_categories_sheet.dart';
 
 part 'inventory_sheets.dart';
 
@@ -78,46 +79,33 @@ class _InventoryScreenState extends State<InventoryScreen> {
     });
   }
 
-  List<domain.Card> get _filtered {
-    var list = _cards;
-    if (_categoryFilter != null) {
-      list = list.where((e) => e.categoryId == _categoryFilter).toList();
+  int _countFor(domain.CardStatus status, {String? categoryId}) {
+    var n = 0;
+    for (final card in _cards) {
+      if (card.status != status) continue;
+      if (categoryId != null && card.categoryId != categoryId) continue;
+      n++;
     }
-    if (_statusFilter != null) {
-      list = list.where((e) => e.status == _statusFilter).toList();
-    }
-    final q = _query.trim();
-    if (q.isNotEmpty) {
-      list = list
-          .where((e) =>
-              e.serialNumber.contains(q) ||
-              e.secretCode.contains(q) ||
-              e.id.contains(q))
-          .toList();
-    }
-    return list;
+    return n;
   }
 
-  int _countFor(String categoryId, domain.CardStatus status) => _cards
-      .where((e) => e.categoryId == categoryId && e.status == status)
-      .length;
-
-  String _categoryName(String categoryId) {
-    for (final cat in _categories) {
-      if (cat.id == categoryId) return cat.name;
-    }
-    return categoryId;
+  List<domain.Card> get _filtered {
+    final q = _query.trim().toLowerCase();
+    return _cards.where((card) {
+      if (_categoryFilter != null && card.categoryId != _categoryFilter) return false;
+      if (_statusFilter != null && card.status != _statusFilter) return false;
+      if (q.isEmpty) return true;
+      final catName = _categories.where((c) => c.id == card.categoryId).map((c) => c.name).firstOrNull ?? '';
+      return card.serial.toLowerCase().contains(q) ||
+          (card.secret ?? '').toLowerCase().contains(q) ||
+          catName.toLowerCase().contains(q);
+    }).toList();
   }
 
   Future<void> _openAddCards() async {
     if (_categories.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'أضف فئة أولاً قبل استيراد الكروت',
-            style: TextStyle(fontFamily: NetTypography.family),
-          ),
-        ),
+        const SnackBar(content: Text('أنشئ فئة أولاً قبل إضافة الكروت', style: TextStyle(fontFamily: 'Tajawal'))),
       );
       return;
     }
@@ -132,13 +120,11 @@ class _InventoryScreenState extends State<InventoryScreen> {
   }
 
   Future<void> _openCategories() async {
-    await NetSheet.show<void>(
-      context,
-      builder: (ctx) => _CategoriesSheet(
-        categories: _categories,
-        cards: _cards,
-        onChanged: _load,
-      ),
+    await showCategoriesSheet(
+      context: context,
+      categories: _categories,
+      cards: _cards,
+      onChanged: _load,
     );
   }
 
@@ -178,10 +164,19 @@ class _InventoryScreenState extends State<InventoryScreen> {
           ),
           ListTile(
             leading: Icon(Icons.filter_alt_off_rounded, color: KayanPalette.of(ctx).primary),
-            title: const Text('إلغاء الفلاتر والبحث'),
+            title: const Text('إعادة ضبط الفلاتر'),
             onTap: () {
               Navigator.pop(ctx);
               _resetInventoryFilters();
+            },
+          ),
+          SwitchListTile(
+            secondary: Icon(Icons.visibility_rounded, color: KayanPalette.of(ctx).primary),
+            title: const Text('إظهار الأسرار'),
+            value: _revealSecrets,
+            onChanged: (v) {
+              setState(() => _revealSecrets = v);
+              Navigator.pop(ctx);
             },
           ),
         ],
@@ -192,7 +187,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
   @override
   Widget build(BuildContext context) {
     if (_loading) {
-      return const AsyncLoadingView(skeleton: true, skeletonCount: 5);
+      return const AsyncLoadingView(skeleton: true, skeletonCount: 6);
     }
     if (_error != null) {
       return AsyncErrorView(message: _error!, onRetry: _load);
@@ -200,350 +195,256 @@ class _InventoryScreenState extends State<InventoryScreen> {
 
     final palette = KayanPalette.of(context);
     final net = context.netColors;
-    final filtered = _filtered;
-    final available = _cards.where((e) => e.status == domain.CardStatus.available).length;
-    final reserved = _cards.where((e) => e.status == domain.CardStatus.reserved).length;
-    final sold = _cards.where((e) => e.status == domain.CardStatus.sold).length;
+    final available = _countFor(domain.CardStatus.available);
+    final reserved = _countFor(domain.CardStatus.reserved);
+    final sold = _countFor(domain.CardStatus.sold);
+    final total = available + reserved + sold;
+    final ratio = total == 0 ? 0.0 : available / total;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        NetTabHeader(
-          title: 'إدارة الكروت',
-          subtitle: 'المخزون والحالات والفئات · ' + _cards.length.toString() + ' كرت',
-          icon: Icons.style_rounded,
-          actions: [
-            NetHeaderAction(
-              icon: Icons.add_rounded,
-              tooltip: 'استيراد كروت',
-              onPressed: _openAddCards,
-            ),
-            NetHeaderAction(
-              icon: Icons.more_horiz_rounded,
-              tooltip: 'خيارات',
-              onPressed: _openOverflowMenu,
-            ),
-          ],
-        ),
-        Padding(
-          padding: NetSpacing.pageH,
-          child: NetSurfaceCard(
-            padding: NetSpacing.cardTight,
+    return RefreshIndicator(
+      onRefresh: _load,
+      color: palette.primary,
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: NetSpacing.listBottomInset,
+        children: [
+          NetTabHeader(
+            title: 'إدارة الكروت',
+            subtitle: 'المخزون · الفئات · الاستيراد',
+            icon: Icons.inventory_2_rounded,
+            actions: [
+              NetHeaderAction(
+                icon: Icons.category_rounded,
+                tooltip: 'الفئات',
+                onPressed: _openCategories,
+              ),
+              NetHeaderAction(
+                icon: Icons.add_rounded,
+                tooltip: 'إضافة',
+                onPressed: _openAddCards,
+              ),
+              NetHeaderAction(
+                icon: Icons.more_vert_rounded,
+                tooltip: 'المزيد',
+                onPressed: _openOverflowMenu,
+              ),
+            ],
+          ),
+          const SizedBox(height: NetSpacing.md),
+          NetSurfaceCard(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Row(
                   children: [
-                    _LegendDot(color: net.available, label: 'متاح', value: available),
-                    const SizedBox(width: NetSpacing.md),
-                    _LegendDot(color: net.reserved, label: 'محجوز', value: reserved),
-                    const SizedBox(width: NetSpacing.md),
-                    _LegendDot(color: net.sold, label: 'مباع', value: sold),
-                  ],
-                ),
-                const SizedBox(height: NetSpacing.md),
-                NetRatioBar(
-                  segments: [
-                    (value: available, color: net.available),
-                    (value: reserved, color: net.reserved),
-                    (value: sold, color: net.sold),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
-        if (_categories.isNotEmpty)
-          SizedBox(
-            height: 44,
-            child: ListView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.only(
-                right: NetSpacing.lg,
-                left: NetSpacing.lg,
-                top: NetSpacing.md,
-              ),
-              children: [
-                for (final cat in _categories)
-                  Padding(
-                    padding: const EdgeInsetsDirectional.only(start: NetSpacing.sm),
-                    child: FilterChip(
-                      selected: _categoryFilter == cat.id,
-                      showCheckmark: false,
-                      label: Text(
-                        cat.name + ' (' + _countFor(cat.id, domain.CardStatus.available).toString() + ')',
-                        style: TextStyle(
-                          fontFamily: NetTypography.family,
-                          fontSize: 12.5,
-                          fontWeight: FontWeight.w700,
-                          color: _categoryFilter == cat.id ? Colors.white : palette.textPrimary,
-                        ),
-                      ),
-                      selectedColor: palette.primary,
-                      backgroundColor: palette.surface,
-                      side: BorderSide(
-                        color: _categoryFilter == cat.id ? palette.primary : palette.border,
-                      ),
-                      shape: RoundedRectangleBorder(borderRadius: NetRadii.pillAll),
-                      onSelected: (_) => setState(() {
-                        _categoryFilter = _categoryFilter == cat.id ? null : cat.id;
-                      }),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(
-            NetSpacing.lg,
-            NetSpacing.md,
-            NetSpacing.lg,
-            NetSpacing.sm,
-          ),
-          child: TextField(
-            controller: _searchCtrl,
-            onChanged: (v) => setState(() => _query = v),
-            decoration: InputDecoration(
-              hintText: 'بحث برقم الكرت أو الرمز',
-              hintStyle: TextStyle(
-                fontFamily: NetTypography.family,
-                color: palette.textTertiary,
-                fontSize: 13,
-              ),
-              prefixIcon: Icon(Icons.search_rounded, color: palette.textTertiary),
-              suffixIcon: IconButton(
-                tooltip: _revealSecrets ? 'إخفاء الرموز' : 'إظهار الرموز',
-                icon: Icon(
-                  _revealSecrets ? Icons.visibility_off_rounded : Icons.visibility_rounded,
-                  size: 18,
-                  color: palette.textSecondary,
-                ),
-                onPressed: () => setState(() => _revealSecrets = !_revealSecrets),
-              ),
-              filled: true,
-              fillColor: palette.surface,
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: NetSpacing.md,
-                vertical: NetSpacing.md,
-              ),
-              border: OutlineInputBorder(
-                borderRadius: NetRadii.smAll,
-                borderSide: BorderSide(color: palette.border),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: NetRadii.smAll,
-                borderSide: BorderSide(color: palette.border),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: NetRadii.smAll,
-                borderSide: BorderSide(color: palette.primary, width: 1.4),
-              ),
-            ),
-            style: TextStyle(fontFamily: NetTypography.family, color: palette.textPrimary),
-          ),
-        ),
-        Expanded(
-          child: filtered.isEmpty
-              ? AsyncEmptyView(
-                  message: _cards.isEmpty ? 'لا توجد كروت بعد' : 'لا نتائج مطابقة',
-                  icon: Icons.style_outlined,
-                  hint: _cards.isEmpty
-                      ? 'أضف فئة أولاً ثم استورد الكروت يدويًا أو من ملف'
-                      : 'جرّب إلغاء الفلاتر أو تغيير كلمة البحث',
-                  actionLabel: _cards.isEmpty ? 'استيراد كروت' : 'إلغاء الفلاتر',
-                  onAction: _cards.isEmpty ? _openAddCards : _resetInventoryFilters,
-                )
-              : RefreshIndicator(
-                  onRefresh: _load,
-                  color: palette.primary,
-                  child: ListView.separated(
-                    padding: const EdgeInsets.only(bottom: 88),
-                    itemCount: filtered.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: NetSpacing.sm),
-                    itemBuilder: (_, index) {
-                      final card = filtered[index];
-                      return _CardRow(
-                        card: card,
-                        categoryName: _categoryName(card.categoryId),
-                        revealSecret: _revealSecrets,
-                      );
-                    },
-                  ),
-                ),
-        ),
-      ],
-    );
-  }
-}
-
-class _LegendDot extends StatelessWidget {
-  const _LegendDot({
-    required this.color,
-    required this.label,
-    required this.value,
-  });
-
-  final Color color;
-  final String label;
-  final int value;
-
-  @override
-  Widget build(BuildContext context) {
-    final palette = KayanPalette.of(context);
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: 9,
-          height: 9,
-          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-        ),
-        const SizedBox(width: NetSpacing.xs),
-        Text(
-          label,
-          style: TextStyle(
-            fontFamily: NetTypography.family,
-            fontSize: 12,
-            color: palette.textSecondary,
-          ),
-        ),
-        const SizedBox(width: NetSpacing.xxs),
-        Text(
-          value.toString(),
-          style: TextStyle(
-            fontFamily: NetTypography.family,
-            fontSize: 12.5,
-            fontWeight: FontWeight.w800,
-            color: palette.textPrimary,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _CardRow extends StatelessWidget {
-  const _CardRow({
-    required this.card,
-    required this.categoryName,
-    required this.revealSecret,
-  });
-
-  final domain.Card card;
-  final String categoryName;
-  final bool revealSecret;
-
-  static IconData _statusIcon(domain.CardStatus status) => switch (status) {
-        domain.CardStatus.available => Icons.check_circle_outline_rounded,
-        domain.CardStatus.reserved => Icons.lock_clock_rounded,
-        domain.CardStatus.sold => Icons.sell_outlined,
-        domain.CardStatus.disabled => Icons.block_rounded,
-        domain.CardStatus.expired => Icons.hourglass_disabled_rounded,
-      };
-
-  @override
-  Widget build(BuildContext context) {
-    final palette = KayanPalette.of(context);
-    final net = context.netColors;
-    final statusColor = cardStatusColor(card.status, net);
-    final statusBg = cardStatusContainer(card.status, net);
-    final hasSecret = card.secretCode.isNotEmpty;
-    final masked = hasSecret
-        ? (revealSecret ? card.secretCode : '•' * card.secretCode.length.clamp(4, 10))
-        : 'بدون رمز';
-
-    return NetSurfaceCard(
-      margin: NetSpacing.pageH,
-      padding: const EdgeInsets.all(NetSpacing.md),
-      child: Row(
-        children: [
-          Container(
-            width: NetSizes.badge,
-            height: NetSizes.badge,
-            decoration: BoxDecoration(
-              color: statusBg,
-              borderRadius: NetRadii.smAll,
-            ),
-            child: Icon(_statusIcon(card.status), size: 20, color: statusColor),
-          ),
-          const SizedBox(width: NetSpacing.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Flexible(
+                    Expanded(
                       child: Text(
-                        card.serialNumber,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                        'المخزون الكلي',
                         style: TextStyle(
                           fontFamily: NetTypography.family,
                           fontWeight: FontWeight.w800,
-                          fontSize: 14,
+                          fontSize: 15,
                           color: palette.textPrimary,
                         ),
                       ),
                     ),
-                    const SizedBox(width: NetSpacing.sm),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: NetSpacing.sm,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: statusBg,
-                        borderRadius: NetRadii.pillAll,
-                      ),
-                      child: Text(
-                        cardStatusLabel(card.status),
-                        style: TextStyle(
-                          fontFamily: NetTypography.family,
-                          fontSize: 10.5,
-                          fontWeight: FontWeight.w800,
-                          color: statusColor,
-                        ),
+                    Text(
+                      '$available متوفر',
+                      style: TextStyle(
+                        fontFamily: NetTypography.family,
+                        fontWeight: FontWeight.w700,
+                        color: net.success,
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: NetSpacing.xxs),
+                const SizedBox(height: NetSpacing.sm),
+                ClipRRect(
+                  borderRadius: NetRadii.pillAll,
+                  child: LinearProgressIndicator(
+                    value: ratio,
+                    minHeight: 8,
+                    backgroundColor: palette.surfaceVariant,
+                    color: ratio < 0.15 ? net.rejected : palette.primary,
+                  ),
+                ),
+                const SizedBox(height: NetSpacing.sm),
                 Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Icon(Icons.category_rounded, size: 13, color: palette.textTertiary),
-                    const SizedBox(width: NetSpacing.xs),
-                    Flexible(
-                      child: Text(
-                        categoryName,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontFamily: NetTypography.family,
-                          fontSize: 12,
-                          color: palette.textSecondary,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: NetSpacing.md),
-                    Icon(Icons.vpn_key_rounded, size: 13, color: palette.textTertiary),
-                    const SizedBox(width: NetSpacing.xs),
-                    Text(
-                      masked,
-                      style: TextStyle(
-                        fontFamily: NetTypography.family,
-                        fontSize: 12,
-                        letterSpacing: revealSecret ? 0.2 : 1.2,
-                        color: palette.textSecondary,
-                      ),
-                    ),
+                    _StatChip(label: 'متوفر', value: available, color: net.success),
+                    _StatChip(label: 'محجوز', value: reserved, color: net.pending),
+                    _StatChip(label: 'مباع', value: sold, color: palette.textSecondary),
                   ],
                 ),
               ],
             ),
           ),
+          const SizedBox(height: NetSpacing.md),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: NetSpacing.md),
+            child: TextField(
+              controller: _searchCtrl,
+              onChanged: (v) => setState(() => _query = v),
+              style: const TextStyle(fontFamily: 'Tajawal'),
+              decoration: InputDecoration(
+                hintText: 'بحث بالسيريال أو الفئة…',
+                hintStyle: TextStyle(fontFamily: 'Tajawal', color: palette.textSecondary),
+                prefixIcon: Icon(Icons.search_rounded, color: palette.textSecondary),
+                filled: true,
+                fillColor: palette.surface,
+                border: OutlineInputBorder(borderRadius: NetRadii.pillAll, borderSide: BorderSide.none),
+                enabledBorder: OutlineInputBorder(borderRadius: NetRadii.pillAll, borderSide: BorderSide(color: palette.border)),
+                focusedBorder: OutlineInputBorder(borderRadius: NetRadii.pillAll, borderSide: BorderSide(color: palette.primary, width: 1.4)),
+              ),
+            ),
+          ),
+          const SizedBox(height: NetSpacing.sm),
+          if (_categories.isNotEmpty)
+            SizedBox(
+              height: 40,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: NetSpacing.md),
+                children: [
+                  Padding(
+                    padding: const EdgeInsetsDirectional.only(end: 8),
+                    child: FilterChip(
+                      label: const Text('الكل', style: TextStyle(fontFamily: 'Tajawal')),
+                      selected: _categoryFilter == null,
+                      onSelected: (_) => setState(() => _categoryFilter = null),
+                    ),
+                  ),
+                  for (final cat in _categories)
+                    Padding(
+                      padding: const EdgeInsetsDirectional.only(end: 8),
+                      child: FilterChip(
+                        label: Text(cat.name, style: const TextStyle(fontFamily: 'Tajawal')),
+                        selected: _categoryFilter == cat.id,
+                        onSelected: (_) => setState(() => _categoryFilter = cat.id),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          const SizedBox(height: NetSpacing.sm),
+          SizedBox(
+            height: 36,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: NetSpacing.md),
+              children: [
+                for (final entry in [
+                  (null, 'كل الحالات'),
+                  (domain.CardStatus.available, 'متوفر'),
+                  (domain.CardStatus.reserved, 'محجوز'),
+                  (domain.CardStatus.sold, 'مباع'),
+                ])
+                  Padding(
+                    padding: const EdgeInsetsDirectional.only(end: 8),
+                    child: ChoiceChip(
+                      label: Text(entry.$2, style: const TextStyle(fontFamily: 'Tajawal', fontSize: 12)),
+                      selected: _statusFilter == entry.$1,
+                      onSelected: (_) => setState(() => _statusFilter = entry.$1),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(height: NetSpacing.md),
+          if (_filtered.isEmpty)
+            Padding(
+              padding: const EdgeInsets.all(NetSpacing.xl),
+              child: Column(
+                children: [
+                  Icon(Icons.inventory_2_outlined, size: 48, color: palette.textSecondary),
+                  const SizedBox(height: 12),
+                  Text(
+                    _cards.isEmpty ? 'لا توجد كروت بعد' : 'لا نتائج للبحث/الفلتر',
+                    style: TextStyle(fontFamily: 'Tajawal', color: palette.textSecondary),
+                  ),
+                  if (_cards.isEmpty) ...[
+                    const SizedBox(height: 12),
+                    FilledButton.icon(
+                      onPressed: _openAddCards,
+                      icon: const Icon(Icons.add_rounded),
+                      label: const Text('إضافة كروت', style: TextStyle(fontFamily: 'Tajawal')),
+                    ),
+                  ],
+                ],
+              ),
+            )
+          else
+            ..._filtered.map((card) {
+              final cat = _categories.where((c) => c.id == card.categoryId).firstOrNull;
+              final statusColor = switch (card.status) {
+                domain.CardStatus.available => net.success,
+                domain.CardStatus.reserved => net.pending,
+                domain.CardStatus.sold => palette.textSecondary,
+              };
+              final statusLabel = switch (card.status) {
+                domain.CardStatus.available => 'متوفر',
+                domain.CardStatus.reserved => 'محجوز',
+                domain.CardStatus.sold => 'مباع',
+              };
+              return Padding(
+                padding: const EdgeInsets.symmetric(horizontal: NetSpacing.md, vertical: 4),
+                child: NetSurfaceCard(
+                  child: ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(
+                      card.serial,
+                      style: TextStyle(
+                        fontFamily: NetTypography.family,
+                        fontWeight: FontWeight.w700,
+                        color: palette.textPrimary,
+                      ),
+                    ),
+                    subtitle: Text(
+                      [
+                        if (cat != null) cat.name,
+                        if (_revealSecrets && (card.secret?.isNotEmpty ?? false)) 'PIN: ${card.secret}',
+                        statusLabel,
+                      ].join(' · '),
+                      style: TextStyle(fontFamily: 'Tajawal', color: palette.textSecondary, fontSize: 12.5),
+                    ),
+                    trailing: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: statusColor.withValues(alpha: 0.12),
+                        borderRadius: NetRadii.pillAll,
+                      ),
+                      child: Text(
+                        statusLabel,
+                        style: TextStyle(fontFamily: 'Tajawal', color: statusColor, fontWeight: FontWeight.w700, fontSize: 12),
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            }),
         ],
       ),
+    );
+  }
+}
+
+class _StatChip extends StatelessWidget {
+  const _StatChip({required this.label, required this.value, required this.color});
+  final String label;
+  final int value;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Text(
+          value.toString(),
+          style: TextStyle(fontFamily: NetTypography.family, fontWeight: FontWeight.w800, fontSize: 18, color: color),
+        ),
+        Text(label, style: TextStyle(fontFamily: 'Tajawal', fontSize: 12, color: KayanPalette.of(context).textSecondary)),
+      ],
     );
   }
 }
