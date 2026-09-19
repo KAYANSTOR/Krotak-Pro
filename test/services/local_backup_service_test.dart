@@ -73,7 +73,8 @@ void main() {
 
     settings.map.clear();
     final restored = await service.restoreFromFile(file, password: 'secret-pass');
-    expect(restored, isA<Success<void>>());
+    expect(restored, isA<Success>());
+    expect((restored as Success).value.settingsCount, greaterThan(0));
     expect(settings.map[SettingKeys.networkName]?.value, 'NET-TEST');
   });
 
@@ -81,7 +82,7 @@ void main() {
     final created = await service.createBackup(password: 'secret-pass');
     final file = (created as Success<File>).value;
     final restored = await service.restoreFromFile(file, password: 'wrong-pass');
-    expect(restored, isA<Failure<void>>());
+    expect(restored, isA<Failure>());
     expect((restored as Failure).error.code, 'backup_wrong_password');
   });
 }
