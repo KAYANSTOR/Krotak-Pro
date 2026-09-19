@@ -41,10 +41,14 @@ final class TransferTemplate {
     required this.pattern,
     required this.isActive,
     this.walletId,
+    this.posId,
     this.priority = 0,
     this.sampleBody,
     this.senderCode,
     this.identifierKind = TemplateIdentifierKind.phone,
+    this.senderNameLabel,
+    this.noteLabel,
+    this.requireReference = true,
   });
 
   final String id;
@@ -63,6 +67,10 @@ final class TransferTemplate {
   /// Optional link to a [Wallet] so templates can be managed per wallet.
   final String? walletId;
 
+  /// Optional link to a [PosAccount]/[PointOfSale] so templates can be
+  /// managed per point-of-sale (parallel to [walletId]).
+  final String? posId;
+
   /// Lower value = higher precedence when multiple templates match.
   final int priority;
 
@@ -75,17 +83,38 @@ final class TransferTemplate {
   /// Preferred identifier kind chosen in the wizard (drives default placeholders).
   final TemplateIdentifierKind identifierKind;
 
+  /// Static display label for "sender name" shown in the wizard preview.
+  /// Not extracted from the message body — a fixed annotation on the
+  /// template itself (e.g. "غير معروف").
+  final String? senderNameLabel;
+
+  /// Static display label for "note / statement" shown in the wizard
+  /// preview (e.g. "تحويل مشترك"). Not extracted from the message body.
+  final String? noteLabel;
+
+  /// Whether a captured `{ref}` is mandatory for a successful match.
+  /// Defaults to `true` — the safe, original behaviour: a template with
+  /// no reference can't be de-duplicated against a real transaction.
+  /// Only set `false` deliberately for message formats that genuinely
+  /// carry no reference (e.g. POS card-request templates).
+  final bool requireReference;
+
   TransferTemplate copyWith({
     String? id,
     String? name,
     String? pattern,
     bool? isActive,
     String? walletId,
+    String? posId,
     int? priority,
     String? sampleBody,
     String? senderCode,
     TemplateIdentifierKind? identifierKind,
+    String? senderNameLabel,
+    String? noteLabel,
+    bool? requireReference,
     bool clearWalletId = false,
+    bool clearPosId = false,
   }) {
     return TransferTemplate(
       id: id ?? this.id,
@@ -93,10 +122,14 @@ final class TransferTemplate {
       pattern: pattern ?? this.pattern,
       isActive: isActive ?? this.isActive,
       walletId: clearWalletId ? null : (walletId ?? this.walletId),
+      posId: clearPosId ? null : (posId ?? this.posId),
       priority: priority ?? this.priority,
       sampleBody: sampleBody ?? this.sampleBody,
       senderCode: senderCode ?? this.senderCode,
       identifierKind: identifierKind ?? this.identifierKind,
+      senderNameLabel: senderNameLabel ?? this.senderNameLabel,
+      noteLabel: noteLabel ?? this.noteLabel,
+      requireReference: requireReference ?? this.requireReference,
     );
   }
 }
