@@ -101,7 +101,13 @@ final class LocalMessageParser implements MessageParser {
     final phone = _group(match, 'phone');
     final account = _group(match, 'account');
     final ref = _group(match, 'ref');
-    if (ref == null || ref.isEmpty) return null;
+    // `ref` (transaction reference) is required by default — this is a
+    // deliberate financial safety net: a template with no captured
+    // reference can't be de-duplicated against a real bank transaction.
+    // Only templates that explicitly opt out (`requireReference: false`,
+    // e.g. POS card-request templates that carry no reference at all)
+    // skip this check.
+    if (template.requireReference && (ref == null || ref.isEmpty)) return null;
 
     String? identifier;
     TransferIdentifierType type;
@@ -122,7 +128,7 @@ final class LocalMessageParser implements MessageParser {
       amount: Money(minorUnits: minor, currencyCode: defaultCurrencyCode),
       customerIdentifier: identifier,
       identifierType: type,
-      reference: ref,
+      reference: ref ?? '',
       templateId: template.id,
       rawIdentifier: phone ?? account,
     );

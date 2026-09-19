@@ -165,7 +165,7 @@ final class LocalTransferProcessor implements TransferProcessor {
         final credit = await balances.credit(
           customerId: resolution.customer!.id,
           amount: transfer.amount,
-          reference: transfer.reference,
+          reference: transfer.reference.isEmpty ? null : transfer.reference,
         );
         if (credit is Failure<Transaction>) return Failure<Transaction>(credit.error);
         final tx = (credit as Success<Transaction>).value;
@@ -276,6 +276,11 @@ final class LocalTransferProcessor implements TransferProcessor {
       final settlement = await advanceEngine.applyPayment(
         customerId: customer.id,
         amount: transfer.amount,
+        // Salafni settlement requires a non-null reference; `_operationId`
+        // (below) supplies a stable per-message fallback pattern, but this
+        // call's own dedup-by-prefix scheme is unaffected either way — an
+        // empty reference here only ever causes a conservative rejection
+        // (`settlement_reference_conflict`), never a silent double-credit.
         reference: transfer.reference,
       );
       if (settlement is Failure<AdvancePaymentResult>) {
@@ -406,7 +411,7 @@ final class LocalTransferProcessor implements TransferProcessor {
     final credit = await balances.credit(
       customerId: customer.id,
       amount: effectiveAmount,
-      reference: transfer.reference,
+      reference: transfer.reference.isEmpty ? null : transfer.reference,
     );
     if (credit is Failure<Transaction>) {
       await inventoryService.releaseReservation(
