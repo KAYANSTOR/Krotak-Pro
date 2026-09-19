@@ -6,15 +6,15 @@ import 'package:net_app/ui/widgets/customer_statement_export.dart';
 
 void main() {
   test('buildCustomerStatementText includes name, phone, balance and txs', () {
-    const customer = Customer(
+    final customer = Customer(
       id: 'c1',
       displayName: 'علي',
       status: CustomerStatus.active,
       createdAt: DateTime.utc(2026, 1, 1),
       updatedAt: DateTime.utc(2026, 1, 1),
     );
-    const ids = [
-      CustomerIdentifier(
+    final ids = [
+      const CustomerIdentifier(
         id: 'i1',
         customerId: 'c1',
         type: CustomerIdentifierType.phoneNumber,
