@@ -4,8 +4,15 @@ import '../../../core/result.dart';
 import '../../../domain/entities/customer.dart';
 import '../../../domain/entities/transaction.dart';
 import '../../app_scope.dart';
-import '../../theme/kayan_colors.dart';
+import '../../labels/net_labels.dart';
+import '../../theme/kayan_palette.dart';
+import '../../theme/net_semantic_colors.dart';
+import '../../theme/net_tokens.dart';
 import '../../widgets/async_views.dart';
+import '../../widgets/net/net_indicators.dart';
+import '../../widgets/net/net_initial_avatar.dart';
+import '../../widgets/net/net_sheet.dart';
+import '../../widgets/net/net_surface_card.dart';
 
 enum SalesReportRange { today, month, custom }
 
@@ -123,106 +130,332 @@ class _SalesPeriodReportScreenState extends State<SalesPeriodReportScreen> {
     });
   }
 
+  /// ورقة «تفاصيل المبيعات حسب الفئات» — تجميع عرض فقط من المبيعات المحمّلة.
+  ///
+  /// كل بيع يتم بقيمة فئة مطابقة تمامًا، فيكفي التجميع بالقيمة الاسمية
+  /// وربطها بأسماء الفئات النشطة — دون أي استعلامات أو منطق جديد.
+  Future<void> _showCategoryBreakdown() async {
+    final byAmount = <int, ({int count, int minor})>{};
+    for (final r in _rows) {
+      final key = r.sale.amount.minorUnits;
+      final prev = byAmount[key] ?? (count: 0, minor: 0);
+      byAmount[key] = (
+        count: prev.count + 1,
+        minor: prev.minor + r.sale.amount.minorUnits,
+      );
+    }
+    final entries = byAmount.entries.toList()
+      ..sort((a, b) => b.value.minor.compareTo(a.value.minor));
+    if (!mounted) return;
+    await NetSheet.show<void>(
+      context,
+      builder: (_) => _CategoryBreakdownSheet(
+        entries: [for (final e in entries) MapEntry(e.key, e.value)],
+        totalMinor: _totalMinor,
+      ),
+    );
+  }
+
+  Widget _rangeChip({
+    required BuildContext context,
+    required String label,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    final palette = KayanPalette.of(context);
+    return ChoiceChip(
+      label: Text(
+        label,
+        style: TextStyle(
+          fontFamily: NetTypography.family,
+          fontSize: 12.5,
+          fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+          color: selected ? Colors.white : palette.textPrimary,
+        ),
+      ),
+      selected: selected,
+      showCheckmark: false,
+      selectedColor: palette.primary,
+      backgroundColor: palette.surface,
+      side: BorderSide(
+        color: selected
+            ? palette.primary
+            : Theme.of(context).colorScheme.outlineVariant,
+      ),
+      shape: const RoundedRectangleBorder(borderRadius: NetRadii.pillAll),
+      onSelected: (_) => onTap(),
+    );
+  }
+
+  List<NetBarDatum> _topCustomerBars(BuildContext context) {
+    final net = context.netColors;
+    final totals = <String, int>{};
+    for (final row in _rows) {
+      totals[row.customerName] =
+          (totals[row.customerName] ?? 0) + row.sale.amount.minorUnits;
+    }
+    final ranked = totals.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    final top = ranked.take(8).toList();
+    return [
+      for (var i = 0; i < top.length; i++)
+        NetBarDatum(
+          label: top[i].key,
+          value: top[i].value / 100,
+          color: i == 0 ? net.success : net.info,
+          valueLabel: formatMoneyMinor(top[i].value),
+        ),
+    ];
+  }
+
   @override
   Widget build(BuildContext context) {
+    final palette = KayanPalette.of(context);
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
-        backgroundColor: KayanColors.appBackground,
-        appBar: AppBar(
-          title: const Text(
-            'تقرير المبيعات التفصيلي',
-            style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.bold),
-          ),
-        ),
+        appBar: AppBar(title: const Text('تقرير المبيعات التفصيلي')),
         body: Column(
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+              padding: const EdgeInsets.fromLTRB(
+                NetSpacing.lg,
+                NetSpacing.md,
+                NetSpacing.lg,
+                NetSpacing.sm,
+              ),
               child: Wrap(
-                spacing: 8,
-                runSpacing: 8,
+                spacing: NetSpacing.sm,
+                runSpacing: NetSpacing.sm,
                 children: [
-                  ChoiceChip(
-                    label: const Text('اليوم', style: TextStyle(fontFamily: 'Tajawal')),
+                  _rangeChip(
+                    context: context,
+                    label: 'اليوم',
                     selected: _range == SalesReportRange.today,
-                    onSelected: (_) {
+                    onTap: () {
                       setState(() => _range = SalesReportRange.today);
                       _load();
                     },
                   ),
-                  ChoiceChip(
-                    label: const Text('الشهر', style: TextStyle(fontFamily: 'Tajawal')),
+                  _rangeChip(
+                    context: context,
+                    label: 'الشهر',
                     selected: _range == SalesReportRange.month,
-                    onSelected: (_) {
+                    onTap: () {
                       setState(() => _range = SalesReportRange.month);
                       _load();
                     },
                   ),
-                  ChoiceChip(
-                    label: const Text('فترة مختارة', style: TextStyle(fontFamily: 'Tajawal')),
+                  _rangeChip(
+                    context: context,
+                    label: 'فترة مختارة',
                     selected: _range == SalesReportRange.custom,
-                    onSelected: (_) => _pickCustom(),
+                    onTap: () => _pickCustom(),
                   ),
                 ],
               ),
             ),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Card(
-                child: ListTile(
-                  title: const Text(
-                    'إجمالي المبيعات المكتملة',
-                    style: TextStyle(fontFamily: 'Tajawal'),
-                  ),
-                  subtitle: Text(
-                    '${formatMoneyMinor(_totalMinor)} · ${_rows.length} كرت',
-                    style: const TextStyle(
-                      fontFamily: 'Tajawal',
-                      fontWeight: FontWeight.bold,
+              padding: NetSpacing.pageH,
+              child: NetSurfaceCard(
+                padding: NetSpacing.cardTight,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.receipt_long_rounded,
+                          size: 20,
+                          color: palette.primary,
+                        ),
+                        const SizedBox(width: NetSpacing.sm),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'إجمالي المبيعات المكتملة',
+                                style: TextStyle(
+                                  fontFamily: NetTypography.family,
+                                  fontSize: 12.5,
+                                  color: palette.textSecondary,
+                                ),
+                              ),
+                              const SizedBox(height: NetSpacing.xxs),
+                              Text(
+                                formatMoneyMinor(_totalMinor),
+                                style: TextStyle(
+                                  fontFamily: NetTypography.family,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w800,
+                                  color: palette.textPrimary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: NetSpacing.sm,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: context.netColors.availableContainer,
+                            borderRadius: BorderRadius.circular(NetRadii.xs),
+                          ),
+                          child: Text(
+                            '${_rows.length} كرت',
+                            style: TextStyle(
+                              fontFamily: NetTypography.family,
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w700,
+                              color: context.netColors.available,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
+                    if (_rows.isNotEmpty) ...[
+                      const SizedBox(height: NetSpacing.md),
+                      NetHorizontalBars(
+                        labelWidth: 88,
+                        emptyMessage: 'لا توجد مبيعات لهذه الفترة',
+                        data: _topCustomerBars(context),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+
+            // ── تفاصيل المبيعات حسب الفئات (الفيديو t29s) ──
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                NetSpacing.lg,
+                NetSpacing.sm,
+                NetSpacing.lg,
+                0,
+              ),
+              child: NetSurfaceCard(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: NetSpacing.md,
+                  vertical: NetSpacing.sm,
+                ),
+                onTap: _rows.isEmpty ? null : _showCategoryBreakdown,
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.pie_chart_outline_rounded,
+                      size: NetSizes.iconSm,
+                      color: palette.primary,
+                    ),
+                    const SizedBox(width: NetSpacing.sm),
+                    Expanded(
+                      child: Text(
+                        'تفاصيل المبيعات حسب الفئات',
+                        style: TextStyle(
+                          fontFamily: NetTypography.family,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: palette.textPrimary,
+                        ),
+                      ),
+                    ),
+                    Icon(
+                      Icons.chevron_left_rounded,
+                      size: NetSizes.iconSm,
+                      color: palette.textTertiary,
+                    ),
+                  ],
                 ),
               ),
             ),
             Expanded(
               child: _loading
-                  ? const AsyncLoadingView()
+                  ? const AsyncLoadingView(skeleton: true, skeletonCount: 5)
                   : _error != null
                       ? AsyncErrorView(message: _error!, onRetry: _load)
                       : _rows.isEmpty
-                          ? const AsyncEmptyView(
+                          ? AsyncEmptyView(
                               message: 'لا توجد مبيعات مسجلة لهذه الفترة',
+                              hint: 'جرّب تغيير الفترة أو اختر «فترة مختارة».',
+                              icon: Icons.receipt_long_outlined,
+                              actionLabel: 'إعادة التحميل',
+                              onAction: _load,
                             )
                           : RefreshIndicator(
                               onRefresh: _load,
-                              child: ListView.separated(
-                                padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                              color: palette.primary,
+                              child: ListView.builder(
+                                padding: const EdgeInsets.fromLTRB(
+                                  NetSpacing.lg,
+                                  NetSpacing.sm,
+                                  NetSpacing.lg,
+                                  NetSpacing.xxl,
+                                ),
                                 itemCount: _rows.length,
-                                separatorBuilder: (_, __) => const Divider(height: 1),
                                 itemBuilder: (_, i) {
                                   final row = _rows[i];
                                   final dt = row.sale.createdAt;
                                   final stamp =
-                                      '${dt.day}/${dt.month} ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
-                                  return ListTile(
-                                    title: Text(
-                                      row.customerName,
-                                      style: const TextStyle(
-                                        fontFamily: 'Tajawal',
-                                        fontWeight: FontWeight.w700,
-                                      ),
+                                      '${arabicShortDate(dt)} · ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+                                  return NetSurfaceCard(
+                                    margin: const EdgeInsets.only(
+                                      bottom: NetSpacing.sm,
                                     ),
-                                    subtitle: Text(
-                                      stamp,
-                                      style: const TextStyle(fontFamily: 'Tajawal'),
-                                    ),
-                                    trailing: Text(
-                                      formatMoneyMinor(row.sale.amount.minorUnits),
-                                      style: const TextStyle(
-                                        fontFamily: 'Tajawal',
-                                        fontWeight: FontWeight.bold,
-                                      ),
+                                    padding: NetSpacing.cardTight,
+                                    child: Row(
+                                      children: [
+                                        NetInitialAvatar(
+                                          name: row.customerName,
+                                        ),
+                                        const SizedBox(width: NetSpacing.md),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                row.customerName,
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: TextStyle(
+                                                  fontFamily:
+                                                      NetTypography.family,
+                                                  fontSize: 14,
+                                                  fontWeight: FontWeight.w700,
+                                                  color: palette.textPrimary,
+                                                ),
+                                              ),
+                                              const SizedBox(
+                                                height: NetSpacing.xxs,
+                                              ),
+                                              Text(
+                                                stamp,
+                                                style: TextStyle(
+                                                  fontFamily:
+                                                      NetTypography.family,
+                                                  fontSize: 11.5,
+                                                  color: palette.textSecondary,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        const SizedBox(width: NetSpacing.sm),
+                                        Text(
+                                          formatMoneyMinor(
+                                            row.sale.amount.minorUnits,
+                                          ),
+                                          style: TextStyle(
+                                            fontFamily: NetTypography.family,
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w800,
+                                            color: palette.textPrimary,
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   );
                                 },
@@ -232,6 +465,157 @@ class _SalesPeriodReportScreenState extends State<SalesPeriodReportScreen> {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// ورقة تفاصيل المبيعات حسب الفئات — عرض فقط: بحث + شريط نسبة لكل فئة.
+///
+/// التجميع بالقيمة الاسمية لأن كل بيع يقابل فئة مطابقة تمامًا للمبلغ؛
+/// اسم الفئة يُعرض عند تطابق قيمة واحدة مع فئة واحدة فقط.
+class _CategoryBreakdownSheet extends StatefulWidget {
+  const _CategoryBreakdownSheet({
+    required this.entries,
+    required this.totalMinor,
+  });
+
+  /// faceValue (minorUnits) → (عدد الكروت، مجموع البيع).
+  final List<MapEntry<int, ({int count, int minor})>> entries;
+  final int totalMinor;
+
+  @override
+  State<_CategoryBreakdownSheet> createState() =>
+      _CategoryBreakdownSheetState();
+}
+
+class _CategoryBreakdownSheetState extends State<_CategoryBreakdownSheet> {
+  final _searchCtrl = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = KayanPalette.of(context);
+    final net = context.netColors;
+    final q = _query.trim();
+    final visible = q.isEmpty
+        ? widget.entries
+        : widget.entries
+            .where((e) => formatMoneyMinor(e.key).contains(q))
+            .toList(growable: false);
+
+    return NetSheet(
+      title: 'تفاصيل المبيعات حسب الفئات',
+      subtitle: 'توزيع مبيعات الفترة المحددة على فئات الكروت',
+      icon: Icons.pie_chart_outline_rounded,
+      children: [
+        TextField(
+          controller: _searchCtrl,
+          onChanged: (v) => setState(() => _query = v),
+          decoration: InputDecoration(
+            hintText: 'ابحث عن فئة...',
+            prefixIcon: Icon(Icons.search_rounded, color: palette.textTertiary),
+            filled: true,
+            fillColor: palette.surface,
+            isDense: true,
+            border: OutlineInputBorder(
+              borderRadius: NetRadii.smAll,
+              borderSide: BorderSide(color: palette.border),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: NetRadii.smAll,
+              borderSide: BorderSide(color: palette.border),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: NetRadii.smAll,
+              borderSide: BorderSide(color: palette.primary, width: 1.4),
+            ),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: NetSpacing.md,
+              vertical: NetSpacing.md,
+            ),
+          ),
+          style: TextStyle(
+            fontFamily: NetTypography.family,
+            fontSize: 14,
+            color: palette.textPrimary,
+          ),
+        ),
+        const SizedBox(height: NetSpacing.lg),
+        if (visible.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: NetSpacing.xxl),
+            child: Text(
+              'لا نتائج مطابقة',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontFamily: NetTypography.family,
+                fontSize: 13,
+                color: palette.textSecondary,
+              ),
+            ),
+          )
+        else
+          for (final e in visible)
+            Padding(
+              padding: const EdgeInsets.only(bottom: NetSpacing.md),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          formatMoneyMinor(e.key),
+                          style: TextStyle(
+                            fontFamily: NetTypography.family,
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w700,
+                            color: palette.textPrimary,
+                          ),
+                        ),
+                      ),
+                      Text(
+                        '${e.value.count} كرت · ${(widget.totalMinor <= 0 ? 0.0 : e.value.minor / widget.totalMinor * 100).toStringAsFixed(e.value.minor * 100 ~/ (widget.totalMinor == 0 ? 1 : widget.totalMinor) >= 10 ? 0 : 1)}%',
+                        style: TextStyle(
+                          fontFamily: NetTypography.family,
+                          fontSize: 12,
+                          color: palette.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: NetSpacing.xs),
+                  ClipRRect(
+                    borderRadius: NetRadii.pillAll,
+                    child: TweenAnimationBuilder<double>(
+                      tween: Tween(
+                        begin: 0,
+                        end: widget.totalMinor <= 0
+                            ? 0.0
+                            : (e.value.minor / widget.totalMinor)
+                                .clamp(0.0, 1.0),
+                      ),
+                      duration: const Duration(milliseconds: 450),
+                      curve: Curves.easeOutCubic,
+                      builder: (context, v, _) => LinearProgressIndicator(
+                        value: v,
+                        minHeight: 8,
+                        backgroundColor: palette.surfaceVariant,
+                        valueColor:
+                            AlwaysStoppedAnimation<Color>(net.available),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+      ],
     );
   }
 }

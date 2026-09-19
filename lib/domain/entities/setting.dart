@@ -37,6 +37,16 @@ abstract final class SettingKeys {
   static const promotionsCatalog = 'promotions_catalog';
   static const promotionRewardSmsTemplate = 'promotion_reward_sms_template';
 
+  // Outbound message templates (customers / offers / system / POS) — product video catalog.
+  static const voucherDeliverySmsTemplate = 'voucher_delivery_sms_template';
+  static const customerDebtPaymentTemplate = 'customer_debt_payment_template';
+  static const posBalanceResponseTemplate = 'pos_balance_response_template';
+  static const posCreditLimitExceededTemplate = 'pos_credit_limit_exceeded_template';
+  static const dailyPosSummaryTemplate = 'daily_pos_summary_template';
+  static const posRequestRejectedTemplate = 'pos_request_rejected_template';
+  static const posCustomerSmsTailTemplate = 'pos_customer_sms_tail_template';
+  static const lowStockAlertTemplate = 'low_stock_alert_template';
+
   /// JSON map: walletId → {senderId, sourceMode, packageName}.
   static const walletExtras = 'wallet_extras';
 
@@ -61,7 +71,29 @@ abstract final class SettingDefaults {
   static const broadcastRateDelayMs = 800;
   static const lowStockThreshold = 10;
   static const pendingAttentionAlertEnabled = true;
-  static const promotionRewardSmsTemplate = 'مكافأة عرض {title}\nالرقم: {serial}\nالرمز: {secret}';
+  static const promotionRewardSmsTemplate =
+      'مكافأة عرض {title}\nالرقم: {serial}\nالرمز: {secret}';
+  static const voucherDeliverySmsTemplate =
+      'رقم الكرت: {serial}\nالرمز: {code}';
+  static const customerDebtPaymentTemplate =
+      'تم تأكيد سداد مبلغ {amount} ر.ي. رصيدك الحالي: {balance} ر.ي';
+  static const posBalanceResponseTemplate =
+      'رصيد نقطة البيع {pos}: {balance} ر.ي\nالدين: {debt} ر.ي';
+  static const posCreditLimitExceededTemplate =
+      'تعذر تنفيذ الطلب: تجاوزت نقطة البيع {pos} سقف الدين المسموح ({limit} ر.ي)';
+  static const dailyPosSummaryTemplate =
+      'ملخص يومي لنقطة البيع {pos}\nالمبيعات: {sales}\nالتحويلات: {transfers}\nالرصيد: {balance} ر.ي';
+  static const posSettlementSuccessTemplate =
+      'تم تأكيد تسوية نقطة البيع {pos} بمبلغ {amount} ر.ي';
+  static const posSettlementFailedTemplate =
+      'فشلت تسوية نقطة البيع {pos}: {reason}';
+  static const posSettlementUnknownTemplate =
+      'تعذر التحقق من تسوية نقطة البيع {pos}. راجع السجل يدوياً';
+  static const posRequestRejectedTemplate =
+      'تم رفض طلب نقطة البيع {pos}: {reason}';
+  static const posCustomerSmsTailTemplate = '\n— {pos}';
+  static const lowStockAlertTemplate =
+      'تنبيه مخزون منخفض: الفئة {category} متبقي {count} كرت فقط';
   static const preferredSimSlot = '0';
   static const preferredSendSimSlot = '0';
   static const simAutoFailover = true;

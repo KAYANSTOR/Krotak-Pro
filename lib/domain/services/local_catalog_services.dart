@@ -206,24 +206,43 @@ final class LocalWalletCatalogService implements WalletCatalogService {
     final saved = await wallets.save(updated);
     if (saved is Failure<void>) return Failure(saved.error);
     await _writeExtras(updated.id, updated.senderId, updated.sourceMode, updated.packageName);
-    await auditLogs.append(AuditLog(id: ids.next('audit'), entityType: 'wallet', entityId: updated.id, action: 'status_changed', payloadJson: '{"status":"' + updated.status.name + '"}', occurredAt: clock.now()));
+    await auditLogs.append(AuditLog(id: ids.next('audit'), entityType: 'wallet', entityId: updated.id, action: 'status_changed', payloadJson: '{\"status\":\"' + updated.status.name + '\"}', occurredAt: clock.now()));
     return Success(updated);
   }
   @override
   Future<Result<void>> ensureDefaultWallets() async {
     final existing = await wallets.listAll();
     if (existing is Failure) return Failure((existing as Failure).error);
-    final byName = {for (final w in (existing as Success<List<Wallet>>).value) w.name.trim().toLowerCase(): w};
+    final byName = {
+      for (final w in (existing as Success<List<Wallet>>).value)
+        w.name.trim().toLowerCase(): w,
+    };
+    final extras = await _readExtras();
     for (final spec in _defaults) {
       final key = spec.name.toLowerCase();
       if (byName.containsKey(key)) {
-        await _writeExtras(byName[key]!.id, spec.senderId, spec.sourceMode, spec.packageName);
+        // Never overwrite operator-edited sender/mode/package on subsequent boots.
+        final id = byName[key]!.id;
+        if (!extras.containsKey(id)) {
+          await _writeExtras(id, spec.senderId, spec.sourceMode, spec.packageName);
+        }
         continue;
       }
-      final r = await saveWallet(name: spec.name, senderId: spec.senderId, sourceMode: spec.sourceMode, packageName: spec.packageName);
+      final r = await saveWallet(
+        name: spec.name,
+        senderId: spec.senderId,
+        sourceMode: spec.sourceMode,
+        packageName: spec.packageName,
+      );
       if (r is Failure) return Failure((r as Failure).error);
     }
-    await settings.save(AppSetting(key: SettingKeys.defaultWalletsSeeded, value: 'true', updatedAt: clock.now()));
+    await settings.save(
+      AppSetting(
+        key: SettingKeys.defaultWalletsSeeded,
+        value: 'true',
+        updatedAt: clock.now(),
+      ),
+    );
     return const Success(null);
   }
   Future<Map<String, Map<String, dynamic>>> _readExtras() async {

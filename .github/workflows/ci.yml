@@ -11,32 +11,18 @@ jobs:
   analyze-test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: subosito/flutter-action@v2
         with:
-          channel: stable
+          flutter-version: 3.47.4
           cache: true
       - name: Install SQLite
         run: sudo apt-get update && sudo apt-get install -y libsqlite3-dev
       - run: flutter pub get
-      - name: Flutter analyze (lib)
-        run: flutter analyze --no-fatal-infos lib
-      - name: Test (stable suite)
-        run: |
-          set -e
-          # Full suite is restored incrementally; run tests known green for APK gate.
-          flutter test \
-            test/data_database_test.dart \
-            test/services/card_import_parser_test.dart \
-            test/services/card_batch_import_test.dart \
-            test/services/pending_message_review_test.dart \
-            test/services/rejected_message_catalog_test.dart \
-            test/services/broadcast_service_test.dart \
-            test/services/message_delivery_worker_test.dart \
-            test/services/message_status_machine_test.dart \
-            test/services/wallet_toggle_test.dart \
-            test/services/ops_report_service_test.dart \
-            || flutter test test/data_database_test.dart test/services/card_import_parser_test.dart
+      - name: Flutter analyze
+        run: flutter analyze --no-fatal-infos
+      - name: Test (full suite)
+        run: flutter test
 
   build-apk:
     needs: analyze-test
@@ -44,10 +30,10 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: subosito/flutter-action@v2
         with:
-          channel: stable
+          flutter-version: 3.47.4
           cache: true
       - run: flutter pub get
       - name: Build release APK

@@ -3,6 +3,10 @@ import 'package:flutter/material.dart';
 import '../../../core/result.dart';
 import '../../../domain/entities/setting.dart';
 import '../../app_scope.dart';
+import '../../theme/kayan_palette.dart';
+import '../../theme/net_tokens.dart';
+import '../../widgets/async_views.dart';
+import '../../widgets/net/net_surface_card.dart';
 
 /// Edit the network display name shown on the Dashboard Header.
 ///
@@ -87,42 +91,50 @@ class _NetworkNameSettingsScreenState extends State<NetworkNameSettingsScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('اسم الشبكة')),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? const AsyncLoadingView(skeleton: true, skeletonCount: 2)
           : ListView(
-              padding: const EdgeInsets.all(16),
+              padding: NetSpacing.screen,
               children: [
-                const Text(
+                Text(
                   'الاسم الظاهر في أعلى لوحة التحكم بجانب الشعار.',
-                  style: TextStyle(fontFamily: 'Tajawal', fontSize: 14),
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: _controller,
-                  enabled: !_saving,
-                  maxLength: 48,
-                  textInputAction: TextInputAction.done,
-                  onSubmitted: (_) => _save(),
-                  decoration: const InputDecoration(
-                    labelText: 'اسم الشبكة',
-                    border: OutlineInputBorder(),
-                    hintText: SettingDefaults.networkName,
+                  style: TextStyle(
+                    fontFamily: NetTypography.family,
+                    fontSize: 13,
+                    height: 1.4,
+                    color: KayanPalette.of(context).textSecondary,
                   ),
-                  style: const TextStyle(fontFamily: 'Tajawal'),
                 ),
-                if (_error != null) ...[
-                  const SizedBox(height: 8),
-                  Text(
-                    _error!,
-                    style: TextStyle(
-                      fontFamily: 'Tajawal',
-                      color: Theme.of(context).colorScheme.error,
-                    ),
+                const SizedBox(height: NetSpacing.md),
+                NetSurfaceCard(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      TextField(
+                        controller: _controller,
+                        enabled: !_saving,
+                        maxLength: 48,
+                        textInputAction: TextInputAction.done,
+                        onSubmitted: (_) => _save(),
+                        decoration: const InputDecoration(
+                          labelText: 'اسم الشبكة',
+                          hintText: SettingDefaults.networkName,
+                        ),
+                      ),
+                      if (_error != null) ...[
+                        const SizedBox(height: NetSpacing.sm),
+                        NetInlineNotice(
+                          message: _error!,
+                          icon: Icons.error_outline_rounded,
+                          color: Theme.of(context).colorScheme.error,
+                        ),
+                      ],
+                      const SizedBox(height: NetSpacing.md),
+                      FilledButton(
+                        onPressed: _saving ? null : _save,
+                        child: Text(_saving ? 'جاري الحفظ…' : 'حفظ'),
+                      ),
+                    ],
                   ),
-                ],
-                const SizedBox(height: 16),
-                FilledButton(
-                  onPressed: _saving ? null : _save,
-                  child: Text(_saving ? 'جاري الحفظ…' : 'حفظ'),
                 ),
               ],
             ),

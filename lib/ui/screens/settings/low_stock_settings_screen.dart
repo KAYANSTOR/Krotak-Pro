@@ -108,7 +108,6 @@ class _LowStockSettingsScreenState extends State<LowStockSettingsScreen> {
                   FilledButton(
                     onPressed: _saving ? null : _save,
                     style: FilledButton.styleFrom(
-                      backgroundColor: const Color(0xFF0F766E),
                       padding: const EdgeInsets.symmetric(vertical: 14),
                     ),
                     child: _saving

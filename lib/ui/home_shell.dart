@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'routing/app_routes.dart';
@@ -6,15 +7,15 @@ import 'screens/dashboard_screen.dart';
 import 'screens/inventory_screen.dart';
 import 'screens/offers_screen.dart';
 import 'screens/reports_screen.dart';
+import 'widgets/dashboard/customer_create_sheet.dart';
 import 'widgets/dashboard/quick_actions_sheet.dart';
 import 'widgets/kayan_bottom_nav.dart';
 import 'widgets/permissions_onboarding.dart';
 
-/// Bottom navigation: dashboard | reports | offers | accounts | cards
+/// Shell with bottom navigation matching the product video tabs.
 ///
-/// Pages are created lazily on first visit. This avoids surfacing runtime
-/// failures from inactive tabs while the visible tab is rendering. State is
-/// preserved after a tab has been visited once.
+/// Each tab renders its own [NetTabHeader] so there is exactly one header per
+/// screen (no duplicated shell AppBar + in-body title) and no nested Scaffolds.
 class HomeShell extends StatefulWidget {
   const HomeShell({super.key});
 
@@ -23,21 +24,12 @@ class HomeShell extends StatefulWidget {
 }
 
 class _HomeShellState extends State<HomeShell> {
-  static const _ids = <String>[
-    'dashboard',
-    'reports',
-    'offers',
-    'accounts',
-    'cards',
-  ];
+  static const _ids = ['dashboard', 'reports', 'offers', 'accounts', 'cards'];
 
-  static const _titles = <String, String>{
-    'dashboard': 'لوحة التحكم',
-    'reports': 'التقارير',
-    'offers': 'العروض',
-    'accounts': 'الحسابات',
-    'cards': 'الكروت',
-  };
+  /// Signals the dashboard and the accounts tab to reload after a mutation
+  /// performed elsewhere (customer creation, direct sale, POS accounts)
+  /// without coupling the tabs together.
+  final ValueNotifier<int> _dashboardRefresh = ValueNotifier<int>(0);
 
   int _index = 0;
   bool _permissionsStarted = false;
@@ -49,7 +41,7 @@ class _HomeShellState extends State<HomeShell> {
   void initState() {
     super.initState();
     _pages = List<Widget?>.filled(_ids.length, null, growable: false);
-    _pages[0] = DashboardScreen(onNavigateToTab: _goToId);
+    _pages[0] = _buildDashboard();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || _permissionsStarted) return;
@@ -58,15 +50,27 @@ class _HomeShellState extends State<HomeShell> {
     });
   }
 
+  @override
+  void dispose() {
+    _dashboardRefresh.dispose();
+    super.dispose();
+  }
+
+  Widget _buildDashboard() => DashboardScreen(
+        onNavigateToTab: _goToId,
+        refreshSignal: _dashboardRefresh,
+        onMutated: () => _dashboardRefresh.value++,
+      );
+
   Widget _pageForIndex(int index) {
     final existing = _pages[index];
     if (existing != null) return existing;
 
     final page = switch (index) {
-      0 => DashboardScreen(onNavigateToTab: _goToId),
+      0 => _buildDashboard(),
       1 => const ReportsScreen(),
       2 => const OffersScreen(),
-      3 => const CustomersScreen(),
+      3 => CustomersScreen(refreshSignal: _dashboardRefresh),
       4 => const InventoryScreen(),
       _ => const SizedBox.shrink(),
     };
@@ -83,10 +87,41 @@ class _HomeShellState extends State<HomeShell> {
     });
   }
 
+  /// Fan-out of one shared refresh: called after any mutation from any tab so
+  /// the dashboard and the accounts tab always see the latest data.
+  void _bumpRefresh() {
+    _dashboardRefresh.value++;
+  }
+
+  Future<void> _openDirectSale() async {
+    await AppRoutes.openDirectSale(context);
+    if (mounted) _bumpRefresh();
+  }
+
+  Future<void> _openWalletsAndPos() async {
+    await AppRoutes.openWalletsAndPos(context);
+    if (mounted) _bumpRefresh();
+  }
+
+  /// Center button of the bottom bar — the same quick actions the dashboard
+  /// exposes, so every tab reaches them without extra navigation.
+  void _openQuickActions() {
+    QuickActionsSheet.show(
+      context,
+      onDirectSale: _openDirectSale,
+      onPosAccounts: _openWalletsAndPos,
+      onAddCustomer: () => _goToId('accounts'),
+      onCreateCustomer: () async {
+        await CustomerCreateSheet.show(context);
+        if (mounted) _bumpRefresh();
+      },
+      onOffers: () => _goToId('offers'),
+      onCards: () => _goToId('cards'),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    // Dashboard and cards use their own headers (match Z Net video).
-    final hideAppBar = _currentId == 'dashboard' || _currentId == 'cards';
     final children = <Widget>[
       for (var i = 0; i < _pages.length; i++)
         i == _index
@@ -95,37 +130,19 @@ class _HomeShellState extends State<HomeShell> {
     ];
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF6F8F9),
-      appBar: hideAppBar
-          ? null
-          : AppBar(
-              title: Text(_titles[_currentId] ?? 'NET'),
-            ),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SafeArea(
-        top: hideAppBar,
+        bottom: false,
         child: IndexedStack(
           index: _index,
           sizing: StackFit.expand,
           children: children,
         ),
       ),
-      floatingActionButton: _currentId == 'dashboard'
-          ? FloatingActionButton(
-              onPressed: () {
-                QuickActionsSheet.show(
-                  context,
-                  onDirectSale: () => AppRoutes.openDirectSale(context),
-                  onPosAccounts: () => AppRoutes.openWalletsAndPos(context),
-                  onAddCustomer: () => _goToId('accounts'),
-                );
-              },
-              tooltip: 'إجراءات سريعة',
-              child: const Icon(Icons.add),
-            )
-          : null,
       bottomNavigationBar: KayanBottomNav(
         currentId: _currentId,
         onSelect: _goToId,
+        onQuickActions: _openQuickActions,
       ),
     );
   }

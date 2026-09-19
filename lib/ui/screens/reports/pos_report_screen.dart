@@ -7,8 +7,12 @@ import '../../../domain/entities/setting.dart';
 import '../../../domain/entities/transaction.dart';
 import '../../../domain/entities/wallet.dart';
 import '../../app_scope.dart';
-import '../../theme/kayan_colors.dart';
+import '../../theme/kayan_palette.dart';
+import '../../theme/net_semantic_colors.dart';
+import '../../theme/net_tokens.dart';
 import '../../widgets/async_views.dart';
+import '../../widgets/net/net_indicators.dart';
+import '../../widgets/net/net_surface_card.dart';
 
 class _PosRow {
   const _PosRow({
@@ -183,7 +187,7 @@ class _PosReportScreenState extends State<PosReportScreen> {
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
-        backgroundColor: KayanColors.appBackground,
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         appBar: AppBar(
           title: const Text(
             'تقرير نقاط البيع',
@@ -197,9 +201,10 @@ class _PosReportScreenState extends State<PosReportScreen> {
                 : RefreshIndicator(
                     onRefresh: _load,
                     child: ListView(
-                      padding: const EdgeInsets.all(16),
+                      padding: const EdgeInsets.all(NetSpacing.lg),
                       children: [
                         SwitchListTile(
+                          contentPadding: EdgeInsets.zero,
                           title: const Text(
                             'التسوية التلقائية للحوالات',
                             style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w700),
@@ -211,71 +216,152 @@ class _PosReportScreenState extends State<PosReportScreen> {
                           value: _autoSettle,
                           onChanged: _toggleAuto,
                         ),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: NetSpacing.md),
                         if (_items.isEmpty)
                           const Padding(
                             padding: EdgeInsets.only(top: 48),
                             child: AsyncEmptyView(message: 'لا نقاط بيع مسجّلة'),
                           )
-                        else
+                        else ...[
+                          _PosSummaryCard(items: _items),
+                          const SizedBox(height: NetSpacing.md),
                           ..._items.map((row) {
-                            return Card(
-                              margin: const EdgeInsets.only(bottom: 12),
-                              child: Padding(
-                                padding: const EdgeInsets.all(12),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      row.pos.name,
-                                      style: const TextStyle(
-                                        fontFamily: 'Tajawal',
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 16,
-                                      ),
+                            return NetSurfaceCard(
+                              margin: const EdgeInsets.only(bottom: NetSpacing.md),
+                              padding: NetSpacing.cardTight,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    row.pos.name,
+                                    style: const TextStyle(
+                                      fontFamily: 'Tajawal',
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 16,
                                     ),
-                                    const SizedBox(height: 4),
+                                  ),
+                                  const SizedBox(height: NetSpacing.xs),
+                                  Text(
+                                    'الحالة: ${_posStatusLabel(row.pos.status)} · ${_commission(row.account)}',
+                                    style: const TextStyle(fontFamily: 'Tajawal'),
+                                  ),
+                                  if (row.account != null)
                                     Text(
-                                      'الحالة: ${row.pos.status.name} · ${_commission(row.account)}',
+                                      'معرّفات: ${row.account!.identifiers.join('، ')}',
                                       style: const TextStyle(fontFamily: 'Tajawal'),
                                     ),
-                                    if (row.account != null)
-                                      Text(
-                                        'معرّفات: ${row.account!.identifiers.join('، ')}',
-                                        style: const TextStyle(fontFamily: 'Tajawal'),
-                                      ),
-                                    const SizedBox(height: 8),
-                                    Text(
-                                      row.debtMinor > 0
-                                          ? 'المستحق: ${formatMoneyMinor(row.debtMinor)}'
-                                          : 'رصيد مدفوع مقدماً: ${formatMoneyMinor(row.prepaidMinor)}',
-                                      style: TextStyle(
-                                        fontFamily: 'Tajawal',
-                                        fontWeight: FontWeight.w700,
-                                        color: row.debtMinor > 0
-                                            ? const Color(0xFFB45309)
-                                            : KayanColors.primary,
-                                      ),
+                                  const SizedBox(height: NetSpacing.sm),
+                                  Text(
+                                    row.debtMinor > 0
+                                        ? 'المستحق: ${formatMoneyMinor(row.debtMinor)}'
+                                        : 'رصيد مدفوع مقدماً: ${formatMoneyMinor(row.prepaidMinor)}',
+                                    style: TextStyle(
+                                      fontFamily: 'Tajawal',
+                                      fontWeight: FontWeight.w700,
+                                      color: row.debtMinor > 0
+                                          ? context.netColors.warning
+                                          : context.kayan.primary,
                                     ),
-                                    if (row.account != null && row.debtMinor > 0)
-                                      Align(
-                                        alignment: Alignment.centerLeft,
-                                        child: TextButton(
-                                          onPressed: () => _settle(row),
-                                          child: const Text(
-                                            'تسوية يدوية',
-                                            style: TextStyle(fontFamily: 'Tajawal'),
-                                          ),
+                                  ),
+                                  if (row.account != null && row.debtMinor > 0)
+                                    Align(
+                                      alignment: Alignment.centerLeft,
+                                      child: TextButton(
+                                        onPressed: () => _settle(row),
+                                        child: const Text(
+                                          'تسوية يدوية',
+                                          style: TextStyle(fontFamily: 'Tajawal'),
                                         ),
                                       ),
-                                  ],
-                                ),
+                                    ),
+                                ],
                               ),
                             );
                           }),
+                        ],
                       ],
                     ),
                   ),
+      ),
+    );
+  }
+}
+
+String _posStatusLabel(PointOfSaleStatus status) {
+  switch (status) {
+    case PointOfSaleStatus.active:
+      return 'نشط';
+    case PointOfSaleStatus.suspended:
+      return 'موقوف';
+    case PointOfSaleStatus.archived:
+      return 'مؤرشف';
+  }
+}
+
+class _PosSummaryCard extends StatelessWidget {
+  const _PosSummaryCard({required this.items});
+
+  final List<_PosRow> items;
+
+  @override
+  Widget build(BuildContext context) {
+    final net = context.netColors;
+    final debtTotal = items.fold<int>(0, (a, r) => a + r.debtMinor);
+    final prepaidTotal = items.fold<int>(0, (a, r) => a + r.prepaidMinor);
+    final linked = items.where((r) => r.account != null).length;
+    final ranked = [...items]
+      ..sort((a, b) => b.debtMinor.compareTo(a.debtMinor));
+    final top = ranked.take(8).toList();
+    return NetSurfaceCard(
+      padding: NetSpacing.cardTight,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          NetIndicatorGrid(
+            indicators: [
+              NetIndicatorTile(
+                label: 'نقاط البيع',
+                value: '${items.length}',
+                icon: Icons.storefront_rounded,
+              ),
+              NetIndicatorTile(
+                label: 'مربوطة',
+                value: '$linked',
+                icon: Icons.link_rounded,
+                tint: net.info,
+              ),
+              NetIndicatorTile(
+                label: 'إجمالي المستحق',
+                value: formatMoneyMinor(debtTotal),
+                icon: Icons.south_west_rounded,
+                tint: net.warning,
+              ),
+              NetIndicatorTile(
+                label: 'مدفوع مقدماً',
+                value: formatMoneyMinor(prepaidTotal),
+                icon: Icons.north_east_rounded,
+                tint: net.success,
+              ),
+            ],
+          ),
+          const SizedBox(height: NetSpacing.md),
+          NetHorizontalBars(
+            labelWidth: 88,
+            emptyMessage: 'لا مستحقات مسجّلة',
+            data: [
+              for (final row in top)
+                if (row.debtMinor > 0 || row.prepaidMinor > 0)
+                  NetBarDatum(
+                    label: row.pos.name,
+                    value: (row.debtMinor > 0 ? row.debtMinor : row.prepaidMinor) / 100,
+                    color: row.debtMinor > 0 ? net.warning : net.success,
+                    valueLabel: formatMoneyMinor(
+                      row.debtMinor > 0 ? row.debtMinor : row.prepaidMinor,
+                    ),
+                  ),
+            ],
+          ),
+        ],
       ),
     );
   }

@@ -8,6 +8,8 @@ import 'kayan_colors.dart';
 class KayanPalette {
   const KayanPalette({
     required this.isDark,
+    required this.primary,
+    required this.onPrimary,
     required this.appBackground,
     required this.surface,
     required this.surfaceVariant,
@@ -20,6 +22,10 @@ class KayanPalette {
   });
 
   final bool isDark;
+  final Color primary;
+
+  /// نص/أيقونة فوق تعبئة [primary] — يتبع الوضع لتجنّب نص أبيض على تيل فاتح.
+  final Color onPrimary;
   final Color appBackground;
   final Color surface;
   final Color surfaceVariant;
@@ -32,6 +38,8 @@ class KayanPalette {
 
   static const light = KayanPalette(
     isDark: false,
+    primary: KayanColors.primary,
+    onPrimary: Colors.white,
     appBackground: KayanColors.appBackground,
     surface: KayanColors.surface,
     surfaceVariant: KayanColors.lightBackground,
@@ -45,6 +53,8 @@ class KayanPalette {
 
   static const dark = KayanPalette(
     isDark: true,
+    primary: Color(0xFF35A3A4),
+    onPrimary: KayanColors.darkAppBackground,
     appBackground: KayanColors.darkAppBackground,
     surface: KayanColors.darkSurface,
     surfaceVariant: KayanColors.darkSurfaceVariant,

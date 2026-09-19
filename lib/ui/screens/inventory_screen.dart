@@ -1,3 +1,6 @@
+import 'dart:io';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -7,14 +10,22 @@ import '../../domain/entities/money.dart';
 import '../../domain/services/card_import_parser.dart';
 import '../../domain/services/services.dart';
 import '../app_scope.dart';
-import '../theme/kayan_colors.dart';
+import '../labels/net_labels.dart';
+import '../theme/kayan_palette.dart';
+import '../theme/net_semantic_colors.dart';
+import '../theme/net_tokens.dart';
 import '../widgets/async_views.dart';
-import '../widgets/reserved_card_ops.dart';
+import '../widgets/net/net_sheet.dart';
+import '../widgets/net/net_sparkline.dart';
+import '../widgets/net/net_surface_card.dart';
+import '../widgets/net/net_tab_header.dart';
 
-part 'inventory_widgets.dart';
 part 'inventory_sheets.dart';
 
 /// شاشة إدارة الكروت — مطابقة لتصميم فيديو Z Net + الصورة المرجعية.
+///
+/// الاستعلامات والاستيراد كما هي؛ التحديث بصري (مقاييس مخزون، إخفاء الأسرار،
+/// حالات فارغة، رأس موحّد).
 class InventoryScreen extends StatefulWidget {
   const InventoryScreen({super.key});
 
@@ -22,33 +33,20 @@ class InventoryScreen extends StatefulWidget {
   State<InventoryScreen> createState() => _InventoryScreenState();
 }
 
-enum _StatusFilter { all, available, used }
-
 class _InventoryScreenState extends State<InventoryScreen> {
   bool _loading = true;
   String? _error;
   List<domain.CardCategory> _categories = const [];
-  List<domain.Card> _allCards = const [];
-  String? _categoryFilter;
-  _StatusFilter _statusFilter = _StatusFilter.all;
-  final _searchCtrl = TextEditingController();
+  List<domain.Card> _cards = const [];
   String _query = '';
-
-  static const _chipColors = [
-    Color(0xFF14B8A6),
-    Color(0xFFEC4899),
-    Color(0xFF3B82F6),
-    Color(0xFFF59E0B),
-    Color(0xFF8B5CF6),
-  ];
+  String? _categoryFilter;
+  domain.CardStatus? _statusFilter;
+  bool _revealSecrets = false;
+  final _searchCtrl = TextEditingController();
 
   @override
   void initState() {
     super.initState();
-    _searchCtrl.addListener(() {
-      if (!mounted) return;
-      setState(() => _query = _searchCtrl.text.trim());
-    });
     WidgetsBinding.instance.addPostFrameCallback((_) => _load());
   }
 
@@ -59,406 +57,526 @@ class _InventoryScreenState extends State<InventoryScreen> {
   }
 
   Future<void> _load() async {
-    if (!mounted) return;
     setState(() {
       _loading = true;
       _error = null;
     });
     final c = AppScope.of(context);
     final cats = await c.categories.listAll();
-    final avail = await c.cards.listByStatus(domain.CardStatus.available);
-    final reserved = await c.cards.listByStatus(domain.CardStatus.reserved);
-    final sold = await c.cards.listByStatus(domain.CardStatus.sold);
-    final disabled = await c.cards.listByStatus(domain.CardStatus.disabled);
-    final expired = await c.cards.listByStatus(domain.CardStatus.expired);
+    final cards = await c.cards.listAll();
     if (!mounted) return;
-    if (cats is Failure) {
+    if (cats is Failure || cards is Failure) {
       setState(() {
         _loading = false;
-        _error = (cats as Failure).error.message;
+        _error = cats is Failure
+            ? (cats as Failure<dynamic>).error.message
+            : (cards as Failure<dynamic>).error.message;
       });
       return;
     }
-    final list = <domain.Card>[
-      if (avail is Success<List<domain.Card>>) ...avail.value,
-      if (reserved is Success<List<domain.Card>>) ...reserved.value,
-      if (sold is Success<List<domain.Card>>) ...sold.value,
-      if (disabled is Success<List<domain.Card>>) ...disabled.value,
-      if (expired is Success<List<domain.Card>>) ...expired.value,
-    ];
     setState(() {
       _loading = false;
-      _categories = (cats as Success<List<domain.CardCategory>>).value
-          .where((e) => e.isActive)
-          .toList();
-      _allCards = list;
-      if (_categoryFilter != null &&
-          !_categories.any((e) => e.id == _categoryFilter)) {
-        _categoryFilter = null;
-      }
+      _categories = (cats as Success<List<domain.CardCategory>>).value;
+      _cards = (cards as Success<List<domain.Card>>).value;
     });
   }
 
-  domain.CardCategory? _catOf(domain.Card card) {
-    for (final c in _categories) {
-      if (c.id == card.categoryId) return c;
-    }
-    return null;
-  }
-
   List<domain.Card> get _filtered {
-    var list = _allCards;
+    var list = _cards;
     if (_categoryFilter != null) {
-      list = list.where((c) => c.categoryId == _categoryFilter).toList();
+      list = list.where((e) => e.categoryId == _categoryFilter).toList();
     }
-    switch (_statusFilter) {
-      case _StatusFilter.available:
-        list = list
-            .where((c) =>
-                c.status == domain.CardStatus.available ||
-                c.status == domain.CardStatus.reserved)
-            .toList();
-      case _StatusFilter.used:
-        list = list
-            .where((c) =>
-                c.status == domain.CardStatus.sold ||
-                c.status == domain.CardStatus.disabled ||
-                c.status == domain.CardStatus.expired)
-            .toList();
-      case _StatusFilter.all:
-        break;
+    if (_statusFilter != null) {
+      list = list.where((e) => e.status == _statusFilter).toList();
     }
-    if (_query.isNotEmpty) {
-      final q = _query.toLowerCase();
+    final q = _query.trim();
+    if (q.isNotEmpty) {
       list = list
-          .where((c) =>
-              c.serialNumber.toLowerCase().contains(q) ||
-              c.secretCode.toLowerCase().contains(q))
+          .where((e) =>
+              e.serialNumber.contains(q) ||
+              e.secretCode.contains(q) ||
+              e.id.contains(q))
           .toList();
     }
     return list;
   }
 
-  String _fmtFace(Money m) {
-    final major = m.minorUnits / 100.0;
-    final s = major == major.roundToDouble()
-        ? major.toInt().toString()
-        : major.toStringAsFixed(2);
-    return '$s ر.ي';
-  }
+  /// Display-only counts per category/status over the already-loaded cards.
+  int _countFor(String categoryId, domain.CardStatus status) => _cards
+      .where((e) => e.categoryId == categoryId && e.status == status)
+      .length;
 
-  String _fmtFaceShort(Money m) {
-    final major = m.minorUnits / 100.0;
-    return major == major.roundToDouble()
-        ? major.toInt().toString()
-        : major.toStringAsFixed(2);
-  }
-
-  Future<void> _openCategories() async {
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => _CategoriesSheet(
-        categories: _categories,
-        onChanged: _load,
-      ),
-    );
-    if (mounted) await _load();
+  /// Resolves a category display name without an extra query.
+  String _categoryName(String categoryId) {
+    for (final cat in _categories) {
+      if (cat.id == categoryId) return cat.name;
+    }
+    return categoryId;
   }
 
   Future<void> _openAddCards() async {
     if (_categories.isEmpty) {
-      await _openCategories();
-      if (!mounted || _categories.isEmpty) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'أضف فئة أولاً قبل استيراد الكروت',
+            style: TextStyle(fontFamily: NetTypography.family),
+          ),
+        ),
+      );
+      return;
     }
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
+    await NetSheet.show<void>(
+      context,
       builder: (ctx) => _AddCardsSheet(
         categories: _categories,
         initialCategoryId: _categoryFilter ?? _categories.first.id,
         onDone: _load,
       ),
     );
-    if (mounted) await _load();
   }
 
-  Future<void> _copyField(String value, String message) async {
-    await Clipboard.setData(ClipboardData(text: value));
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message, style: const TextStyle(fontFamily: 'Tajawal'))),
-    );
-  }
-
-  void _resetInventoryFilters() {
-    _searchCtrl.clear();
-    setState(() {
-      _categoryFilter = null;
-      _statusFilter = _StatusFilter.all;
-    });
-  }
-
-  void _showHeaderMenu() {
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => Directionality(
-        textDirection: TextDirection.rtl,
-        child: Container(
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-          ),
-          child: SafeArea(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const SizedBox(height: 8),
-                Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Color(0xFFCBD5E1),
-                    borderRadius: BorderRadius.all(Radius.circular(4)),
-                  ),
-                ),
-                ListTile(
-                  leading: const Icon(Icons.refresh, color: KayanColors.primary),
-                  title: const Text(
-                    'تحديث المخزون',
-                    style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w700),
-                  ),
-                  onTap: () async {
-                    Navigator.pop(ctx);
-                    await _load();
-                  },
-                ),
-                ListTile(
-                  leading: const Icon(Icons.category_outlined, color: KayanColors.primary),
-                  title: const Text(
-                    'إدارة الفئات',
-                    style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w700),
-                  ),
-                  onTap: () {
-                    Navigator.pop(ctx);
-                    _openCategories();
-                  },
-                ),
-                ListTile(
-                  leading: const Icon(Icons.cloud_upload_outlined, color: KayanColors.primary),
-                  title: const Text(
-                    'استيراد كروت',
-                    style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w700),
-                  ),
-                  onTap: () {
-                    Navigator.pop(ctx);
-                    _openAddCards();
-                  },
-                ),
-                ListTile(
-                  leading: const Icon(Icons.filter_alt_off_outlined, color: KayanColors.primary),
-                  title: const Text(
-                    'إلغاء الفلاتر والبحث',
-                    style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w700),
-                  ),
-                  onTap: () {
-                    Navigator.pop(ctx);
-                    _resetInventoryFilters();
-                  },
-                ),
-                const SizedBox(height: 8),
-              ],
-            ),
-          ),
-        ),
+  Future<void> _openCategories() async {
+    await NetSheet.show<void>(
+      context,
+      builder: (ctx) => _CategoriesSheet(
+        categories: _categories,
+        onChanged: _load,
       ),
     );
   }
 
-  Future<void> _showUsedCardsAction() async {
+  void _resetInventoryFilters() {
     setState(() {
-      _statusFilter = _statusFilter == _StatusFilter.used
-          ? _StatusFilter.all
-          : _StatusFilter.used;
+      _query = '';
+      _categoryFilter = null;
+      _statusFilter = null;
+      _searchCtrl.clear();
     });
-    if (_statusFilter == _StatusFilter.used) {
-      await _load();
-    }
+  }
+
+  Future<void> _openOverflowMenu() async {
+    await NetSheet.show<void>(
+      context,
+      builder: (ctx) => NetSheet(
+        title: 'خيارات الكروت',
+        icon: Icons.tune_rounded,
+        children: [
+          ListTile(
+            leading: Icon(Icons.category_rounded, color: KayanPalette.of(ctx).primary),
+            title: const Text('إدارة الفئات'),
+            subtitle: Text('${_categories.length} فئة'),
+            onTap: () {
+              Navigator.pop(ctx);
+              _openCategories();
+            },
+          ),
+          ListTile(
+            leading: Icon(Icons.cloud_upload_rounded, color: KayanPalette.of(ctx).primary),
+            title: const Text('استيراد كروت'),
+            subtitle: const Text('لصق يدوي أو ملف نصي/CSV'),
+            onTap: () {
+              Navigator.pop(ctx);
+              _openAddCards();
+            },
+          ),
+          ListTile(
+            leading: Icon(Icons.filter_alt_off_rounded, color: KayanPalette.of(ctx).primary),
+            title: const Text('إلغاء الفلاتر والبحث'),
+            onTap: () {
+              Navigator.pop(ctx);
+              _resetInventoryFilters();
+            },
+          ),
+        ],
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    return Directionality(
-      textDirection: TextDirection.rtl,
-      child: ColoredBox(
-        color: KayanColors.appBackground,
-        child: Column(
-          children: [
-            _Header(
-              onMenu: _showHeaderMenu,
-              onAdd: _openAddCards,
-              onDelete: _showUsedCardsAction,
+    if (_loading) {
+      return const AsyncLoadingView(skeleton: true, skeletonCount: 5);
+    }
+    if (_error != null) {
+      return AsyncErrorView(message: _error!, onRetry: _load);
+    }
+
+    final palette = KayanPalette.of(context);
+    final net = context.netColors;
+    final filtered = _filtered;
+    final available = _cards.where((e) => e.status == domain.CardStatus.available).length;
+    final reserved = _cards.where((e) => e.status == domain.CardStatus.reserved).length;
+    final sold = _cards.where((e) => e.status == domain.CardStatus.sold).length;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        NetTabHeader(
+          title: 'إدارة الكروت',
+          subtitle: 'المخزون والحالات والفئات · ${_cards.length} كرت',
+          icon: Icons.style_rounded,
+          actions: [
+            NetHeaderAction(
+              icon: Icons.add_rounded,
+              tooltip: 'استيراد كروت',
+              onPressed: _openAddCards,
             ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 4, 16, 10),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: _TopActionButton(
-                      label: 'الفئات',
-                      icon: Icons.category_outlined,
-                      onTap: _openCategories,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: _TopActionButton(
-                      label: 'إضافة الكروت',
-                      icon: Icons.cloud_upload_outlined,
-                      onTap: _openAddCards,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: TextField(
-                controller: _searchCtrl,
-                style: const TextStyle(fontFamily: 'Tajawal'),
-                decoration: InputDecoration(
-                  hintText: 'البحث برقم الكرت...',
-                  hintStyle: const TextStyle(
-                    fontFamily: 'Tajawal',
-                    color: KayanColors.textTertiary,
-                  ),
-                  prefixIcon: const Icon(Icons.search, color: KayanColors.textTertiary),
-                  filled: true,
-                  fillColor: const Color(0xFFF1F5F9),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    borderSide: BorderSide.none,
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            SizedBox(
-              height: 40,
-              child: ListView(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                children: [
-                  _CategoryChip(
-                    label: 'الكل',
-                    selected: _categoryFilter == null,
-                    onTap: () => setState(() => _categoryFilter = null),
-                  ),
-                  ...List.generate(_categories.length, (i) {
-                    final cat = _categories[i];
-                    final color = _chipColors[i % _chipColors.length];
-                    return Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: _CategoryChip(
-                        label: 'كرت ${_fmtFaceShort(cat.faceValue)}',
-                        selected: _categoryFilter == cat.id,
-                        dotColor: color,
-                        onTap: () => setState(() => _categoryFilter = cat.id),
-                      ),
-                    );
-                  }),
-                ],
-              ),
-            ),
-            const SizedBox(height: 10),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Row(
-                children: [
-                  _StatusChip(
-                    label: 'الكل',
-                    selected: _statusFilter == _StatusFilter.all,
-                    onTap: () => setState(() => _statusFilter = _StatusFilter.all),
-                  ),
-                  const SizedBox(width: 8),
-                  _StatusChip(
-                    label: 'كروت متوفرة',
-                    selected: _statusFilter == _StatusFilter.available,
-                    onTap: () => setState(() => _statusFilter = _StatusFilter.available),
-                  ),
-                  const SizedBox(width: 8),
-                  _StatusChip(
-                    label: 'كروت مستخدمة',
-                    selected: _statusFilter == _StatusFilter.used,
-                    onTap: () => setState(() => _statusFilter = _StatusFilter.used),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 8),
-            Expanded(
-              child: _loading
-                  ? const AsyncLoadingView()
-                  : _error != null
-                      ? AsyncErrorView(message: _error!, onRetry: _load)
-                      : RefreshIndicator(
-                          onRefresh: _load,
-                          color: KayanColors.primary,
-                          child: _filtered.isEmpty
-                              ? ListView(
-                                  children: const [
-                                    SizedBox(height: 80),
-                                    Center(
-                                      child: Text(
-                                        'لا توجد كروت مطابقة',
-                                        style: TextStyle(
-                                          fontFamily: 'Tajawal',
-                                          color: KayanColors.textSecondary,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                )
-                              : ListView.separated(
-                                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-                                  itemCount: _filtered.length,
-                                  separatorBuilder: (_, __) => const SizedBox(height: 10),
-                                  itemBuilder: (context, i) {
-                                    final card = _filtered[i];
-                                    final cat = _catOf(card);
-                                    return _TicketCard(
-                                      card: card,
-                                      faceLabel: cat != null ? _fmtFace(cat.faceValue) : '—',
-                                      onTap: () {
-                                        if (card.status == domain.CardStatus.reserved &&
-                                            cat != null) {
-                                          showReservedCardOps(
-                                            context: context,
-                                            card: card,
-                                            category: cat,
-                                            onDone: _load,
-                                          );
-                                        }
-                                      },
-                                      onCopySerial: () => _copyField(
-                                        card.serialNumber,
-                                        'تم نسخ الرقم التسلسلي',
-                                      ),
-                                      onCopySecret: () => _copyField(
-                                        card.secretCode,
-                                        'تم نسخ رمز الكود',
-                                      ),
-                                    );
-                                  },
-                                ),
-                        ),
+            NetHeaderAction(
+              icon: Icons.more_horiz_rounded,
+              tooltip: 'خيارات',
+              onPressed: _openOverflowMenu,
             ),
           ],
         ),
+
+        // ── مقياس المخزون الكلي ──
+        Padding(
+          padding: NetSpacing.pageH,
+          child: NetSurfaceCard(
+            padding: NetSpacing.cardTight,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    _LegendDot(color: net.available, label: 'متاح', value: available),
+                    const SizedBox(width: NetSpacing.md),
+                    _LegendDot(color: net.reserved, label: 'محجوز', value: reserved),
+                    const SizedBox(width: NetSpacing.md),
+                    _LegendDot(color: net.sold, label: 'مباع', value: sold),
+                  ],
+                ),
+                const SizedBox(height: NetSpacing.md),
+                NetRatioBar(
+                  segments: [
+                    (value: available, color: net.available),
+                    (value: reserved, color: net.reserved),
+                    (value: sold, color: net.sold),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+
+        // ── شرائح الفئات ──
+        if (_categories.isNotEmpty)
+          SizedBox(
+            height: 44,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.only(
+                right: NetSpacing.lg,
+                left: NetSpacing.lg,
+                top: NetSpacing.md,
+              ),
+              children: [
+                for (final cat in _categories)
+                  Padding(
+                    padding: const EdgeInsetsDirectional.only(start: NetSpacing.sm),
+                    child: FilterChip(
+                      selected: _categoryFilter == cat.id,
+                      showCheckmark: false,
+                      label: Text(
+                        '${cat.name} (${_countFor(cat.id, domain.CardStatus.available)})',
+                        style: TextStyle(
+                          fontFamily: NetTypography.family,
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w700,
+                          color: _categoryFilter == cat.id
+                              ? Colors.white
+                              : palette.textPrimary,
+                        ),
+                      ),
+                      selectedColor: palette.primary,
+                      backgroundColor: palette.surface,
+                      side: BorderSide(
+                        color: _categoryFilter == cat.id ? palette.primary : palette.border,
+                      ),
+                      shape: RoundedRectangleBorder(borderRadius: NetRadii.pillAll),
+                      onSelected: (_) => setState(() {
+                        _categoryFilter = _categoryFilter == cat.id ? null : cat.id;
+                      }),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+
+        // ── البحث + إظهار الأسرار ──
+        Padding(
+          padding: const EdgeInsets.fromLTRB(
+            NetSpacing.lg,
+            NetSpacing.md,
+            NetSpacing.lg,
+            NetSpacing.sm,
+          ),
+          child: TextField(
+            controller: _searchCtrl,
+            onChanged: (v) => setState(() => _query = v),
+            decoration: InputDecoration(
+              hintText: 'بحث برقم الكرت أو الرمز',
+              hintStyle: TextStyle(
+                fontFamily: NetTypography.family,
+                color: palette.textTertiary,
+                fontSize: 13,
+              ),
+              prefixIcon: Icon(Icons.search_rounded, color: palette.textTertiary),
+              suffixIcon: IconButton(
+                tooltip: _revealSecrets ? 'إخفاء الرموز' : 'إظهار الرموز',
+                icon: Icon(
+                  _revealSecrets ? Icons.visibility_off_rounded : Icons.visibility_rounded,
+                  size: 18,
+                  color: palette.textSecondary,
+                ),
+                onPressed: () => setState(() => _revealSecrets = !_revealSecrets),
+              ),
+              filled: true,
+              fillColor: palette.surface,
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: NetSpacing.md,
+                vertical: NetSpacing.md,
+              ),
+              border: OutlineInputBorder(
+                borderRadius: NetRadii.smAll,
+                borderSide: BorderSide(color: palette.border),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: NetRadii.smAll,
+                borderSide: BorderSide(color: palette.border),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: NetRadii.smAll,
+                borderSide: BorderSide(color: palette.primary, width: 1.4),
+              ),
+            ),
+            style: TextStyle(fontFamily: NetTypography.family, color: palette.textPrimary),
+          ),
+        ),
+
+        Expanded(
+          child: filtered.isEmpty
+              ? AsyncEmptyView(
+                  message: _cards.isEmpty ? 'لا توجد كروت بعد' : 'لا نتائج مطابقة',
+                  icon: Icons.style_outlined,
+                  hint: _cards.isEmpty
+                      ? 'أضف فئة أولاً ثم استورد الكروت يدويًا أو من ملف'
+                      : 'جرّب إلغاء الفلاتر أو تغيير كلمة البحث',
+                  actionLabel: _cards.isEmpty ? 'استيراد كروت' : 'إلغاء الفلاتر',
+                  onAction: _cards.isEmpty ? _openAddCards : _resetInventoryFilters,
+                )
+              : RefreshIndicator(
+                  onRefresh: _load,
+                  color: palette.primary,
+                  child: ListView.separated(
+                    padding: const EdgeInsets.only(bottom: 88),
+                    itemCount: filtered.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: NetSpacing.sm),
+                    itemBuilder: (_, index) {
+                      final card = filtered[index];
+                      return _CardRow(
+                        card: card,
+                        categoryName: _categoryName(card.categoryId),
+                        revealSecret: _revealSecrets,
+                      );
+                    },
+                  ),
+                ),
+        ),
+      ],
+    );
+  }
+}
+
+class _LegendDot extends StatelessWidget {
+  const _LegendDot({
+    required this.color,
+    required this.label,
+    required this.value,
+  });
+
+  final Color color;
+  final String label;
+  final int value;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = KayanPalette.of(context);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 9,
+          height: 9,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: NetSpacing.xs),
+        Text(
+          label,
+          style: TextStyle(
+            fontFamily: NetTypography.family,
+            fontSize: 12,
+            color: palette.textSecondary,
+          ),
+        ),
+        const SizedBox(width: NetSpacing.xxs),
+        Text(
+          '$value',
+          style: TextStyle(
+            fontFamily: NetTypography.family,
+            fontSize: 12.5,
+            fontWeight: FontWeight.w800,
+            color: palette.textPrimary,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _CardRow extends StatelessWidget {
+  const _CardRow({
+    required this.card,
+    required this.categoryName,
+    required this.revealSecret,
+  });
+
+  final domain.Card card;
+  final String categoryName;
+  final bool revealSecret;
+
+  static IconData _statusIcon(domain.CardStatus status) => switch (status) {
+        domain.CardStatus.available => Icons.check_circle_outline_rounded,
+        domain.CardStatus.reserved => Icons.lock_clock_rounded,
+        domain.CardStatus.sold => Icons.sell_outlined,
+        domain.CardStatus.disabled => Icons.block_rounded,
+        domain.CardStatus.expired => Icons.hourglass_disabled_rounded,
+      };
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = KayanPalette.of(context);
+    final net = context.netColors;
+    final statusColor = cardStatusColor(card.status, net);
+    final statusBg = cardStatusContainer(card.status, net);
+    final hasSecret = card.secretCode.isNotEmpty;
+    final masked = hasSecret
+        ? (revealSecret ? card.secretCode : '•' * card.secretCode.length.clamp(4, 10))
+        : 'بدون رمز';
+
+    return NetSurfaceCard(
+      margin: NetSpacing.pageH,
+      padding: const EdgeInsets.all(NetSpacing.md),
+      child: Row(
+        children: [
+          Container(
+            width: NetSizes.badge,
+            height: NetSizes.badge,
+            decoration: BoxDecoration(
+              color: statusBg,
+              borderRadius: NetRadii.smAll,
+            ),
+            child: Icon(_statusIcon(card.status), size: 20, color: statusColor),
+          ),
+          const SizedBox(width: NetSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        card.serialNumber,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontFamily: NetTypography.family,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 14,
+                          color: palette.textPrimary,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: NetSpacing.sm),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: NetSpacing.sm,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: statusBg,
+                        borderRadius: NetRadii.pillAll,
+                      ),
+                      child: Text(
+                        cardStatusLabel(card.status),
+                        style: TextStyle(
+                          fontFamily: NetTypography.family,
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w800,
+                          color: statusColor,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: NetSpacing.xxs),
+                Row(
+                  children: [
+                    Icon(Icons.category_rounded, size: 13, color: palette.textTertiary),
+                    const SizedBox(width: NetSpacing.xs),
+                    Flexible(
+                      child: Text(
+                        categoryName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontFamily: NetTypography.family,
+                          fontSize: 12,
+                          color: palette.textSecondary,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: NetSpacing.md),
+                    Icon(Icons.vpn_key_rounded, size: 13, color: palette.textTertiary),
+                    const SizedBox(width: NetSpacing.xs),
+                    Text(
+                      masked,
+                      style: TextStyle(
+                        fontFamily: NetTypography.family,
+                        fontSize: 12,
+                        letterSpacing: revealSecret ? 0 : 1.5,
+                        color: palette.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          if (hasSecret)
+            IconButton(
+              tooltip: 'نسخ الرمز',
+              onPressed: () {
+                Clipboard.setData(ClipboardData(text: card.secretCode));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text(
+                      'تم نسخ رمز الكرت',
+                      style: TextStyle(fontFamily: NetTypography.family),
+                    ),
+                    duration: Duration(seconds: 2),
+                  ),
+                );
+              },
+              icon: Icon(
+                Icons.copy_rounded,
+                size: NetSizes.iconSm,
+                color: palette.textSecondary,
+              ),
+            ),
+        ],
       ),
     );
   }

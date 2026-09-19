@@ -113,6 +113,11 @@ ParsedTransfer _transfer(String messageId) => ParsedTransfer(messageId: messageI
 
 final class _FakeMessages implements MessageRepository {
   final store = <String, IncomingMessage>{};
+  @override
+  Future<Result<void>> delete(String id) async {
+    store.remove(id);
+    return const Success(null);
+  }
   final seenExternalReferences = <String>[];
   @override Future<Result<void>> save(IncomingMessage message) async { if (message.externalReference != null && store.values.any((m) => m.externalReference == message.externalReference)) return const Failure(AppFailure(code: 'unique_violation', message: 'duplicate')); store[message.id] = message; return const Success(null); }
   @override Future<Result<IncomingMessage?>> findById(String id) async => Success(store[id]);

@@ -7,6 +7,9 @@ import '../../domain/entities/setting.dart';
 import '../../domain/entities/transaction.dart';
 import '../../domain/services/pending_attention_alarm_service.dart';
 import '../app_scope.dart';
+import '../theme/kayan_colors.dart';
+import '../theme/kayan_palette.dart';
+import '../theme/net_semantic_colors.dart';
 import '../widgets/async_views.dart';
 
 /// الرسائل المعلّقة (قيد التأكيد) — مطابقة منطق الفيديو + Domain.
@@ -171,7 +174,7 @@ class _PendingMessagesScreenState extends State<PendingMessagesScreen>
           'تم الاعتماد وتسجيل الإيداع',
           style: TextStyle(fontFamily: 'Tajawal'),
         ),
-        backgroundColor: Color(0xFF059669),
+        backgroundColor: KayanColors.success,
       ),
     );
     await _load();
@@ -199,7 +202,7 @@ class _PendingMessagesScreenState extends State<PendingMessagesScreen>
             ),
             FilledButton(
               style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFFDC2626),
+                backgroundColor: KayanColors.error,
               ),
               onPressed: () => Navigator.pop(ctx, true),
               child: const Text('رفض', style: TextStyle(fontFamily: 'Tajawal')),
@@ -243,17 +246,20 @@ class _PendingMessagesScreenState extends State<PendingMessagesScreen>
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
-        backgroundColor: const Color(0xFFF0F9F8),
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         appBar: AppBar(
-          backgroundColor: Colors.white,
+          backgroundColor: Theme.of(context).colorScheme.surface,
           elevation: 0,
           surfaceTintColor: Colors.transparent,
           leading: IconButton(
             tooltip: 'رجوع',
             onPressed: () => Navigator.maybePop(context),
-            icon: const Icon(Icons.arrow_forward, color: Color(0xFF0F172A)),
+            icon: Icon(
+              Icons.arrow_forward,
+              color: Theme.of(context).colorScheme.onSurface,
+            ),
           ),
-          title: const Column(
+          title: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text(
@@ -263,7 +269,7 @@ class _PendingMessagesScreenState extends State<PendingMessagesScreen>
                   fontFamily: 'Tajawal',
                   fontWeight: FontWeight.w800,
                   fontSize: 18,
-                  color: Color(0xFF0F172A),
+                  color: Theme.of(context).colorScheme.onSurface,
                 ),
               ),
               Text(
@@ -272,7 +278,7 @@ class _PendingMessagesScreenState extends State<PendingMessagesScreen>
                 style: TextStyle(
                   fontFamily: 'Tajawal',
                   fontSize: 12,
-                  color: Color(0xFF64748B),
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
               ),
             ],
@@ -283,8 +289,8 @@ class _PendingMessagesScreenState extends State<PendingMessagesScreen>
                 tooltip: _alarm.isMuted ? 'تشغيل التنبيه' : 'كتم التنبيه',
                 onPressed: _toggleMute,
                 icon: Icon(
-                  _alarm.isMuted ? Icons.volume_off : Icons.volume_up,
-                  color: const Color(0xFF0F766E),
+                  _alarm.isMuted ? Icons.volume_off_rounded : Icons.volume_up_rounded,
+                  color: context.kayan.primary,
                 ),
               ),
           ],
@@ -294,36 +300,36 @@ class _PendingMessagesScreenState extends State<PendingMessagesScreen>
           children: [
             if (_alertEnabled && _rows.isNotEmpty && !_alarm.isMuted)
               Material(
-                color: const Color(0xFFFEF3C7),
+                color: context.netColors.warningContainer,
                 child: Padding(
                   padding:
                       const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                   child: Row(
                     children: [
-                      const Icon(
+                      Icon(
                         Icons.notification_important,
-                        color: Color(0xFFB45309),
+                        color: context.netColors.warning,
                         size: 20,
                       ),
                       const SizedBox(width: 8),
-                      const Expanded(
+                      Expanded(
                         child: Text(
                           'تنبيه نشط — عمليات تحتاج تدخلاً',
                           style: TextStyle(
                             fontFamily: 'Tajawal',
                             fontSize: 12,
-                            color: Color(0xFF92400E),
+                            color: context.netColors.warning,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
                       ),
                       TextButton(
                         onPressed: _toggleMute,
-                        child: const Text(
+                        child: Text(
                           'كتم',
                           style: TextStyle(
                             fontFamily: 'Tajawal',
-                            color: Color(0xFFB45309),
+                            color: context.netColors.warning,
                             fontWeight: FontWeight.w700,
                           ),
                         ),
@@ -339,28 +345,28 @@ class _PendingMessagesScreenState extends State<PendingMessagesScreen>
                   padding:
                       const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFFFF7ED),
+                    color: context.netColors.warningContainer,
                     borderRadius: BorderRadius.circular(14),
                     border: Border.all(
-                      color: const Color(0xFFFDBA74).withValues(alpha: 0.5),
+                      color: context.netColors.warning.withValues(alpha: 0.35),
                     ),
                   ),
                   child: Row(
                     children: [
-                      const Icon(
+                      Icon(
                         Icons.hourglass_top,
-                        color: Color(0xFFC2410C),
+                        color: context.netColors.warning,
                         size: 22,
                       ),
                       const SizedBox(width: 10),
                       Expanded(
                         child: Text(
                           '${_rows.length} رسالة معلّقة بانتظار الاعتماد أو الرفض',
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontFamily: 'Tajawal',
                             fontWeight: FontWeight.w700,
                             fontSize: 13,
-                            color: Color(0xFF9A3412),
+                            color: context.netColors.warning,
                           ),
                         ),
                       ),
@@ -377,14 +383,16 @@ class _PendingMessagesScreenState extends State<PendingMessagesScreen>
                 keyboardType: TextInputType.phone,
                 decoration: InputDecoration(
                   hintText: 'بحث برقم جوال العميل',
-                  hintStyle: const TextStyle(
+                  hintStyle: TextStyle(
                     fontFamily: 'Tajawal',
-                    color: Color(0xFF94A3B8),
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
-                  prefixIcon:
-                      const Icon(Icons.search, color: Color(0xFF94A3B8)),
+                  prefixIcon: Icon(
+                    Icons.search,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
                   filled: true,
-                  fillColor: const Color(0xFFF1F5F9),
+                  fillColor: Theme.of(context).colorScheme.surface,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(14),
                     borderSide: BorderSide.none,
@@ -409,7 +417,7 @@ class _PendingMessagesScreenState extends State<PendingMessagesScreen>
                               icon: Icons.mark_email_unread_outlined,
                             )
                           : RefreshIndicator(
-                              color: const Color(0xFF0F766E),
+                              color: context.kayan.primary,
                               onRefresh: _load,
                               child: ListView.separated(
                                 padding:
@@ -489,9 +497,9 @@ class _PendingCard extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.03),
@@ -510,13 +518,13 @@ class _PendingCard extends StatelessWidget {
                 width: 36,
                 height: 36,
                 decoration: BoxDecoration(
-                  color: const Color(0xFFFFEDD5),
+                  color: context.netColors.warningContainer,
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: const Icon(
+                child: Icon(
                   Icons.hourglass_top,
                   size: 20,
-                  color: Color(0xFFEA580C),
+                  color: context.netColors.warning,
                 ),
               ),
               const SizedBox(width: 10),
@@ -526,19 +534,19 @@ class _PendingCard extends StatelessWidget {
                   children: [
                     Text(
                       m.sender.isEmpty ? 'محفظة غير معروفة' : m.sender,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontFamily: 'Tajawal',
                         fontWeight: FontWeight.w700,
                         fontSize: 15,
-                        color: Color(0xFF0F172A),
+                        color: Theme.of(context).colorScheme.onSurface,
                       ),
                     ),
                     Text(
                       _fmtTime(m.receivedAt),
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontFamily: 'Tajawal',
                         fontSize: 11,
-                        color: Color(0xFF94A3B8),
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
                     ),
                   ],
@@ -548,27 +556,32 @@ class _PendingCard extends StatelessWidget {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFFFEDD5),
+                  color: context.netColors.warningContainer,
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: const Text(
+                child: Text(
                   'معلّقة',
                   style: TextStyle(
                     fontFamily: 'Tajawal',
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
-                    color: Color(0xFFC2410C),
+                    color: context.netColors.warning,
                   ),
                 ),
               ),
             ],
           ),
           const SizedBox(height: 12),
-          _infoRow(Icons.phone_android, 'الجوال', row.phone ?? '—'),
-          _infoRow(Icons.payments_outlined, 'المبلغ', _fmtAmount(row.amount)),
+          _infoRow(context, Icons.phone_android, 'الجوال', row.phone ?? '—'),
+          _infoRow(
+            context,
+            Icons.payments_outlined,
+            'المبلغ',
+            _fmtAmount(row.amount),
+          ),
           if (row.reference != null && row.reference!.isNotEmpty)
-            _infoRow(Icons.tag, 'المرجع', row.reference!),
-          _infoRow(Icons.info_outline, 'السبب', row.reason),
+            _infoRow(context, Icons.tag, 'المرجع', row.reference!),
+          _infoRow(context, Icons.info_outline, 'السبب', row.reason),
           const SizedBox(height: 14),
           if (busy)
             const Center(
@@ -585,8 +598,10 @@ class _PendingCard extends StatelessWidget {
                   child: OutlinedButton(
                     onPressed: onReject,
                     style: OutlinedButton.styleFrom(
-                      foregroundColor: const Color(0xFFDC2626),
-                      side: const BorderSide(color: Color(0xFFFECACA)),
+                      foregroundColor: context.netColors.rejected,
+                      side: BorderSide(
+                        color: context.netColors.rejected.withValues(alpha: 0.4),
+                      ),
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
@@ -607,7 +622,6 @@ class _PendingCard extends StatelessWidget {
                   child: FilledButton(
                     onPressed: onApprove,
                     style: FilledButton.styleFrom(
-                      backgroundColor: const Color(0xFF0F766E),
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
@@ -629,29 +643,34 @@ class _PendingCard extends StatelessWidget {
     );
   }
 
-  Widget _infoRow(IconData icon, String label, String value) {
+  Widget _infoRow(
+    BuildContext context,
+    IconData icon,
+    String label,
+    String value,
+  ) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 6),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 16, color: const Color(0xFF94A3B8)),
+          Icon(icon, size: 16, color: Theme.of(context).colorScheme.onSurfaceVariant),
           const SizedBox(width: 6),
           Text(
             '$label: ',
-            style: const TextStyle(
+            style: TextStyle(
               fontFamily: 'Tajawal',
               fontSize: 13,
-              color: Color(0xFF64748B),
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),
           ),
           Expanded(
             child: Text(
               value,
-              style: const TextStyle(
+              style: TextStyle(
                 fontFamily: 'Tajawal',
                 fontSize: 13,
-                color: Color(0xFF0F172A),
+                color: Theme.of(context).colorScheme.onSurface,
                 fontWeight: FontWeight.w600,
               ),
             ),

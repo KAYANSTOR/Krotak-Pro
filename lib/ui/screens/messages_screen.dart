@@ -3,6 +3,9 @@ import 'package:flutter/material.dart';
 import '../../core/result.dart';
 import '../../domain/entities/transaction.dart';
 import '../app_scope.dart';
+import '../theme/kayan_palette.dart';
+import '../theme/net_tokens.dart';
+import '../widgets/net/net_surface_card.dart';
 
 class MessagesScreen extends StatefulWidget {
   const MessagesScreen({super.key});
@@ -52,38 +55,67 @@ class _MessagesScreenState extends State<MessagesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final palette = KayanPalette.of(context);
     return ListView(
-      padding: const EdgeInsets.all(16),
+      padding: NetSpacing.screen,
       children: [
         Text(
           'محاكاة رسالة تحويل (للاختبار دون SMS حقيقي)',
-          style: Theme.of(context).textTheme.titleMedium,
-        ),
-        const SizedBox(height: 12),
-        TextField(
-          controller: _senderCtrl,
-          decoration: const InputDecoration(
-            labelText: 'المرسل',
-            border: OutlineInputBorder(),
+          style: TextStyle(
+            fontFamily: NetTypography.family,
+            fontSize: 15,
+            fontWeight: FontWeight.w800,
+            color: palette.textPrimary,
           ),
         ),
-        const SizedBox(height: 8),
-        TextField(
-          controller: _bodyCtrl,
-          maxLines: 4,
-          decoration: const InputDecoration(
-            labelText: 'نص الرسالة',
-            border: OutlineInputBorder(),
+        const SizedBox(height: NetSpacing.md),
+        NetSurfaceCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              TextField(
+                controller: _senderCtrl,
+                decoration: const InputDecoration(labelText: 'المرسل'),
+              ),
+              const SizedBox(height: NetSpacing.md),
+              TextField(
+                controller: _bodyCtrl,
+                maxLines: 4,
+                decoration: const InputDecoration(labelText: 'نص الرسالة'),
+              ),
+              const SizedBox(height: NetSpacing.lg),
+              FilledButton(
+                onPressed: _busy ? null : _simulate,
+                child: const Text('معالجة الرسالة'),
+              ),
+            ],
           ),
-        ),
-        const SizedBox(height: 12),
-        FilledButton(
-          onPressed: _busy ? null : _simulate,
-          child: const Text('معالجة الرسالة'),
         ),
         if (_status != null) ...[
-          const SizedBox(height: 12),
-          Text(_status!),
+          const SizedBox(height: NetSpacing.md),
+          NetSurfaceCard(
+            child: Row(
+              children: [
+                Icon(
+                  Icons.info_outline_rounded,
+                  size: 18,
+                  color: palette.textSecondary,
+                ),
+                const SizedBox(width: NetSpacing.sm),
+                Expanded(
+                  child: Text(
+                    _status!,
+                    style: TextStyle(
+                      fontFamily: NetTypography.family,
+                      fontSize: 13,
+                      height: 1.4,
+                      color: palette.textPrimary,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
       ],
     );

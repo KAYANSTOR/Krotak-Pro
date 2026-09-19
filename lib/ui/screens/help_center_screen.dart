@@ -2,6 +2,13 @@ import 'package:flutter/material.dart';
 
 import '../theme/kayan_palette.dart';
 
+/// يفتح درجة اللون في الوضع الداكن حتى يبقى التباين مقروءًا على الأسطح الداكنة.
+Color _tone(BuildContext context, Color color) {
+  if (Theme.of(context).brightness != Brightness.dark) return color;
+  final hsl = HSLColor.fromColor(color);
+  return hsl.withLightness((hsl.lightness + 0.24).clamp(0.0, 0.82)).toColor();
+}
+
 /// مركز المساعدة — مطابقة تصميم فيديو Z Net.
 ///
 /// المصدر الوحيد للمحتوى:
@@ -324,7 +331,7 @@ class _HelpCenterScreenState extends State<HelpCenterScreen> {
       floatingActionButton: _showTop
           ? FloatingActionButton.small(
               heroTag: 'help_scroll_top',
-              backgroundColor: const Color(0xFFA855F7),
+              backgroundColor: Theme.of(context).colorScheme.primary,
               foregroundColor: Colors.white,
               onPressed: () => _scroll.animateTo(
                 0,
@@ -380,7 +387,7 @@ class _GroupBlock extends StatelessWidget {
                   fontFamily: 'Tajawal',
                   fontWeight: FontWeight.w800,
                   fontSize: 15,
-                  color: group.accent,
+                  color: _tone(context, group.accent),
                 ),
               ),
               Expanded(
@@ -390,7 +397,7 @@ class _GroupBlock extends StatelessWidget {
                     fontFamily: 'Tajawal',
                     fontWeight: FontWeight.w700,
                     fontSize: 15,
-                    color: group.accent,
+                    color: _tone(context, group.accent),
                   ),
                 ),
               ),
@@ -451,10 +458,14 @@ class _ItemCard extends StatelessWidget {
                 width: 42,
                 height: 42,
                 decoration: BoxDecoration(
-                  color: item.iconBg.withValues(alpha: 0.14),
+                  color: _tone(context, item.iconBg).withValues(alpha: 0.14),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: Icon(item.icon, color: item.iconBg, size: 22),
+                child: Icon(
+                  item.icon,
+                  color: _tone(context, item.iconBg),
+                  size: 22,
+                ),
               ),
             ],
           ),
@@ -470,14 +481,14 @@ class _ItemCard extends StatelessWidget {
                       height: 24,
                       alignment: Alignment.center,
                       decoration: BoxDecoration(
-                        color: const Color(0xFF0D9488),
+                        color: _tone(context, item.iconBg).withValues(alpha: 0.16),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Text(
                         '${i + 1}',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontFamily: 'Tajawal',
-                          color: Colors.white,
+                          color: _tone(context, item.iconBg),
                           fontWeight: FontWeight.w700,
                           fontSize: 12,
                         ),
@@ -534,7 +545,7 @@ class _ItemCard extends StatelessWidget {
   }
 }
 
-final class _HelpGroup {
+class _HelpGroup {
   const _HelpGroup({
     required this.title,
     required this.accent,

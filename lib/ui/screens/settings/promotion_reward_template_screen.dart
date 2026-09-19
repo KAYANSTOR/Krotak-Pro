@@ -4,8 +4,9 @@ import '../../../core/result.dart';
 import '../../../domain/entities/setting.dart';
 import '../../../domain/services/local_promotion_fulfillment_service.dart';
 import '../../app_scope.dart';
-import '../../theme/kayan_colors.dart';
+import '../../theme/net_tokens.dart';
 import '../../widgets/async_views.dart';
+import '../../widgets/net/net_surface_card.dart';
 
 class PromotionRewardTemplateScreen extends StatefulWidget {
   const PromotionRewardTemplateScreen({super.key});
@@ -69,33 +70,40 @@ class _PromotionRewardTemplateScreenState
   Widget build(BuildContext context) => Directionality(
         textDirection: TextDirection.rtl,
         child: Scaffold(
-          backgroundColor: KayanColors.appBackground,
+          backgroundColor: Theme.of(context).scaffoldBackgroundColor,
           appBar: AppBar(title: const Text('قالب SMS لمكافأة العرض')),
           body: _loading
-              ? const AsyncLoadingView()
+              ? const AsyncLoadingView(skeleton: true, skeletonCount: 3)
               : ListView(
-                  padding: const EdgeInsets.all(16),
+                  padding: NetSpacing.screen,
                   children: [
-                    const Text(
-                      'المتغيرات: {title} {serial} {secret} {code} {amount}',
-                      style: TextStyle(fontFamily: 'Tajawal'),
+                    const NetInlineNotice(
+                      message:
+                          'المتغيرات: {title} {serial} {secret} {code} {amount}',
+                      icon: Icons.data_object_rounded,
                     ),
-                    const SizedBox(height: 16),
-                    TextField(
-                      controller: _body,
-                      minLines: 3,
-                      maxLines: 6,
-                      decoration: const InputDecoration(
-                        labelText: 'نص الرسالة',
-                        helperText: 'تُرسل بعد صرف كرت المكافأة',
-                        border: OutlineInputBorder(),
+                    const SizedBox(height: NetSpacing.lg),
+                    NetSurfaceCard(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          TextField(
+                            controller: _body,
+                            minLines: 3,
+                            maxLines: 6,
+                            decoration: const InputDecoration(
+                              labelText: 'نص الرسالة',
+                              helperText: 'تُرسل بعد صرف كرت المكافأة',
+                            ),
+                          ),
+                          const SizedBox(height: NetSpacing.lg),
+                          FilledButton.icon(
+                            onPressed: _save,
+                            icon: const Icon(Icons.save_outlined),
+                            label: const Text('حفظ القالب'),
+                          ),
+                        ],
                       ),
-                    ),
-                    const SizedBox(height: 16),
-                    FilledButton.icon(
-                      onPressed: _save,
-                      icon: const Icon(Icons.save_outlined),
-                      label: const Text('حفظ القالب'),
                     ),
                   ],
                 ),

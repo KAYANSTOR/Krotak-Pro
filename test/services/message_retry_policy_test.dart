@@ -9,15 +9,16 @@ void main() {
     expect(policy.isRetryableCode('sms_delivery_failed'), isTrue);
     expect(policy.isRetryableCode('out_of_stock'), isFalse);
     expect(policy.isRetryableCode('voucherSendFailed'), isTrue);
+    expect(policy.isRetryableCode('voucher_send_failed'), isTrue);
   });
 
   test('uses bounded exponential backoff with maxAttempts=3', () {
     expect(policy.maxAttempts, 3);
-    expect(policy.delayForAttempt(1), const Duration(seconds: 30));
-    expect(policy.delayForAttempt(2), const Duration(seconds: 60));
-    expect(policy.delayForAttempt(3), const Duration(seconds: 120));
-    // Clamped to maxAttempts=3 → same as attempt 3
-    expect(policy.delayForAttempt(99), const Duration(seconds: 120));
+    expect(policy.delayForAttempt(1), const Duration(seconds: 2));
+    expect(policy.delayForAttempt(2), const Duration(seconds: 4));
+    expect(policy.delayForAttempt(3), const Duration(seconds: 8));
+    // Clamped to maxAttempts=3 → same as attempt 3.
+    expect(policy.delayForAttempt(99), const Duration(seconds: 8));
   });
 
   test('statusAfterFailure maps exhausted to failedMaxAttempts', () {

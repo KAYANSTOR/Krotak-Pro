@@ -12,8 +12,8 @@ import 'domain/entities/message.dart';
 import 'domain/entities/setting.dart';
 import 'ui/app_scope.dart';
 import 'ui/home_shell.dart';
-import 'ui/theme/kayan_palette.dart';
 import 'ui/theme/kayan_theme.dart';
+import 'ui/theme/net_theme_schedule.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -43,7 +43,8 @@ Future<void> main() async {
   ];
 
   final container = await AppContainer.bootstrap(templates: defaultTemplates);
-  await _loadThemeMode(container);
+  final themeRaw = await _loadThemeMode(container);
+  _NetAppState.seedPersistedThemeRaw(themeRaw);
   AppScope.register(container);
   runApp(NetApp(container: container));
   unawaited(_startBackgroundHandlersSafely(container));
@@ -58,10 +59,13 @@ Future<void> _startBackgroundHandlersSafely(AppContainer container) async {
   }
 }
 
-Future<void> _loadThemeMode(AppContainer container) async {
+Future<String> _loadThemeMode(AppContainer container) async {
   final result = await container.settings.find(SettingKeys.themeMode);
   final raw = result is Success<AppSetting?> ? result.value?.value : null;
-  container.themeModeNotifier.value = ThemeModeCodec.parse(raw);
+  // القيمة `system` القديمة تُقرأ كوضع نهاري ثابت (توافق خلفي).
+  container.themeModeNotifier.value =
+      NetThemeSchedule.resolve(NetThemeSchedule.parse(raw), DateTime.now());
+  return raw ?? NetThemeMode.light.name;
 }
 
 class NetApp extends StatefulWidget {
@@ -76,10 +80,34 @@ class _NetAppState extends State<NetApp> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _ticker = NetThemeAutoTicker(_applyAutoTheme);
+    _ticker.start();
+    // أي تحديث لاحق للقيمة المخزنة (من الإعدادات) يعيد الحسم فورًا.
+    NetThemeRawCache.onRawChanged = (_) => _applyAutoTheme(DateTime.now());
+    NetThemeRawCache.raw = _themeRawAtBoot;
   }
+
+  late final NetThemeAutoTicker _ticker;
+
+  /// يوقظ الوضع التلقائي كل دقيقة حتى يتبدّل المظهر عند 7ص/7م دون تدخل.
+  void _applyAutoTheme(DateTime now) {
+    final mode = NetThemeSchedule.parse(NetThemeRawCache.raw);
+    if (mode != NetThemeMode.auto) return;
+    final resolved = NetThemeSchedule.resolve(mode, now);
+    if (widget.container.themeModeNotifier.value != resolved) {
+      widget.container.themeModeNotifier.value = resolved;
+    }
+  }
+
+  /// القيمة الخام المحفوظة وقت الإقلاع (قبل بناء هذه الحالة).
+  static String _themeRawAtBoot = NetThemeMode.light.name;
+
+  /// يضبطه main.dart بعد قراءة الإعداد حتى لا يفقد التاكير القيمة.
+  static void seedPersistedThemeRaw(String raw) => _themeRawAtBoot = raw;
 
   @override
   void dispose() {
+    _ticker.stop();
     WidgetsBinding.instance.removeObserver(this);
     AppScope.unregister(widget.container);
     widget.container.dispose();
@@ -105,17 +133,24 @@ class _NetAppState extends State<NetApp> with WidgetsBindingObserver {
             theme: buildKayanLightTheme(),
             darkTheme: buildKayanDarkTheme(),
             themeMode: mode,
+            // Smooth, token-based light/dark switch instead of an instant flip.
+            themeAnimationDuration: const Duration(milliseconds: 220),
+            themeAnimationCurve: Curves.easeOutCubic,
             locale: const Locale('ar'),
-            supportedLocales: const [Locale('ar'), Locale('en')],
+            supportedLocales: const [Locale('ar')],
+            localeResolutionCallback: (locale, supported) => const Locale('ar'),
             localizationsDelegates: const [
               GlobalMaterialLocalizations.delegate,
               GlobalWidgetsLocalizations.delegate,
               GlobalCupertinoLocalizations.delegate,
             ],
-            builder: (context, child) => Directionality(
-              textDirection: TextDirection.rtl,
-              child: child ?? const SizedBox.shrink(),
-            ),
+            builder: (context, child) {
+              // Force RTL for the entire app tree (Yemen / Arabic UX).
+              return Directionality(
+                textDirection: TextDirection.rtl,
+                child: child ?? const SizedBox.shrink(),
+              );
+            },
             home: const HomeShell(),
           ),
         ),

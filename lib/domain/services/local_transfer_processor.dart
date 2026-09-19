@@ -179,7 +179,7 @@ final class LocalTransferProcessor implements TransferProcessor {
             action: 'transfer_processed',
             occurredAt: clock.now(),
             payloadJson:
-                '{"transactionId":"${tx.id}","reference":"${transfer.reference}","identifierType":"${transfer.identifierType.name}","deliveryPhone":"$delivery"}',
+                '{\"transactionId\":\"${tx.id}\",\"reference\":\"${transfer.reference}\",\"identifierType\":\"${transfer.identifierType.name}\",\"deliveryPhone\":\"$delivery\"}',
           ),
         );
         if (audited is Failure<void>) return Failure<Transaction>(audited.error);
@@ -459,7 +459,7 @@ final class LocalTransferProcessor implements TransferProcessor {
         action: 'voucher_committed',
         occurredAt: clock.now(),
         payloadJson:
-            '{"operationId":"$operationId","cardId":"${card.id}","categoryId":"${category.id}","reservationId":"$reservationId","destination":"$destination"}',
+            '{\"operationId\":\"$operationId\",\"cardId\":\"${card.id}\",\"categoryId\":\"${category.id}\",\"reservationId\":\"$reservationId\",\"destination\":\"$destination\"}',
       ),
     );
     if (commitAudit is Failure<void>) {
@@ -474,6 +474,9 @@ final class LocalTransferProcessor implements TransferProcessor {
       return Failure<Transaction>(commitAudit.error);
     }
 
+    // Mark sending before the native SMS call so recovery/worker sees an
+    // in-flight delivery and can re-attempt quickly if the first send fails.
+    await messages.updateStatus(message.id, MessageProcessingStatus.sending);
     final body =
         cardDeliverySmsBody(serialNumber: card.serialNumber, secretCode: card.secretCode);
     final sent = await sender.send(destination: destination, body: body);
@@ -486,10 +489,17 @@ final class LocalTransferProcessor implements TransferProcessor {
           action: 'sms_delivery_failed',
           occurredAt: clock.now(),
           payloadJson:
-              '{"operationId":"$operationId","cardId":"${card.id}","categoryId":"${category.id}","reservationId":"$reservationId","destination":"$destination","error":"${sent.error.code}"}',
+              '{\"operationId\":\"$operationId\",\"cardId\":\"${card.id}\",\"categoryId\":\"${category.id}\",\"reservationId\":\"$reservationId\",\"destination\":\"$destination\",\"error\":\"${sent.error.code}\"}',
         ),
       );
+      // Sale/voucher already committed — do not reverse. Leave status failed so
+      // MessageDeliveryWorker retries within seconds.
       await messages.updateStatus(message.id, MessageProcessingStatus.failed);
+      final ledgerOnFail =
+          await transactionRepo.findByReference('sale-op:$operationId');
+      if (ledgerOnFail is Success<Transaction?> && ledgerOnFail.value != null) {
+        return Success<Transaction>(ledgerOnFail.value!);
+      }
       return Failure<Transaction>(sent.error);
     }
 
@@ -501,7 +511,7 @@ final class LocalTransferProcessor implements TransferProcessor {
         action: 'sms_delivery_succeeded',
         occurredAt: clock.now(),
         payloadJson:
-            '{"operationId":"$operationId","cardId":"${card.id}","categoryId":"${category.id}","reservationId":"$reservationId","destination":"$destination"}',
+            '{\"operationId\":\"$operationId\",\"cardId\":\"${card.id}\",\"categoryId\":\"${category.id}\",\"reservationId\":\"$reservationId\",\"destination\":\"$destination\"}',
       ),
     );
     if (deliveryAudit is Failure<void>) {
@@ -631,7 +641,7 @@ final class LocalTransferProcessor implements TransferProcessor {
   }
 
   String? _field(String payload, String name) {
-    final match = RegExp('"$name":"([^"]*)"').firstMatch(payload);
+    final match = RegExp('\"$name\":\"([^\"]*)\"').firstMatch(payload);
     return match?.group(1);
   }
 
@@ -665,7 +675,7 @@ final class LocalTransferProcessor implements TransferProcessor {
         action: action,
         occurredAt: clock.now(),
         payloadJson:
-            '{"code":"${error.code}","reference":"${transfer.reference}","operationId":"${_operationId(transfer)}","identifierType":"${transfer.identifierType.name}","identifier":"${transfer.customerIdentifier}","deliveryPhone":"${deliveryPhone ?? ''}"}',
+            '{\"code\":\"${error.code}\",\"reference\":\"${transfer.reference}\",\"operationId\":\"${_operationId(transfer)}\",\"identifierType\":\"${transfer.identifierType.name}\",\"identifier\":\"${transfer.customerIdentifier}\",\"deliveryPhone\":\"${deliveryPhone ?? ''}\"}',
       ),
     );
   }

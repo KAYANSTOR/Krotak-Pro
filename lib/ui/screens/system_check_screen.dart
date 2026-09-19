@@ -3,9 +3,11 @@ import 'package:flutter/material.dart';
 import '../../core/result.dart';
 import '../../domain/entities/system_capability.dart';
 import '../app_scope.dart';
-import '../theme/kayan_colors.dart';
 import '../theme/kayan_palette.dart';
+import '../theme/net_semantic_colors.dart';
+import '../theme/net_tokens.dart';
 import '../widgets/async_views.dart';
+import '../widgets/net/net_surface_card.dart';
 
 /// مركز فحص وتشخيص النظام — مطابق دليل 1.0.9 + ثيم Kayan التكيّفي.
 class SystemCheckScreen extends StatefulWidget {
@@ -60,13 +62,14 @@ class _SystemCheckScreenState extends State<SystemCheckScreen> {
   }
 
   Color _levelColor(SystemHealthLevel level) {
+    final net = context.netColors;
     switch (level) {
       case SystemHealthLevel.ready:
-        return const Color(0xFF059669);
+        return net.available;
       case SystemHealthLevel.warning:
-        return const Color(0xFFD97706);
+        return net.warning;
       case SystemHealthLevel.critical:
-        return const Color(0xFFDC2626);
+        return net.rejected;
     }
   }
 
@@ -89,27 +92,17 @@ class _SystemCheckScreenState extends State<SystemCheckScreen> {
       child: Scaffold(
         backgroundColor: palette.appBackground,
         appBar: AppBar(
-          title: Text(
-            'فحص وتشخيص النظام',
-            style: TextStyle(
-              fontFamily: 'Tajawal',
-              fontWeight: FontWeight.w800,
-              color: palette.textPrimary,
-            ),
-          ),
-          backgroundColor: palette.appBackground,
-          foregroundColor: palette.textPrimary,
-          elevation: 0,
+          title: const Text('فحص وتشخيص النظام'),
           actions: [
             IconButton(
               tooltip: 'إعادة الفحص',
               onPressed: _loading ? null : _runCheck,
-              icon: const Icon(Icons.refresh),
+              icon: const Icon(Icons.refresh_rounded),
             ),
           ],
         ),
         body: _loading
-            ? const AsyncLoadingView(message: 'جاري فحص الصلاحيات والخدمات…')
+            ? const AsyncLoadingView(skeleton: true, skeletonCount: 4)
             : _error != null
                 ? AsyncErrorView(message: _error!, onRetry: _runCheck)
                 : _buildBody(palette),
@@ -124,29 +117,29 @@ class _SystemCheckScreenState extends State<SystemCheckScreen> {
 
     return RefreshIndicator(
       onRefresh: _runCheck,
-      color: KayanColors.primary,
+      color: palette.primary,
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+        padding: NetSpacing.screen,
         children: [
           Container(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(NetSpacing.md),
             decoration: BoxDecoration(
               color: color.withValues(alpha: palette.isDark ? 0.16 : 0.1),
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(NetRadii.md),
               border: Border.all(color: color.withValues(alpha: 0.35)),
             ),
             child: Row(
               children: [
                 Icon(
                   level == SystemHealthLevel.ready
-                      ? Icons.verified_user
+                      ? Icons.verified_rounded
                       : level == SystemHealthLevel.warning
                           ? Icons.warning_amber_rounded
-                          : Icons.error_outline,
+                          : Icons.error_outline_rounded,
                   color: color,
-                  size: 36,
+                  size: 34,
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: NetSpacing.sm),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -176,27 +169,27 @@ class _SystemCheckScreenState extends State<SystemCheckScreen> {
               ],
             ),
           ),
-          const SizedBox(height: 18),
+          const SizedBox(height: NetSpacing.lg),
           _section(
             palette: palette,
             title: 'إمكانيات حرجة',
             subtitle: 'بدونها تتوقف الأتمتة أو تفشل معالجة الرسائل',
             items: snap.of(CapabilitySeverity.critical),
-            tone: const Color(0xFFDC2626),
+            tone: context.netColors.rejected,
           ),
           _section(
             palette: palette,
             title: 'إمكانيات مستحسنة',
             subtitle: 'تحسن الاستقرار على أجهزة الشركات المصنّعة',
             items: snap.of(CapabilitySeverity.recommended),
-            tone: const Color(0xFFD97706),
+            tone: context.netColors.warning,
           ),
           _section(
             palette: palette,
             title: 'إمكانيات اختيارية',
             subtitle: 'ميزات إضافية غير إلزامية للتشغيل الأساسي',
             items: snap.of(CapabilitySeverity.optional),
-            tone: const Color(0xFF0F766E),
+            tone: palette.primary,
           ),
         ],
       ),
@@ -231,9 +224,9 @@ class _SystemCheckScreenState extends State<SystemCheckScreen> {
             color: palette.textTertiary,
           ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: NetSpacing.sm),
         ...items.map((c) => _capCard(c, palette)),
-        const SizedBox(height: 16),
+        const SizedBox(height: NetSpacing.lg),
       ],
     );
   }
@@ -241,29 +234,22 @@ class _SystemCheckScreenState extends State<SystemCheckScreen> {
   Widget _capCard(SystemCapability cap, KayanPalette palette) {
     final ok = cap.isOk;
     final busy = _busyId == cap.id;
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: palette.surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: ok
-              ? const Color(0xFF059669).withValues(alpha: palette.isDark ? 0.45 : 1)
-              : palette.border,
-        ),
-      ),
+    final net = context.netColors;
+    return NetSurfaceCard(
+      margin: const EdgeInsets.only(bottom: NetSpacing.sm),
+      padding: NetSpacing.cardTight,
+      borderColor: ok ? net.available.withValues(alpha: 0.55) : palette.border,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
             children: [
               Icon(
-                ok ? Icons.check_circle : Icons.cancel_outlined,
-                color: ok ? const Color(0xFF059669) : const Color(0xFFDC2626),
+                ok ? Icons.check_circle_rounded : Icons.cancel_rounded,
+                color: ok ? net.available : net.rejected,
                 size: 22,
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: NetSpacing.sm),
               Expanded(
                 child: Text(
                   cap.title,
@@ -276,20 +262,21 @@ class _SystemCheckScreenState extends State<SystemCheckScreen> {
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: NetSpacing.sm,
+                  vertical: 3,
+                ),
                 decoration: BoxDecoration(
-                  color: ok
-                      ? const Color(0xFF059669).withValues(alpha: palette.isDark ? 0.2 : 0.08)
-                      : const Color(0xFFDC2626).withValues(alpha: palette.isDark ? 0.2 : 0.08),
-                  borderRadius: BorderRadius.circular(8),
+                  color: ok ? net.availableContainer : net.rejectedContainer,
+                  borderRadius: BorderRadius.circular(NetRadii.xs),
                 ),
                 child: Text(
                   ok ? 'مفعّل' : 'غير مفعّل',
                   style: TextStyle(
-                    fontFamily: 'Tajawal',
+                    fontFamily: NetTypography.family,
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
-                    color: ok ? const Color(0xFF059669) : const Color(0xFFDC2626),
+                    color: ok ? net.available : net.rejected,
                   ),
                 ),
               ),
@@ -310,10 +297,6 @@ class _SystemCheckScreenState extends State<SystemCheckScreen> {
             Align(
               alignment: Alignment.centerLeft,
               child: FilledButton.icon(
-                style: FilledButton.styleFrom(
-                  backgroundColor: KayanColors.primary,
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                ),
                 onPressed: busy ? null : () => _act(cap),
                 icon: busy
                     ? const SizedBox(
@@ -324,11 +307,11 @@ class _SystemCheckScreenState extends State<SystemCheckScreen> {
                           color: Colors.white,
                         ),
                       )
-                    : const Icon(Icons.open_in_new, size: 16),
+                    : const Icon(Icons.open_in_new_rounded, size: 16),
                 label: Text(
                   cap.actionLabel!,
-                  style: const TextStyle(
-                    fontFamily: 'Tajawal',
+                  style: TextStyle(
+                    fontFamily: NetTypography.family,
                     fontWeight: FontWeight.w700,
                     fontSize: 13,
                   ),

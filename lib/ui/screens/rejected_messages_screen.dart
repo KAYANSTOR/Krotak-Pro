@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 
 import '../../core/result.dart';
+import '../../domain/entities/message.dart';
 import '../../domain/entities/money.dart';
 import '../../domain/entities/setting.dart';
 import '../../domain/services/rejected_message_catalog.dart';
 import '../app_scope.dart';
+import '../theme/kayan_palette.dart';
+import '../theme/net_semantic_colors.dart';
 import '../widgets/async_views.dart';
 
 /// الرسائل المرفوضة — مطابقة إطار الفيديو (`cards_t320s` / `rem_320`).
@@ -29,6 +32,10 @@ class _RejectedMessagesScreenState extends State<RejectedMessagesScreen> {
   List<RejectedMessageItem> _items = const [];
   String _filter = RejectionCategories.all;
   int _newCount = 0;
+
+  /// تبويب الأرشيف — الرسائل التي تمت معالجتها/استعادتها بنجاح (قراءة فقط).
+  bool _showArchive = false;
+  List<RejectedMessageItem> _archiveItems = const [];
 
   /// تسميات قصيرة للشرائح مطابقة لنص الفيديو قدر الإمكان.
   static const _chipShort = <String, String>{
@@ -86,6 +93,35 @@ class _RejectedMessagesScreenState extends State<RejectedMessagesScreen> {
     final items = (result as Success<List<RejectedMessageItem>>).value;
     final newCount = items.where((i) => i.isNew).length;
 
+    // الأرشيف: الرسائل المحلولة بنجاح (معالجة أو مستردة) — عرض فقط.
+    final archive = <RejectedMessageItem>[];
+    for (final status in [
+      MessageProcessingStatus.processed,
+      MessageProcessingStatus.recovered,
+    ]) {
+      final r = await c.messages.listByStatus(status);
+      if (r is Success<List<IncomingMessage>>) {
+        for (final m in r.value) {
+          final parse = c.messageParser.parse(m);
+          archive.add(
+            RejectedMessageItem(
+              message: m,
+              category: RejectionCategories.all,
+              reason: 'تمت معالجة الرسالة بنجاح',
+              isNew: false,
+              amount: parse is Success<ParsedTransfer> ? parse.value.amount : null,
+              phone: parse is Success<ParsedTransfer>
+                  ? parse.value.customerIdentifier
+                  : m.customerIdentifier,
+              reference:
+                  parse is Success<ParsedTransfer> ? parse.value.reference : null,
+            ),
+          );
+        }
+      }
+    }
+    archive.sort((a, b) => b.message.receivedAt.compareTo(a.message.receivedAt));
+
     if (markViewed) {
       await c.settings.save(
         AppSetting(
@@ -101,6 +137,7 @@ class _RejectedMessagesScreenState extends State<RejectedMessagesScreen> {
       _loading = false;
       _items = items;
       _newCount = newCount;
+      _archiveItems = archive;
     });
   }
 
@@ -171,17 +208,20 @@ class _RejectedMessagesScreenState extends State<RejectedMessagesScreen> {
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
-        backgroundColor: const Color(0xFFF0F9F8),
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         appBar: AppBar(
-          backgroundColor: Colors.white,
+          backgroundColor: Theme.of(context).colorScheme.surface,
           elevation: 0,
           surfaceTintColor: Colors.transparent,
           leading: IconButton(
             tooltip: 'رجوع',
             onPressed: () => Navigator.maybePop(context),
-            icon: const Icon(Icons.arrow_forward, color: Color(0xFF0F172A)),
+            icon: Icon(
+              Icons.arrow_forward,
+              color: Theme.of(context).colorScheme.onSurface,
+            ),
           ),
-          title: const Column(
+          title: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text(
@@ -191,7 +231,7 @@ class _RejectedMessagesScreenState extends State<RejectedMessagesScreen> {
                   fontFamily: 'Tajawal',
                   fontWeight: FontWeight.w800,
                   fontSize: 18,
-                  color: Color(0xFF0F172A),
+                  color: Theme.of(context).colorScheme.onSurface,
                 ),
               ),
               Text(
@@ -200,7 +240,7 @@ class _RejectedMessagesScreenState extends State<RejectedMessagesScreen> {
                 style: TextStyle(
                   fontFamily: 'Tajawal',
                   fontSize: 12,
-                  color: Color(0xFF64748B),
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
               ),
             ],
@@ -208,20 +248,28 @@ class _RejectedMessagesScreenState extends State<RejectedMessagesScreen> {
           actions: [
             IconButton(
               tooltip: 'أرشيف',
-              onPressed: () {},
-              icon: const Icon(Icons.inventory_2_outlined, color: Color(0xFF64748B)),
+              onPressed: () => setState(() => _showArchive = !_showArchive),
+              icon: Icon(
+                _showArchive ? Icons.chat_bubble_outline : Icons.inventory_2_outlined,
+                color: _showArchive
+                    ? context.kayan.primary
+                    : Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
             ),
             IconButton(
               tooltip: 'المزيد',
               onPressed: () => _load(markViewed: false),
-              icon: const Icon(Icons.more_horiz, color: Color(0xFF64748B)),
+              icon: Icon(
+                Icons.more_horiz,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
             ),
           ],
         ),
         body: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            if (!_loading && _error == null) ...[
+            if (!_loading && _error == null && !_showArchive) ...[
               // شرائح التصنيف — مطابقة الفيديو
               SizedBox(
                 height: 48,
@@ -240,16 +288,18 @@ class _RejectedMessagesScreenState extends State<RejectedMessagesScreen> {
                           fontFamily: 'Tajawal',
                           fontSize: 12,
                           fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                          color: selected ? Colors.white : const Color(0xFF334155),
+                          color: selected
+                              ? Colors.white
+                              : Theme.of(context).colorScheme.onSurface,
                         ),
                       ),
                       selected: selected,
-                      selectedColor: const Color(0xFF0F766E),
-                      backgroundColor: Colors.white,
+                      selectedColor: Theme.of(context).colorScheme.primary,
+                      backgroundColor: Theme.of(context).colorScheme.surface,
                       side: BorderSide(
                         color: selected
-                            ? const Color(0xFF0F766E)
-                            : const Color(0xFFE2E8F0),
+                            ? context.kayan.primary
+                            : Theme.of(context).colorScheme.outlineVariant,
                       ),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(20),
@@ -278,13 +328,16 @@ class _RejectedMessagesScreenState extends State<RejectedMessagesScreen> {
                   style: const TextStyle(fontFamily: 'Tajawal'),
                   decoration: InputDecoration(
                     hintText: 'بحث بجوال أو محفظة أو سبب',
-                    hintStyle: const TextStyle(
+                    hintStyle: TextStyle(
                       fontFamily: 'Tajawal',
-                      color: Color(0xFF94A3B8),
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
-                    prefixIcon: const Icon(Icons.search, color: Color(0xFF94A3B8)),
+                    prefixIcon: Icon(
+                      Icons.search,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
                     filled: true,
-                    fillColor: const Color(0xFFF1F5F9),
+                    fillColor: Theme.of(context).colorScheme.surface,
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(14),
                       borderSide: BorderSide.none,
@@ -302,7 +355,9 @@ class _RejectedMessagesScreenState extends State<RejectedMessagesScreen> {
                   ? const AsyncLoadingView()
                   : _error != null
                       ? AsyncErrorView(message: _error!, onRetry: () => _load())
-                      : _filtered.isEmpty
+                      : _showArchive
+                          ? _archiveList()
+                          : _filtered.isEmpty
                           ? AsyncEmptyView(
                               message: _items.isEmpty
                                   ? 'لا توجد رسائل مرفوضة'
@@ -310,7 +365,7 @@ class _RejectedMessagesScreenState extends State<RejectedMessagesScreen> {
                               icon: Icons.archive_outlined,
                             )
                           : RefreshIndicator(
-                              color: const Color(0xFF0F766E),
+                              color: context.kayan.primary,
                               onRefresh: () => _load(markViewed: false),
                               child: ListView.builder(
                                 padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
@@ -329,10 +384,12 @@ class _RejectedMessagesScreenState extends State<RejectedMessagesScreen> {
                                         child: Text(
                                           '$day (${dayItems.length})',
                                           textAlign: TextAlign.left,
-                                          style: const TextStyle(
+                                          style: TextStyle(
                                             fontFamily: 'Tajawal',
                                             fontSize: 12,
-                                            color: Color(0xFF94A3B8),
+                                            color: Theme.of(context)
+                                                .colorScheme
+                                                .onSurfaceVariant,
                                           ),
                                         ),
                                       ),
@@ -353,6 +410,102 @@ class _RejectedMessagesScreenState extends State<RejectedMessagesScreen> {
       ),
     );
   }
+
+  /// قائمة الأرشيف: بطاقة عدد + تجميع باليوم + بطاقات «تمت المعالجة».
+  Widget _archiveList() {
+    final groups = <String, List<RejectedMessageItem>>{};
+    for (final i in _archiveItems) {
+      final t = i.message.receivedAt.toLocal();
+      final key =
+          '${t.year}-${t.month.toString().padLeft(2, '0')}-${t.day.toString().padLeft(2, '0')}';
+      groups.putIfAbsent(key, () => []).add(i);
+    }
+    final keys = groups.keys.toList();
+    return RefreshIndicator(
+      color: context.kayan.primary,
+      onRefresh: () => _load(markViewed: false),
+      child: ListView.builder(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+        itemCount: keys.isEmpty ? 1 : keys.length + 1,
+        itemBuilder: (_, gi) {
+          if (gi == 0) {
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                decoration: BoxDecoration(
+                  color: context.netColors.successContainer,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: context.netColors.success.withValues(alpha: 0.4),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.verified_outlined,
+                      color: context.netColors.success,
+                      size: 22,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'مراجعة الرسائل التي تم حلها بنجاح',
+                            style: TextStyle(
+                              fontFamily: 'Tajawal',
+                              fontSize: 12,
+                              color: context.netColors.success,
+                            ),
+                          ),
+                          Text(
+                            '${_archiveItems.length} رسالة محلولة',
+                            style: TextStyle(
+                              fontFamily: 'Tajawal',
+                              fontWeight: FontWeight.w800,
+                              fontSize: 16,
+                              color: context.netColors.success,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }
+          final day = keys[gi - 1];
+          final dayItems = groups[day]!;
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(top: 8, bottom: 8),
+                child: Text(
+                  '$day (${dayItems.length})',
+                  textAlign: TextAlign.left,
+                  style: TextStyle(
+                    fontFamily: 'Tajawal',
+                    fontSize: 12,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+              ...dayItems.map(
+                (item) => Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: _RejectedCard(item: item, resolved: true),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
 }
 
 /// بطاقة ملخص صفراء مطابقة للفيديو.
@@ -367,33 +520,35 @@ class _SummaryBanner extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
-        color: const Color(0xFFFEF3C7),
+        color: context.netColors.warningContainer,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFFCD34D).withValues(alpha: 0.6)),
+        border: Border.all(
+          color: context.netColors.warning.withValues(alpha: 0.4),
+        ),
       ),
       child: Row(
         children: [
-          const Icon(Icons.chat_bubble_outline, color: Color(0xFFB45309), size: 22),
+          Icon(Icons.chat_bubble_outline, color: context.netColors.warning, size: 22),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
+                Text(
                   'إجمالي الرسائل المرفوضة',
                   style: TextStyle(
                     fontFamily: 'Tajawal',
                     fontSize: 12,
-                    color: Color(0xFF92400E),
+                    color: context.netColors.warning,
                   ),
                 ),
                 Text(
                   '$total رسالة مرفوضة',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontFamily: 'Tajawal',
                     fontWeight: FontWeight.w800,
                     fontSize: 16,
-                    color: Color(0xFF78350F),
+                    color: context.netColors.warning,
                   ),
                 ),
               ],
@@ -403,17 +558,19 @@ class _SummaryBanner extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
               decoration: BoxDecoration(
-                color: const Color(0xFFFEE2E2),
+                color: context.netColors.rejectedContainer,
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: const Color(0xFFFECACA)),
+                border: Border.all(
+                  color: context.netColors.rejected.withValues(alpha: 0.4),
+                ),
               ),
               child: Text(
                 '$newCount جديد',
-                style: const TextStyle(
+                style: TextStyle(
                   fontFamily: 'Tajawal',
                   fontWeight: FontWeight.w700,
                   fontSize: 12,
-                  color: Color(0xFFDC2626),
+                  color: context.netColors.rejected,
                 ),
               ),
             ),
@@ -423,11 +580,14 @@ class _SummaryBanner extends StatelessWidget {
   }
 }
 
-/// بطاقة رسالة مرفوضة مطابقة للإطار.
+/// بطاقة رسالة مرفوضة/محلولة مطابقة للإطار.
 class _RejectedCard extends StatelessWidget {
-  const _RejectedCard({required this.item});
+  const _RejectedCard({required this.item, this.resolved = false});
 
   final RejectedMessageItem item;
+
+  /// تلوين أخضر + نص «تمت المعالجة» لبطاقات الأرشيف.
+  final bool resolved;
 
   String _fmtTime(DateTime t) {
     final local = t.toLocal();
@@ -442,12 +602,14 @@ class _RejectedCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final m = item.message;
     final wallet = m.sender.isEmpty ? '—' : m.sender;
+    final accent =
+        resolved ? context.netColors.success : context.netColors.rejected;
 
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.03),
@@ -468,8 +630,8 @@ class _RejectedCard extends StatelessWidget {
                 width: 8,
                 height: 8,
                 margin: const EdgeInsets.only(top: 6),
-                decoration: const BoxDecoration(
-                  color: Color(0xFFCBD5E1),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.outlineVariant,
                   shape: BoxShape.circle,
                 ),
               ),
@@ -478,23 +640,23 @@ class _RejectedCard extends StatelessWidget {
                 child: Text(
                   item.reason,
                   textAlign: TextAlign.right,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontFamily: 'Tajawal',
                     fontWeight: FontWeight.w700,
                     fontSize: 14,
-                    color: Color(0xFF0F172A),
+                    color: Theme.of(context).colorScheme.onSurface,
                     height: 1.35,
                   ),
                 ),
               ),
               const SizedBox(width: 10),
-              // نقطة حمراء يسار (حافة البطاقة)
+              // نقطة ملونة حسب الحالة (حافة البطاقة)
               Container(
                 width: 8,
                 height: 8,
                 margin: const EdgeInsets.only(top: 6),
-                decoration: const BoxDecoration(
-                  color: Color(0xFFEF4444),
+                decoration: BoxDecoration(
+                  color: accent,
                   shape: BoxShape.circle,
                 ),
               ),
@@ -508,21 +670,24 @@ class _RejectedCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF1F5F9),
+                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.account_balance_wallet_outlined,
-                        size: 14, color: Color(0xFF64748B)),
+                    Icon(
+                      Icons.account_balance_wallet_outlined,
+                      size: 14,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
                     const SizedBox(width: 4),
                     Text(
                       wallet,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontFamily: 'Tajawal',
                         fontSize: 11,
-                        color: Color(0xFF475569),
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -534,40 +699,63 @@ class _RejectedCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF1F5F9),
+                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.access_time, size: 14, color: Color(0xFF64748B)),
+                    Icon(
+                      Icons.access_time,
+                      size: 14,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
                     const SizedBox(width: 4),
                     Text(
                       _fmtTime(m.receivedAt),
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontFamily: 'Tajawal',
                         fontSize: 11,
-                        color: Color(0xFF475569),
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
                     ),
                   ],
                 ),
               ),
-              if (item.isNew) ...[
+              if (item.isNew && !resolved) ...[
                 const SizedBox(width: 8),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFFEE2E2),
+                    color: context.netColors.rejectedContainer,
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: const Text(
+                  child: Text(
                     'جديد',
                     style: TextStyle(
                       fontFamily: 'Tajawal',
                       fontSize: 11,
                       fontWeight: FontWeight.w700,
-                      color: Color(0xFFDC2626),
+                      color: context.netColors.rejected,
+                    ),
+                  ),
+                ),
+              ],
+              if (resolved) ...[
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: context.netColors.successContainer,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    'تمت المعالجة',
+                    style: TextStyle(
+                      fontFamily: 'Tajawal',
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: context.netColors.success,
                     ),
                   ),
                 ),

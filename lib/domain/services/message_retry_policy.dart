@@ -5,7 +5,7 @@ import '../entities/message.dart';
 final class MessageRetryPolicy {
   const MessageRetryPolicy({
     this.maxAttempts = 3,
-    this.baseDelay = const Duration(seconds: 30),
+    this.baseDelay = const Duration(seconds: 2),
     this.maxDelay = const Duration(minutes: 30),
     this.confirmPendingTimeout = const Duration(minutes: 15),
   });
@@ -31,6 +31,7 @@ final class MessageRetryPolicy {
         'message_save_failed',
         'message_status_update_failed',
         RejectionRetryHints.voucherSendFailed,
+        RejectionRetryHints.legacyVoucherSendFailed,
       }.contains(code);
 
   bool canRetry(int attempts) => attempts < maxAttempts;
@@ -70,7 +71,11 @@ final class MessageRetryPolicy {
   }
 }
 
-/// Local string aliases so policy does not hard-depend on RejectionCodes import order.
+/// Local string aliases so policy does not hard-depend on RejectionCodes catalog.
 abstract final class RejectionRetryHints {
+  /// Canonical screenshot/domain rejection code.
   static const voucherSendFailed = 'voucherSendFailed';
+
+  /// Legacy persisted code accepted for backward compatibility.
+  static const legacyVoucherSendFailed = 'voucher_send_failed';
 }

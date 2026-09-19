@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../core/result.dart';
 import '../../../domain/entities/setting.dart';
 import '../../app_scope.dart';
+import '../../theme/kayan_palette.dart';
 import '../../widgets/async_views.dart';
 
 /// إعدادات شرائح الاتصال المزدوجة + Auto-Failover — مطابق فيديو Z Net.
@@ -114,14 +115,14 @@ class _SimSettingsScreenState extends State<SimSettingsScreen> {
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
-        backgroundColor: const Color(0xFFF8FAFC),
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         appBar: AppBar(
           title: const Text(
             'إعدادات شرائح الاتصال',
             style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w700),
           ),
-          backgroundColor: const Color(0xFFF8FAFC),
-          foregroundColor: const Color(0xFF0F172A),
+          backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+          foregroundColor: Theme.of(context).colorScheme.onSurface,
           elevation: 0,
         ),
         body: _loading
@@ -146,7 +147,7 @@ class _SimSettingsScreenState extends State<SimSettingsScreen> {
                           fontFamily: 'Tajawal',
                           fontSize: 12,
                           height: 1.4,
-                          color: Colors.grey.shade600,
+                          color: KayanPalette.of(context).textTertiary,
                         ),
                       ),
                       const SizedBox(height: 16),
@@ -207,7 +208,7 @@ class _SimSettingsScreenState extends State<SimSettingsScreen> {
                               style: TextStyle(fontFamily: 'Tajawal', fontSize: 12),
                             ),
                             value: _listen,
-                            activeColor: const Color(0xFF0F766E),
+                            activeColor: context.kayan.primary,
                             onChanged: (v) => setState(() => _listen = v),
                           ),
                           const Divider(height: 20),
@@ -222,7 +223,7 @@ class _SimSettingsScreenState extends State<SimSettingsScreen> {
                               style: TextStyle(fontFamily: 'Tajawal', fontSize: 12),
                             ),
                             value: _failover,
-                            activeColor: const Color(0xFF0F766E),
+                            activeColor: context.kayan.primary,
                             onChanged: (v) => setState(() => _failover = v),
                           ),
                         ],
@@ -230,7 +231,6 @@ class _SimSettingsScreenState extends State<SimSettingsScreen> {
                       const SizedBox(height: 20),
                       FilledButton(
                         style: FilledButton.styleFrom(
-                          backgroundColor: const Color(0xFF0F766E),
                           padding: const EdgeInsets.symmetric(vertical: 14),
                         ),
                         onPressed: _saving ? null : _save,
@@ -261,9 +261,9 @@ class _SimSettingsScreenState extends State<SimSettingsScreen> {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,

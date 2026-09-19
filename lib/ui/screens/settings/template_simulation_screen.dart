@@ -5,6 +5,7 @@ import '../../../domain/entities/message.dart';
 import '../../../domain/entities/wallet.dart';
 import '../../../domain/services/local_message_parser.dart';
 import '../../app_scope.dart';
+import '../../theme/net_semantic_colors.dart';
 import '../../theme/kayan_palette.dart';
 
 /// محاكاة القوالب — اختبار استخراج البيانات من رسائل SMS (مطابق للفيديو).
@@ -171,8 +172,7 @@ class _TemplateSimulationScreenState extends State<TemplateSimulationScreen> {
                           flex: 2,
                           child: FilledButton.icon(
                             onPressed: _running ? null : _simulate,
-                            style: FilledButton.styleFrom(backgroundColor: const Color(0xFF0F766E)),
-                            icon: const Icon(Icons.play_arrow),
+                            icon: const Icon(Icons.play_arrow_rounded),
                             label: Text(_running ? '…' : 'محاكاة', style: const TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w700)),
                           ),
                         ),
@@ -205,9 +205,17 @@ class _TemplateSimulationScreenState extends State<TemplateSimulationScreen> {
                 width: double.infinity,
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: (_success ? const Color(0xFF059669) : const Color(0xFFDC2626)).withValues(alpha: 0.08),
+                  color: (_success
+                          ? context.netColors.available
+                          : context.netColors.rejected)
+                      .withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: (_success ? const Color(0xFF059669) : const Color(0xFFDC2626)).withValues(alpha: 0.35)),
+                  border: Border.all(
+                    color: (_success
+                            ? context.netColors.available
+                            : context.netColors.rejected)
+                        .withValues(alpha: 0.35),
+                  ),
                 ),
                 child: Text(
                   _result!,
@@ -215,7 +223,9 @@ class _TemplateSimulationScreenState extends State<TemplateSimulationScreen> {
                     fontFamily: 'Tajawal',
                     height: 1.55,
                     fontWeight: FontWeight.w600,
-                    color: _success ? const Color(0xFF059669) : const Color(0xFFDC2626),
+                    color: _success
+                        ? context.netColors.available
+                        : context.netColors.rejected,
                   ),
                 ),
               ),

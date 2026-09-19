@@ -5,7 +5,10 @@ import '../../../core/result.dart';
 import '../../../domain/entities/setting.dart';
 import '../../../domain/entities/transaction.dart';
 import '../../app_scope.dart';
+import '../../theme/kayan_palette.dart';
+import '../../theme/net_tokens.dart';
 import '../../widgets/async_views.dart';
+import '../../widgets/net/net_surface_card.dart';
 
 class ExportLedgerScreen extends StatefulWidget {
   const ExportLedgerScreen({super.key});
@@ -66,34 +69,65 @@ class _ExportLedgerScreenState extends State<ExportLedgerScreen> {
         actions: [
           if (_exportText.isNotEmpty)
             IconButton(
-              icon: const Icon(Icons.copy),
+              icon: const Icon(Icons.copy_rounded),
               onPressed: () async {
                 final messenger = ScaffoldMessenger.of(context);
                 await Clipboard.setData(ClipboardData(text: _exportText));
                 messenger.showSnackBar(
-                  const SnackBar(content: Text('تم النسخ', style: TextStyle(fontFamily: 'Tajawal'))),
+                  const SnackBar(content: Text('تم النسخ')),
                 );
               },
             ),
         ],
       ),
       body: _loading
-          ? const AsyncLoadingView()
+          ? const AsyncLoadingView(skeleton: true, skeletonCount: 3)
           : _error != null
               ? AsyncErrorView(message: _error!, onRetry: _load)
               : _count == 0
-                  ? const AsyncEmptyView(message: 'لا حركات للتصدير')
+                  ? AsyncEmptyView(
+                      message: 'لا حركات للتصدير',
+                      hint: 'سيظهر هنا ملف CSV محلي بكل الحركات المسجّلة.',
+                      icon: Icons.file_download_outlined,
+                      actionLabel: 'إعادة التحميل',
+                      onAction: _load,
+                    )
                   : ListView(
-                      padding: const EdgeInsets.all(16),
+                      padding: NetSpacing.screen,
                       children: [
-                        Text(
-                          '$_count حركة — CSV محلي (offline)',
-                          style: const TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.bold),
+                        NetSurfaceCard(
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.table_chart_outlined,
+                                size: 18,
+                                color: KayanPalette.of(context).primary,
+                              ),
+                              const SizedBox(width: NetSpacing.sm),
+                              Expanded(
+                                child: Text(
+                                  '$_count حركة — CSV محلي (offline)',
+                                  style: TextStyle(
+                                    fontFamily: NetTypography.family,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w700,
+                                    color: KayanPalette.of(context).textPrimary,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                        const SizedBox(height: 12),
-                        SelectableText(
-                          _exportText,
-                          style: const TextStyle(fontFamily: 'monospace', fontSize: 11),
+                        const SizedBox(height: NetSpacing.md),
+                        NetSurfaceCard(
+                          margin: EdgeInsets.zero,
+                          child: SelectableText(
+                            _exportText,
+                            style: const TextStyle(
+                              fontFamily: 'monospace',
+                              fontSize: 11,
+                            ),
+                          ),
                         ),
                       ],
                     ),
