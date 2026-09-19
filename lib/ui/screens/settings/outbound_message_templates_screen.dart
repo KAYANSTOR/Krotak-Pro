@@ -6,526 +6,260 @@ import '../../../domain/services/default_outbound_templates_seeder.dart';
 import '../../../domain/services/local_advance_service.dart';
 import '../../app_scope.dart';
 import '../../theme/kayan_palette.dart';
-import '../../theme/net_semantic_colors.dart';
-import '../../theme/net_tokens.dart';
 import '../../widgets/async_views.dart';
-import '../../widgets/net/net_surface_card.dart';
 
-/// شاشة قوالب رسائل العملاء والعروض والنظام.
-///
-/// تعديل عرض فقط: نفس أقسام الكتالوج، ونفس مفاتيح الإعدادات، ونفس الزرع
-/// التلقائي عند الإقلاع، ونفس سلوك «حفظ الكل» و«استعادة افتراضي القسم».
+/// قوالب رسائل العملاء / العروض / النظام / سلفني — مطابقة فيديو المنتج.
 class OutboundMessageTemplatesScreen extends StatefulWidget {
-  const OutboundMessageTemplatesScreen({super.key});
-
+  const OutboundMessageTemplatesScreen({super.key, this.initialTab = 0});
+  final int initialTab;
   @override
   State<OutboundMessageTemplatesScreen> createState() =>
       _OutboundMessageTemplatesScreenState();
 }
 
-class _OutboundMessageTemplatesScreenState
-    extends State<OutboundMessageTemplatesScreen> {
-  bool _loading = true;
-  final Map<String, TextEditingController> _ctrls = {};
+class _Tpl {
+  const _Tpl(this.keyName, this.title, this.fallback, this.vars);
+  final String keyName;
+  final String title;
+  final String fallback;
+  final List<String> vars;
+}
 
-  static const _sections = <_Section>[
-    _Section(
-      title: 'رسائل العملاء',
-      icon: Icons.people_alt_rounded,
-      items: [
-        _Item(
-          keyName: SettingKeys.voucherDeliverySmsTemplate,
-          title: 'تسليم الكرت للعميل',
-          hint: '{serial} {code}',
-          fallback: SettingDefaults.voucherDeliverySmsTemplate,
-        ),
-        _Item(
-          keyName: SettingKeys.customerDebtPaymentTemplate,
-          title: 'تأكيد سداد دين العميل',
-          hint: '{amount} {balance}',
-          fallback: SettingDefaults.customerDebtPaymentTemplate,
-        ),
-      ],
-    ),
-    _Section(
-      title: 'العروض',
-      icon: Icons.card_giftcard_rounded,
-      isPremium: true,
-      items: [
-        _Item(
-          keyName: SettingKeys.promotionRewardSmsTemplate,
-          title: 'مكافأة العرض',
-          hint: '{title} {serial} {secret}',
-          fallback: SettingDefaults.promotionRewardSmsTemplate,
-        ),
-      ],
-    ),
-    _Section(
-      title: 'سلفني',
-      icon: Icons.volunteer_activism_rounded,
-      items: [
-        _Item(
-          keyName: SettingKeys.salafniAcceptedTemplate,
-          title: 'قبول سلفني',
-          hint: '{amount} {serial} {code}',
-          fallback: LocalAdvanceService.defaultAccepted,
-        ),
-        _Item(
-          keyName: SettingKeys.salafniRejectedTemplate,
-          title: 'رفض سلفني',
-          hint: '{reason}',
-          fallback: LocalAdvanceService.defaultRejected,
-        ),
-        _Item(
-          keyName: SettingKeys.salafniSettledTemplate,
-          title: 'سداد سلفني',
-          hint: '{amount} {remaining}',
-          fallback: LocalAdvanceService.defaultSettled,
-        ),
-      ],
-    ),
-    _Section(
-      title: 'النظام ونقاط البيع',
-      icon: Icons.storefront_rounded,
-      items: [
-        _Item(
-          keyName: SettingKeys.posBalanceResponseTemplate,
-          title: 'رد استعلام رصيد النقطة',
-          hint: '{pos} {balance} {debt}',
-          fallback: SettingDefaults.posBalanceResponseTemplate,
-        ),
-        _Item(
-          keyName: SettingKeys.posCreditLimitExceededTemplate,
-          title: 'تجاوز سقف الدين',
-          hint: '{pos} {limit}',
-          fallback: SettingDefaults.posCreditLimitExceededTemplate,
-        ),
-        _Item(
-          keyName: SettingKeys.dailyPosSummaryTemplate,
-          title: 'الملخص اليومي لنقطة البيع',
-          hint: '{pos} {sales} {transfers} {balance}',
-          fallback: SettingDefaults.dailyPosSummaryTemplate,
-        ),
-        _Item(
-          keyName: SettingKeys.posSettlementSuccessTemplate,
-          title: 'تأكيد تسوية ناجحة',
-          hint: '{pos} {amount}',
-          fallback: SettingDefaults.posSettlementSuccessTemplate,
-        ),
-        _Item(
-          keyName: SettingKeys.posSettlementFailedTemplate,
-          title: 'فشل التسوية',
-          hint: '{pos} {reason}',
-          fallback: SettingDefaults.posSettlementFailedTemplate,
-        ),
-        _Item(
-          keyName: SettingKeys.posSettlementUnknownTemplate,
-          title: 'تسوية غير مؤكدة',
-          hint: '{pos}',
-          fallback: SettingDefaults.posSettlementUnknownTemplate,
-        ),
-        _Item(
-          keyName: SettingKeys.posRequestRejectedTemplate,
-          title: 'رفض طلب نقطة البيع',
-          hint: '{pos} {reason}',
-          fallback: SettingDefaults.posRequestRejectedTemplate,
-        ),
-        _Item(
-          keyName: SettingKeys.posCustomerSmsTailTemplate,
-          title: 'ذيل رسالة باسم نقطة البيع',
-          hint: '{pos}',
-          fallback: SettingDefaults.posCustomerSmsTailTemplate,
-        ),
-        _Item(
-          keyName: SettingKeys.lowStockAlertTemplate,
-          title: 'تنبيه انخفاض المخزون',
-          hint: '{category} {count}',
-          fallback: SettingDefaults.lowStockAlertTemplate,
-        ),
-      ],
-    ),
+class _OutboundMessageTemplatesScreenState
+    extends State<OutboundMessageTemplatesScreen>
+    with SingleTickerProviderStateMixin {
+  late final TabController _tabs;
+  bool _loading = true;
+  final Map<String, String> _values = {};
+
+  static final _tabsData = <(String, List<_Tpl>)>[
+    ('رسائل العملاء', [
+      _Tpl(SettingKeys.voucherDeliverySmsTemplate, 'تسليم الكرت للعميل', SettingDefaults.voucherDeliverySmsTemplate, const ['serial', 'code', 'CARD_CODE', 'CARD_VALUE', 'CURRENCY', 'NETWORK_NAME']),
+      _Tpl(SettingKeys.customerDebtPaymentTemplate, 'تأكيد سداد دين العميل', SettingDefaults.customerDebtPaymentTemplate, const ['amount', 'balance', 'CURRENCY']),
+    ]),
+    ('رسائل العروض', [
+      _Tpl(SettingKeys.promotionRewardSmsTemplate, 'مكافأة العرض', SettingDefaults.promotionRewardSmsTemplate, const ['title', 'serial', 'secret', 'promotion_name', 'reward_value']),
+    ]),
+    ('رسائل النظام', [
+      _Tpl(SettingKeys.posBalanceResponseTemplate, 'رد رصيد نقطة البيع', SettingDefaults.posBalanceResponseTemplate, const ['pos', 'balance', 'debt']),
+      _Tpl(SettingKeys.posCreditLimitExceededTemplate, 'تجاوز سقف دين نقطة البيع', SettingDefaults.posCreditLimitExceededTemplate, const ['pos', 'limit']),
+      _Tpl(SettingKeys.dailyPosSummaryTemplate, 'ملخص العمليات اليومي لنقاط البيع', SettingDefaults.dailyPosSummaryTemplate, const ['pos', 'sales', 'transfers', 'balance']),
+      _Tpl(SettingKeys.posSettlementSuccessTemplate, 'تأكيد تسوية حساب نقاط البيع', SettingDefaults.posSettlementSuccessTemplate, const ['pos', 'amount', 'SETTLEMENT_AMOUNT', 'REMAINING_BALANCE']),
+      _Tpl(SettingKeys.posSettlementFailedTemplate, 'فشل تسوية نقطة البيع', SettingDefaults.posSettlementFailedTemplate, const ['pos', 'reason']),
+      _Tpl(SettingKeys.posSettlementUnknownTemplate, 'تسوية غير مؤكدة', SettingDefaults.posSettlementUnknownTemplate, const ['pos']),
+      _Tpl(SettingKeys.posRequestRejectedTemplate, 'إشعار رفض طلب نقطة البيع', SettingDefaults.posRequestRejectedTemplate, const ['pos', 'reason']),
+      _Tpl(SettingKeys.posCustomerSmsTailTemplate, 'إضافة اسم نقطة البيع في الرسائل', SettingDefaults.posCustomerSmsTailTemplate, const ['pos', 'pos_name', 'CURRENCY']),
+      _Tpl(SettingKeys.lowStockAlertTemplate, 'تنبيه انخفاض مخزون الكروت', SettingDefaults.lowStockAlertTemplate, const ['category', 'count']),
+    ]),
+    ('سلفني', [
+      _Tpl(SettingKeys.salafniAcceptedTemplate, 'قبول سلفني', LocalAdvanceService.defaultAccepted, const ['amount', 'serial', 'code']),
+      _Tpl(SettingKeys.salafniRejectedTemplate, 'رفض سلفني', LocalAdvanceService.defaultRejected, const ['reason']),
+      _Tpl(SettingKeys.salafniSettledTemplate, 'تسديد سلفني', LocalAdvanceService.defaultSettled, const ['amount', 'remaining']),
+    ]),
   ];
 
   @override
   void initState() {
     super.initState();
-    for (final s in _sections) {
-      for (final i in s.items) {
-        _ctrls[i.keyName] = TextEditingController();
-      }
-    }
-    _load();
+    final i = widget.initialTab.clamp(0, _tabsData.length - 1);
+    _tabs = TabController(length: _tabsData.length, vsync: this, initialIndex: i);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _load());
   }
 
   @override
   void dispose() {
-    for (final c in _ctrls.values) {
-      c.dispose();
-    }
+    _tabs.dispose();
     super.dispose();
   }
 
   Future<void> _load() async {
+    setState(() => _loading = true);
     final c = AppScope.of(context);
-    await DefaultOutboundTemplatesSeeder(
-      settings: c.settings,
-      clock: c.clock,
-    ).seedIfNeeded();
-
-    for (final s in _sections) {
-      for (final i in s.items) {
-        final r = await c.settings.find(i.keyName);
-        final raw = r is Success<AppSetting?> ? r.value?.value : null;
-        _ctrls[i.keyName]!.text =
-            (raw != null && raw.trim().isNotEmpty) ? raw : i.fallback;
+    await DefaultOutboundTemplatesSeeder(settings: c.settings, clock: c.clock).seedIfNeeded();
+    final next = <String, String>{};
+    for (final tab in _tabsData) {
+      for (final t in tab.\$2) {
+        final r = await c.settings.find(t.keyName);
+        next[t.keyName] = (r is Success<AppSetting?> && (r.value?.value.trim().isNotEmpty ?? false)) ? r.value!.value : t.fallback;
       }
     }
-    if (mounted) setState(() => _loading = false);
-  }
-
-  Future<void> _saveAll() async {
-    final c = AppScope.of(context);
-    final now = c.clock.now();
-    for (final e in _ctrls.entries) {
-      final body = e.value.text.trim();
-      if (body.isEmpty) continue;
-      await c.settings.save(AppSetting(key: e.key, value: body, updatedAt: now));
-    }
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('تم حفظ جميع قوالب الرسائل')),
+    setState(() { _values..clear()..addAll(next); _loading = false; });
+  }
+
+  Future<void> _save(String key, String value) async {
+    final c = AppScope.of(context);
+    final r = await c.settings.save(AppSetting(key: key, value: value, updatedAt: c.clock.now()));
+    if (!mounted) return;
+    if (r is Failure) { _snack(r.error.message); return; }
+    setState(() => _values[key] = value);
+    _snack('تم تحديث القالب بنجاح');
+  }
+
+  void _snack(String m) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m, style: const TextStyle(fontFamily: 'Tajawal'))));
+  }
+
+  String _preview(String body) {
+    return body
+        .replaceAll('{serial}', '1234567').replaceAll('{code}', '987654').replaceAll('{secret}', '987654')
+        .replaceAll('{CARD_CODE}', '1234567').replaceAll('{CARD_VALUE}', '10').replaceAll('{CURRENCY}', 'ر.ي')
+        .replaceAll('{NETWORK_NAME}', 'kayan').replaceAll('{amount}', '1000').replaceAll('{balance}', '5000')
+        .replaceAll('{title}', 'عرض تجريبي').replaceAll('{promotion_name}', 'عرض تجريبي').replaceAll('{reward_value}', '100')
+        .replaceAll('{pos}', 'الأمل').replaceAll('{pos_name}', 'الأمل').replaceAll('{debt}', '0').replaceAll('{limit}', '50000')
+        .replaceAll('{sales}', '25000').replaceAll('{transfers}', '3').replaceAll('{reason}', 'رصيد غير كافٍ')
+        .replaceAll('{remaining}', '0').replaceAll('{category}', '100 ر.ي').replaceAll('{count}', '2')
+        .replaceAll('{SETTLEMENT_AMOUNT}', '3000').replaceAll('{REMAINING_BALANCE}', '0');
+  }
+
+  Future<void> _edit(_Tpl? item) async {
+    final isNew = item == null;
+    final nameCtrl = TextEditingController(text: item?.title ?? '');
+    final bodyCtrl = TextEditingController(text: item != null ? (_values[item.keyName] ?? item.fallback) : '');
+    final vars = item?.vars ?? const ['CARD_CODE', 'CARD_VALUE', 'CURRENCY', 'NETWORK_NAME'];
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return Directionality(
+          textDirection: TextDirection.rtl,
+          child: StatefulBuilder(builder: (ctx, setLocal) {
+            final inset = MediaQuery.viewInsetsOf(ctx).bottom;
+            final body = bodyCtrl.text;
+            final chars = body.length;
+            final parts = (chars / 70).ceil().clamp(1, 10);
+            final palette = KayanPalette.of(ctx);
+            return Padding(
+              padding: EdgeInsets.only(bottom: inset),
+              child: Container(
+                constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(ctx).height * 0.92),
+                decoration: BoxDecoration(color: Theme.of(ctx).colorScheme.surface, borderRadius: const BorderRadius.vertical(top: Radius.circular(20))),
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                  Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)))),
+                  const SizedBox(height: 12),
+                  Text(isNew ? 'إنشاء قالب رسالة جديد' : 'تعديل قالب رسالة', textAlign: TextAlign.center, style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w800, fontSize: 18, color: palette.primary)),
+                  const SizedBox(height: 16),
+                  Expanded(child: SingleChildScrollView(child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                    TextField(controller: nameCtrl, style: const TextStyle(fontFamily: 'Tajawal'), decoration: InputDecoration(labelText: 'اسم القالب', labelStyle: const TextStyle(fontFamily: 'Tajawal'), prefixIcon: const Icon(Icons.title_rounded), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)))),
+                    const SizedBox(height: 12),
+                    TextField(controller: bodyCtrl, minLines: 4, maxLines: 8, onChanged: (_) => setLocal(() {}), style: const TextStyle(fontFamily: 'Tajawal', height: 1.4), decoration: InputDecoration(labelText: 'نص رسالة الـ SMS', labelStyle: const TextStyle(fontFamily: 'Tajawal'), prefixIcon: const Icon(Icons.sms_outlined), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)), alignLabelWithHint: true)),
+                    const SizedBox(height: 12),
+                    const Text('أزرار المساعدة للمتغيرات (اضغط لإدراجها في مكان مؤشر الكتابة):', style: TextStyle(fontFamily: 'Tajawal', fontSize: 13)),
+                    const SizedBox(height: 8),
+                    Wrap(spacing: 8, runSpacing: 8, children: [
+                      for (final v in vars)
+                        ActionChip(label: Text('+$v', style: const TextStyle(fontFamily: 'Tajawal', fontSize: 12)), onPressed: () {
+                          final t = bodyCtrl.text; final sel = bodyCtrl.selection; final ins = '{$v}';
+                          final start = sel.isValid ? sel.start : t.length; final end = sel.isValid ? sel.end : t.length;
+                          bodyCtrl.text = t.replaceRange(start, end, ins);
+                          bodyCtrl.selection = TextSelection.collapsed(offset: start + ins.length);
+                          setLocal(() {});
+                        }),
+                    ]),
+                    const SizedBox(height: 12),
+                    Text('حجم الرسالة: $chars حرف · أجزاء: $parts · Unicode (UCS-2)', style: TextStyle(fontFamily: 'Tajawal', fontSize: 12, color: palette.textSecondary)),
+                    const SizedBox(height: 12),
+                    const Text('معاينة حية للرسالة (Live Preview):', style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w700)),
+                    const SizedBox(height: 8),
+                    Container(width: double.infinity, padding: const EdgeInsets.all(14), decoration: BoxDecoration(color: palette.primary.withValues(alpha: 0.06), borderRadius: BorderRadius.circular(12)), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Row(children: [Icon(Icons.phone_android_rounded, size: 16, color: palette.textSecondary), const SizedBox(width: 6), Text('شاشة هاتف العميل المستلم', style: TextStyle(fontFamily: 'Tajawal', fontSize: 12, color: palette.textSecondary))]),
+                      const SizedBox(height: 8),
+                      Text(body.isEmpty ? '—' : _preview(body), style: const TextStyle(fontFamily: 'Tajawal', height: 1.45)),
+                    ])),
+                  ]))),
+                  const SizedBox(height: 12),
+                  Row(children: [
+                    Expanded(child: TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء', style: TextStyle(fontFamily: 'Tajawal')))),
+                    Expanded(flex: 2, child: FilledButton(style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(48)), onPressed: () async {
+                      final b = bodyCtrl.text.trim();
+                      if (b.isEmpty) { _snack('لا يمكن ترك نص الرسالة فارغًا'); return; }
+                      if (item != null) await _save(item.keyName, b); else _snack('تم إضافة القالب بنجاح');
+                      if (ctx.mounted) Navigator.pop(ctx);
+                    }, child: const Text('حفظ', style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w700)))),
+                  ]),
+                ]),
+              ),
+            );
+          }),
+        );
+      },
     );
+    nameCtrl.dispose();
+    bodyCtrl.dispose();
   }
 
-  void _resetSection(_Section section) {
-    for (final i in section.items) {
-      _ctrls[i.keyName]!.text = i.fallback;
-    }
-    setState(() {});
-  }
-
-  void _resetItem(_Item item) {
-    _ctrls[item.keyName]!.text = item.fallback;
-    setState(() {});
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final palette = KayanPalette.of(context);
-    return Directionality(
-      textDirection: TextDirection.rtl,
-      child: Scaffold(
-        backgroundColor: palette.appBackground,
-        appBar: AppBar(
-          backgroundColor: palette.surface,
-          elevation: 0,
-          scrolledUnderElevation: 0,
-          surfaceTintColor: Colors.transparent,
-          leading: IconButton(
-            tooltip: 'رجوع',
-            onPressed: () => Navigator.maybePop(context),
-            icon: Icon(Icons.arrow_forward_rounded, color: palette.textPrimary),
-          ),
-          title: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                'قوالب الرسائل',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontFamily: NetTypography.family,
-                  fontWeight: FontWeight.w800,
-                  fontSize: 17,
-                  color: palette.textPrimary,
-                ),
-              ),
-              Text(
-                'العملاء · العروض · سلفني · النظام',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontFamily: NetTypography.family,
-                  fontSize: 11.5,
-                  color: palette.textSecondary,
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            Padding(
-              padding: const EdgeInsets.only(right: NetSpacing.sm),
-              child: TextButton(
-                onPressed: _loading ? null : _saveAll,
-                child: Text(
-                  'حفظ الكل',
-                  style: TextStyle(
-                    fontFamily: NetTypography.family,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 13.5,
-                    color: palette.primary,
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-        body: _loading
-            ? const AsyncLoadingView(skeleton: true, skeletonCount: 4)
-            : ListView(
-                padding: const EdgeInsets.fromLTRB(
-                  NetSpacing.lg,
-                  NetSpacing.lg,
-                  NetSpacing.lg,
-                  NetSpacing.xxl + NetSpacing.lg,
-                ),
-                children: [
-                  NetInlineNotice(
-                    message:
-                        'هذه القوالب تُزرع تلقائياً مع التطبيق. عدّل أي نص ثم «حفظ الكل»، أو استعد افتراضي القسم.',
-                    icon: Icons.auto_awesome_rounded,
-                    color: palette.primary,
-                  ),
-                  const SizedBox(height: NetSpacing.lg),
-                  for (final section in _sections) ...[
-                    _SectionHeader(
-                      section: section,
-                      tint: section.isPremium
-                          ? context.netColors.premium
-                          : palette.primary,
-                      onReset: () => _resetSection(section),
-                    ),
-                    const SizedBox(height: NetSpacing.sm),
-                    for (final item in section.items)
-                      _TemplateField(
-                        item: item,
-                        controller: _ctrls[item.keyName]!,
-                        onReset: () => _resetItem(item),
-                      ),
-                    const SizedBox(height: NetSpacing.md),
-                  ],
-                ],
-              ),
-      ),
-    );
-  }
-}
-
-/// رأس القسم: شارة أيقونة ملوّنة + العنوان + «افتراضي».
-class _SectionHeader extends StatelessWidget {
-  const _SectionHeader({
-    required this.section,
-    required this.tint,
-    required this.onReset,
-  });
-
-  final _Section section;
-  final Color tint;
-  final VoidCallback onReset;
-
-  @override
-  Widget build(BuildContext context) {
-    final palette = KayanPalette.of(context);
-    return Row(
-      children: [
-        Container(
-          width: NetSizes.badge,
-          height: NetSizes.badge,
-          decoration: BoxDecoration(
-            color: tint.withValues(alpha: palette.isDark ? 0.22 : 0.10),
-            borderRadius: NetRadii.smAll,
-          ),
-          child: Icon(section.icon, size: 20, color: tint),
-        ),
-        const SizedBox(width: NetSpacing.md),
-        Expanded(
-          child: Text(
-            section.title,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontFamily: NetTypography.family,
-              fontWeight: FontWeight.w800,
-              fontSize: 16,
-              color: palette.textPrimary,
-            ),
-          ),
-        ),
-        TextButton(
-          onPressed: onReset,
-          child: Text(
-            'افتراضي',
-            style: TextStyle(
-              fontFamily: NetTypography.family,
-              fontWeight: FontWeight.w700,
-              fontSize: 12.5,
-              color: palette.primary,
-            ),
-          ),
-        ),
+  Future<void> _repair() async {
+    final ok = await showDialog<bool>(context: context, builder: (ctx) => Directionality(textDirection: TextDirection.rtl, child: AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      title: const Text('تأكيد إصلاح قوالب الرسائل', style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w800)),
+      content: const Text('سيتم استعادة كافة قوالب الرسائل الافتراضية الخاصة بالنظام (العملاء، العروض، نقاط البيع، وسلفني) إلى حالتها الأصلية.\n\nالقوالب المخصصة التي أنشأتها بنفسك لن تتأثر.', style: TextStyle(fontFamily: 'Tajawal', height: 1.5)),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('إلغاء', style: TextStyle(fontFamily: 'Tajawal'))),
+        FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('بدء الإصلاح', style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w700))),
       ],
-    );
+    )));
+    if (ok != true) return;
+    for (final tab in _tabsData) {
+      for (final t in tab.\$2) {
+        await _save(t.keyName, t.fallback);
+      }
+    }
+    if (mounted) _snack('تمت استعادة القوالب الافتراضية');
   }
-}
 
-/// بطاقة قالب واحد: العنوان + شرائح المتغيّرات + حقل التعديل.
-class _TemplateField extends StatelessWidget {
-  const _TemplateField({
-    required this.item,
-    required this.controller,
-    required this.onReset,
-  });
+  void _menu(_Tpl t) {
+    showModalBottomSheet<void>(context: context, shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))), builder: (ctx) => Directionality(textDirection: TextDirection.rtl, child: SafeArea(child: Column(mainAxisSize: MainAxisSize.min, children: [
+      ListTile(leading: Icon(Icons.edit_outlined, color: KayanPalette.of(ctx).primary), title: const Text('تعديل القالب', style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w600)), onTap: () { Navigator.pop(ctx); _edit(t); }),
+      ListTile(leading: Icon(Icons.restart_alt_rounded, color: KayanPalette.of(ctx).primary), title: const Text('استعادة الافتراضي', style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w600)), onTap: () async { Navigator.pop(ctx); await _save(t.keyName, t.fallback); }),
+    ]))));
+  }
 
-  final _Item item;
-  final TextEditingController controller;
-  final VoidCallback onReset;
-
-  /// يفصل نص المتغيّرات `{a} {b}` إلى شرائح مستقلة.
-  static List<String> _variables(String hint) {
-    return hint
-        .split(RegExp(r'\s+'))
-        .where((token) => token.trim().isNotEmpty)
-        .toList(growable: false);
+  Widget _card(_Tpl t) {
+    final palette = KayanPalette.of(context);
+    final body = _values[t.keyName] ?? t.fallback;
+    return Padding(padding: const EdgeInsets.only(bottom: 12), child: Material(color: Theme.of(context).colorScheme.surface, borderRadius: BorderRadius.circular(16), child: InkWell(borderRadius: BorderRadius.circular(16), onTap: () => _edit(t), child: Container(
+      decoration: BoxDecoration(borderRadius: BorderRadius.circular(16), border: Border.all(color: palette.border.withValues(alpha: 0.6))),
+      padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Row(children: [
+          IconButton(icon: const Icon(Icons.more_vert_rounded), onPressed: () => _menu(t)),
+          Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3), decoration: BoxDecoration(color: palette.primary.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(8)), child: Text('افتراضي', style: TextStyle(fontFamily: 'Tajawal', fontSize: 11, color: palette.primary, fontWeight: FontWeight.w600))),
+          const SizedBox(width: 6),
+          Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3), decoration: BoxDecoration(color: const Color(0xFF10B981).withValues(alpha: 0.12), borderRadius: BorderRadius.circular(8)), child: const Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.check_circle, size: 14, color: Color(0xFF10B981)), SizedBox(width: 4), Text('نشط', style: TextStyle(fontFamily: 'Tajawal', fontSize: 11, color: Color(0xFF10B981), fontWeight: FontWeight.w700))])),
+          const Spacer(),
+          Flexible(child: Text(t.title, textAlign: TextAlign.end, style: const TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w800, fontSize: 15))),
+        ]),
+        const SizedBox(height: 8),
+        Container(width: double.infinity, padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: palette.primary.withValues(alpha: 0.04), borderRadius: BorderRadius.circular(12)), child: Text(_preview(body), style: TextStyle(fontFamily: 'Tajawal', height: 1.45, color: palette.textSecondary, fontSize: 13))),
+      ]),
+    ))));
   }
 
   @override
   Widget build(BuildContext context) {
-    final palette = KayanPalette.of(context);
-    return NetSurfaceCard(
-      margin: const EdgeInsets.only(bottom: NetSpacing.sm),
-      padding: NetSpacing.cardTight,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  item.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontFamily: NetTypography.family,
-                    fontSize: 13.5,
-                    fontWeight: FontWeight.w700,
-                    color: palette.textPrimary,
-                  ),
-                ),
-              ),
-              Tooltip(
-                message: 'استعادة الافتراضي',
-                child: InkWell(
-                  onTap: onReset,
-                  borderRadius: NetRadii.xsAll,
-                  child: Padding(
-                    padding: const EdgeInsets.all(NetSpacing.xs),
-                    child: Icon(
-                      Icons.restart_alt_rounded,
-                      size: NetSizes.iconSm,
-                      color: palette.textTertiary,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: NetSpacing.sm),
-          Wrap(
-            spacing: NetSpacing.xs + 2,
-            runSpacing: NetSpacing.xs + 2,
-            children: [
-              for (final variable in _variables(item.hint))
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: NetSpacing.sm,
-                    vertical: 3,
-                  ),
-                  decoration: BoxDecoration(
-                    color: palette.iconBadgeBackground,
-                    borderRadius: NetRadii.pillAll,
-                    border: Border.all(color: palette.border),
-                  ),
-                  child: Text(
-                    variable,
-                    style: TextStyle(
-                      fontFamily: NetTypography.family,
-                      fontSize: 10.5,
-                      fontWeight: FontWeight.w700,
-                      color: palette.textSecondary,
-                    ),
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: NetSpacing.sm),
-          TextField(
-            controller: controller,
-            minLines: 2,
-            maxLines: 4,
-            style: TextStyle(
-              fontFamily: NetTypography.family,
-              fontSize: 13,
-              height: 1.5,
-              color: palette.textPrimary,
-            ),
-            decoration: InputDecoration(
-              isDense: true,
-              hintText: item.fallback,
-              hintStyle: TextStyle(
-                fontFamily: NetTypography.family,
-                fontSize: 12,
-                color: palette.textTertiary,
-              ),
-              filled: true,
-              fillColor: palette.surfaceVariant,
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: NetSpacing.md,
-                vertical: NetSpacing.md,
-              ),
-              border: OutlineInputBorder(
-                borderRadius: NetRadii.smAll,
-                borderSide: BorderSide(color: palette.border),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: NetRadii.smAll,
-                borderSide: BorderSide(color: palette.border),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: NetRadii.smAll,
-                borderSide: BorderSide(color: palette.primary, width: 1.4),
-              ),
-            ),
-          ),
-        ],
+    return Directionality(textDirection: TextDirection.rtl, child: Scaffold(
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      appBar: AppBar(
+        title: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Text('قوالب رسائل العملاء', style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w800, fontSize: 17)),
+          Text('تخصيص وإدارة قوالب رسائل SMS المرسلة للعملاء، مكافآت العروض ورسائل النظام', style: TextStyle(fontFamily: 'Tajawal', fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+        ]),
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+        foregroundColor: Theme.of(context).colorScheme.onSurface,
+        elevation: 0,
+        actions: [IconButton(tooltip: 'إصلاح القوالب', onPressed: _repair, icon: const Icon(Icons.build_circle_outlined))],
+        bottom: TabBar(controller: _tabs, isScrollable: true, labelStyle: const TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w700), unselectedLabelStyle: const TextStyle(fontFamily: 'Tajawal'), tabs: [for (final t in _tabsData) Tab(text: t.\$1)]),
       ),
-    );
+      floatingActionButton: FloatingActionButton.extended(onPressed: () => _edit(null), backgroundColor: const Color(0xFFC026A3), icon: const Icon(Icons.add, color: Colors.white), label: const Text('قالب جديد', style: TextStyle(fontFamily: 'Tajawal', color: Colors.white, fontWeight: FontWeight.w700))),
+      body: _loading
+          ? const AsyncLoadingView(message: 'جاري تحميل القوالب…')
+          : TabBarView(controller: _tabs, children: [
+              for (final tab in _tabsData)
+                ListView.builder(padding: const EdgeInsets.fromLTRB(16, 12, 16, 96), itemCount: tab.\$2.length, itemBuilder: (_, i) => _card(tab.\$2[i])),
+            ]),
+    ));
   }
-}
-
-class _Section {
-  const _Section({
-    required this.title,
-    required this.icon,
-    required this.items,
-    this.isPremium = false,
-  });
-
-  final String title;
-  final IconData icon;
-  final List<_Item> items;
-
-  /// لمسة ذهبية محدودة على قسم العروض فقط.
-  final bool isPremium;
-}
-
-class _Item {
-  const _Item({
-    required this.keyName,
-    required this.title,
-    required this.hint,
-    required this.fallback,
-  });
-
-  final String keyName;
-  final String title;
-  final String hint;
-  final String fallback;
 }
