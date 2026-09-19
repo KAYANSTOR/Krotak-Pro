@@ -13,6 +13,7 @@ import '../theme/net_semantic_colors.dart';
 import '../widgets/async_views.dart';
 import '../widgets/customer_promotion_progress.dart';
 import '../widgets/customer_statement_export.dart';
+import '../widgets/net/net_app_bar_title.dart';
 
 /// تفاصيل الحساب — رصيد + ربط GSM + تعديل رصيد + تقدم العروض + سجل.
 class CustomerDetailScreen extends StatefulWidget {
@@ -254,13 +255,12 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
           elevation: 0,
           surfaceTintColor: Colors.transparent,
           leading: IconButton(onPressed: () => Navigator.maybePop(context), icon: Icon(Icons.arrow_forward, color: Theme.of(context).colorScheme.onSurface)),
-          title: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(customer.displayName, textAlign: TextAlign.center, style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w800, fontSize: 16, color: Theme.of(context).colorScheme.onSurface)),
-              Text('كشف حساب العميل والعمليات', textAlign: TextAlign.center, style: TextStyle(fontFamily: 'Tajawal', fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant)),
-            ],
+          title: NetAppBarTitle(
+            icon: Icons.person_rounded,
+            title: customer.displayName,
+            subtitle: 'كشف حساب العميل والعمليات',
           ),
+          centerTitle: false,
           actions: [
             IconButton(tooltip: 'تصدير الكشف', onPressed: _exportStatement, icon: Icon(Icons.ios_share_rounded, color: context.kayan.primary)),
             IconButton(onPressed: _load, icon: Icon(Icons.refresh_rounded, color: context.kayan.primary)),
