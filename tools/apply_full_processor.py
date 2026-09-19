@@ -3,7 +3,6 @@
 from pathlib import Path
 import base64
 import gzip
-import sys
 
 def assemble(prefix: str) -> bytes:
     parts = sorted(Path('tools').glob(f'{prefix}_*.b64'))
@@ -13,8 +12,8 @@ def assemble(prefix: str) -> bytes:
     return gzip.decompress(base64.b64decode(raw))
 
 def main() -> None:
-    proc = assemble('xfer_full')
-    test = assemble('xfer_test')
+    proc = assemble('xf')
+    test = assemble('xt')
     Path('lib/domain/services/local_transfer_processor.dart').write_bytes(proc)
     Path('test/services/message_parser_and_transfer_test.dart').write_bytes(test)
     text = proc.decode('utf-8')
