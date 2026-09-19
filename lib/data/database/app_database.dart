@@ -220,6 +220,20 @@ class AppDatabase extends _$AppDatabase {
       'identifier_kind',
       "TEXT NOT NULL DEFAULT 'phone'",
     );
+    // Wallets/POS video-match additions — self-healing via beforeOpen, so no
+    // separate schemaVersion bump is needed for these.
+    await _addColumnIfMissing('transfer_templates', 'pos_id', 'TEXT');
+    await _addColumnIfMissing(
+      'transfer_templates',
+      'sender_name_label',
+      'TEXT',
+    );
+    await _addColumnIfMissing('transfer_templates', 'note_label', 'TEXT');
+    await _addColumnIfMissing(
+      'transfer_templates',
+      'require_reference',
+      'INTEGER NOT NULL DEFAULT 1',
+    );
   }
 
   Future<void> _addColumnIfMissing(
