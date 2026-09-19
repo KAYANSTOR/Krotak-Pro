@@ -23,9 +23,6 @@ import '../widgets/net/net_tab_header.dart';
 part 'inventory_sheets.dart';
 
 /// شاشة إدارة الكروت — مطابقة لتصميم فيديو Z Net + الصورة المرجعية.
-///
-/// الاستعلامات والاستيراد كما هي؛ التحديث بصري (مقاييس مخزون، إخفاء الأسرار،
-/// حالات فارغة، رأس موحّد).
 class InventoryScreen extends StatefulWidget {
   const InventoryScreen({super.key});
 
@@ -101,12 +98,10 @@ class _InventoryScreenState extends State<InventoryScreen> {
     return list;
   }
 
-  /// Display-only counts per category/status over the already-loaded cards.
   int _countFor(String categoryId, domain.CardStatus status) => _cards
       .where((e) => e.categoryId == categoryId && e.status == status)
       .length;
 
-  /// Resolves a category display name without an extra query.
   String _categoryName(String categoryId) {
     for (final cat in _categories) {
       if (cat.id == categoryId) return cat.name;
@@ -141,6 +136,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
       context,
       builder: (ctx) => _CategoriesSheet(
         categories: _categories,
+        cards: _cards,
         onChanged: _load,
       ),
     );
@@ -165,7 +161,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
           ListTile(
             leading: Icon(Icons.category_rounded, color: KayanPalette.of(ctx).primary),
             title: const Text('إدارة الفئات'),
-            subtitle: Text('${_categories.length} فئة'),
+            subtitle: Text(_categories.length.toString() + ' فئة'),
             onTap: () {
               Navigator.pop(ctx);
               _openCategories();
@@ -214,7 +210,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
       children: [
         NetTabHeader(
           title: 'إدارة الكروت',
-          subtitle: 'المخزون والحالات والفئات · ${_cards.length} كرت',
+          subtitle: 'المخزون والحالات والفئات · ' + _cards.length.toString() + ' كرت',
           icon: Icons.style_rounded,
           actions: [
             NetHeaderAction(
@@ -229,8 +225,6 @@ class _InventoryScreenState extends State<InventoryScreen> {
             ),
           ],
         ),
-
-        // ── مقياس المخزون الكلي ──
         Padding(
           padding: NetSpacing.pageH,
           child: NetSurfaceCard(
@@ -259,8 +253,6 @@ class _InventoryScreenState extends State<InventoryScreen> {
             ),
           ),
         ),
-
-        // ── شرائح الفئات ──
         if (_categories.isNotEmpty)
           SizedBox(
             height: 44,
@@ -279,14 +271,12 @@ class _InventoryScreenState extends State<InventoryScreen> {
                       selected: _categoryFilter == cat.id,
                       showCheckmark: false,
                       label: Text(
-                        '${cat.name} (${_countFor(cat.id, domain.CardStatus.available)})',
+                        cat.name + ' (' + _countFor(cat.id, domain.CardStatus.available).toString() + ')',
                         style: TextStyle(
                           fontFamily: NetTypography.family,
                           fontSize: 12.5,
                           fontWeight: FontWeight.w700,
-                          color: _categoryFilter == cat.id
-                              ? Colors.white
-                              : palette.textPrimary,
+                          color: _categoryFilter == cat.id ? Colors.white : palette.textPrimary,
                         ),
                       ),
                       selectedColor: palette.primary,
@@ -303,8 +293,6 @@ class _InventoryScreenState extends State<InventoryScreen> {
               ],
             ),
           ),
-
-        // ── البحث + إظهار الأسرار ──
         Padding(
           padding: const EdgeInsets.fromLTRB(
             NetSpacing.lg,
@@ -354,7 +342,6 @@ class _InventoryScreenState extends State<InventoryScreen> {
             style: TextStyle(fontFamily: NetTypography.family, color: palette.textPrimary),
           ),
         ),
-
         Expanded(
           child: filtered.isEmpty
               ? AsyncEmptyView(
@@ -422,7 +409,7 @@ class _LegendDot extends StatelessWidget {
         ),
         const SizedBox(width: NetSpacing.xxs),
         Text(
-          '$value',
+          value.toString(),
           style: TextStyle(
             fontFamily: NetTypography.family,
             fontSize: 12.5,
@@ -546,7 +533,7 @@ class _CardRow extends StatelessWidget {
                       style: TextStyle(
                         fontFamily: NetTypography.family,
                         fontSize: 12,
-                        letterSpacing: revealSecret ? 0 : 1.5,
+                        letterSpacing: revealSecret ? 0.2 : 1.2,
                         color: palette.textSecondary,
                       ),
                     ),
@@ -555,27 +542,6 @@ class _CardRow extends StatelessWidget {
               ],
             ),
           ),
-          if (hasSecret)
-            IconButton(
-              tooltip: 'نسخ الرمز',
-              onPressed: () {
-                Clipboard.setData(ClipboardData(text: card.secretCode));
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text(
-                      'تم نسخ رمز الكرت',
-                      style: TextStyle(fontFamily: NetTypography.family),
-                    ),
-                    duration: Duration(seconds: 2),
-                  ),
-                );
-              },
-              icon: Icon(
-                Icons.copy_rounded,
-                size: NetSizes.iconSm,
-                color: palette.textSecondary,
-              ),
-            ),
         ],
       ),
     );
