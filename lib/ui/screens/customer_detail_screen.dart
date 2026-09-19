@@ -7,6 +7,9 @@ import '../../domain/entities/money.dart';
 import '../../domain/entities/transaction.dart';
 import '../../domain/services/local_promotion_progress_service.dart';
 import '../app_scope.dart';
+import '../theme/kayan_colors.dart';
+import '../theme/kayan_palette.dart';
+import '../theme/net_semantic_colors.dart';
 import '../widgets/async_views.dart';
 import '../widgets/customer_promotion_progress.dart';
 
@@ -90,10 +93,10 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
         textDirection: TextDirection.rtl,
         child: AlertDialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Row(
+          title: Row(
             children: [
-              Icon(Icons.phone_android, color: Color(0xFF0F766E)),
-              SizedBox(width: 8),
+              Icon(Icons.phone_android, color: context.kayan.primary),
+              const SizedBox(width: 8),
               Expanded(
                 child: Text(
                   'ربط رقم جوال (GSM)',
@@ -110,12 +113,12 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Text(
+              Text(
                 'الرجاء إدخال رقم جوال المشترك لإرسال الكروت المعلّقة وتأكيد المعاملات المستقبلية.',
                 style: TextStyle(
                   fontFamily: 'Tajawal',
                   fontSize: 13,
-                  color: Color(0xFF64748B),
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                   height: 1.4,
                 ),
               ),
@@ -147,9 +150,6 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
               child: const Text('إلغاء', style: TextStyle(fontFamily: 'Tajawal')),
             ),
             FilledButton(
-              style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFF0F766E),
-              ),
               onPressed: () => Navigator.pop(ctx, true),
               child: const Text(
                 'ربط وصرف الكروت',
@@ -185,7 +185,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text('تم ربط الجوال', style: TextStyle(fontFamily: 'Tajawal')),
-        backgroundColor: Color(0xFF059669),
+        backgroundColor: KayanColors.success,
       ),
     );
     await _load();
@@ -232,7 +232,6 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                 child: const Text('إلغاء', style: TextStyle(fontFamily: 'Tajawal')),
               ),
               FilledButton(
-                style: FilledButton.styleFrom(backgroundColor: const Color(0xFF0F766E)),
                 onPressed: () => Navigator.pop(ctx, true),
                 child: const Text('تنفيذ', style: TextStyle(fontFamily: 'Tajawal')),
               ),
@@ -303,14 +302,17 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
-        backgroundColor: const Color(0xFFF0F9F8),
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         appBar: AppBar(
-          backgroundColor: Colors.white,
+          backgroundColor: Theme.of(context).colorScheme.surface,
           elevation: 0,
           surfaceTintColor: Colors.transparent,
           leading: IconButton(
             onPressed: () => Navigator.maybePop(context),
-            icon: const Icon(Icons.arrow_forward, color: Color(0xFF0F172A)),
+            icon: Icon(
+              Icons.arrow_forward,
+              color: Theme.of(context).colorScheme.onSurface,
+            ),
           ),
           title: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -318,20 +320,20 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
               Text(
                 customer.displayName,
                 textAlign: TextAlign.center,
-                style: const TextStyle(
+                style: TextStyle(
                   fontFamily: 'Tajawal',
                   fontWeight: FontWeight.w800,
                   fontSize: 16,
-                  color: Color(0xFF0F172A),
+                  color: Theme.of(context).colorScheme.onSurface,
                 ),
               ),
-              const Text(
+              Text(
                 'كشف حساب المشترك والعمليات',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontFamily: 'Tajawal',
                   fontSize: 11,
-                  color: Color(0xFF64748B),
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
               ),
             ],
@@ -339,12 +341,12 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
           actions: [
             IconButton(
               onPressed: _load,
-              icon: const Icon(Icons.refresh, color: Color(0xFF0F766E)),
+              icon: Icon(Icons.refresh_rounded, color: context.kayan.primary),
             ),
           ],
         ),
         body: RefreshIndicator(
-          color: const Color(0xFF0F766E),
+          color: context.kayan.primary,
           onRefresh: _load,
           child: ListView(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
@@ -352,9 +354,11 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: Theme.of(context).colorScheme.surface,
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                  border: Border.all(
+                    color: Theme.of(context).colorScheme.outlineVariant,
+                  ),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -364,11 +368,11 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                         Expanded(
                           child: Text(
                             customer.displayName,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontFamily: 'Tajawal',
                               fontWeight: FontWeight.w800,
                               fontSize: 17,
-                              color: Color(0xFF0F172A),
+                              color: Theme.of(context).colorScheme.onSurface,
                             ),
                           ),
                         ),
@@ -376,37 +380,37 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFFEF3C7),
+                              color: context.netColors.warningContainer,
                               borderRadius: BorderRadius.circular(8),
                             ),
-                            child: const Text(
+                            child: Text(
                               'غير مربوط',
                               style: TextStyle(
                                 fontFamily: 'Tajawal',
                                 fontSize: 11,
                                 fontWeight: FontWeight.w700,
-                                color: Color(0xFFB45309),
+                                color: context.netColors.warning,
                               ),
                             ),
                           ),
                       ],
                     ),
                     const SizedBox(height: 6),
-                    const Text(
+                    Text(
                       'الرصيد الحالي',
                       style: TextStyle(
                         fontFamily: 'Tajawal',
                         fontSize: 12,
-                        color: Color(0xFF64748B),
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
                     ),
                     Text(
                       _fmtMoney(_balance),
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontFamily: 'Tajawal',
                         fontSize: 26,
                         fontWeight: FontWeight.w800,
-                        color: Color(0xFF0F766E),
+                        color: context.kayan.primary,
                       ),
                     ),
                   ],
@@ -419,10 +423,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                 children: [
                   FilledButton.icon(
                     onPressed: _linkPhone,
-                    style: FilledButton.styleFrom(
-                      backgroundColor: const Color(0xFF0F766E),
-                    ),
-                    icon: const Icon(Icons.link, size: 18),
+                    icon: const Icon(Icons.link_rounded, size: 18),
                     label: Text(
                       _hasPrimaryPhone ? 'تغيير الجوال' : 'ربط الجوال',
                       style: const TextStyle(fontFamily: 'Tajawal'),
@@ -471,18 +472,20 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                     margin: const EdgeInsets.only(bottom: 8),
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: Theme.of(context).colorScheme.surface,
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                      border: Border.all(
+                        color: Theme.of(context).colorScheme.outlineVariant,
+                      ),
                     ),
                     child: Row(
                       children: [
                         Icon(
-                          credit ? Icons.arrow_downward : Icons.arrow_upward,
+                          credit ? Icons.arrow_downward_rounded : Icons.arrow_upward_rounded,
                           size: 18,
                           color: credit
-                              ? const Color(0xFF059669)
-                              : const Color(0xFFDC2626),
+                              ? context.netColors.available
+                              : context.netColors.rejected,
                         ),
                         const SizedBox(width: 8),
                         Expanded(
@@ -499,10 +502,10 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                               ),
                               Text(
                                 _fmtTxTime(tx.createdAt),
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontFamily: 'Tajawal',
                                   fontSize: 11,
-                                  color: Color(0xFF94A3B8),
+                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                                 ),
                               ),
                             ],
@@ -514,8 +517,8 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                             fontFamily: 'Tajawal',
                             fontWeight: FontWeight.w700,
                             color: credit
-                                ? const Color(0xFF059669)
-                                : const Color(0xFFDC2626),
+                                ? context.netColors.available
+                                : context.netColors.rejected,
                           ),
                         ),
                       ],

@@ -39,6 +39,7 @@ abstract interface class CardCategoryRepository {
 abstract interface class CardRepository {
   Future<Result<Card?>> findById(String id);
   Future<Result<Card?>> findBySerialNumber(String serialNumber);
+  Future<Result<List<Card>>> listAll();
   Future<Result<Set<String>>> existingSerialsAmong(Iterable<String> serials);
   Future<Result<Set<String>>> existingSecretsAmong(Iterable<String> secrets);
   Future<Result<List<Card>>> findByCategory(String categoryId);

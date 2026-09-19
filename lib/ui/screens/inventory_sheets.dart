@@ -18,14 +18,14 @@ class _CategoriesSheetState extends State<_CategoriesSheet> {
         minChildSize: 0.4,
         maxChildSize: 0.9,
         builder: (ctx, scroll) => Container(
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          decoration: BoxDecoration(
+            color: KayanPalette.of(ctx).surface,
+            borderRadius: NetRadii.sheetTop,
           ),
           child: Column(
             children: [
               const SizedBox(height: 10),
-              Container(width: 40, height: 4, decoration: BoxDecoration(color: const Color(0xFFCBD5E1), borderRadius: BorderRadius.circular(4))),
+              Container(width: 40, height: 4, decoration: BoxDecoration(color: KayanPalette.of(ctx).border, borderRadius: NetRadii.pillAll)),
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
                 child: Row(
@@ -41,12 +41,11 @@ class _CategoriesSheetState extends State<_CategoriesSheet> {
               ),
               Expanded(
                 child: widget.categories.isEmpty
-                    ? const Center(
-                        child: Text(
-                          'لا توجد فئات بعد — أنشئ فئة بقيمة اسمية موجبة',
-                          style: TextStyle(fontFamily: 'Tajawal', color: KayanColors.textSecondary),
-                          textAlign: TextAlign.center,
-                        ),
+                    ? const AsyncEmptyView(
+                        message: 'لا توجد فئات بعد',
+                        hint: 'أنشئ فئة بقيمة اسمية موجبة أولًا',
+                        icon: Icons.category_outlined,
+                        compact: true,
                       )
                     : ListView.builder(
                         controller: scroll,
@@ -55,13 +54,14 @@ class _CategoriesSheetState extends State<_CategoriesSheet> {
                         itemBuilder: (context, i) {
                           final cat = widget.categories[i];
                           final major = cat.faceValue.minorUnits / 100.0;
+                          final palette = KayanPalette.of(context);
                           return ListTile(
                             contentPadding: EdgeInsets.zero,
                             leading: CircleAvatar(
-                              backgroundColor: KayanColors.lightBackground,
+                              backgroundColor: palette.iconBadgeBackground,
                               child: Text(
                                 major == major.roundToDouble() ? major.toInt().toString() : major.toStringAsFixed(0),
-                                style: const TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w700, color: KayanColors.primary, fontSize: 12),
+                                style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w700, color: palette.primary, fontSize: 12),
                               ),
                             ),
                             title: Text(cat.name, style: const TextStyle(fontFamily: 'Tajawal')),
@@ -97,7 +97,14 @@ class _CategoriesSheetState extends State<_CategoriesSheet> {
                 TextField(controller: valueCtrl, keyboardType: const TextInputType.numberWithOptions(decimal: true), inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))], decoration: const InputDecoration(labelText: 'القيمة الاسمية (ر.ي)', border: OutlineInputBorder()), style: const TextStyle(fontFamily: 'Tajawal')),
                 if (localError != null) ...[
                   const SizedBox(height: 10),
-                  Text(localError!, style: const TextStyle(fontFamily: 'Tajawal', color: Color(0xFFDC2626), fontSize: 13)),
+                  Text(
+                    localError!,
+                    style: TextStyle(
+                      fontFamily: 'Tajawal',
+                      color: context.netColors.rejected,
+                      fontSize: 13,
+                    ),
+                  ),
                 ],
               ],
             ),
@@ -128,7 +135,7 @@ class _CategoriesSheetState extends State<_CategoriesSheet> {
                     ),
                   );
                   if (r is Failure) {
-                    setLocal(() => localError = (r as Failure).error.message);
+                    setLocal(() => localError = (r as Failure<dynamic>).error.message);
                     return;
                   }
                   if (ctx.mounted) Navigator.pop(ctx);
@@ -178,6 +185,60 @@ class _AddCardsSheetState extends State<_AddCardsSheet> {
     super.dispose();
   }
 
+  Future<void> _pickFile() async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: const ['txt', 'csv', 'text', 'log'],
+        withData: true,
+        allowMultiple: false,
+      );
+      if (result == null || result.files.isEmpty) return;
+      final file = result.files.single;
+      String? content;
+      if (file.bytes != null && file.bytes!.isNotEmpty) {
+        content = String.fromCharCodes(file.bytes!);
+      } else if (file.path != null && file.path!.isNotEmpty) {
+        content = await File(file.path!).readAsString();
+      }
+      if (content == null || content.trim().isEmpty) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'تعذر قراءة الملف أو الملف فارغ',
+              style: TextStyle(fontFamily: 'Tajawal'),
+            ),
+          ),
+        );
+        return;
+      }
+      setState(() {
+        _batchCtrl.text = content!;
+        _tab = 1;
+      });
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'تم تحميل الملف (${content.split(RegExp(r'\r?\n')).where((l) => l.trim().isNotEmpty).length} سطر)',
+            style: const TextStyle(fontFamily: 'Tajawal'),
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'فشل اختيار الملف: $e',
+            style: const TextStyle(fontFamily: 'Tajawal'),
+          ),
+        ),
+      );
+    }
+  }
+
   Future<void> _saveSingle() async {
     final serial = _serialCtrl.text.trim();
     final secret = _secretCtrl.text.trim();
@@ -198,7 +259,7 @@ class _AddCardsSheetState extends State<_AddCardsSheet> {
     if (!mounted) return;
     setState(() => _busy = false);
     if (r is Failure) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text((r as Failure).error.message, style: const TextStyle(fontFamily: 'Tajawal'))));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text((r as Failure<dynamic>).error.message, style: const TextStyle(fontFamily: 'Tajawal'))));
       return;
     }
     final n = (r as Success<int>).value;
@@ -219,7 +280,7 @@ class _AddCardsSheetState extends State<_AddCardsSheet> {
     if (!mounted) return;
     setState(() => _busy = false);
     if (r is Failure) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text((r as Failure).error.message, style: const TextStyle(fontFamily: 'Tajawal'))));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text((r as Failure<dynamic>).error.message, style: const TextStyle(fontFamily: 'Tajawal'))));
       return;
     }
     final n = (r as Success<int>).value;
@@ -237,14 +298,14 @@ class _AddCardsSheetState extends State<_AddCardsSheet> {
       child: Padding(
         padding: EdgeInsets.only(bottom: bottom),
         child: Container(
-          decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+          decoration: BoxDecoration(color: KayanPalette.of(context).surface, borderRadius: NetRadii.sheetTop),
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
           child: SingleChildScrollView(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               mainAxisSize: MainAxisSize.min,
               children: [
-                Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: const Color(0xFFCBD5E1), borderRadius: BorderRadius.circular(4)))),
+                Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: KayanPalette.of(context).border, borderRadius: NetRadii.pillAll))),
                 const SizedBox(height: 12),
                 const Text('إضافة الكروت', style: TextStyle(fontFamily: 'Tajawal', fontSize: 18, fontWeight: FontWeight.w800)),
                 const SizedBox(height: 12),
@@ -309,13 +370,22 @@ class _AddCardsSheetState extends State<_AddCardsSheet> {
                     _format == CardImportFormat.serialOnly
                         ? 'وضع رقم فقط: سطر واحد = رقم كرت. الفواصل تُتجاهل ويُؤخذ الحقل الأول.'
                         : 'وضع رقم+رمز: serial,secret أو serial;secret. سطر لكل كرت.',
-                    style: const TextStyle(fontFamily: 'Tajawal', fontSize: 11, color: KayanColors.textSecondary),
+                    style: TextStyle(fontFamily: 'Tajawal', fontSize: 11, color: KayanPalette.of(context).textSecondary),
+                  ),
+                  const SizedBox(height: 10),
+                  OutlinedButton.icon(
+                    onPressed: _busy ? null : _pickFile,
+                    icon: const Icon(Icons.folder_open_outlined),
+                    label: const Text(
+                      'اختيار ملف',
+                      style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w700),
+                    ),
                   ),
                 ],
                 const SizedBox(height: 16),
                 FilledButton(
                   onPressed: _busy ? null : (_tab == 0 ? _saveSingle : _saveBatch),
-                  style: FilledButton.styleFrom(backgroundColor: KayanColors.primary, padding: const EdgeInsets.symmetric(vertical: 14)),
+                  style: FilledButton.styleFrom(backgroundColor: KayanPalette.of(context).primary, padding: const EdgeInsets.symmetric(vertical: 14)),
                   child: _busy
                       ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                       : const Text('استيراد', style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w700)),

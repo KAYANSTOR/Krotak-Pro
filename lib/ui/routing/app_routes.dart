@@ -6,6 +6,7 @@ import '../screens/failed_messages_screen.dart';
 import '../screens/help_center_screen.dart';
 import '../screens/pending_messages_screen.dart';
 import '../screens/rejected_messages_screen.dart';
+import '../screens/reports/pos_accounts_ledger_screen.dart';
 import '../screens/reports/pos_report_screen.dart';
 import '../screens/reports/sales_period_report_screen.dart';
 import '../screens/settings_screen.dart';
@@ -41,4 +42,8 @@ abstract final class AppRoutes {
       push(context, SalesPeriodReportScreen(initialRange: range));
   static Future<void> openPosReport(BuildContext context) =>
       push(context, const PosReportScreen());
+
+  /// حسابات نقاط البيع — كشف التسوية والدفتر (مطابق للفيديو).
+  static Future<void> openPosAccountsLedger(BuildContext context) =>
+      push(context, const PosAccountsLedgerScreen());
 }

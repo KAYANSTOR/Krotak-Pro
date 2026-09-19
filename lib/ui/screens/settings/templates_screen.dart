@@ -4,6 +4,8 @@ import '../../../core/result.dart';
 import '../../../domain/entities/message.dart';
 import '../../../domain/entities/wallet.dart';
 import '../../app_scope.dart';
+import '../../theme/kayan_palette.dart';
+import '../../theme/net_semantic_colors.dart';
 import '../../widgets/async_views.dart';
 import 'template_simulation_screen.dart';
 import 'template_wizard_screen.dart';
@@ -143,7 +145,9 @@ class _TemplatesScreenState extends State<TemplatesScreen> {
               child: const Text('إلغاء', style: TextStyle(fontFamily: 'Tajawal')),
             ),
             FilledButton(
-              style: FilledButton.styleFrom(backgroundColor: const Color(0xFFDC2626)),
+              style: FilledButton.styleFrom(
+                backgroundColor: context.netColors.rejected,
+              ),
               onPressed: () => Navigator.pop(ctx, true),
               child: const Text('حذف', style: TextStyle(fontFamily: 'Tajawal')),
             ),
@@ -176,8 +180,8 @@ class _TemplatesScreenState extends State<TemplatesScreen> {
       builder: (ctx) => Directionality(
         textDirection: TextDirection.rtl,
         child: Container(
-          decoration: const BoxDecoration(
-            color: Colors.white,
+          decoration: BoxDecoration(
+            color: Theme.of(ctx).colorScheme.surface,
             borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
           ),
           child: SafeArea(
@@ -189,12 +193,15 @@ class _TemplatesScreenState extends State<TemplatesScreen> {
                   width: 40,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: Colors.grey.shade300,
+                    color: KayanPalette.of(ctx).border,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
                 ListTile(
-                  leading: const Icon(Icons.edit_outlined, color: Color(0xFF0F766E)),
+                  leading: Icon(
+                    Icons.edit_outlined,
+                    color: context.kayan.primary,
+                  ),
                   title: const Text(
                     'تعديل',
                     style: TextStyle(
@@ -208,13 +215,16 @@ class _TemplatesScreenState extends State<TemplatesScreen> {
                   },
                 ),
                 ListTile(
-                  leading: const Icon(Icons.delete_outline, color: Color(0xFFDC2626)),
-                  title: const Text(
+                  leading: Icon(
+                    Icons.delete_outline_rounded,
+                    color: context.netColors.rejected,
+                  ),
+                  title: Text(
                     'حذف',
                     style: TextStyle(
                       fontFamily: 'Tajawal',
                       fontWeight: FontWeight.w600,
-                      color: Color(0xFFDC2626),
+                      color: context.netColors.rejected,
                     ),
                   ),
                   onTap: () {
@@ -244,15 +254,18 @@ class _TemplatesScreenState extends State<TemplatesScreen> {
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
-        backgroundColor: const Color(0xFFF0F9F8),
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         appBar: AppBar(
-          backgroundColor: Colors.white,
+          backgroundColor: Theme.of(context).colorScheme.surface,
           elevation: 0,
           surfaceTintColor: Colors.transparent,
           leading: IconButton(
             tooltip: 'رجوع',
             onPressed: () => Navigator.maybePop(context),
-            icon: const Icon(Icons.arrow_forward, color: Color(0xFF0F172A)),
+            icon: Icon(
+              Icons.arrow_forward,
+              color: Theme.of(context).colorScheme.onSurface,
+            ),
           ),
           title: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -260,20 +273,20 @@ class _TemplatesScreenState extends State<TemplatesScreen> {
               Text(
                 title,
                 textAlign: TextAlign.center,
-                style: const TextStyle(
+                style: TextStyle(
                   fontFamily: 'Tajawal',
                   fontWeight: FontWeight.w800,
                   fontSize: 18,
-                  color: Color(0xFF0F172A),
+                  color: Theme.of(context).colorScheme.onSurface,
                 ),
               ),
               Text(
                 subtitle,
                 textAlign: TextAlign.center,
-                style: const TextStyle(
+                style: TextStyle(
                   fontFamily: 'Tajawal',
                   fontSize: 12,
-                  color: Color(0xFF64748B),
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
               ),
             ],
@@ -288,13 +301,13 @@ class _TemplatesScreenState extends State<TemplatesScreen> {
                   ),
                 ),
               ),
-              icon: const Icon(Icons.science_outlined, color: Color(0xFF0F766E)),
+              icon: Icon(Icons.science_outlined, color: context.kayan.primary),
             ),
           ],
         ),
         floatingActionButton: FloatingActionButton.extended(
           onPressed: () => _openWizard(),
-          backgroundColor: const Color(0xFFA855F7),
+          backgroundColor: Theme.of(context).colorScheme.primary,
           foregroundColor: Colors.white,
           elevation: 2,
           icon: const Icon(Icons.add, size: 22),
@@ -318,7 +331,7 @@ class _TemplatesScreenState extends State<TemplatesScreen> {
                         onAction: () => _openWizard(),
                       )
                     : RefreshIndicator(
-                        color: const Color(0xFF0F766E),
+                        color: context.kayan.primary,
                         onRefresh: _load,
                         child: ListView.separated(
                           padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
@@ -360,14 +373,14 @@ class _TemplateCard extends StatelessWidget {
     final active = t.isActive;
 
     return Material(
-      color: Colors.white,
+      color: Theme.of(context).colorScheme.surface,
       elevation: 0,
       borderRadius: BorderRadius.circular(16),
       child: Container(
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: Theme.of(context).colorScheme.surface,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFFE2E8F0)),
+          border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withValues(alpha: 0.03),
@@ -383,12 +396,16 @@ class _TemplateCard extends StatelessWidget {
             IconButton(
               onPressed: onMenu,
               visualDensity: VisualDensity.compact,
-              icon: const Icon(Icons.more_vert, color: Color(0xFF94A3B8), size: 22),
+              icon: Icon(
+                Icons.more_vert,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                size: 22,
+              ),
             ),
             // Switch
             Switch.adaptive(
               value: active,
-              activeColor: const Color(0xFF0F766E),
+              activeColor: context.kayan.primary,
               onChanged: onToggle,
             ),
             const SizedBox(width: 4),
@@ -400,11 +417,11 @@ class _TemplateCard extends StatelessWidget {
                   Text(
                     t.name,
                     textAlign: TextAlign.right,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontFamily: 'Tajawal',
                       fontWeight: FontWeight.w700,
                       fontSize: 15,
-                      color: Color(0xFF0F172A),
+                      color: Theme.of(context).colorScheme.onSurface,
                     ),
                   ),
                   const SizedBox(height: 6),
@@ -416,8 +433,10 @@ class _TemplateCard extends StatelessWidget {
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                         decoration: BoxDecoration(
                           color: active
-                              ? const Color(0xFF059669).withValues(alpha: 0.12)
-                              : const Color(0xFFF1F5F9),
+                              ? context.netColors.available.withValues(alpha: 0.14)
+                              : Theme.of(context)
+                                  .colorScheme
+                                  .surfaceContainerHighest,
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Row(
@@ -429,8 +448,10 @@ class _TemplateCard extends StatelessWidget {
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
                                 color: active
-                                    ? const Color(0xFF059669)
-                                    : const Color(0xFF94A3B8),
+                                    ? context.netColors.available
+                                    : Theme.of(context)
+                                        .colorScheme
+                                        .onSurfaceVariant,
                               ),
                             ),
                             const SizedBox(width: 5),
@@ -441,8 +462,10 @@ class _TemplateCard extends StatelessWidget {
                                 fontSize: 11,
                                 fontWeight: FontWeight.w600,
                                 color: active
-                                    ? const Color(0xFF059669)
-                                    : const Color(0xFF64748B),
+                                    ? context.netColors.available
+                                    : Theme.of(context)
+                                        .colorScheme
+                                        .onSurfaceVariant,
                               ),
                             ),
                           ],
@@ -451,20 +474,20 @@ class _TemplateCard extends StatelessWidget {
                       const SizedBox(width: 8),
                       Text(
                         'أولوية: ${t.priority}',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontFamily: 'Tajawal',
                           fontSize: 12,
-                          color: Color(0xFF64748B),
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
                       ),
                       if (walletLabel != null) ...[
                         const SizedBox(width: 8),
                         Text(
                           walletLabel!,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontFamily: 'Tajawal',
                             fontSize: 11,
-                            color: Color(0xFF94A3B8),
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
                           ),
                         ),
                       ],
@@ -480,16 +503,16 @@ class _TemplateCard extends StatelessWidget {
               height: 36,
               decoration: BoxDecoration(
                 color: active
-                    ? const Color(0xFFD1FAE5)
-                    : const Color(0xFFF1F5F9),
+                    ? context.netColors.availableContainer
+                    : Theme.of(context).colorScheme.surfaceContainerHighest,
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Icon(
                 Icons.check_circle,
                 size: 22,
                 color: active
-                    ? const Color(0xFF10B981)
-                    : const Color(0xFFCBD5E1),
+                    ? context.netColors.available
+                    : Theme.of(context).colorScheme.onSurfaceVariant,
               ),
             ),
           ],

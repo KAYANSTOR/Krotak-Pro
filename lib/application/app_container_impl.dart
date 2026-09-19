@@ -198,7 +198,18 @@ final class AppContainer {
     final recoveryService = LocalMessageRecoveryService(messages: messages, parser: parser, processor: processor, sourceGuard: sourceGuard, retryService: retryService, settings: settings);
     final deliveryWorker = MessageDeliveryWorker(messages: messages, auditLogs: auditLogs, cards: cards, messageSender: messageSender, retryService: retryService, clock: clock, ids: ids);
     final pendingReview = PendingMessageReviewService(messages: messages, parser: parser, customers: customers, customerService: customerService, balances: balanceService, auditLogs: auditLogs, unitOfWork: uow, clock: clock, ids: ids, sourceGuard: sourceGuard);
-    final smsHandler = IncomingSmsHandler(bridge: smsBridge, messages: messages, parser: parser, processor: processor, ids: ids, settings: settings, advanceService: advanceService, engine: smsEngine, sourceGuard: sourceGuard);
+    final smsHandler = IncomingSmsHandler(
+      bridge: smsBridge,
+      messages: messages,
+      parser: parser,
+      processor: processor,
+      ids: ids,
+      settings: settings,
+      advanceService: advanceService,
+      engine: smsEngine,
+      sourceGuard: sourceGuard,
+      onAfterPayment: () => deliveryWorker.tick().then((_) {}),
+    );
     final notificationHandler = IncomingNotificationHandler(bridge: notificationBridge, sources: notificationSources, engine: notificationEngine);
 
     ThemeMode theme = ThemeMode.system;
@@ -217,17 +228,35 @@ final class AppContainer {
   Future<void> startBackgroundHandlers() async {
     smsHandler.start();
     await notificationHandler.start();
+    // Immediate first pass, then aggressive short interval so voucher SMS
+    // never waits ~1 minute after commit / transient send failure.
     await _runRecovery();
-    _recoveryTimer ??= Timer.periodic(const Duration(minutes: 1), (_) => _runRecovery());
+    _recoveryTimer ??= Timer.periodic(const Duration(seconds: 5), (_) => _runRecovery());
   }
 
   Future<void> runRecoveryPass() => _runRecovery();
+
+  /// Fire-and-forget delivery worker tick (no recoverPending). Call after any
+  /// path that commits a voucher so SMS leaves the device within milliseconds.
+  Future<void> kickDeliveryWorker() async {
+    if (_disposed) return;
+    try {
+      await deliveryWorker.tick();
+    } catch (_) {}
+  }
 
   Future<void> _runRecovery() async {
     if (_recoveryBusy || _disposed) return;
     final enabled = await settings.find(SettingKeys.autoRetryFailedMessages);
     final raw = enabled is Success<AppSetting?> ? enabled.value?.value : null;
-    if (!SettingBool.read(raw, defaultValue: SettingDefaults.autoRetryFailedMessages)) return;
+    if (!SettingBool.read(raw, defaultValue: SettingDefaults.autoRetryFailedMessages)) {
+      // Still run delivery worker even if auto-retry of parsing is off —
+      // committed vouchers must always be delivered quickly.
+      try {
+        await deliveryWorker.tick();
+      } catch (_) {}
+      return;
+    }
     _recoveryBusy = true;
     try {
       await recoveryService.recoverPending();

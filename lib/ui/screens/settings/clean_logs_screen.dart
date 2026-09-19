@@ -5,6 +5,7 @@ import '../../../domain/entities/message.dart';
 import '../../app_scope.dart';
 import '../../theme/kayan_colors.dart';
 import '../../theme/kayan_palette.dart';
+import '../../theme/net_semantic_colors.dart';
 import '../../widgets/async_views.dart';
 
 /// صيانة السجلات: حجم الرسائل + استعادة المعلّق + تنظيف ذكي.
@@ -166,7 +167,7 @@ class _CleanLogsScreenState extends State<CleanLogsScreen> {
                                 palette,
                                 title: 'معلّقة',
                                 value: '$_pending',
-                                color: const Color(0xFFD97706),
+                                color: context.netColors.warning,
                               ),
                             ),
                             const SizedBox(width: 8),
@@ -175,7 +176,9 @@ class _CleanLogsScreenState extends State<CleanLogsScreen> {
                                 palette,
                                 title: 'مرفوضة',
                                 value: '$_rejected',
-                                color: const Color(0xFF64748B),
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.onSurfaceVariant,
                               ),
                             ),
                             const SizedBox(width: 8),
@@ -184,7 +187,7 @@ class _CleanLogsScreenState extends State<CleanLogsScreen> {
                                 palette,
                                 title: 'فاشلة',
                                 value: '$_failed',
-                                color: const Color(0xFFDC2626),
+                                color: context.netColors.rejected,
                               ),
                             ),
                           ],

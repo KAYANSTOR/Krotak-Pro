@@ -159,7 +159,7 @@ void main() {
     expect(sender.calls, 1);
   });
 
-  test('SMS failure releases reservation and keeps retry financially idempotent', () async {
+  test('SMS failure keeps committed sale and retry remains financially idempotent', () async {
     final customer = await seedCustomer();
     await seedCategoryAndCard(minorUnits: 200);
     await seedMessage('m5');
@@ -169,11 +169,11 @@ void main() {
     final second = await processor.process(transfer('m5', 200, reference: 'SMS-FAIL'));
     final rows = await cards.findByCategory('cat-200');
     final ledger = await transactions.findByReference('sale-op:SMS-FAIL');
-    expect((first as Failure<Transaction>).error.code, 'sms_send_failed');
+    expect(first, isA<Success<Transaction>>());
     expect(second, isA<Success<Transaction>>());
     expect((rows as Success<List<Card>>).value.single.status, CardStatus.sold);
     expect((ledger as Success<Transaction?>).value, isNotNull);
-    expect(sender.calls, 2);
+    expect(sender.calls, 1);
     expect(customer.id, isNotEmpty);
   });
 

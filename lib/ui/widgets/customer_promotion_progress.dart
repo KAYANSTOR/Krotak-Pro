@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../theme/net_semantic_colors.dart';
+
 import '../../domain/services/local_promotion_progress_service.dart';
 
 /// بطاقات تقدم العروض لشاشة تفاصيل الحساب.
@@ -32,7 +34,7 @@ class CustomerPromotionProgressSection extends StatelessWidget {
           return Padding(
             padding: const EdgeInsets.only(bottom: 8),
             child: Material(
-              color: Colors.white,
+              color: Theme.of(context).colorScheme.surface,
               borderRadius: BorderRadius.circular(12),
               child: InkWell(
                 onTap: onOpenAll,
@@ -43,8 +45,8 @@ class CustomerPromotionProgressSection extends StatelessWidget {
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
                       color: p.qualified
-                          ? const Color(0xFFA7F3D0)
-                          : const Color(0xFFE2E8F0),
+                          ? context.netColors.available.withValues(alpha: 0.45)
+                          : Theme.of(context).colorScheme.outlineVariant,
                     ),
                   ),
                   child: Column(
@@ -63,12 +65,12 @@ class CustomerPromotionProgressSection extends StatelessWidget {
                             ),
                           ),
                           if (p.qualified)
-                            const Text(
+                            Text(
                               'مستحق',
                               style: TextStyle(
                                 fontFamily: 'Tajawal',
                                 fontSize: 11,
-                                color: Color(0xFF059669),
+                                color: context.netColors.available,
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
@@ -79,20 +81,20 @@ class CustomerPromotionProgressSection extends StatelessWidget {
                         value: p.ratio,
                         minHeight: 6,
                         borderRadius: BorderRadius.circular(6),
-                        backgroundColor: const Color(0xFFE2E8F0),
+                        backgroundColor: Theme.of(context).colorScheme.outlineVariant,
                         color: p.qualified
-                            ? const Color(0xFF059669)
-                            : const Color(0xFF0F766E),
+                            ? context.netColors.available
+                            : Theme.of(context).colorScheme.primary,
                       ),
                       const SizedBox(height: 4),
                       Text(
                         '${(p.accumulatedMinor / 100).toStringAsFixed(0)} / '
                         '${(p.promotion.thresholdMinorUnits / 100).toStringAsFixed(0)} '
                         '${p.currencyCode}',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontFamily: 'Tajawal',
                           fontSize: 11,
-                          color: Color(0xFF64748B),
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
                       ),
                     ],
@@ -136,14 +138,14 @@ Future<void> showCustomerPromotionSheet({
               ),
               const SizedBox(height: 12),
               if (items.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 24),
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 24),
                   child: Text(
                     'لا توجد عروض نشطة حاليًا',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontFamily: 'Tajawal',
-                      color: Color(0xFF64748B),
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
                   ),
                 )

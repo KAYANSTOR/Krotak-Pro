@@ -3,15 +3,24 @@ import 'package:flutter/material.dart';
 import '../../core/result.dart';
 import '../../domain/entities/transaction.dart';
 import '../app_scope.dart';
+import '../labels/net_labels.dart';
+import '../theme/kayan_palette.dart';
+import '../theme/net_semantic_colors.dart';
+import '../theme/net_tokens.dart';
 import '../widgets/async_views.dart';
+import '../widgets/net/net_surface_card.dart';
+import '../widgets/net/net_transaction_detail_sheet.dart';
 
 /// سجل العمليات — مطابقة إطارات الفيديو (`frame_t500s` / `inv_t480s`).
 ///
 /// - بحث + فلاتر أنواع/تواريخ
-/// - ملخص: عدد · صافي · إيداعات · صرف
-/// - بطاقات عملية مع مبلغ ونوع ووقت
+/// - ملخص ثابت: عدد · صافي · إيداعات · صرف
+/// - بطاقات عملية مجمّعة باليوم مع مبلغ ونوع ووقت
 /// - ورقة تصفية حسب نوع العملية (مجموعات الفيديو)
 /// - Domain: transactions.listRecent
+///
+/// التحديث الجديد بصري بالكامل: الثيم والوضع الداكن، تجميع باليوم، هياكل
+/// تحميل، وحالات فارغة قابلة للتنفيذ. لا تغيير في الاستعلام أو الحسابات.
 class TransactionsLogScreen extends StatefulWidget {
   const TransactionsLogScreen({super.key});
 
@@ -171,284 +180,378 @@ class _TransactionsLogScreenState extends State<TransactionsLogScreen> {
   bool get _hasFilters =>
       _from != null || _to != null || _typeFilter.isNotEmpty;
 
+  Future<void> _openAdvancedOptions() async {
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => _AdvancedOptionsSheet(
+        typeCount: _typeFilter.length,
+        hasDateRange: _from != null || _to != null,
+      ),
+    );
+    if (choice == 'date') await _openDateSheet();
+    if (choice == 'type') await _openTypeSheet();
+  }
+
+  static DateTime _dayOf(DateTime timestamp) {
+    final local = timestamp.toLocal();
+    return DateTime(local.year, local.month, local.day);
+  }
+
   @override
   Widget build(BuildContext context) {
     final items = _filtered;
+    final palette = KayanPalette.of(context);
+    final net = context.netColors;
 
-    return Directionality(
-      textDirection: TextDirection.rtl,
-      child: Scaffold(
-        backgroundColor: const Color(0xFFF0F9F8),
-        appBar: AppBar(
-          backgroundColor: Colors.white,
-          elevation: 0,
-          surfaceTintColor: Colors.transparent,
-          leading: IconButton(
-            tooltip: 'رجوع',
-            onPressed: () => Navigator.maybePop(context),
-            icon: const Icon(Icons.arrow_forward, color: Color(0xFF0F172A)),
-          ),
-          title: const Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                'سجل العمليات',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontFamily: 'Tajawal',
-                  fontWeight: FontWeight.w800,
-                  fontSize: 18,
-                  color: Color(0xFF0F172A),
-                ),
+    return Scaffold(
+      backgroundColor: palette.appBackground,
+      appBar: AppBar(
+        backgroundColor: palette.appBackground,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          tooltip: 'رجوع',
+          onPressed: () => Navigator.maybePop(context),
+          icon: Icon(Icons.arrow_forward_rounded, color: palette.textPrimary),
+        ),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'سجل العمليات',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontFamily: NetTypography.family,
+                fontWeight: FontWeight.w800,
+                fontSize: 18,
+                color: palette.textPrimary,
               ),
-              Text(
-                'عرض وتصفية جميع المعاملات المسجلة',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontFamily: 'Tajawal',
-                  fontSize: 12,
-                  color: Color(0xFF64748B),
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            IconButton(
-              tooltip: 'تصفية الأنواع',
-              onPressed: _openTypeSheet,
-              icon: const Icon(Icons.filter_list, color: Color(0xFF0F766E)),
             ),
-            IconButton(
-              tooltip: 'خيارات متقدمة',
-              onPressed: () async {
-                final choice = await showModalBottomSheet<String>(
-                  context: context,
-                  backgroundColor: Colors.transparent,
-                  builder: (ctx) => Directionality(
-                    textDirection: TextDirection.rtl,
-                    child: Container(
-                      decoration: const BoxDecoration(
-                        color: Colors.white,
-                        borderRadius:
-                            BorderRadius.vertical(top: Radius.circular(16)),
-                      ),
-                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Container(
-                            width: 40,
-                            height: 4,
-                            decoration: BoxDecoration(
-                              color: Colors.grey.shade300,
-                              borderRadius: BorderRadius.circular(2),
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                          const Text(
-                            'خيارات التصفية المتقدمة',
-                            style: TextStyle(
-                              fontFamily: 'Tajawal',
-                              fontWeight: FontWeight.w800,
-                              fontSize: 16,
-                            ),
-                          ),
-                          ListTile(
-                            leading: const Icon(Icons.calendar_month,
-                                color: Color(0xFF0F766E)),
-                            title: const Text(
-                              'نطاق التاريخ',
-                              style: TextStyle(
-                                  fontFamily: 'Tajawal',
-                                  fontWeight: FontWeight.w600),
-                            ),
-                            subtitle: const Text(
-                              'اختر تاريخ البداية والنهاية',
-                              style: TextStyle(
-                                  fontFamily: 'Tajawal', fontSize: 12),
-                            ),
-                            onTap: () => Navigator.pop(ctx, 'date'),
-                          ),
-                          ListTile(
-                            leading: const Icon(Icons.category_outlined,
-                                color: Color(0xFF0F766E)),
-                            title: const Text(
-                              'نوع العملية',
-                              style: TextStyle(
-                                  fontFamily: 'Tajawal',
-                                  fontWeight: FontWeight.w600),
-                            ),
-                            subtitle: Text(
-                              _typeFilter.isEmpty
-                                  ? 'كل الأنواع'
-                                  : '${_typeFilter.length} أنواع محددة',
-                              style: const TextStyle(
-                                  fontFamily: 'Tajawal', fontSize: 12),
-                            ),
-                            onTap: () => Navigator.pop(ctx, 'type'),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                );
-                if (choice == 'date') await _openDateSheet();
-                if (choice == 'type') await _openTypeSheet();
-              },
-              icon: const Icon(Icons.tune, color: Color(0xFF0F766E)),
+            Text(
+              'عرض وتصفية جميع المعاملات المسجلة',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontFamily: NetTypography.family,
+                fontSize: 12,
+                color: palette.textSecondary,
+              ),
             ),
           ],
         ),
-        body: Column(
-          children: [
-            // بحث
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
-              child: TextField(
-                controller: _searchCtrl,
-                onChanged: (_) => setState(() {}),
-                style: const TextStyle(fontFamily: 'Tajawal'),
-                decoration: InputDecoration(
-                  hintText: 'بحث برقم الجوال، الاسم، رقم الكرت، الحوالة...',
-                  hintStyle: const TextStyle(
-                    fontFamily: 'Tajawal',
-                    color: Color(0xFF94A3B8),
-                    fontSize: 13,
-                  ),
-                  prefixIcon:
-                      const Icon(Icons.search, color: Color(0xFF94A3B8)),
-                  filled: true,
-                  fillColor: const Color(0xFFF1F5F9),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    borderSide: BorderSide.none,
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 12,
-                  ),
+        actions: [
+          IconButton(
+            tooltip: 'تصفية الأنواع',
+            onPressed: _openTypeSheet,
+            icon: Icon(Icons.filter_list_rounded, color: palette.primary),
+          ),
+          IconButton(
+            tooltip: 'خيارات متقدمة',
+            onPressed: _openAdvancedOptions,
+            icon: Icon(Icons.tune_rounded, color: palette.primary),
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          // بحث
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              NetSpacing.lg,
+              NetSpacing.sm,
+              NetSpacing.lg,
+              NetSpacing.sm,
+            ),
+            child: TextField(
+              controller: _searchCtrl,
+              onChanged: (_) => setState(() {}),
+              style: TextStyle(fontFamily: NetTypography.family, color: palette.textPrimary),
+              decoration: InputDecoration(
+                hintText: 'بحث بالاسم، رقم الكرت، الحوالة...',
+                hintStyle: TextStyle(
+                  fontFamily: NetTypography.family,
+                  color: palette.textTertiary,
+                  fontSize: 13,
+                ),
+                prefixIcon: Icon(Icons.search_rounded, color: palette.textTertiary),
+                suffixIcon: _searchCtrl.text.isEmpty
+                    ? null
+                    : IconButton(
+                        tooltip: 'مسح البحث',
+                        icon: const Icon(Icons.close_rounded, size: 18),
+                        onPressed: () => setState(_searchCtrl.clear),
+                      ),
+                filled: true,
+                fillColor: palette.surface,
+                border: OutlineInputBorder(
+                  borderRadius: NetRadii.smAll,
+                  borderSide: BorderSide.none,
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: NetRadii.smAll,
+                  borderSide: BorderSide(color: palette.border),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: NetRadii.smAll,
+                  borderSide: BorderSide(color: palette.primary, width: 1.4),
+                ),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: NetSpacing.md,
+                  vertical: NetSpacing.md,
                 ),
               ),
             ),
-            // شرائح الفلاتر
-            SingleChildScrollView(
+          ),
+
+          // شرائح الفلاتر
+          SizedBox(
+            height: 42,
+            child: ListView(
               scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-              child: Row(
-                children: [
-                  if (_hasFilters)
-                    Padding(
-                      padding: const EdgeInsets.only(left: 8),
-                      child: ActionChip(
-                        avatar: const Icon(Icons.close, size: 16),
-                        label: const Text(
-                          'مسح الكل',
-                          style: TextStyle(fontFamily: 'Tajawal', fontSize: 12),
-                        ),
-                        onPressed: _clearAll,
-                      ),
-                    ),
+              padding: NetSpacing.pageH,
+              children: [
+                if (_hasFilters)
                   Padding(
-                    padding: const EdgeInsets.only(left: 8),
-                    child: FilterChip(
-                      selected: _typeFilter.isNotEmpty,
-                      showCheckmark: false,
-                      label: Text(
-                        _typeFilter.isEmpty
-                            ? 'كل الأنواع'
-                            : '${_typeFilter.length} أنواع',
-                        style: TextStyle(
-                          fontFamily: 'Tajawal',
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: _typeFilter.isNotEmpty
-                              ? Colors.white
-                              : const Color(0xFF334155),
-                        ),
+                    padding: const EdgeInsetsDirectional.only(start: NetSpacing.sm),
+                    child: ActionChip(
+                      avatar: const Icon(Icons.close_rounded, size: 15),
+                      label: const Text(
+                        'مسح الكل',
+                        style: TextStyle(fontFamily: NetTypography.family, fontSize: 12),
                       ),
-                      selectedColor: const Color(0xFF0F766E),
-                      backgroundColor: Colors.white,
-                      side: BorderSide(
-                        color: _typeFilter.isNotEmpty
-                            ? const Color(0xFF0F766E)
-                            : const Color(0xFFE2E8F0),
-                      ),
-                      onSelected: (_) => _openTypeSheet(),
+                      onPressed: _clearAll,
                     ),
                   ),
-                  FilterChip(
-                    selected: _from != null || _to != null,
-                    showCheckmark: false,
-                    label: Text(
-                      (_from == null && _to == null)
-                          ? 'كل التواريخ'
-                          : 'تواريخ محددة',
-                      style: TextStyle(
-                        fontFamily: 'Tajawal',
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: (_from != null || _to != null)
-                            ? Colors.white
-                            : const Color(0xFF334155),
-                      ),
-                    ),
-                    selectedColor: const Color(0xFF0F766E),
-                    backgroundColor: Colors.white,
-                    side: BorderSide(
-                      color: (_from != null || _to != null)
-                          ? const Color(0xFF0F766E)
-                          : const Color(0xFFE2E8F0),
-                    ),
-                    avatar: Icon(
-                      Icons.calendar_today,
-                      size: 14,
-                      color: (_from != null || _to != null)
-                          ? Colors.white
-                          : const Color(0xFF64748B),
-                    ),
-                    onSelected: (_) => _openDateSheet(),
-                  ),
-                ],
+                _FilterPill(
+                  selected: _typeFilter.isNotEmpty,
+                  label: _typeFilter.isEmpty
+                      ? 'كل الأنواع'
+                      : '${_typeFilter.length} أنواع',
+                  icon: Icons.category_rounded,
+                  onTap: _openTypeSheet,
+                ),
+                _FilterPill(
+                  selected: _from != null || _to != null,
+                  label: (_from == null && _to == null)
+                      ? 'كل التواريخ'
+                      : 'تواريخ محددة',
+                  icon: Icons.calendar_today_rounded,
+                  onTap: _openDateSheet,
+                ),
+              ],
+            ),
+          ),
+
+          // ملخص ثابت أعلى القائمة
+          if (!_loading && _error == null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                NetSpacing.lg,
+                NetSpacing.sm,
+                NetSpacing.lg,
+                NetSpacing.sm,
+              ),
+              child: _SummaryBar(
+                count: items.length,
+                netLabel: _fmtSigned(_net.abs(), positive: _net >= 0),
+                depositLabel: _fmtSigned(_depositSum, positive: true),
+                outflowLabel: _fmtSigned(_outflowSum, positive: false),
               ),
             ),
-            // ملخص
-            if (!_loading && _error == null)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                child: _SummaryBar(
-                  count: items.length,
-                  netLabel: _fmtSigned(_net.abs(), positive: _net >= 0),
-                  depositLabel: _fmtSigned(_depositSum, positive: true),
-                  outflowLabel: _fmtSigned(_outflowSum, positive: false),
-                ),
-              ),
-            Expanded(
-              child: _loading
-                  ? const AsyncLoadingView()
-                  : _error != null
-                      ? AsyncErrorView(message: _error!, onRetry: _load)
-                      : items.isEmpty
-                          ? const AsyncEmptyView(
-                              message: 'لا عمليات في الفترة/التصفية المحددة',
-                              icon: Icons.receipt_long_outlined,
-                            )
-                          : RefreshIndicator(
-                              color: const Color(0xFF0F766E),
-                              onRefresh: _load,
-                              child: ListView.separated(
-                                padding:
-                                    const EdgeInsets.fromLTRB(16, 4, 16, 24),
-                                itemCount: items.length,
-                                separatorBuilder: (_, __) =>
-                                    const SizedBox(height: 10),
-                                itemBuilder: (_, i) => _TxCard(
-                                  tx: items[i],
-                                  label: _typeLabel(items[i].type),
-                                  inflow: _isInflow(items[i].type),
-                                  amountLabel: _fmtMinor(items[i].amount.minorUnits),
-                                ),
-                              ),
+
+          Expanded(
+            child: _loading
+                ? const AsyncLoadingView(skeleton: true, skeletonCount: 5)
+                : _error != null
+                    ? AsyncErrorView(message: _error!, onRetry: _load)
+                    : items.isEmpty
+                        ? AsyncEmptyView(
+                            message: 'لا عمليات في الفترة/التصفية المحددة',
+                            icon: Icons.receipt_long_outlined,
+                            hint: _hasFilters
+                                ? 'جرّب توسيع نطاق التاريخ أو مسح الفلاتر'
+                                : 'ستظهر هنا كل حركات الإيداع والصرف',
+                            actionLabel: _hasFilters ? 'مسح الفلاتر' : null,
+                            onAction: _hasFilters ? _clearAll : null,
+                          )
+                        : RefreshIndicator(
+                            color: palette.primary,
+                            onRefresh: _load,
+                            child: ListView.builder(
+                              padding: const EdgeInsets.only(bottom: NetSpacing.xxl),
+                              itemCount: items.length,
+                              itemBuilder: (_, i) {
+                                final tx = items[i];
+                                final day = _dayOf(tx.createdAt);
+                                final isFirstOfDay = i == 0 ||
+                                    _dayOf(items[i - 1].createdAt) != day;
+                                return Column(
+                                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                                  children: [
+                                    if (isFirstOfDay)
+                                      _DayHeader(label: arabicDayLabel(day)),
+                                    _TxCard(
+                                      tx: tx,
+                                      label: _typeLabel(tx.type),
+                                      inflow: _isInflow(tx.type),
+                                      amountLabel: _fmtMinor(tx.amount.minorUnits),
+                                      onTap: () =>
+                                          NetTransactionDetailSheet.show(context, tx),
+                                    ),
+                                  ],
+                                );
+                              },
                             ),
+                          ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FilterPill extends StatelessWidget {
+  const _FilterPill({
+    required this.selected,
+    required this.label,
+    required this.icon,
+    required this.onTap,
+  });
+
+  final bool selected;
+  final String label;
+  final IconData icon;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = KayanPalette.of(context);
+    return Padding(
+      padding: const EdgeInsetsDirectional.only(start: NetSpacing.sm),
+      child: FilterChip(
+        selected: selected,
+        showCheckmark: false,
+        avatar: Icon(
+          icon,
+          size: 14,
+          color: selected ? Colors.white : palette.textSecondary,
+        ),
+        label: Text(
+          label,
+          style: TextStyle(
+            fontFamily: NetTypography.family,
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+            color: selected ? Colors.white : palette.textPrimary,
+          ),
+        ),
+        selectedColor: palette.primary,
+        backgroundColor: palette.surface,
+        side: BorderSide(color: selected ? palette.primary : palette.border),
+        onSelected: (_) => onTap(),
+      ),
+    );
+  }
+}
+
+class _DayHeader extends StatelessWidget {
+  const _DayHeader({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = KayanPalette.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        NetSpacing.xl,
+        NetSpacing.md,
+        NetSpacing.xl,
+        NetSpacing.xs,
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.calendar_today_rounded, size: 13, color: palette.textSecondary),
+          const SizedBox(width: NetSpacing.sm),
+          Text(
+            label,
+            style: TextStyle(
+              fontFamily: NetTypography.family,
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+              color: palette.textSecondary,
+            ),
+          ),
+          const SizedBox(width: NetSpacing.sm),
+          Expanded(child: Divider(height: 1, color: palette.border)),
+        ],
+      ),
+    );
+  }
+}
+
+class _AdvancedOptionsSheet extends StatelessWidget {
+  const _AdvancedOptionsSheet({
+    required this.typeCount,
+    required this.hasDateRange,
+  });
+
+  final int typeCount;
+  final bool hasDateRange;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = KayanPalette.of(context);
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Container(
+        decoration: BoxDecoration(
+          color: palette.surface,
+          borderRadius: NetRadii.sheetTop,
+        ),
+        padding: const EdgeInsets.fromLTRB(
+          NetSpacing.lg,
+          NetSpacing.md,
+          NetSpacing.lg,
+          NetSpacing.xxl,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 44,
+              height: 4,
+              decoration: BoxDecoration(
+                color: palette.border,
+                borderRadius: NetRadii.pillAll,
+              ),
+            ),
+            const SizedBox(height: NetSpacing.lg),
+            Text(
+              'خيارات التصفية المتقدمة',
+              style: TextStyle(
+                fontFamily: NetTypography.family,
+                fontWeight: FontWeight.w800,
+                fontSize: 16,
+                color: palette.textPrimary,
+              ),
+            ),
+            const SizedBox(height: NetSpacing.sm),
+            ListTile(
+              leading: Icon(Icons.calendar_month_rounded, color: palette.primary),
+              title: const Text('نطاق التاريخ'),
+              subtitle: Text(
+                hasDateRange ? 'نطاق محدد حاليًا' : 'اختر تاريخ البداية والنهاية',
+              ),
+              onTap: () => Navigator.pop(context, 'date'),
+            ),
+            ListTile(
+              leading: Icon(Icons.category_rounded, color: palette.primary),
+              title: const Text('نوع العملية'),
+              subtitle: Text(
+                typeCount == 0 ? 'كل الأنواع' : '$typeCount أنواع محددة',
+              ),
+              onTap: () => Navigator.pop(context, 'type'),
             ),
           ],
         ),
@@ -472,127 +575,128 @@ class _SummaryBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
+    final palette = KayanPalette.of(context);
+    final net = context.netColors;
+    final isPositive = netLabel.startsWith('+');
+
+    return NetSurfaceCard(
+      padding: NetSpacing.cardTight,
       child: Column(
         children: [
           Row(
             children: [
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: NetSpacing.sm,
+                  vertical: NetSpacing.xs,
+                ),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF1F5F9),
-                  borderRadius: BorderRadius.circular(8),
+                  color: palette.surfaceVariant,
+                  borderRadius: NetRadii.xsAll,
                 ),
                 child: Text(
                   '$count عملية',
-                  style: const TextStyle(
-                    fontFamily: 'Tajawal',
+                  style: TextStyle(
+                    fontFamily: NetTypography.family,
                     fontWeight: FontWeight.w700,
                     fontSize: 12,
-                    color: Color(0xFF475569),
+                    color: palette.textSecondary,
                   ),
                 ),
               ),
               const Spacer(),
               Text(
                 'الصافي: $netLabel',
-                style: const TextStyle(
-                  fontFamily: 'Tajawal',
+                style: TextStyle(
+                  fontFamily: NetTypography.family,
                   fontWeight: FontWeight.w800,
                   fontSize: 13,
-                  color: Color(0xFF0F172A),
+                  color: isPositive ? net.available : net.error,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: NetSpacing.sm),
           Row(
             children: [
               Expanded(
-                child: Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFECFDF5),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Row(
-                        children: [
-                          Icon(Icons.arrow_downward,
-                              size: 14, color: Color(0xFF059669)),
-                          SizedBox(width: 4),
-                          Text(
-                            'إجمالي الإيداعات',
-                            style: TextStyle(
-                              fontFamily: 'Tajawal',
-                              fontSize: 11,
-                              color: Color(0xFF047857),
-                            ),
-                          ),
-                        ],
-                      ),
-                      Text(
-                        depositLabel,
-                        style: const TextStyle(
-                          fontFamily: 'Tajawal',
-                          fontWeight: FontWeight.w800,
-                          fontSize: 14,
-                          color: Color(0xFF059669),
-                        ),
-                      ),
-                    ],
-                  ),
+                child: _SummaryTile(
+                  icon: Icons.arrow_downward_rounded,
+                  label: 'إجمالي الإيداعات',
+                  value: depositLabel,
+                  color: net.available,
+                  background: net.availableContainer,
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: NetSpacing.sm),
               Expanded(
-                child: Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFEF2F2),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Row(
-                        children: [
-                          Icon(Icons.arrow_upward,
-                              size: 14, color: Color(0xFFDC2626)),
-                          SizedBox(width: 4),
-                          Text(
-                            'إجمالي الصرف / الخصم',
-                            style: TextStyle(
-                              fontFamily: 'Tajawal',
-                              fontSize: 11,
-                              color: Color(0xFFB91C1C),
-                            ),
-                          ),
-                        ],
-                      ),
-                      Text(
-                        outflowLabel,
-                        style: const TextStyle(
-                          fontFamily: 'Tajawal',
-                          fontWeight: FontWeight.w800,
-                          fontSize: 14,
-                          color: Color(0xFFDC2626),
-                        ),
-                      ),
-                    ],
-                  ),
+                child: _SummaryTile(
+                  icon: Icons.arrow_upward_rounded,
+                  label: 'إجمالي الصرف / الخصم',
+                  value: outflowLabel,
+                  color: net.error,
+                  background: net.errorContainer,
                 ),
               ),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SummaryTile extends StatelessWidget {
+  const _SummaryTile({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.color,
+    required this.background,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+  final Color color;
+  final Color background;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(NetSpacing.sm),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: NetRadii.xsAll,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 14, color: color),
+              const SizedBox(width: NetSpacing.xs),
+              Text(
+                label,
+                style: TextStyle(
+                  fontFamily: NetTypography.family,
+                  fontSize: 11,
+                  color: color,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: NetSpacing.xxs),
+          Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontFamily: NetTypography.family,
+              fontWeight: FontWeight.w800,
+              fontSize: 14,
+              color: color,
+            ),
           ),
         ],
       ),
@@ -606,12 +710,14 @@ class _TxCard extends StatelessWidget {
     required this.label,
     required this.inflow,
     required this.amountLabel,
+    this.onTap,
   });
 
   final Transaction tx;
   final String label;
   final bool inflow;
   final String amountLabel;
+  final VoidCallback? onTap;
 
   String _fmtTime(DateTime t) {
     final local = t.toLocal();
@@ -619,40 +725,25 @@ class _TxCard extends StatelessWidget {
     final m = local.minute.toString().padLeft(2, '0');
     final period = h >= 12 ? 'م' : 'ص';
     final h12 = h == 0 ? 12 : (h > 12 ? h - 12 : h);
-    return '${local.day} ${_month(local.month)} · $h12:$m $period';
-  }
-
-  String _month(int m) {
-    const names = [
-      '',
-      'يناير',
-      'فبراير',
-      'مارس',
-      'أبريل',
-      'مايو',
-      'يونيو',
-      'يوليو',
-      'أغسطس',
-      'سبتمبر',
-      'أكتوبر',
-      'نوفمبر',
-      'ديسمبر',
-    ];
-    return names[m];
+    return '$h12:$m $period';
   }
 
   @override
   Widget build(BuildContext context) {
-    final color = inflow ? const Color(0xFF059669) : const Color(0xFFDC2626);
-    final bg = inflow ? const Color(0xFFD1FAE5) : const Color(0xFFFEE2E2);
+    final palette = KayanPalette.of(context);
+    final net = context.netColors;
+    final color = inflow ? net.available : net.error;
+    final bg = inflow ? net.availableContainer : net.errorContainer;
 
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+    return NetSurfaceCard(
+      margin: const EdgeInsets.fromLTRB(
+        NetSpacing.lg,
+        0,
+        NetSpacing.lg,
+        NetSpacing.sm,
       ),
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(NetSpacing.md),
+      onTap: onTap,
       child: Row(
         children: [
           Container(
@@ -661,61 +752,85 @@ class _TxCard extends StatelessWidget {
             alignment: Alignment.center,
             decoration: BoxDecoration(
               color: bg,
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: NetRadii.smAll,
             ),
-            child: Text(
-              inflow ? '+${amountLabel.replaceAll(' ر.ي', '')}' : '-${amountLabel.replaceAll(' ر.ي', '')}',
-              style: TextStyle(
-                fontFamily: 'Tajawal',
-                fontWeight: FontWeight.w800,
-                fontSize: 11,
-                color: color,
-              ),
-              textAlign: TextAlign.center,
+            child: Icon(
+              inflow ? Icons.south_west_rounded : Icons.north_east_rounded,
+              size: 20,
+              color: color,
             ),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: NetSpacing.md),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   label,
-                  style: const TextStyle(
-                    fontFamily: 'Tajawal',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontFamily: NetTypography.family,
                     fontWeight: FontWeight.w700,
                     fontSize: 14,
-                    color: Color(0xFF0F172A),
+                    color: palette.textPrimary,
                   ),
                 ),
                 if (tx.reference != null && tx.reference!.isNotEmpty)
                   Text(
                     tx.reference!,
-                    style: const TextStyle(
-                      fontFamily: 'Tajawal',
-                      fontSize: 12,
-                      color: Color(0xFF64748B),
-                    ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontFamily: NetTypography.family,
+                      fontSize: 12,
+                      color: palette.textSecondary,
+                    ),
                   ),
-                Text(
-                  _fmtTime(tx.createdAt),
-                  style: const TextStyle(
-                    fontFamily: 'Tajawal',
-                    fontSize: 11,
-                    color: Color(0xFF94A3B8),
-                  ),
+                Row(
+                  children: [
+                    Icon(Icons.schedule_rounded, size: 12, color: palette.textTertiary),
+                    const SizedBox(width: NetSpacing.xs),
+                    Text(
+                      _fmtTime(tx.createdAt),
+                      style: TextStyle(
+                        fontFamily: NetTypography.family,
+                        fontSize: 11,
+                        color: palette.textTertiary,
+                      ),
+                    ),
+                    const SizedBox(width: NetSpacing.sm),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: NetSpacing.sm,
+                        vertical: 1,
+                      ),
+                      decoration: BoxDecoration(
+                        color: palette.surfaceVariant,
+                        borderRadius: NetRadii.pillAll,
+                      ),
+                      child: Text(
+                        transactionStatusLabel(tx.status),
+                        style: TextStyle(
+                          fontFamily: NetTypography.family,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          color: palette.textSecondary,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
           ),
+          const SizedBox(width: NetSpacing.sm),
           Text(
             '${inflow ? '+' : '-'}$amountLabel',
             style: TextStyle(
-              fontFamily: 'Tajawal',
+              fontFamily: NetTypography.family,
               fontWeight: FontWeight.w800,
-              fontSize: 13,
+              fontSize: 13.5,
               color: color,
             ),
           ),
@@ -771,6 +886,7 @@ class _TypeFilterSheetState extends State<_TypeFilterSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final palette = KayanPalette.of(context);
     return Directionality(
       textDirection: TextDirection.rtl,
       child: DraggableScrollableSheet(
@@ -778,50 +894,60 @@ class _TypeFilterSheetState extends State<_TypeFilterSheet> {
         minChildSize: 0.45,
         maxChildSize: 0.92,
         builder: (ctx, scroll) => Container(
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          decoration: BoxDecoration(
+            color: palette.surface,
+            borderRadius: NetRadii.sheetTop,
           ),
           child: Column(
             children: [
-              const SizedBox(height: 10),
+              const SizedBox(height: NetSpacing.md),
               Container(
-                width: 40,
+                width: 44,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: const Color(0xFFCBD5E1),
-                  borderRadius: BorderRadius.circular(2),
+                  color: palette.border,
+                  borderRadius: NetRadii.pillAll,
                 ),
               ),
               Padding(
-                padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
+                padding: const EdgeInsets.fromLTRB(
+                  NetSpacing.lg,
+                  NetSpacing.md,
+                  NetSpacing.lg,
+                  NetSpacing.sm,
+                ),
                 child: Row(
                   children: [
-                    const Expanded(
+                    Expanded(
                       child: Text(
                         'تصفية حسب نوع العملية',
                         style: TextStyle(
-                          fontFamily: 'Tajawal',
+                          fontFamily: NetTypography.family,
                           fontWeight: FontWeight.w800,
                           fontSize: 16,
+                          color: palette.textPrimary,
                         ),
                       ),
                     ),
                     if (_selected.isNotEmpty)
                       Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 4),
+                          horizontal: NetSpacing.sm,
+                          vertical: NetSpacing.xs,
+                        ),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFECFDF5),
-                          borderRadius: BorderRadius.circular(12),
+                          color: palette.primary.withValues(
+                            alpha: palette.isDark ? 0.22 : 0.12,
+                          ),
+                          borderRadius: NetRadii.pillAll,
                         ),
                         child: Text(
                           '${_selected.length} محدد',
-                          style: const TextStyle(
-                            fontFamily: 'Tajawal',
+                          style: TextStyle(
+                            fontFamily: NetTypography.family,
                             fontWeight: FontWeight.w700,
                             fontSize: 12,
-                            color: Color(0xFF0F766E),
+                            color: palette.primary,
                           ),
                         ),
                       ),
@@ -829,24 +955,18 @@ class _TypeFilterSheetState extends State<_TypeFilterSheet> {
                 ),
               ),
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
+                padding: NetSpacing.pageH,
                 child: Row(
                   children: [
                     TextButton(
                       onPressed: () => setState(
                         () => _selected = TransactionType.values.toSet(),
                       ),
-                      child: const Text(
-                        'تحديد الكل',
-                        style: TextStyle(fontFamily: 'Tajawal'),
-                      ),
+                      child: const Text('تحديد الكل'),
                     ),
                     TextButton(
                       onPressed: () => setState(() => _selected.clear()),
-                      child: const Text(
-                        'إلغاء التحديد',
-                        style: TextStyle(fontFamily: 'Tajawal'),
-                      ),
+                      child: const Text('إلغاء التحديد'),
                     ),
                   ],
                 ),
@@ -854,24 +974,32 @@ class _TypeFilterSheetState extends State<_TypeFilterSheet> {
               Expanded(
                 child: ListView(
                   controller: scroll,
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                  padding: const EdgeInsets.fromLTRB(
+                    NetSpacing.lg,
+                    0,
+                    NetSpacing.lg,
+                    NetSpacing.lg,
+                  ),
                   children: [
                     for (final entry in _groups.entries) ...[
                       Padding(
-                        padding: const EdgeInsets.only(top: 12, bottom: 8),
+                        padding: const EdgeInsets.only(
+                          top: NetSpacing.md,
+                          bottom: NetSpacing.sm,
+                        ),
                         child: Text(
                           entry.key,
-                          style: const TextStyle(
-                            fontFamily: 'Tajawal',
-                            fontWeight: FontWeight.w700,
+                          style: TextStyle(
+                            fontFamily: NetTypography.family,
+                            fontWeight: FontWeight.w800,
                             fontSize: 13,
-                            color: Color(0xFF0F766E),
+                            color: palette.primary,
                           ),
                         ),
                       ),
                       Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
+                        spacing: NetSpacing.sm,
+                        runSpacing: NetSpacing.sm,
                         children: entry.value.map((t) {
                           final on = _selected.contains(t);
                           return FilterChip(
@@ -880,20 +1008,16 @@ class _TypeFilterSheetState extends State<_TypeFilterSheet> {
                             label: Text(
                               _label(t),
                               style: TextStyle(
-                                fontFamily: 'Tajawal',
+                                fontFamily: NetTypography.family,
                                 fontSize: 12,
                                 fontWeight: FontWeight.w600,
-                                color: on
-                                    ? Colors.white
-                                    : const Color(0xFF334155),
+                                color: on ? Colors.white : palette.textPrimary,
                               ),
                             ),
-                            selectedColor: const Color(0xFF0F766E),
-                            backgroundColor: const Color(0xFFF8FAFC),
+                            selectedColor: palette.primary,
+                            backgroundColor: palette.surfaceVariant,
                             side: BorderSide(
-                              color: on
-                                  ? const Color(0xFF0F766E)
-                                  : const Color(0xFFE2E8F0),
+                              color: on ? palette.primary : palette.border,
                             ),
                             onSelected: (v) => setState(() {
                               if (v) {
@@ -911,34 +1035,26 @@ class _TypeFilterSheetState extends State<_TypeFilterSheet> {
               ),
               SafeArea(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                  padding: const EdgeInsets.fromLTRB(
+                    NetSpacing.lg,
+                    0,
+                    NetSpacing.lg,
+                    NetSpacing.lg,
+                  ),
                   child: Row(
                     children: [
                       Expanded(
                         child: OutlinedButton(
                           onPressed: () => Navigator.pop(context, widget.initial),
-                          child: const Text(
-                            'إلغاء',
-                            style: TextStyle(fontFamily: 'Tajawal'),
-                          ),
+                          child: const Text('إلغاء'),
                         ),
                       ),
-                      const SizedBox(width: 12),
+                      const SizedBox(width: NetSpacing.md),
                       Expanded(
                         flex: 2,
                         child: FilledButton(
-                          style: FilledButton.styleFrom(
-                            backgroundColor: const Color(0xFF0F766E),
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                          ),
                           onPressed: () => Navigator.pop(context, _selected),
-                          child: const Text(
-                            'تطبيق',
-                            style: TextStyle(
-                              fontFamily: 'Tajawal',
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
+                          child: const Text('تطبيق'),
                         ),
                       ),
                     ],
@@ -998,59 +1114,60 @@ class _DateFilterSheetState extends State<_DateFilterSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final palette = KayanPalette.of(context);
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+        decoration: BoxDecoration(
+          color: palette.surface,
+          borderRadius: NetRadii.sheetTop,
         ),
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+        padding: const EdgeInsets.fromLTRB(
+          NetSpacing.lg,
+          NetSpacing.md,
+          NetSpacing.lg,
+          NetSpacing.xxl,
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              width: 40,
+              width: 44,
               height: 4,
               decoration: BoxDecoration(
-                color: Colors.grey.shade300,
-                borderRadius: BorderRadius.circular(2),
+                color: palette.border,
+                borderRadius: NetRadii.pillAll,
               ),
             ),
-            const SizedBox(height: 16),
-            const Text(
+            const SizedBox(height: NetSpacing.lg),
+            Text(
               'نطاق التاريخ',
               style: TextStyle(
-                fontFamily: 'Tajawal',
+                fontFamily: NetTypography.family,
                 fontWeight: FontWeight.w800,
                 fontSize: 16,
+                color: palette.textPrimary,
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: NetSpacing.lg),
             Row(
               children: [
                 Expanded(
                   child: OutlinedButton(
                     onPressed: () => _pick(true),
-                    child: Text(
-                      'من: ${_fmt(_from)}',
-                      style: const TextStyle(fontFamily: 'Tajawal'),
-                    ),
+                    child: Text('من: ${_fmt(_from)}'),
                   ),
                 ),
-                const SizedBox(width: 10),
+                const SizedBox(width: NetSpacing.sm),
                 Expanded(
                   child: OutlinedButton(
                     onPressed: () => _pick(false),
-                    child: Text(
-                      'إلى: ${_fmt(_to)}',
-                      style: const TextStyle(fontFamily: 'Tajawal'),
-                    ),
+                    child: Text('إلى: ${_fmt(_to)}'),
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: NetSpacing.lg),
             Row(
               children: [
                 Expanded(
@@ -1059,30 +1176,18 @@ class _DateFilterSheetState extends State<_DateFilterSheet> {
                       'from': null,
                       'to': null,
                     }),
-                    child: const Text(
-                      'مسح',
-                      style: TextStyle(fontFamily: 'Tajawal'),
-                    ),
+                    child: const Text('مسح'),
                   ),
                 ),
-                const SizedBox(width: 10),
+                const SizedBox(width: NetSpacing.sm),
                 Expanded(
                   flex: 2,
                   child: FilledButton(
-                    style: FilledButton.styleFrom(
-                      backgroundColor: const Color(0xFF0F766E),
-                    ),
                     onPressed: () => Navigator.pop(context, {
                       'from': _from,
                       'to': _to,
                     }),
-                    child: const Text(
-                      'تطبيق',
-                      style: TextStyle(
-                        fontFamily: 'Tajawal',
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
+                    child: const Text('تطبيق'),
                   ),
                 ),
               ],

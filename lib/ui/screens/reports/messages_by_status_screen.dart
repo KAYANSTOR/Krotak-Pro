@@ -3,7 +3,12 @@ import 'package:flutter/material.dart';
 import '../../../core/result.dart';
 import '../../../domain/entities/message.dart';
 import '../../app_scope.dart';
+import '../../labels/net_labels.dart';
+import '../../theme/kayan_palette.dart';
+import '../../theme/net_semantic_colors.dart';
+import '../../theme/net_tokens.dart';
 import '../../widgets/async_views.dart';
+import '../../widgets/net/net_surface_card.dart';
 
 class MessagesByStatusScreen extends StatefulWidget {
   const MessagesByStatusScreen({
@@ -62,36 +67,92 @@ class _MessagesByStatusScreenState extends State<MessagesByStatusScreen> {
     return Scaffold(
       appBar: AppBar(title: Text(widget.title)),
       body: _loading
-          ? const AsyncLoadingView()
+          ? const AsyncLoadingView(skeleton: true, skeletonCount: 5)
           : _error != null
               ? AsyncErrorView(message: _error!, onRetry: _load)
               : _items.isEmpty
-                  ? const AsyncEmptyView(message: 'لا رسائل في هذه الحالة')
+                  ? AsyncEmptyView(
+                      message: 'لا رسائل في هذه الحالة',
+                      hint: 'ستظهر هنا الرسائل الواردة بهذه الحالة مرتبة من الأحدث.',
+                      icon: Icons.mark_email_unread_outlined,
+                      actionLabel: 'إعادة التحميل',
+                      onAction: _load,
+                    )
                   : RefreshIndicator(
                       onRefresh: _load,
-                      child: ListView.separated(
+                      color: context.kayan.primary,
+                      child: ListView.builder(
+                        padding: NetSpacing.screen,
                         itemCount: _items.length,
-                        separatorBuilder: (_, __) => const Divider(height: 1),
                         itemBuilder: (_, i) {
                           final m = _items[i];
-                          return ListTile(
-                            title: Text(
-                              m.sender,
-                              style: const TextStyle(
-                                fontFamily: 'Tajawal',
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            subtitle: Text(
-                              '${m.status.name}\n${m.body}',
-                              maxLines: 3,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(fontFamily: 'Tajawal', fontSize: 12),
-                            ),
-                            isThreeLine: true,
-                            trailing: Text(
-                              '${m.receivedAt.month}/${m.receivedAt.day}',
-                              style: const TextStyle(fontFamily: 'Tajawal', fontSize: 11),
+                          final net = context.netColors;
+                          final status = m.status;
+                          return NetSurfaceCard(
+                            margin: const EdgeInsets.only(bottom: NetSpacing.sm),
+                            padding: NetSpacing.cardTight,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        m.sender.isEmpty ? 'مرسل غير معروف' : m.sender,
+                                        textDirection: TextDirection.ltr,
+                                        textAlign: TextAlign.right,
+                                        style: TextStyle(
+                                          fontFamily: NetTypography.family,
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w700,
+                                          color: context.kayan.textPrimary,
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: NetSpacing.sm),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: NetSpacing.sm,
+                                        vertical: 3,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: messageStatusContainer(status, net),
+                                        borderRadius: BorderRadius.circular(NetRadii.xs),
+                                      ),
+                                      child: Text(
+                                        messageStatusLabel(status),
+                                        style: TextStyle(
+                                          fontFamily: NetTypography.family,
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w700,
+                                          color: messageStatusColor(status, net),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: NetSpacing.xs),
+                                Text(
+                                  m.body,
+                                  maxLines: 3,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontFamily: NetTypography.family,
+                                    fontSize: 12.5,
+                                    height: 1.4,
+                                    color: context.kayan.textSecondary,
+                                  ),
+                                ),
+                                const SizedBox(height: NetSpacing.sm),
+                                Text(
+                                  relativeArabicTime(m.receivedAt),
+                                  style: TextStyle(
+                                    fontFamily: NetTypography.family,
+                                    fontSize: 11,
+                                    color: context.kayan.textTertiary,
+                                  ),
+                                ),
+                              ],
                             ),
                           );
                         },

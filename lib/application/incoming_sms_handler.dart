@@ -22,6 +22,7 @@ final class IncomingSmsHandler {
     required this.sourceGuard,
     this.settings,
     this.advanceService,
+    this.onAfterPayment,
     UnifiedPaymentEventEngine? engine,
   }) : engine = engine ??
            UnifiedPaymentEventEngine(
@@ -41,6 +42,7 @@ final class IncomingSmsHandler {
   final PaymentSourceGuard sourceGuard;
   final SettingsRepository? settings;
   final AdvanceService? advanceService;
+  final Future<void> Function()? onAfterPayment;
   final UnifiedPaymentEventEngine engine;
   StreamSubscription<IncomingSmsEvent>? _sub;
 
@@ -100,28 +102,37 @@ final class IncomingSmsHandler {
   }
 
   Future<void> _onEvent(IncomingSmsEvent event) async {
-    if (_isSalafniCommand(event.body) &&
-        advanceService != null &&
-        await _salafniEnabled()) {
-      await advanceService!.requestByIdentifier(
-        identifier: event.sender,
-        currencyCode: await _currencyCode(),
-        operationId: _salafniOperationId(
-          event.sender,
-          event.body,
-          event.receivedAt,
+    try {
+      if (_isSalafniCommand(event.body) &&
+          advanceService != null &&
+          await _salafniEnabled()) {
+        await advanceService!.requestByIdentifier(
+          identifier: event.sender,
+          currencyCode: await _currencyCode(),
+          operationId: _salafniOperationId(
+            event.sender,
+            event.body,
+            event.receivedAt,
+          ),
+        );
+        return;
+      }
+      await engine.ingest(
+        PaymentEvent(
+          channel: PaymentChannel.sms,
+          sourceKey: event.sender,
+          body: event.body,
+          receivedAt: event.receivedAt,
         ),
       );
-      return;
+    } finally {
+      final hook = onAfterPayment;
+      if (hook != null) {
+        try {
+          await hook();
+        } catch (_) {}
+      }
     }
-    await engine.ingest(
-      PaymentEvent(
-        channel: PaymentChannel.sms,
-        sourceKey: event.sender,
-        body: event.body,
-        receivedAt: event.receivedAt,
-      ),
-    );
   }
 
   bool _isSalafniCommand(String body) {

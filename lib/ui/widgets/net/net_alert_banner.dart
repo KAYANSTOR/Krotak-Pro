@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../theme/net_semantic_colors.dart';
+import '../../theme/net_tokens.dart';
 
 enum NetAlertStyle { warning, danger, info }
 
@@ -9,15 +10,17 @@ class NetAlertBanner extends StatelessWidget {
   const NetAlertBanner({
     super.key,
     required this.message,
-    this.icon = Icons.info_outline,
+    this.icon = Icons.info_outline_rounded,
     this.onTap,
     this.style = NetAlertStyle.warning,
+    this.onDismiss,
   });
 
   final String message;
   final IconData icon;
   final VoidCallback? onTap;
   final NetAlertStyle style;
+  final VoidCallback? onDismiss;
 
   @override
   Widget build(BuildContext context) {
@@ -28,51 +31,66 @@ class NetAlertBanner extends StatelessWidget {
 
     switch (style) {
       case NetAlertStyle.danger:
-        bg = const Color(0xFFFFF1F2);
-        fg = const Color(0xFFBE123C);
-        border = const Color(0xFFFB7185);
+        bg = net.errorContainer;
+        fg = net.rejected;
+        border = net.error;
       case NetAlertStyle.warning:
         bg = net.alertBackground;
         fg = net.alertForeground;
-        border = const Color(0xFFFCD34D);
+        border = net.warning;
       case NetAlertStyle.info:
-        bg = const Color(0xFFEFF6FF);
-        fg = const Color(0xFF1D4ED8);
-        border = const Color(0xFF93C5FD);
+        bg = net.infoContainer;
+        fg = net.info;
+        border = net.info;
     }
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      padding: const EdgeInsets.symmetric(
+        horizontal: NetSpacing.lg,
+        vertical: NetSpacing.xs,
+      ),
       child: Material(
         color: bg,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: NetRadii.smAll,
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: NetRadii.smAll,
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            padding: const EdgeInsets.symmetric(
+              horizontal: NetSpacing.md,
+              vertical: NetSpacing.md,
+            ),
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: border, width: 1.2),
+              borderRadius: NetRadii.smAll,
+              border: Border.all(color: border.withValues(alpha: 0.55), width: 1.2),
             ),
             child: Row(
               children: [
-                Icon(icon, color: fg, size: 20),
-                const SizedBox(width: 10),
+                Icon(icon, color: fg, size: NetSizes.iconSm),
+                const SizedBox(width: NetSpacing.sm),
                 Expanded(
                   child: Text(
                     message,
                     style: TextStyle(
-                      fontFamily: 'Tajawal',
-                      fontSize: 13,
+                      fontFamily: NetTypography.family,
+                      fontSize: 12.5,
                       color: fg,
                       fontWeight: FontWeight.w700,
-                      height: 1.35,
+                      height: 1.4,
                     ),
                   ),
                 ),
-                if (onTap != null)
-                  Icon(Icons.chevron_left, color: fg, size: 18),
+                if (onDismiss != null)
+                  InkWell(
+                    onTap: onDismiss,
+                    borderRadius: NetRadii.pillAll,
+                    child: Padding(
+                      padding: const EdgeInsets.all(NetSpacing.xxs),
+                      child: Icon(Icons.close_rounded, color: fg, size: 16),
+                    ),
+                  )
+                else if (onTap != null)
+                  Icon(Icons.chevron_left_rounded, color: fg, size: NetSizes.iconSm),
               ],
             ),
           ),

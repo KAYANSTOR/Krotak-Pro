@@ -5,8 +5,11 @@ import '../../domain/entities/customer.dart';
 import '../../domain/entities/pos_account.dart';
 import '../../domain/entities/wallet.dart';
 import '../../domain/services/default_pos_templates_seeder.dart';
+import '../../platform/contact_picker_bridge.dart';
 import '../app_scope.dart';
 import '../theme/kayan_colors.dart';
+import '../theme/kayan_palette.dart';
+import '../theme/net_semantic_colors.dart';
 import '../widgets/async_views.dart';
 import 'settings/templates_screen.dart';
 
@@ -226,8 +229,8 @@ class _WalletsPosScreenState extends State<WalletsPosScreen>
               return Padding(
                 padding: EdgeInsets.only(bottom: inset),
                 child: Container(
-                  decoration: const BoxDecoration(
-                    color: Colors.white,
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.surface,
                     borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
                   ),
                   padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
@@ -240,7 +243,7 @@ class _WalletsPosScreenState extends State<WalletsPosScreen>
                           width: 40,
                           height: 4,
                           decoration: BoxDecoration(
-                            color: Colors.grey.shade300,
+                            color: KayanPalette.of(ctx).border,
                             borderRadius: BorderRadius.circular(2),
                           ),
                         ),
@@ -249,11 +252,11 @@ class _WalletsPosScreenState extends State<WalletsPosScreen>
                       Text(
                         existing == null ? 'محفظة جديدة' : 'تعديل محفظة',
                         textAlign: TextAlign.center,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontFamily: 'Tajawal',
                           fontWeight: FontWeight.w800,
                           fontSize: 18,
-                          color: Color(0xFF0F766E),
+                          color: context.kayan.primary,
                         ),
                       ),
                       const SizedBox(height: 16),
@@ -324,7 +327,6 @@ class _WalletsPosScreenState extends State<WalletsPosScreen>
                             flex: 2,
                             child: FilledButton(
                               style: FilledButton.styleFrom(
-                                backgroundColor: const Color(0xFF0F766E),
                                 minimumSize: const Size.fromHeight(48),
                               ),
                               onPressed: () {
@@ -398,7 +400,7 @@ class _WalletsPosScreenState extends State<WalletsPosScreen>
             mainAxisSize: MainAxisSize.min,
             children: [
               ListTile(
-                leading: const Icon(Icons.edit_outlined, color: Color(0xFF0F766E)),
+                leading: Icon(Icons.edit_outlined, color: context.kayan.primary),
                 title: const Text('تعديل', style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w600)),
                 onTap: () {
                   Navigator.pop(ctx);
@@ -406,7 +408,7 @@ class _WalletsPosScreenState extends State<WalletsPosScreen>
                 },
               ),
               ListTile(
-                leading: const Icon(Icons.settings_suggest_outlined, color: Color(0xFF0F766E)),
+                leading: Icon(Icons.settings_suggest_outlined, color: context.kayan.primary),
                 title: const Text('إدارة القوالب', style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w600)),
                 onTap: () {
                   Navigator.pop(ctx);
@@ -418,8 +420,17 @@ class _WalletsPosScreenState extends State<WalletsPosScreen>
                 },
               ),
               ListTile(
-                leading: const Icon(Icons.delete_outline, color: Color(0xFFDC2626)),
-                title: const Text('حذف', style: TextStyle(fontFamily: 'Tajawal', color: Color(0xFFDC2626))),
+                leading: Icon(
+                  Icons.delete_outline_rounded,
+                  color: context.netColors.rejected,
+                ),
+                title: Text(
+                  'حذف',
+                  style: TextStyle(
+                    fontFamily: 'Tajawal',
+                    color: context.netColors.rejected,
+                  ),
+                ),
                 onTap: () async {
                   Navigator.pop(ctx);
                   final r = await AppScope.of(context).walletCatalog.updateWallet(
@@ -458,6 +469,8 @@ class _WalletsPosScreenState extends State<WalletsPosScreen>
               : ''),
     );
     var mode = acc?.percentageMode ?? PosPercentageMode.defaultCategory;
+    final contactPicker = ContactPickerBridge();
+    var picking = false;
 
     final ok = await showModalBottomSheet<bool>(
       context: context,
@@ -507,10 +520,31 @@ class _WalletsPosScreenState extends State<WalletsPosScreen>
                         TextField(
                           controller: phoneCtrl,
                           keyboardType: TextInputType.phone,
-                          decoration: const InputDecoration(
+                          decoration: InputDecoration(
                             labelText: 'رقم جوال نقطة البيع',
-                            prefixIcon: Icon(Icons.contact_phone_outlined),
-                            border: OutlineInputBorder(),
+                            prefixIcon: IconButton(
+                              icon: picking
+                                  ? const SizedBox(
+                                      width: 18,
+                                      height: 18,
+                                      child: CircularProgressIndicator(strokeWidth: 2),
+                                    )
+                                  : const Icon(Icons.contact_phone_outlined),
+                              onPressed: picking
+                                  ? null
+                                  : () async {
+                                      setLocal(() => picking = true);
+                                      final phone = await contactPicker.pickPhone();
+                                      if (!mounted) return;
+                                      setLocal(() => picking = false);
+                                      if (phone != null && phone.isNotEmpty) {
+                                        phoneCtrl.text = phone;
+                                        phoneCtrl.selection =
+                                            TextSelection.collapsed(offset: phone.length);
+                                      }
+                                    },
+                            ),
+                            border: const OutlineInputBorder(),
                           ),
                           style: const TextStyle(fontFamily: 'Tajawal'),
                         ),
@@ -771,19 +805,22 @@ class _WalletsPosScreenState extends State<WalletsPosScreen>
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
-        backgroundColor: const Color(0xFFF8FAFC),
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         appBar: AppBar(
-          title: const Column(
+          title: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text('إدارة المحافظ ونقاط البيع',
                   style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w800, fontSize: 17)),
               Text('إعداد وتفعيل المحافظ ونقاط البيع المرتبطة بالرسائل',
-                  style: TextStyle(fontFamily: 'Tajawal', fontSize: 12, color: Color(0xFF64748B))),
+                  style: TextStyle(
+                      fontFamily: 'Tajawal',
+                      fontSize: 12,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant)),
             ],
           ),
-          backgroundColor: const Color(0xFFF8FAFC),
-          foregroundColor: const Color(0xFF0F172A),
+          backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+          foregroundColor: Theme.of(context).colorScheme.onSurface,
           elevation: 0,
         ),
         body: _loading
@@ -801,7 +838,7 @@ class _WalletsPosScreenState extends State<WalletsPosScreen>
                             hintStyle: const TextStyle(fontFamily: 'Tajawal'),
                             prefixIcon: const Icon(Icons.search),
                             filled: true,
-                            fillColor: Colors.white,
+                            fillColor: Theme.of(context).colorScheme.surface,
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(12),
                               borderSide: BorderSide.none,
@@ -812,7 +849,7 @@ class _WalletsPosScreenState extends State<WalletsPosScreen>
                       ),
                       TabBar(
                         controller: _tabs,
-                        labelColor: const Color(0xFF0F766E),
+                        labelColor: context.kayan.primary,
                         labelStyle: const TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w700),
                         tabs: const [Tab(text: 'المحافظ'), Tab(text: 'نقاط البيع')],
                       ),
@@ -825,7 +862,7 @@ class _WalletsPosScreenState extends State<WalletsPosScreen>
                     ],
                   ),
         floatingActionButton: FloatingActionButton.extended(
-          backgroundColor: const Color(0xFFDB2777),
+          backgroundColor: KayanColors.accentPink,
           shape: const StadiumBorder(),
           onPressed: () {
             if (_tabs.index == 0) {
@@ -855,7 +892,7 @@ class _WalletsPosScreenState extends State<WalletsPosScreen>
     }
     return RefreshIndicator(
       onRefresh: _load,
-      color: const Color(0xFF0F766E),
+      color: context.kayan.primary,
       child: ListView.separated(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
         itemCount: items.length,
@@ -866,30 +903,38 @@ class _WalletsPosScreenState extends State<WalletsPosScreen>
           final color = _colorFor(w);
           final isNotif = w.sourceMode == WalletSourceMode.notification;
           return Material(
-            color: Colors.white,
+            color: Theme.of(context).colorScheme.surface,
             borderRadius: BorderRadius.circular(16),
             child: Container(
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFFE2E8F0)),
+                border: Border.all(
+                  color: Theme.of(context).colorScheme.outlineVariant,
+                ),
               ),
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
               child: Row(
                 children: [
                   IconButton(
-                    icon: const Icon(Icons.more_vert, size: 20, color: Color(0xFF94A3B8)),
+                    icon: Icon(
+                      Icons.more_vert,
+                      size: 20,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
                     onPressed: () => _walletMenu(w),
                   ),
                   Switch.adaptive(
                     value: active,
-                    activeColor: const Color(0xFF0F766E),
+                    activeColor: context.kayan.primary,
                     onChanged: _togglingIds.contains(w.id) ? null : (_) => _toggleWallet(w),
                   ),
                   const SizedBox(width: 4),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
-                      color: isNotif ? const Color(0xFFF3E8FF) : const Color(0xFFF1F5F9),
+                      color: isNotif
+                          ? context.netColors.soldContainer
+                          : Theme.of(context).colorScheme.surfaceContainerHighest,
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
@@ -898,7 +943,9 @@ class _WalletsPosScreenState extends State<WalletsPosScreen>
                         fontFamily: 'Tajawal',
                         fontSize: 11,
                         fontWeight: FontWeight.w700,
-                        color: isNotif ? const Color(0xFF7C3AED) : const Color(0xFF64748B),
+                        color: isNotif
+                            ? context.netColors.sold
+                            : Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
                     ),
                   ),
@@ -912,14 +959,19 @@ class _WalletsPosScreenState extends State<WalletsPosScreen>
                                 fontFamily: 'Tajawal', fontWeight: FontWeight.w800, fontSize: 15)),
                         Text(
                           'محفظة — ${w.senderId ?? '—'}',
-                          style: const TextStyle(
-                              fontFamily: 'Tajawal', fontSize: 12, color: Color(0xFF64748B)),
+                          style: TextStyle(
+                              fontFamily: 'Tajawal',
+                              fontSize: 12,
+                              color: Theme.of(context).colorScheme.onSurfaceVariant),
                         ),
                         if (w.packageName != null && w.packageName!.isNotEmpty)
                           Text(
                             w.packageName!,
-                            style: const TextStyle(
-                                fontFamily: 'Tajawal', fontSize: 11, color: Color(0xFF94A3B8)),
+                            style: TextStyle(
+                                fontFamily: 'Tajawal',
+                                fontSize: 11,
+                                color:
+                                    Theme.of(context).colorScheme.onSurfaceVariant),
                             textDirection: TextDirection.ltr,
                           ),
                       ],
@@ -965,12 +1017,14 @@ class _WalletsPosScreenState extends State<WalletsPosScreen>
           final phone = acc?.notifyPhone ??
               (acc != null && acc.identifiers.isNotEmpty ? acc.identifiers.first : null);
           return Material(
-            color: Colors.white,
+            color: Theme.of(context).colorScheme.surface,
             borderRadius: BorderRadius.circular(16),
             child: Container(
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFFE2E8F0)),
+                border: Border.all(
+                  color: Theme.of(context).colorScheme.outlineVariant,
+                ),
               ),
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
               child: Row(
@@ -981,7 +1035,7 @@ class _WalletsPosScreenState extends State<WalletsPosScreen>
                   ),
                   Switch.adaptive(
                     value: active,
-                    activeColor: const Color(0xFF0F766E),
+                    activeColor: context.kayan.primary,
                     onChanged: _togglingIds.contains(p.id) ? null : (_) => _togglePos(p),
                   ),
                   const SizedBox(width: 4),
@@ -994,13 +1048,18 @@ class _WalletsPosScreenState extends State<WalletsPosScreen>
                                 fontFamily: 'Tajawal', fontWeight: FontWeight.w800)),
                         Text(
                           phone == null ? 'نقطة بيع' : 'نقطة بيع — $phone',
-                          style: const TextStyle(
-                              fontFamily: 'Tajawal', fontSize: 12, color: Color(0xFF64748B)),
+                          style: TextStyle(
+                              fontFamily: 'Tajawal',
+                              fontSize: 12,
+                              color: Theme.of(context).colorScheme.onSurfaceVariant),
                         ),
                       ],
                     ),
                   ),
-                  const Icon(Icons.storefront_outlined, color: Color(0xFF0F766E)),
+                  Icon(
+                    Icons.storefront_outlined,
+                    color: context.kayan.primary,
+                  ),
                 ],
               ),
             ),
