@@ -24,4 +24,9 @@ CI على main — analyze + test + Android debug APK build
 - تمييز بصري لبطاقة مبيعات اليوم / الشهر المختارة.
 - تقرير: [phase-23-dashboard-video-parity-visuals.md](phase-23-dashboard-video-parity-visuals.md)
 
+### Phase 24 — طريقة التسوية وأرشيف الرسائل (2026-09-19) ✅ برمجيًا
+- أيقونات وطريقة دفع مميّزة في كشف تسوية نقاط البيع، مع ترميز الطريقة في المرجع القائم.
+- تاريخ عربي تفصيلي على بطاقات أرشيف الرسائل المحلولة.
+- تقرير: [phase-24-settlement-method-and-archive-dates.md](phase-24-settlement-method-and-archive-dates.md)
+
 المراحل السابقة موثقة في المستودع. المتبقي الغير برمجي: تحقق جهاز حقيقي (مرحلة 12).
