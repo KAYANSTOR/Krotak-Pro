@@ -8,42 +8,26 @@ void main() {
     await tester.pumpWidget(const MaterialApp(home: HelpCenterScreen()));
     await tester.pumpAndSettle();
 
-    // Group titles present after video-parity rewrite
-    expect(find.text('البدء والصلاحيات'), findsOneWidget);
-    expect(find.text('الرسائل والمعالجة'), findsOneWidget);
-
-    // Item near top of inventory section
-    final cardsTopic = find.text('الفئات والمخزون');
-    await tester.scrollUntilVisible(
-      cardsTopic,
-      400,
-      scrollable: find.byType(Scrollable).first,
-    );
-    expect(cardsTopic, findsWidgets);
-
-    final reports = find.text('التقارير والعمليات');
-    await tester.scrollUntilVisible(
-      reports,
-      400,
-      scrollable: find.byType(Scrollable).first,
-    );
-    expect(reports, findsWidgets);
+    // App bar + video-parity groups (chip filter + section header share the same label)
+    expect(find.textContaining('مركز المساعدة'), findsWidgets);
+    expect(find.text('البدء والصلاحيات'), findsWidgets);
+    expect(find.text('الرسائل والمعالجة'), findsWidgets);
+    expect(find.text('المخزون والكروت'), findsWidgets);
   });
 
   testWidgets('HelpCenterScreen supports expansion', (tester) async {
     await tester.pumpWidget(const MaterialApp(home: HelpCenterScreen()));
     await tester.pumpAndSettle();
 
-    final title = find.text('إضافة واستيراد الكروت');
-    await tester.scrollUntilVisible(
-      title,
-      400,
-      scrollable: find.byType(Scrollable).first,
-    );
-    expect(title, findsOneWidget);
-    await tester.tap(title);
+    // Expand the first item card in the list (ListTile / ExpansionTile style)
+    final item = find.text('تهيئة التشغيل عند أول فتح');
+    expect(item, findsOneWidget);
+    await tester.tap(item);
     await tester.pumpAndSettle();
-    expect(find.textContaining('سيريال'), findsWidgets);
+    expect(
+      find.textContaining('ورقة سفلية'),
+      findsWidgets,
+    );
   });
 
   testWidgets('AsyncErrorView shows retry', (tester) async {
