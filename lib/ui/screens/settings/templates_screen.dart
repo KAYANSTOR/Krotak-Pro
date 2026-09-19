@@ -354,6 +354,19 @@ class _TemplatesScreenState extends State<TemplatesScreen> {
 
 /// بطاقة قالب مطابقة لإطار `tpl_sys50.jpg`:
 /// [⋮] [Switch]  …  [اسم + شارات]  [✓]
+/// مسودة = القالب ناقص حقلاً مطلوباً (المبلغ، أو معرّف العميل حسب نوعه) —
+/// لا يمكن أن يكون نشطاً فعلياً حتى يُستكمل. مطابق لحالة "مسودة" في الفيديو.
+bool _isTemplateDraft(TransferTemplate t) {
+  final p = t.pattern;
+  final hasAmount = p.contains('{amount}') || p.contains('%amount');
+  final hasIdentifier = switch (t.identifierKind) {
+    TemplateIdentifierKind.phone => p.contains('{phone}') || p.contains('%phone'),
+    TemplateIdentifierKind.balanceRequestCode => true, // لا يُستخرج من نص الرسالة
+    _ => p.contains('{account}') || p.contains('%account'),
+  };
+  return !hasAmount || !hasIdentifier;
+}
+
 class _TemplateCard extends StatelessWidget {
   const _TemplateCard({
     required this.template,
@@ -370,7 +383,8 @@ class _TemplateCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = template;
-    final active = t.isActive;
+    final draft = _isTemplateDraft(t);
+    final active = t.isActive && !draft;
 
     return Material(
       color: Theme.of(context).colorScheme.surface,
@@ -402,11 +416,11 @@ class _TemplateCard extends StatelessWidget {
                 size: 22,
               ),
             ),
-            // Switch
+            // Switch — مسودة لا يمكن تفعيلها حتى تُستكمل
             Switch.adaptive(
               value: active,
               activeColor: context.kayan.primary,
-              onChanged: onToggle,
+              onChanged: draft ? null : onToggle,
             ),
             const SizedBox(width: 4),
             // المحتوى النصي
@@ -428,15 +442,17 @@ class _TemplateCard extends StatelessWidget {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
-                      // شارة نشط / متوقف
+                      // شارة نشط / متوقف / مسودة
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                         decoration: BoxDecoration(
-                          color: active
-                              ? context.netColors.available.withValues(alpha: 0.14)
-                              : Theme.of(context)
-                                  .colorScheme
-                                  .surfaceContainerHighest,
+                          color: draft
+                              ? const Color(0xFFF59E0B).withValues(alpha: 0.14)
+                              : active
+                                  ? context.netColors.available.withValues(alpha: 0.14)
+                                  : Theme.of(context)
+                                      .colorScheme
+                                      .surfaceContainerHighest,
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Row(
@@ -447,25 +463,29 @@ class _TemplateCard extends StatelessWidget {
                               height: 6,
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
-                                color: active
-                                    ? context.netColors.available
-                                    : Theme.of(context)
-                                        .colorScheme
-                                        .onSurfaceVariant,
+                                color: draft
+                                    ? const Color(0xFFF59E0B)
+                                    : active
+                                        ? context.netColors.available
+                                        : Theme.of(context)
+                                            .colorScheme
+                                            .onSurfaceVariant,
                               ),
                             ),
                             const SizedBox(width: 5),
                             Text(
-                              active ? 'نشط' : 'متوقف',
+                              draft ? 'مسودة' : (active ? 'نشط' : 'متوقف'),
                               style: TextStyle(
                                 fontFamily: 'Tajawal',
                                 fontSize: 11,
                                 fontWeight: FontWeight.w600,
-                                color: active
-                                    ? context.netColors.available
-                                    : Theme.of(context)
-                                        .colorScheme
-                                        .onSurfaceVariant,
+                                color: draft
+                                    ? const Color(0xFFF59E0B)
+                                    : active
+                                        ? context.netColors.available
+                                        : Theme.of(context)
+                                            .colorScheme
+                                            .onSurfaceVariant,
                               ),
                             ),
                           ],
@@ -497,22 +517,26 @@ class _TemplateCard extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 10),
-            // أيقونة ✓ خضراء (مطابقة للفيديو)
+            // أيقونة ✓ خضراء / ✏️ مسودة (مطابقة للفيديو)
             Container(
               width: 36,
               height: 36,
               decoration: BoxDecoration(
-                color: active
-                    ? context.netColors.availableContainer
-                    : Theme.of(context).colorScheme.surfaceContainerHighest,
+                color: draft
+                    ? const Color(0xFFF59E0B).withValues(alpha: 0.14)
+                    : active
+                        ? context.netColors.availableContainer
+                        : Theme.of(context).colorScheme.surfaceContainerHighest,
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Icon(
-                Icons.check_circle,
+                draft ? Icons.edit_note_rounded : Icons.check_circle,
                 size: 22,
-                color: active
-                    ? context.netColors.available
-                    : Theme.of(context).colorScheme.onSurfaceVariant,
+                color: draft
+                    ? const Color(0xFFF59E0B)
+                    : active
+                        ? context.netColors.available
+                        : Theme.of(context).colorScheme.onSurfaceVariant,
               ),
             ),
           ],
