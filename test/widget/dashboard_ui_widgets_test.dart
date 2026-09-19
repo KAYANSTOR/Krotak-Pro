@@ -116,7 +116,8 @@ void main() {
     expect(find.text('إيداع / تحويل'), findsOneWidget);
     expect(find.text('مكتملة'), findsOneWidget);
     expect(find.text('مشاركة'), findsOneWidget);
-    expect(find.text('حفظ'), findsOneWidget);
+    expect(find.text('حفظ نص'), findsOneWidget);
+    expect(find.text('حفظ صورة'), findsOneWidget);
     expect(find.text('غير مرتبط بحساب'), findsOneWidget);
   });
 }
