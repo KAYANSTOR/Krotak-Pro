@@ -16,6 +16,7 @@ import '../system_check_screen.dart';
 import '../wallets_pos_screen.dart';
 import 'backup_restore_screen.dart';
 import 'clean_logs_screen.dart';
+import 'deep_clean_screen.dart';
 import 'export_ledger_screen.dart';
 import 'low_stock_settings_screen.dart';
 import 'network_name_settings_screen.dart';
@@ -57,7 +58,7 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
   static const _themeKeywords = 'الوضع الداكن المظهر الثيم ليلي فاتح';
   static const _walletsKeywords =
       'المحافظ نقاط البيع محاكاة القوالب قوالب التحويل طلبات الرصيد ملخص العمليات اليومي التسوية التلقائية';
-  static const _maintenanceKeywords = 'تنظيف السجلات تصدير السجل الأرشفة نسخ احتياطي استعادة بيانات';
+  static const _maintenanceKeywords = 'تنظيف السجلات تصدير السجل الأرشفة نسخ احتياطي استعادة بيانات تنظيف عميق فهارس';
   static const _aboutKeywords = 'عن التطبيق المبرمج كيان سوفت إصدار Z Net';
 
   bool _sectionVisible(String keywords) {
@@ -309,11 +310,12 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
                                   SettingsGroupNavRow(
                                     icon: Icons.backup_outlined,
                                     title: 'النسخ الاحتياطي واستعادة البيانات',
-                                    subtitle: 'حفظ واستعادة الإعدادات محلياً بتشفير AES-GCM (.znet)',
+                                    subtitle: 'إعدادات + قاعدة البيانات كاملة · تشفير AES-GCM (.znet)',
                                     searchText: 'نسخ احتياطي استعادة بيانات',
                                     onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const BackupRestoreScreen())),
                                   ),
                                   SettingsGroupNavRow(icon: Icons.cleaning_services_outlined, title: 'تنظيف السجلات', subtitle: 'حذف السجلات القديمة', onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const CleanLogsScreen()))),
+                                  SettingsGroupNavRow(icon: Icons.auto_fix_high_outlined, title: 'تنظيف عميق للنظام', subtitle: 'إعادة بناء فهارس قاعدة البيانات لتحرير المساحة وتسريع الأداء', onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const DeepCleanScreen()))),
                                   SettingsGroupNavRow(icon: Icons.upload_file_outlined, title: 'تصدير السجل', subtitle: 'تصدير دفتر الحسابات', onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ExportLedgerScreen()))),
                                 ]),
                               if (_sectionVisible(_aboutKeywords)) const SettingsSectionHeader(title: 'عن التطبيق'),
@@ -421,7 +423,7 @@ class _AboutAppCard extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           Text(
-            '© Z Net 2026. جميع الحقوق محفوظة.',
+            '© Z Net 2026 · www.ye.kayan-soft.online\nجميع الحقوق محفوظة.',
             textAlign: TextAlign.center,
             style: TextStyle(
               fontFamily: NetTypography.family,
