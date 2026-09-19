@@ -34,4 +34,9 @@ CI على main — analyze + test + Android debug APK build
 - بلا حزمة PDF جديدة وبلا تغيير على Domain.
 - تقرير: [phase-25-customer-statement-image-export.md](phase-25-customer-statement-image-export.md)
 
+### Phase 26 — حفظ إيصال الحركة نصًا وصورة (2026-09-19) ✅ برمجيًا
+- ورقة تفاصيل العملية: مشاركة، حفظ نص، حفظ صورة PNG للإيصال.
+- بلا حزمة PDF جديدة وبلا تغيير على Domain.
+- تقرير: [phase-26-transaction-receipt-image.md](phase-26-transaction-receipt-image.md)
+
 المراحل السابقة موثقة في المستودع. المتبقي الغير برمجي: تحقق جهاز حقيقي (مرحلة 12).
