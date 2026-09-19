@@ -25,6 +25,12 @@ class _Tpl {
   final List<String> vars;
 }
 
+class _TabDef {
+  const _TabDef(this.label, this.items);
+  final String label;
+  final List<_Tpl> items;
+}
+
 class _OutboundMessageTemplatesScreenState
     extends State<OutboundMessageTemplatesScreen>
     with SingleTickerProviderStateMixin {
@@ -32,15 +38,15 @@ class _OutboundMessageTemplatesScreenState
   bool _loading = true;
   final Map<String, String> _values = {};
 
-  static final _tabsData = <(String, List<_Tpl>)>[
-    ('رسائل العملاء', [
+  static final _tabsData = <_TabDef>[
+    _TabDef('رسائل العملاء', [
       _Tpl(SettingKeys.voucherDeliverySmsTemplate, 'تسليم الكرت للعميل', SettingDefaults.voucherDeliverySmsTemplate, const ['serial', 'code', 'CARD_CODE', 'CARD_VALUE', 'CURRENCY', 'NETWORK_NAME']),
       _Tpl(SettingKeys.customerDebtPaymentTemplate, 'تأكيد سداد دين العميل', SettingDefaults.customerDebtPaymentTemplate, const ['amount', 'balance', 'CURRENCY']),
     ]),
-    ('رسائل العروض', [
+    _TabDef('رسائل العروض', [
       _Tpl(SettingKeys.promotionRewardSmsTemplate, 'مكافأة العرض', SettingDefaults.promotionRewardSmsTemplate, const ['title', 'serial', 'secret', 'promotion_name', 'reward_value']),
     ]),
-    ('رسائل النظام', [
+    _TabDef('رسائل النظام', [
       _Tpl(SettingKeys.posBalanceResponseTemplate, 'رد رصيد نقطة البيع', SettingDefaults.posBalanceResponseTemplate, const ['pos', 'balance', 'debt']),
       _Tpl(SettingKeys.posCreditLimitExceededTemplate, 'تجاوز سقف دين نقطة البيع', SettingDefaults.posCreditLimitExceededTemplate, const ['pos', 'limit']),
       _Tpl(SettingKeys.dailyPosSummaryTemplate, 'ملخص العمليات اليومي لنقاط البيع', SettingDefaults.dailyPosSummaryTemplate, const ['pos', 'sales', 'transfers', 'balance']),
@@ -51,7 +57,7 @@ class _OutboundMessageTemplatesScreenState
       _Tpl(SettingKeys.posCustomerSmsTailTemplate, 'إضافة اسم نقطة البيع في الرسائل', SettingDefaults.posCustomerSmsTailTemplate, const ['pos', 'pos_name', 'CURRENCY']),
       _Tpl(SettingKeys.lowStockAlertTemplate, 'تنبيه انخفاض مخزون الكروت', SettingDefaults.lowStockAlertTemplate, const ['category', 'count']),
     ]),
-    ('سلفني', [
+    _TabDef('سلفني', [
       _Tpl(SettingKeys.salafniAcceptedTemplate, 'قبول سلفني', LocalAdvanceService.defaultAccepted, const ['amount', 'serial', 'code']),
       _Tpl(SettingKeys.salafniRejectedTemplate, 'رفض سلفني', LocalAdvanceService.defaultRejected, const ['reason']),
       _Tpl(SettingKeys.salafniSettledTemplate, 'تسديد سلفني', LocalAdvanceService.defaultSettled, const ['amount', 'remaining']),
@@ -78,7 +84,7 @@ class _OutboundMessageTemplatesScreenState
     await DefaultOutboundTemplatesSeeder(settings: c.settings, clock: c.clock).seedIfNeeded();
     final next = <String, String>{};
     for (final tab in _tabsData) {
-      for (final t in tab.\$2) {
+      for (final t in tab.items) {
         final r = await c.settings.find(t.keyName);
         next[t.keyName] = (r is Success<AppSetting?> && (r.value?.value.trim().isNotEmpty ?? false)) ? r.value!.value : t.fallback;
       }
@@ -151,8 +157,8 @@ class _OutboundMessageTemplatesScreenState
                     const SizedBox(height: 8),
                     Wrap(spacing: 8, runSpacing: 8, children: [
                       for (final v in vars)
-                        ActionChip(label: Text('+$v', style: const TextStyle(fontFamily: 'Tajawal', fontSize: 12)), onPressed: () {
-                          final t = bodyCtrl.text; final sel = bodyCtrl.selection; final ins = '{$v}';
+                        ActionChip(label: Text('+'+v, style: const TextStyle(fontFamily: 'Tajawal', fontSize: 12)), onPressed: () {
+                          final t = bodyCtrl.text; final sel = bodyCtrl.selection; final ins = '{'+v+'}';
                           final start = sel.isValid ? sel.start : t.length; final end = sel.isValid ? sel.end : t.length;
                           bodyCtrl.text = t.replaceRange(start, end, ins);
                           bodyCtrl.selection = TextSelection.collapsed(offset: start + ins.length);
@@ -160,7 +166,7 @@ class _OutboundMessageTemplatesScreenState
                         }),
                     ]),
                     const SizedBox(height: 12),
-                    Text('حجم الرسالة: $chars حرف · أجزاء: $parts · Unicode (UCS-2)', style: TextStyle(fontFamily: 'Tajawal', fontSize: 12, color: palette.textSecondary)),
+                    Text('حجم الرسالة: '+chars.toString()+' حرف · أجزاء: '+parts.toString()+' · Unicode (UCS-2)', style: TextStyle(fontFamily: 'Tajawal', fontSize: 12, color: palette.textSecondary)),
                     const SizedBox(height: 12),
                     const Text('معاينة حية للرسالة (Live Preview):', style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w700)),
                     const SizedBox(height: 8),
@@ -203,7 +209,7 @@ class _OutboundMessageTemplatesScreenState
     )));
     if (ok != true) return;
     for (final tab in _tabsData) {
-      for (final t in tab.\$2) {
+      for (final t in tab.items) {
         await _save(t.keyName, t.fallback);
       }
     }
@@ -251,14 +257,14 @@ class _OutboundMessageTemplatesScreenState
         foregroundColor: Theme.of(context).colorScheme.onSurface,
         elevation: 0,
         actions: [IconButton(tooltip: 'إصلاح القوالب', onPressed: _repair, icon: const Icon(Icons.build_circle_outlined))],
-        bottom: TabBar(controller: _tabs, isScrollable: true, labelStyle: const TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w700), unselectedLabelStyle: const TextStyle(fontFamily: 'Tajawal'), tabs: [for (final t in _tabsData) Tab(text: t.\$1)]),
+        bottom: TabBar(controller: _tabs, isScrollable: true, labelStyle: const TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w700), unselectedLabelStyle: const TextStyle(fontFamily: 'Tajawal'), tabs: [for (final t in _tabsData) Tab(text: t.label)]),
       ),
       floatingActionButton: FloatingActionButton.extended(onPressed: () => _edit(null), backgroundColor: const Color(0xFFC026A3), icon: const Icon(Icons.add, color: Colors.white), label: const Text('قالب جديد', style: TextStyle(fontFamily: 'Tajawal', color: Colors.white, fontWeight: FontWeight.w700))),
       body: _loading
           ? const AsyncLoadingView(message: 'جاري تحميل القوالب…')
           : TabBarView(controller: _tabs, children: [
               for (final tab in _tabsData)
-                ListView.builder(padding: const EdgeInsets.fromLTRB(16, 12, 16, 96), itemCount: tab.\$2.length, itemBuilder: (_, i) => _card(tab.\$2[i])),
+                ListView.builder(padding: const EdgeInsets.fromLTRB(16, 12, 16, 96), itemCount: tab.items.length, itemBuilder: (_, i) => _card(tab.items[i])),
             ]),
     ));
   }
