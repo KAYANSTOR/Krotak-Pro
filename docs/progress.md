@@ -29,4 +29,9 @@ CI على main — analyze + test + Android debug APK build
 - تاريخ عربي تفصيلي على بطاقات أرشيف الرسائل المحلولة.
 - تقرير: [phase-24-settlement-method-and-archive-dates.md](phase-24-settlement-method-and-archive-dates.md)
 
+### Phase 25 — تصدير كشف الحساب نصًا وصورة (2026-09-19) ✅ برمجيًا
+- ورقة تصدير من تفاصيل العميل: نسخ، حفظ نص، حفظ صورة PNG.
+- بلا حزمة PDF جديدة وبلا تغيير على Domain.
+- تقرير: [phase-25-customer-statement-image-export.md](phase-25-customer-statement-image-export.md)
+
 المراحل السابقة موثقة في المستودع. المتبقي الغير برمجي: تحقق جهاز حقيقي (مرحلة 12).
