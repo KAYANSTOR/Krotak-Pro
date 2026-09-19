@@ -14,8 +14,7 @@ import '../../widgets/async_views.dart';
 import '../../widgets/net/net_app_bar_title.dart';
 import '../../widgets/net/net_surface_card.dart';
 
-/// النسخ الاحتياطي واستعادة البيانات — مطابق مواصفات الفيديو والملحق:
-/// AES-GCM · PBKDF2 10k · كلمة مرور ≥ 4 · ملفات .znet · لا يمس عداد الترخيص.
+/// النسخ الاحتياطي واستعادة البيانات — إعدادات + قاعدة البيانات داخل .znet
 class BackupRestoreScreen extends StatefulWidget {
   const BackupRestoreScreen({super.key});
 
@@ -122,8 +121,8 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen> {
           child: AlertDialog(
             title: const Text('تأكيد الاستعادة', style: TextStyle(fontFamily: 'Tajawal')),
             content: Text(
-              'ستُستبدل إعدادات التطبيق الحالية من النسخة المحددة.\n'
-              'عداد الترخيص لا يتأثر.\n\n'
+              'ستُستبدل الإعدادات وقاعدة البيانات من النسخة المحددة.\n'
+              'يُفضَّل إعادة تشغيل التطبيق بعد الاستعادة.\n\n'
               'الملف: ${p.basename(file.path)}',
               style: TextStyle(fontFamily: 'Tajawal', height: 1.5, color: palette.textSecondary),
             ),
@@ -142,14 +141,23 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen> {
       _status = null;
     });
     final c = AppScope.of(context);
-    final r = await c.backupService.restoreFromFile(file, password: password);
+    final r = await c.backupService.restoreFromFile(
+      file,
+      password: password,
+      closeDatabase: () async {
+        await c.database.close();
+      },
+    );
     if (!mounted) return;
     setState(() => _restoring = false);
     if (r is Failure) {
       setState(() => _status = (r as Failure).error.message);
       return;
     }
-    setState(() => _status = 'تمت الاستعادة بنجاح — أعد فتح الشاشات لتطبيق الإعدادات');
+    final report = (r as Success).value;
+    final dbNote = report.databaseRestored ? ' مع استبدال قاعدة البيانات' : '';
+    setState(() => _status =
+        'تمت الاستعادة (${report.settingsCount} إعداد$dbNote) — أعد تشغيل التطبيق');
   }
 
   Future<String?> _askPassword({
@@ -256,7 +264,7 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen> {
           title: const NetAppBarTitle(
             icon: Icons.backup_rounded,
             title: 'النسخ الاحتياطي',
-            subtitle: 'حفظ واستعادة الإعدادات محلياً (.znet)',
+            subtitle: 'إعدادات + قاعدة البيانات · ملف .znet',
           ),
         ),
         body: _loading
@@ -289,7 +297,8 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen> {
                             Text(
                               'AES-GCM 256 · PBKDF2 10,000 · بصمة SHA-256\n'
                               'صيغة .znet · كلمة مرور ≥ 4 أحرف\n'
-                              'الاستعادة تستبدل الإعدادات دون المساس بعداد الترخيص.',
+                              'يشمل الإعدادات وملف قاعدة البيانات net.sqlite.\n'
+                              'الاستعادة تستبدل البيانات؛ عداد الترخيص يُحمى قدر الإمكان.',
                               style: TextStyle(
                                 fontFamily: NetTypography.family,
                                 fontSize: 12.5,
