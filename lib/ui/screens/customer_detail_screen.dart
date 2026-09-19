@@ -12,6 +12,7 @@ import '../theme/kayan_palette.dart';
 import '../theme/net_semantic_colors.dart';
 import '../widgets/async_views.dart';
 import '../widgets/customer_promotion_progress.dart';
+import '../widgets/customer_statement_export.dart';
 
 /// تفاصيل الحساب — رصيد + ربط GSM + تعديل رصيد + تقدم العروض + سجل.
 class CustomerDetailScreen extends StatefulWidget {
@@ -84,191 +85,52 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
   bool get _hasPrimaryPhone =>
       _ids.any((e) => e.type == CustomerIdentifierType.phoneNumber && e.isPrimary);
 
-  /// حوار ربط الجوال مطابق لإطار acc_410.
-  Future<void> _linkPhone() async {
-    final ctrl = TextEditingController();
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => Directionality(
-        textDirection: TextDirection.rtl,
-        child: AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: Row(
-            children: [
-              Icon(Icons.phone_android, color: context.kayan.primary),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'ربط رقم جوال (GSM)',
-                  style: TextStyle(
-                    fontFamily: 'Tajawal',
-                    fontWeight: FontWeight.w800,
-                    fontSize: 16,
-                  ),
-                ),
+  Future<void> _exportStatement() async {
+    final customer = _customer;
+    if (customer == null) return;
+    final text = buildCustomerStatementText(
+      customer: customer,
+      identifiers: _ids,
+      balance: _balance,
+      recent: _recent,
+      formatMoney: _fmtMoney,
+      formatTime: _fmtTxTime,
+    );
+    final preview = Material(
+      color: Theme.of(context).colorScheme.surface,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Text(
+              'NET — كشف حساب',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontFamily: 'Tajawal',
+                fontWeight: FontWeight.w800,
+                fontSize: 16,
               ),
-            ],
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                'الرجاء إدخال رقم جوال العميل لإرسال الكروت المعلّقة وتأكيد المعاملات المستقبلية.',
-                style: TextStyle(
-                  fontFamily: 'Tajawal',
-                  fontSize: 13,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  height: 1.4,
-                ),
-              ),
-              const SizedBox(height: 14),
-              TextField(
-                controller: ctrl,
-                keyboardType: TextInputType.phone,
-                autofocus: true,
-                inputFormatters: [
-                  FilteringTextInputFormatter.digitsOnly,
-                  LengthLimitingTextInputFormatter(9),
-                ],
-                decoration: InputDecoration(
-                  labelText: 'رقم الجوال',
-                  hintText: '7xxxxxxxx',
-                  labelStyle: const TextStyle(fontFamily: 'Tajawal'),
-                  hintStyle: const TextStyle(fontFamily: 'Tajawal'),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                style: const TextStyle(fontFamily: 'Tajawal'),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('إلغاء', style: TextStyle(fontFamily: 'Tajawal')),
             ),
-            FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text(
-                'ربط وصرف الكروت',
-                style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w700),
+            const SizedBox(height: 8),
+            Text(customer.displayName, style: const TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w700)),
+            Text('الرصيد: ${_fmtMoney(_balance)}', style: const TextStyle(fontFamily: 'Tajawal')),
+            const SizedBox(height: 8),
+            ..._recent.take(12).map(
+              (tx) => Text(
+                '${_fmtMoney(tx.amount)}  ${_fmtTxTime(tx.createdAt)}',
+                style: const TextStyle(fontFamily: 'Tajawal', fontSize: 12),
               ),
             ),
           ],
         ),
       ),
     );
-    final phone = ctrl.text.trim();
-    ctrl.dispose();
-    if (ok != true || !mounted) return;
-    if (!RegExp(r'^7\d{8}$').hasMatch(phone)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('رقم غير صالح — 9 أرقام تبدأ بـ 7', style: TextStyle(fontFamily: 'Tajawal')),
-        ),
-      );
-      return;
-    }
-    final r = await AppScope.of(context).customerService.bindPrimaryGsm(
-      customerId: widget.customerId,
-      phone: phone,
-    );
-    if (!mounted) return;
-    if (r is Failure<void>) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(r.error.message, style: const TextStyle(fontFamily: 'Tajawal'))),
-      );
-      return;
-    }
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('تم ربط الجوال', style: TextStyle(fontFamily: 'Tajawal')),
-        backgroundColor: KayanColors.success,
-      ),
-    );
-    await _load();
-  }
-
-  Future<void> _adjustBalance() async {
-    final ctrl = TextEditingController();
-    var credit = true;
-    final ok = await showDialog<bool>(
+    await showCustomerStatementExportSheet(
       context: context,
-      builder: (ctx) => Directionality(
-        textDirection: TextDirection.rtl,
-        child: StatefulBuilder(
-          builder: (ctx, setLocal) => AlertDialog(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            title: const Text('تعديل الرصيد', style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w800)),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                SegmentedButton<bool>(
-                  segments: const [
-                    ButtonSegment(value: true, label: Text('إيداع', style: TextStyle(fontFamily: 'Tajawal'))),
-                    ButtonSegment(value: false, label: Text('خصم', style: TextStyle(fontFamily: 'Tajawal'))),
-                  ],
-                  selected: {credit},
-                  onSelectionChanged: (s) => setLocal(() => credit = s.first),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: ctrl,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  decoration: InputDecoration(
-                    labelText: 'المبلغ',
-                    labelStyle: const TextStyle(fontFamily: 'Tajawal'),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  style: const TextStyle(fontFamily: 'Tajawal'),
-                ),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx, false),
-                child: const Text('إلغاء', style: TextStyle(fontFamily: 'Tajawal')),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.pop(ctx, true),
-                child: const Text('تنفيذ', style: TextStyle(fontFamily: 'Tajawal')),
-              ),
-            ],
-          ),
-        ),
-      ),
+      statementText: text,
+      preview: preview,
     );
-    final raw = ctrl.text.trim().replaceAll(',', '');
-    ctrl.dispose();
-    if (ok != true || !mounted) return;
-    final major = num.tryParse(raw);
-    if (major == null || major <= 0) return;
-    final amount = Money(minorUnits: (major * 100).round(), currencyCode: 'YER');
-    final c = AppScope.of(context);
-    final Result<Transaction> r;
-    if (credit) {
-      r = await c.balanceService.credit(
-        customerId: widget.customerId,
-        amount: amount,
-        reference: 'manual-credit:${c.ids.next('adj')}',
-      );
-    } else {
-      r = await c.settlementService.settle(
-        customerId: widget.customerId,
-        amount: amount,
-        reference: 'manual-debit:${c.ids.next('adj')}',
-      );
-    }
-    if (!mounted) return;
-    if (r is Failure<Transaction>) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(r.error.message, style: const TextStyle(fontFamily: 'Tajawal'))),
-      );
-      return;
-    }
-    await _load();
   }
 
   String _fmtMoney(Money? m) {
@@ -339,6 +201,11 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
             ],
           ),
           actions: [
+            IconButton(
+              tooltip: 'تصدير الكشف',
+              onPressed: _exportStatement,
+              icon: Icon(Icons.ios_share_rounded, color: context.kayan.primary),
+            ),
             IconButton(
               onPressed: _load,
               icon: Icon(Icons.refresh_rounded, color: context.kayan.primary),
