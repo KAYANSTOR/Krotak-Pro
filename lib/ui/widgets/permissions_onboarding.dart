@@ -13,10 +13,10 @@ import '../theme/net_semantic_colors.dart';
 import '../theme/net_tokens.dart';
 import 'net/net_surface_card.dart';
 
-/// بوابة تهيئة إلزامية: لا تُسجّل كمكتملة إلا بعد تحقق أندرويد من جميع المتطلبات.
+/// بوابة تهيئة الأذونات — مطابقة فيديو المنتج (ورقة سفلية فوق الواجهة، ليست شاشة كاملة).
 ///
-/// تُعرض الآن كمساحة تهيئة واحدة بخطوات واضحة (1/N) مع حالة تحقق لكل خطوة،
-/// بدل سبعة حوارات متتالية مانعة.
+/// لا تُسجّل كمكتملة إلا بعد تحقق أندرويد من المتطلبات. العرض: bottom sheet
+/// بهوية NET (بطاقة + تقدم + خطوة واحدة) فوق لوحة التحكم دون شاشة كاملة.
 abstract final class PermissionsOnboarding {
   /// تغيير الإصدار يعيد التحقق بعد تحديث متطلبات الصلاحيات.
   static const doneKey = 'permissions_onboarding_done_v6';
@@ -149,11 +149,13 @@ abstract final class PermissionsOnboarding {
       ),
     ];
 
-    return await Navigator.of(context, rootNavigator: true).push<bool>(
-          MaterialPageRoute<bool>(
-            fullscreenDialog: true,
-            builder: (_) => _PermissionsFlow(steps: steps, diagnostics: diag),
-          ),
+    return await showModalBottomSheet<bool>(
+          context: context,
+          isScrollControlled: true,
+          isDismissible: false,
+          enableDrag: false,
+          backgroundColor: Colors.transparent,
+          builder: (ctx) => _PermissionsSheet(steps: steps, diagnostics: diag),
         ) ??
         false;
   }
@@ -181,25 +183,22 @@ final class _PermStep {
   final bool optionalAfterOpen;
 }
 
-/// A single guided flow: progress, live verification and one primary action
-/// per step instead of a chain of blocking dialogs.
-class _PermissionsFlow extends StatefulWidget {
-  const _PermissionsFlow({required this.steps, required this.diagnostics});
+/// ورقة أذونات سفلية مطابقة الفيديو: خطوة بخطوة فوق الواجهة (ليست شاشة كاملة).
+class _PermissionsSheet extends StatefulWidget {
+  const _PermissionsSheet({required this.steps, required this.diagnostics});
 
   final List<_PermStep> steps;
   final SystemDiagnosticsBridge diagnostics;
 
   @override
-  State<_PermissionsFlow> createState() => _PermissionsFlowState();
+  State<_PermissionsSheet> createState() => _PermissionsSheetState();
 }
 
-class _PermissionsFlowState extends State<_PermissionsFlow> {
+class _PermissionsSheetState extends State<_PermissionsSheet>
+    with WidgetsBindingObserver {
   int _index = 0;
-  bool _checking = true;
   bool _verified = false;
-  bool _busy = false;
-
-  /// أرقام الخطوات التي تحقق شرطها فعليًا — تُعرض كتقدّم وتُتخطّى عند الفتح.
+  bool _checking = false;
   final Set<int> _satisfied = <int>{};
 
   _PermStep get _step => widget.steps[_index];
@@ -208,11 +207,11 @@ class _PermissionsFlowState extends State<_PermissionsFlow> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) => _bootstrap());
   }
 
-  /// يبدأ المستخدم من أول متطلب ناقص فعليًا بدل إعادة المرور على كل الخطوات
-  /// الممنوحة مسبقًا في كل مرة يفتح فيها التطبيق.
+  /// يبدأ من أول متطلب ناقص بدل إعادة المرور على الخطوات الممنوحة مسبقاً.
   Future<void> _bootstrap() async {
     for (var i = 0; i < widget.steps.length - 1; i++) {
       var ok = false;
@@ -231,18 +230,26 @@ class _PermissionsFlowState extends State<_PermissionsFlow> {
       });
     }
     if (!mounted) return;
-    await _check();
+    await _recheck();
   }
 
-  Future<void> _check() async {
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _recheck();
+    }
+  }
+
+  Future<void> _recheck() async {
     if (!mounted) return;
     setState(() => _checking = true);
-    var ok = false;
-    try {
-      ok = await _step.verify();
-    } catch (_) {
-      ok = false;
-    }
+    final ok = await _step.verify();
     if (!mounted) return;
     setState(() {
       _checking = false;
@@ -255,31 +262,21 @@ class _PermissionsFlowState extends State<_PermissionsFlow> {
     });
   }
 
-  Future<void> _runAction() async {
-    setState(() => _busy = true);
+  Future<void> _allow() async {
+    setState(() => _checking = true);
     try {
       await _step.onAllow();
     } catch (_) {
-      // Permission plugins can throw on unsupported OEM builds; the next check
-      // reports the real state instead of failing the flow.
+      // OEM builds may throw; next check reports real state.
     }
-    await Future<void>.delayed(const Duration(milliseconds: 500));
-    if (!mounted) return;
-    setState(() => _busy = false);
-    await _check();
-    if (!mounted) return;
-    if (_step.optionalAfterOpen) _advance(force: true);
-  }
-
-  Future<void> _openAppSettings() async {
-    await widget.diagnostics.openAppSettings();
-    await Future<void>.delayed(const Duration(milliseconds: 700));
-    if (!mounted) return;
-    await _check();
+    if (mounted) await _recheck();
+    if (_step.optionalAfterOpen && mounted) {
+      _advance(force: true);
+    }
   }
 
   void _advance({bool force = false}) {
-    if (!force && !_verified) return;
+    if (!force && !_verified && !_step.optionalAfterOpen) return;
     if (_isLast) {
       Navigator.of(context).pop(true);
       return;
@@ -287,9 +284,9 @@ class _PermissionsFlowState extends State<_PermissionsFlow> {
     setState(() {
       _index += 1;
       _verified = false;
-      _checking = true;
+      _checking = false;
     });
-    _check();
+    _recheck();
   }
 
   @override
@@ -298,214 +295,267 @@ class _PermissionsFlowState extends State<_PermissionsFlow> {
     final net = context.netColors;
     final progress = (_index + 1) / widget.steps.length;
     final canAdvance = _verified || _step.optionalAfterOpen;
+    final media = MediaQuery.of(context);
+    final maxH = media.size.height * 0.78;
 
-    return Scaffold(
-      backgroundColor: palette.appBackground,
-      body: SafeArea(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(
-                NetSpacing.lg,
-                NetSpacing.sm,
-                NetSpacing.lg,
-                NetSpacing.sm,
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'تهيئة NET',
-                          style: TextStyle(
-                            fontFamily: NetTypography.family,
-                            fontWeight: FontWeight.w800,
-                            fontSize: 19,
-                            color: palette.textPrimary,
-                          ),
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Padding(
+        padding: EdgeInsets.only(bottom: media.viewInsets.bottom),
+        child: Align(
+          alignment: Alignment.bottomCenter,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxHeight: maxH),
+            child: Material(
+              color: palette.surface,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+              clipBehavior: Clip.antiAlias,
+              child: SafeArea(
+                top: false,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const SizedBox(height: 10),
+                    Center(
+                      child: Container(
+                        width: 40,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: palette.border,
+                          borderRadius: BorderRadius.circular(2),
                         ),
-                        Text(
-                          _satisfied.isEmpty
-                              ? 'الخطوة ${_index + 1} من ${widget.steps.length} · مطلوب لإكمال التشغيل'
-                              : 'الخطوة ${_index + 1} من ${widget.steps.length} · مكتمل ${_satisfied.length} من ${widget.steps.length}',
-                          style: TextStyle(
-                            fontFamily: NetTypography.family,
-                            fontSize: 12,
-                            color: palette.textSecondary,
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
-                  ),
-                  IconButton(
-                    tooltip: 'إغلاق',
-                    onPressed: () => Navigator.of(context).pop(false),
-                    icon: Icon(Icons.close_rounded, color: palette.textSecondary),
-                  ),
-                ],
-              ),
-            ),
-            Padding(
-              padding: NetSpacing.pageH,
-              child: ClipRRect(
-                borderRadius: NetRadii.pillAll,
-                child: LinearProgressIndicator(
-                  value: progress,
-                  minHeight: 6,
-                  backgroundColor: palette.surfaceVariant,
-                  color: palette.primary,
-                ),
-              ),
-            ),
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(
-                  NetSpacing.lg,
-                  NetSpacing.lg,
-                  NetSpacing.lg,
-                  NetSpacing.xxl,
-                ),
-                children: [
-                  NetSurfaceCard(
-                    padding: NetSpacing.card,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Row(
-                          children: [
-                            Container(
-                              width: 48,
-                              height: 48,
-                              decoration: BoxDecoration(
-                                color: palette.iconBadgeBackground,
-                                borderRadius: NetRadii.smAll,
-                              ),
-                              child: Icon(
-                                _step.icon,
-                                color: palette.primary,
-                                size: NetSizes.iconLg,
-                              ),
-                            ),
-                            const SizedBox(width: NetSpacing.md),
-                            Expanded(
-                              child: Text(
-                                _step.title,
-                                style: TextStyle(
-                                  fontFamily: NetTypography.family,
-                                  fontWeight: FontWeight.w800,
-                                  fontSize: 16,
-                                  color: palette.textPrimary,
-                                ),
-                              ),
-                            ),
-                            _StatusChip(
-                              checking: _checking,
-                              verified: _verified,
-                              optional: _step.optionalAfterOpen,
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: NetSpacing.md),
-                        Text(
-                          _step.body,
-                          style: TextStyle(
-                            fontFamily: NetTypography.family,
-                            fontSize: 13.5,
-                            height: 1.5,
-                            color: palette.textSecondary,
-                          ),
-                        ),
-                        if (_step.specialAccess) ...[
-                          const SizedBox(height: NetSpacing.md),
-                          Row(
-                            children: [
-                              Icon(
-                                Icons.info_outline_rounded,
-                                size: NetSizes.iconSm,
-                                color: net.info,
-                              ),
-                              const SizedBox(width: NetSpacing.sm),
-                              Expanded(
-                                child: Text(
-                                  'هذه الصلاحية تُمنح من إعدادات أندرويد وليس من حوار التطبيق.',
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 8, 8),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'تهيئة التشغيل',
                                   style: TextStyle(
                                     fontFamily: NetTypography.family,
-                                    fontSize: 12,
-                                    color: net.info,
-                                    fontWeight: FontWeight.w600,
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 17,
+                                    color: palette.primary,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  'الخطوة ' +
+                                      (_index + 1).toString() +
+                                      ' من ' +
+                                      widget.steps.length.toString() +
+                                      ' · مكتمل ' +
+                                      _satisfied.length.toString(),
+                                  style: TextStyle(
+                                    fontFamily: NetTypography.family,
+                                    fontSize: 12.5,
+                                    color: palette.textSecondary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          IconButton(
+                            tooltip: 'إغلاق',
+                            onPressed: () => Navigator.of(context).pop(false),
+                            icon: Icon(
+                              Icons.close_rounded,
+                              color: palette.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: LinearProgressIndicator(
+                          value: progress,
+                          minHeight: 6,
+                          backgroundColor: palette.surfaceVariant,
+                          color: palette.primary,
+                        ),
+                      ),
+                    ),
+                    Flexible(
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
+                        child: NetSurfaceCard(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Row(
+                                children: [
+                                  Container(
+                                    width: 48,
+                                    height: 48,
+                                    decoration: BoxDecoration(
+                                      color: palette.iconBadgeBackground,
+                                      borderRadius: NetRadii.smAll,
+                                    ),
+                                    child: Icon(
+                                      _step.icon,
+                                      color: palette.primary,
+                                      size: NetSizes.iconLg,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Text(
+                                      _step.title,
+                                      style: TextStyle(
+                                        fontFamily: NetTypography.family,
+                                        fontWeight: FontWeight.w800,
+                                        fontSize: 15.5,
+                                        color: palette.textPrimary,
+                                      ),
+                                    ),
+                                  ),
+                                  _StatusChip(
+                                    checking: _checking,
+                                    verified: _verified,
+                                    optional: _step.optionalAfterOpen,
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              Text(
+                                _step.body,
+                                style: TextStyle(
+                                  fontFamily: NetTypography.family,
+                                  fontSize: 13.5,
+                                  height: 1.5,
+                                  color: palette.textSecondary,
+                                ),
+                              ),
+                              if (_step.specialAccess) ...[
+                                const SizedBox(height: 10),
+                                Container(
+                                  padding: const EdgeInsets.all(10),
+                                  decoration: BoxDecoration(
+                                    color: net.warningContainer.withValues(
+                                      alpha: 0.55,
+                                    ),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        Icons.settings_rounded,
+                                        size: 18,
+                                        color: net.warning,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          'يتطلب فتح إعدادات النظام ثم العودة للتطبيق للتحقق.',
+                                          style: TextStyle(
+                                            fontFamily: NetTypography.family,
+                                            fontSize: 12,
+                                            color: palette.textPrimary,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          FilledButton.icon(
+                            onPressed: _checking ? null : _allow,
+                            icon: Icon(
+                              _step.specialAccess
+                                  ? Icons.open_in_new_rounded
+                                  : Icons.verified_user_rounded,
+                              size: 18,
+                            ),
+                            label: Text(
+                              _step.actionLabel,
+                              style: const TextStyle(
+                                fontFamily: NetTypography.family,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            style: FilledButton.styleFrom(
+                              minimumSize: const Size.fromHeight(48),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: OutlinedButton(
+                                  onPressed: _checking ? null : _recheck,
+                                  child: const Text(
+                                    'إعادة الفحص',
+                                    style: TextStyle(
+                                      fontFamily: NetTypography.family,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                flex: 2,
+                                child: FilledButton.tonal(
+                                  onPressed: canAdvance && !_checking
+                                      ? () => _advance(
+                                            force: _step.optionalAfterOpen,
+                                          )
+                                      : null,
+                                  child: Text(
+                                    _isLast
+                                        ? 'إنهاء التهيئة'
+                                        : (_step.optionalAfterOpen
+                                            ? 'تم — متابعة'
+                                            : 'التالي'),
+                                    style: const TextStyle(
+                                      fontFamily: NetTypography.family,
+                                      fontWeight: FontWeight.w700,
+                                    ),
                                   ),
                                 ),
                               ),
                             ],
                           ),
-                        ],
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: NetSpacing.lg),
-                  FilledButton.icon(
-                    onPressed: _busy ? null : _runAction,
-                    icon: _busy
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
+                          if (!canAdvance && !_checking) ...[
+                            const SizedBox(height: 8),
+                            Text(
+                              'أكمل هذه الخطوة للانتقال. إن لم يعمل الزر، افتح الإعدادات يدوياً ثم «إعادة الفحص».',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontFamily: NetTypography.family,
+                                fontSize: 11.5,
+                                height: 1.4,
+                                color: palette.textTertiary,
+                              ),
                             ),
-                          )
-                        : const Icon(Icons.check_rounded, size: NetSizes.iconSm),
-                    label: Text(_step.actionLabel),
-                  ),
-                  const SizedBox(height: NetSpacing.sm),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: _busy ? null : _openAppSettings,
-                          icon: const Icon(Icons.settings_rounded, size: NetSizes.iconSm),
-                          label: const Text('فتح الإعدادات'),
-                        ),
-                      ),
-                      const SizedBox(width: NetSpacing.sm),
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: _busy ? null : _check,
-                          icon: const Icon(Icons.refresh_rounded, size: NetSizes.iconSm),
-                          label: const Text('إعادة الفحص'),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: NetSpacing.lg),
-                  FilledButton.tonal(
-                    onPressed: canAdvance ? () => _advance(force: _step.optionalAfterOpen) : null,
-                    child: Text(
-                      _isLast
-                          ? 'إنهاء التهيئة'
-                          : (_step.optionalAfterOpen ? 'تم — متابعة' : 'التالي'),
-                    ),
-                  ),
-                  if (!canAdvance && !_checking) ...[
-                    const SizedBox(height: NetSpacing.sm),
-                    Text(
-                      'أكمل هذه الخطوة للانتقال إلى التالية. إذا لم يعمل الزر، افتح الإعدادات وامنح الصلاحية يدويًا ثم اضغط «إعادة الفحص».',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontFamily: NetTypography.family,
-                        fontSize: 11.5,
-                        height: 1.45,
-                        color: palette.textTertiary,
+                          ],
+                        ],
                       ),
                     ),
                   ],
-                ],
+                ),
               ),
             ),
-          ],
+          ),
         ),
       ),
     );
