@@ -14,10 +14,15 @@ class TemplateWizardScreen extends StatefulWidget {
     super.key,
     this.existing,
     this.initialWalletId,
+    this.initialPosId,
   });
 
   final TransferTemplate? existing;
   final String? initialWalletId;
+
+  /// Scope a newly-created template to a point-of-sale (parallel to
+  /// [initialWalletId]) so it is tagged and filtered like the video shows.
+  final String? initialPosId;
 
   @override
   State<TemplateWizardScreen> createState() => _TemplateWizardScreenState();
@@ -36,9 +41,11 @@ class _TemplateWizardScreenState extends State<TemplateWizardScreen> {
   final _priorityCtrl = TextEditingController(text: '0');
 
   String? _walletId;
+  String? _posId;
   TemplateIdentifierKind _kind = TemplateIdentifierKind.phone;
   bool _isActive = true;
   List<Wallet> _wallets = const [];
+  List<PointOfSale> _posPoints = const [];
 
   @override
   void initState() {
@@ -51,10 +58,12 @@ class _TemplateWizardScreenState extends State<TemplateWizardScreen> {
       _patternCtrl.text = e.pattern;
       _priorityCtrl.text = '${e.priority}';
       _walletId = e.walletId;
+      _posId = e.posId;
       _kind = e.identifierKind;
       _isActive = e.isActive;
     } else {
       _walletId = widget.initialWalletId;
+      _posId = widget.initialPosId;
       _patternCtrl.text = _defaultPattern(TemplateIdentifierKind.phone);
     }
     WidgetsBinding.instance.addPostFrameCallback((_) => _loadWallets());
@@ -72,10 +81,12 @@ class _TemplateWizardScreenState extends State<TemplateWizardScreen> {
 
   Future<void> _loadWallets() async {
     final r = await AppScope.of(context).wallets.listAll();
+    final p = await AppScope.of(context).pointsOfSale.listAll();
     if (!mounted) return;
-    if (r is Success<List<Wallet>>) {
-      setState(() => _wallets = r.value);
-    }
+    setState(() {
+      if (r is Success<List<Wallet>>) _wallets = r.value;
+      if (p is Success<List<PointOfSale>>) _posPoints = p.value;
+    });
   }
 
   String _defaultPattern(TemplateIdentifierKind kind) {
@@ -119,10 +130,7 @@ class _TemplateWizardScreenState extends State<TemplateWizardScreen> {
           _toast('النمط يجب أن يحتوي على {amount}');
           return false;
         }
-        if (!p.contains('{ref}') && !p.contains('%ref')) {
-          _toast('النمط يجب أن يحتوي على {ref}');
-          return false;
-        }
+        // {ref} (رقم العملية) اختياري — لا نفرضه.
         return true;
       case 3:
         final pr = int.tryParse(_priorityCtrl.text.trim());
@@ -166,10 +174,17 @@ class _TemplateWizardScreenState extends State<TemplateWizardScreen> {
       pattern: _patternCtrl.text.trim(),
       isActive: _isActive,
       walletId: _walletId,
+      posId: _posId,
       priority: int.tryParse(_priorityCtrl.text.trim()) ?? 0,
       sampleBody: _sampleCtrl.text.trim().isEmpty ? null : _sampleCtrl.text.trim(),
       senderCode: _senderCtrl.text.trim().isEmpty ? null : _senderCtrl.text.trim(),
       identifierKind: _kind,
+      senderNameLabel: widget.existing?.senderNameLabel,
+      noteLabel: widget.existing?.noteLabel,
+      // Preserve an existing template's opt-out (e.g. seeded POS templates
+      // that carry no reference) — this screen has no UI toggle for it yet,
+      // so it must never silently revert to the default (true) on save.
+      requireReference: widget.existing?.requireReference ?? true,
     );
     final r = await c.transferTemplates.save(template);
     if (!mounted) return;
@@ -317,17 +332,42 @@ class _TemplateWizardScreenState extends State<TemplateWizardScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _label('المحفظة (اختياري)'),
+        _label('المحفظة أو المورد / المرسل'),
         DropdownButtonFormField<String?>(
-          value: _walletId,
+          value: _walletId != null
+              ? 'w:$_walletId'
+              : (_posId != null ? 'p:$_posId' : null),
           decoration: _dec(),
           items: [
-            const DropdownMenuItem<String?>(value: null, child: Text('بدون ربط بمحفظة', style: TextStyle(fontFamily: 'Tajawal'))),
+            const DropdownMenuItem<String?>(
+              value: null,
+              child: Text('بدون ربط', style: TextStyle(fontFamily: 'Tajawal')),
+            ),
             ..._wallets.map(
-              (w) => DropdownMenuItem(value: w.id, child: Text(w.name, style: const TextStyle(fontFamily: 'Tajawal'))),
+              (w) => DropdownMenuItem(
+                value: 'w:${w.id}',
+                child: Text(w.name, style: const TextStyle(fontFamily: 'Tajawal')),
+              ),
+            ),
+            ..._posPoints.map(
+              (p) => DropdownMenuItem(
+                value: 'p:${p.id}',
+                child: Text(p.name, style: const TextStyle(fontFamily: 'Tajawal')),
+              ),
             ),
           ],
-          onChanged: (v) => setState(() => _walletId = v),
+          onChanged: (v) => setState(() {
+            if (v == null) {
+              _walletId = null;
+              _posId = null;
+            } else if (v.startsWith('w:')) {
+              _walletId = v.substring(2);
+              _posId = null;
+            } else if (v.startsWith('p:')) {
+              _posId = v.substring(2);
+              _walletId = null;
+            }
+          }),
         ),
         const SizedBox(height: 14),
         _label('نوع معرّف العميل للرسالة'),
@@ -402,7 +442,7 @@ class _TemplateWizardScreenState extends State<TemplateWizardScreen> {
         ),
         const SizedBox(height: 12),
         Text(
-          'يجب وجود {amount} و {ref}. المعرّف: {phone} أو {account} حسب نوع المعرّف.',
+          'يجب وجود {amount}. المعرّف: {phone} أو {account} حسب نوع المعرّف. {ref} اختياري.',
           style: TextStyle(fontFamily: 'Tajawal', fontSize: 12, color: kayan.textTertiary),
         ),
       ],
