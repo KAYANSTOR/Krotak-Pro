@@ -1,6 +1,6 @@
 import '../../core/clock.dart';
 import '../../core/result.dart';
-import '../../data/database/app_database.dart';
+import '../../data/database/app_database.dart' hide IncomingMessage;
 import '../entities/message.dart';
 import '../repositories/repositories.dart';
 
