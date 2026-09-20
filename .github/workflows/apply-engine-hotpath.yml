@@ -8,7 +8,7 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Apply remaining contacts identity files
+      - name: Apply processor contacts identity
         run: python3 tools/contacts/apply_remaining.py
       - name: Commit
         run: |
@@ -16,11 +16,10 @@ jobs:
           git config user.email "jarallhalkboudi@gmail.com"
           git add -A
           git diff --cached --quiet && echo No changes && exit 0
-          git commit -m "feat(identity): contacts-based customer vs provisional ledger
+          git commit -m "feat(identity): LocalTransferProcessor contacts-based provision + promote
 
 - Phone in device contacts => CustomerStatus.active with contact name
 - Phone not in contacts => CustomerStatus.provisional (ledger only)
 - Later transfer promotes provisional when contacts match
-- MainActivity lookupContactByPhone + ContactPickerBridge.findByPhone
-- Wired via ContactDirectory in LocalTransferProcessor / AppContainer"
+- Wired via ContactDirectory"
           git push
