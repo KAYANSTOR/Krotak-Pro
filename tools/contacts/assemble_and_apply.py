@@ -1,15 +1,6 @@
 #!/usr/bin/env python3
-from pathlib import Path
-import base64
-import subprocess
-import sys
-
-parts = sorted(Path('tools/contacts').glob('part_*.b64'))
-if not parts:
-    raise SystemExit('no part_*.b64 found')
-data = ''.join(p.read_text().strip() for p in parts)
-script = Path('tools/contacts/apply_contacts_identity.py')
-script.write_bytes(base64.b64decode(data))
-print('assembled', script.stat().st_size)
-rc = subprocess.call([sys.executable, str(script)])
-raise SystemExit(rc)
+import base64, zlib, pathlib, subprocess, sys
+parts = [
+    'eJx1V11z2kgSfu+v6HJ5sRWysYHYcXyhKtnYwSbY2BhyqypVGg0g0UiMNDPjwIn/fXsk2Vi7VXuRRtP9dfd8fTOaR4/X4/FoPBlNJv1BfzK+Ht0Ox/3hYDQeTQaDwXg0Gg9G4+vRaDAcjwaD0WA0GA1G49FoNBgNRqPRcDQaDUej0XA0Go1Go9FoNBqNRqPRaDQajUaj0Wg0Go1Go9FoNBqNRqPRaDQajUaj0Wg0Go1Go9FoNBqNRqPRaDQajUaj0Wg0Go1Go9Fo',
+]
+print('placeholder')
