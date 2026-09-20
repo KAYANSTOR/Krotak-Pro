@@ -345,6 +345,9 @@ final class PosOrderDeliveryWorker {
     final pending = await messages.listByStatus(MessageProcessingStatus.pending);
     if (pending is Failure<List<IncomingMessage>>) return Failure(pending.error);
 
+    final parsed = await messages.listByStatus(MessageProcessingStatus.parsed);
+    if (parsed is Failure<List<IncomingMessage>>) return Failure(parsed.error);
+
     final map = <String, IncomingMessage>{};
     for (final item in (failed as Success<List<IncomingMessage>>).value) {
       map[item.id] = item;
@@ -353,6 +356,9 @@ final class PosOrderDeliveryWorker {
       map[item.id] = item;
     }
     for (final item in (pending as Success<List<IncomingMessage>>).value) {
+      map[item.id] = item;
+    }
+    for (final item in (parsed as Success<List<IncomingMessage>>).value) {
       map[item.id] = item;
     }
     final result = map.values.toList()
@@ -450,6 +456,9 @@ final class PosOrderDeliveryWorker {
     IncomingMessage message,
     _PosOrderCommit commit,
   ) async {
+    if (message.status == MessageProcessingStatus.parsed) {
+      return const Success(true);
+    }
     if (await retryService.isDue(message.id)) {
       return const Success(true);
     }
