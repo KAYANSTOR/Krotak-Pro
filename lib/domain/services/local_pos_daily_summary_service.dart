@@ -77,26 +77,14 @@ final class LocalPosDailySummaryService {
     }
     final accounts = (accountsResult as Success<List<PosAccount>>).value;
 
-    final completedResult = await transactions.listCompleted(
-      currencyCode: 'YER',
-    );
-    if (completedResult is Failure<List<Transaction>>) {
-      return Failure(completedResult.error);
-    }
-    final transactionsSnapshot =
-        (completedResult as Success<List<Transaction>>).value;
-
-    final templateResult = await _loadTemplate();
-    if (templateResult is Failure<String>) {
-      return Failure(templateResult.error);
-    }
-    final template = (templateResult as Success<String>).value;
-
     var sent = 0;
     var skipped = 0;
     var failed = 0;
     final errors = <String>[];
+    final dueAccounts = <({PosAccount account, String markerKey})>[];
 
+    // The background recovery loop runs frequently for SMS reliability. Keep
+    // the daily summary path cheap when every active POS has already been sent.
     for (final account in accounts) {
       if (account.status != PointOfSaleStatus.active) {
         skipped++;
@@ -143,6 +131,39 @@ final class LocalPosDailySummaryService {
         );
         continue;
       }
+
+      dueAccounts.add((account: account, markerKey: markerKey));
+    }
+
+    if (dueAccounts.isEmpty) {
+      return Success(
+        PosDailySummaryReport(
+          sent: sent,
+          skipped: skipped,
+          failed: failed,
+          errors: List.unmodifiable(errors),
+        ),
+      );
+    }
+
+    final completedResult = await transactions.listCompleted(
+      currencyCode: 'YER',
+    );
+    if (completedResult is Failure<List<Transaction>>) {
+      return Failure(completedResult.error);
+    }
+    final transactionsSnapshot =
+        (completedResult as Success<List<Transaction>>).value;
+
+    final templateResult = await _loadTemplate();
+    if (templateResult is Failure<String>) {
+      return Failure(templateResult.error);
+    }
+    final template = (templateResult as Success<String>).value;
+
+    for (final due in dueAccounts) {
+      final account = due.account;
+      final markerKey = due.markerKey;
 
       final accountRows = transactionsSnapshot.where(
         (row) =>
