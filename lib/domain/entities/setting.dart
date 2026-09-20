@@ -25,6 +25,7 @@ abstract final class SettingKeys {
   static const salafniSettledTemplate = 'salafni_template_settled';
   static const autoPosSettlementEnabled = 'auto_pos_settlement_enabled';
   static const posAccounts = 'pos_accounts';
+  static const categoryCommissionBps = 'category_commission_bps';
   static const posSettlementSuccessTemplate = 'pos_settlement_template_success';
   static const posSettlementFailedTemplate = 'pos_settlement_template_failed';
   static const posSettlementUnknownTemplate = 'pos_settlement_template_unknown';
@@ -50,75 +51,4 @@ abstract final class SettingKeys {
   static const customOutboundTemplates = 'custom_outbound_templates';
   static const walletExtras = 'wallet_extras';
   static const defaultWalletsSeeded = 'default_wallets_seeded';
-}
-
-abstract final class SettingDefaults {
-  static const networkName = 'NET';
-  static const smsAutoProcessingEnabled = true;
-  static const processCategoryAmountsOnly = true;
-  static const processOldMessagesOnResume = true;
-  static const posBalanceRequestsEnabled = true;
-  static const dailyOpsSummaryAutoSend = true;
-  static const themeMode = 'system';
-  static const autoRetryFailedMessages = true;
-  static const retryMaxAttempts = 5;
-  static const retryBaseDelaySeconds = 30;
-  static const salafniEnabled = false;
-  static const autoPosSettlementEnabled = true;
-  static const broadcastMaxAttempts = 3;
-  static const broadcastRateDelayMs = 800;
-  static const lowStockThreshold = 10;
-  static const pendingAttentionAlertEnabled = true;
-  static const promotionRewardSmsTemplate =
-      'مكافأة عرض {title}\nالرقم: {serial}\nالرمز: {secret}';
-  static const voucherDeliverySmsTemplate =
-      'رقم الكرت: {serial}\nالرمز: {code}';
-  static const customerDebtPaymentTemplate =
-      'تم تأكيد سداد مبلغ {amount} ر.ي. رصيدك الحالي: {balance} ر.ي';
-  static const posBalanceResponseTemplate =
-      'رصيد نقطة البيع {pos}: {balance} ر.ي\nالدين: {debt} ر.ي';
-  static const posCreditLimitExceededTemplate =
-      'تعذر تنفيذ الطلب: تجاوزت نقطة البيع {pos} سقف الدين المسموح ({limit} ر.ي)';
-  static const dailyPosSummaryTemplate =
-      'ملخص يومي لنقطة البيع {pos}\nالمبيعات: {sales}\nالتحويلات: {transfers}\nالرصيد: {balance} ر.ي';
-  static const posSettlementSuccessTemplate =
-      'تم تأكيد تسوية نقطة البيع {pos} بمبلغ {amount} ر.ي';
-  static const posSettlementFailedTemplate =
-      'فشلت تسوية نقطة البيع {pos}: {reason}';
-  static const posSettlementUnknownTemplate =
-      'تعذر التحقق من تسوية نقطة البيع {pos}. راجع السجل يدوياً';
-  static const posRequestRejectedTemplate =
-      'تم رفض طلب نقطة البيع {pos}: {reason}';
-  static const posCustomerSmsTailTemplate = '\n— {pos}';
-  static const posInstantChargeConfirmTemplate =
-      'تم إرسال كرت {amount} ر.ي إلى {phone}';
-  static const lowStockAlertTemplate =
-      'تنبيه مخزون منخفض: الفئة {category} متبقي {count} كرت فقط';
-  static const preferredSimSlot = '0';
-  static const preferredSendSimSlot = '0';
-  static const simAutoFailover = true;
-}
-
-final class AppSetting {
-  const AppSetting({required this.key, required this.value, required this.updatedAt});
-  final String key;
-  final String value;
-  final DateTime updatedAt;
-}
-
-abstract final class SettingBool {
-  static bool read(String? raw, {required bool defaultValue}) {
-    if (raw == null) return defaultValue;
-    final v = raw.trim().toLowerCase();
-    if (v == 'true' || v == '1') return true;
-    if (v == 'false' || v == '0') return false;
-    return defaultValue;
-  }
-}
-
-abstract final class SettingInt {
-  static int read(String? raw, {required int defaultValue}) {
-    if (raw == null) return defaultValue;
-    return int.tryParse(raw.trim()) ?? defaultValue;
-  }
 }

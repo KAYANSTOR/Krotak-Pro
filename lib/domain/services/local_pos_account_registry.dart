@@ -8,8 +8,6 @@ import '../entities/setting.dart';
 import '../phone_normalizer.dart';
 import '../repositories/repositories.dart';
 
-/// Persists POS\u2194ledger bindings in [SettingKeys.posAccounts] as JSON.
-/// No extra Drift table: the customer ledger remains the single financial book.
 final class LocalPosAccountRegistry {
   const LocalPosAccountRegistry({required this.settings, required this.clock});
 
@@ -40,6 +38,17 @@ final class LocalPosAccountRegistry {
     if (all is Failure<List<PosAccount>>) return Failure(all.error);
     for (final account in (all as Success<List<PosAccount>>).value) {
       if (account.posId == posId) return Success(account);
+    }
+    return const Success(null);
+  }
+
+  Future<Result<PosAccount?>> findByCustomerId(String customerId) async {
+    final needle = customerId.trim();
+    if (needle.isEmpty) return const Success(null);
+    final all = await listAll();
+    if (all is Failure<List<PosAccount>>) return Failure(all.error);
+    for (final account in (all as Success<List<PosAccount>>).value) {
+      if (account.customerId == needle) return Success(account);
     }
     return const Success(null);
   }
