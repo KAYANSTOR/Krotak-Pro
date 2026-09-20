@@ -38,10 +38,10 @@ PaymentSourceGuard trustedPaymentSourceGuard({
 }
 
 
-PaymentSourceGuard trustedPosPaymentSourceGuard() {
+Future<PaymentSourceGuard> trustedPosPaymentSourceGuard() async {
   final settings = _SettingsRepositoryFake();
   final registry = LocalPosAccountRegistry(settings: settings, clock: _TestClock());
-  registry.save(
+  await registry.save(
     const PosAccount(
       posId: 'pos-1',
       customerId: 'customer-1',
