@@ -63,8 +63,10 @@ final class PosOrderMessageRenderer {
 
     final first = cards.first;
     final quantityText = _quantityText(effectiveQty);
+    final customerTemplateBody = (customerTemplate as Success<String>).value;
+    final posTemplateBody = (posTemplate as Success<String>).value;
     final customerBody = _replace(
-      customerTemplate.value,
+      customerTemplateBody,
       <String, String>{
         'serial': first.serialNumber,
         'code': first.secretCode,
@@ -91,7 +93,7 @@ final class PosOrderMessageRenderer {
     );
 
     final posBody = _replace(
-      posTemplate.value,
+      posTemplateBody,
       <String, String>{
         'pos': posAccount.name,
         'POS_NAME': posAccount.name,
