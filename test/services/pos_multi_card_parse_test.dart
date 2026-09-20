@@ -73,6 +73,29 @@ void main() {
     expect(parsed, isA<Failure<ParsedTransfer>>());
   });
 
+
+  test('POS instant charge extracts sender ledger and destination', () {
+    final parser = LocalMessageParser(templates: [posTemplate]);
+    final parsed = parser.parse(_msg('شحن 779776919 100'));
+    expect(parsed, isA<Success<ParsedTransfer>>());
+    final value = (parsed as Success<ParsedTransfer>).value;
+    expect(value.instantCharge, isTrue);
+    expect(value.customerIdentifier, '777000111');
+    expect(value.deliveryOverride, '779776919');
+    expect(value.amount.minorUnits, 10000);
+  });
+
+  test('POS Arabic instant charge phrase extracts destination', () {
+    final parser = LocalMessageParser(templates: [posTemplate]);
+    final parsed = parser.parse(_msg('ارسل كرت 50 الى 733123456'));
+    expect(parsed, isA<Success<ParsedTransfer>>());
+    final value = (parsed as Success<ParsedTransfer>).value;
+    expect(value.instantCharge, isTrue);
+    expect(value.customerIdentifier, '777000111');
+    expect(value.deliveryOverride, '733123456');
+    expect(value.amount.minorUnits, 5000);
+  });
+
   test('wallet leftover digits are not treated as qty', () {
     final parser = LocalMessageParser(templates: [walletTemplate]);
     final parsed = parser.parse(
