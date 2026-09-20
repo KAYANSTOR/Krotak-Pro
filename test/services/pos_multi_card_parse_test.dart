@@ -38,6 +38,7 @@ void main() {
     expect(value.quantity, 1);
     expect(value.amount.minorUnits, 10000);
     expect(value.customerIdentifier, '779776919');
+    expect(value.posId, 'pos-1');
   });
 
   test('POS message with trailing qty parses batch size', () {
@@ -126,3 +127,4 @@ void main() {
     expect(value.amount.minorUnits, 0);
     expect(value.reference, startsWith('balance-request:'));
   });
+}
