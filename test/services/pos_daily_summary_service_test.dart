@@ -59,7 +59,7 @@ void main() {
       settings: settings,
       auditLogs: audits,
       messageSender: sender,
-      clock: const FixedClock(DateTime(2026, 9, 21, 8)),
+      clock: FixedClock(DateTime(2026, 9, 21, 8)),
       ids: SequentialIdGenerator(),
     );
 
@@ -91,13 +91,13 @@ void main() {
     final sender = _Sender();
     final audits = _Audits();
     final service = LocalPosDailySummaryService(
-      posRegistry: LocalPosAccountRegistry(settings: settings, clock: const FixedClock(DateTime(2026, 9, 21, 8))),
+      posRegistry: LocalPosAccountRegistry(settings: settings, clock: FixedClock(DateTime(2026, 9, 21, 8))),
       transactions: _Transactions(const []),
       balances: _Balances(const Money(minorUnits: 0, currencyCode: 'YER')),
       settings: settings,
       auditLogs: audits,
       messageSender: sender,
-      clock: const FixedClock(DateTime(2026, 9, 21, 8)),
+      clock: FixedClock(DateTime(2026, 9, 21, 8)),
       ids: SequentialIdGenerator(),
     );
 
@@ -123,7 +123,7 @@ void main() {
       settings: settings,
       auditLogs: _Audits(),
       messageSender: sender,
-      clock: const FixedClock(DateTime(2026, 9, 21)),
+      clock: FixedClock(DateTime(2026, 9, 21)),
       ids: SequentialIdGenerator(),
     );
 
