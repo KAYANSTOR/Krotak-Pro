@@ -14,9 +14,9 @@
 | ملف | دور |
 |-----|-----|
 | `lib/ui/screens/reports/sales_period_report_screen.dart` | تقرير الفترة |
-| `lib/ui/screens/reports/pos_report_screen.dart` | مستحقات وتسوية |
+| `lib/ui/screens/reports/pos_accounts_ledger_screen.dart` | حسابات نقاط البيع والتسوية |
 | `lib/ui/screens/reports_screen.dart` | مركز التقارير |
-| `lib/ui/routing/app_routes.dart` | `openSalesPeriodReport` / `openPosReport` |
+| `lib/ui/routing/app_routes.dart` | `openSalesPeriodReport` / `openPosAccountsLedger` |
 
 ## خارج النطاق
 
