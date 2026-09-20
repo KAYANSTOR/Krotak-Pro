@@ -125,6 +125,7 @@ final class AppContainer {
   final ValueNotifier<ThemeMode> themeModeNotifier;
   Timer? _recoveryTimer;
   bool _recoveryBusy = false;
+  bool _dailySummaryBusy = false;
   bool _disposed = false;
 
   Future<Result<void>> reloadTemplates() async {
@@ -317,11 +318,14 @@ final class AppContainer {
   }
 
   Future<void> _runDailyPosSummary() async {
-    if (_disposed) return;
+    if (_disposed || _dailySummaryBusy) return;
+    _dailySummaryBusy = true;
     try {
       await dailyPosSummary.sendDue();
     } catch (_) {
       // Background summary delivery must never interrupt SMS recovery.
+    } finally {
+      _dailySummaryBusy = false;
     }
   }
 
