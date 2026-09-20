@@ -6,6 +6,7 @@ import '../entities/transaction.dart';
 import '../repositories/repositories.dart';
 import 'local_message_retry_service.dart';
 import 'payment_source_guard.dart';
+import '../entities/audit.dart';
 import 'services.dart';
 
 /// Phase 4 recovery coordinator for received, parsed and failed messages.
@@ -21,6 +22,7 @@ final class LocalMessageRecoveryService {
     required this.sourceGuard,
     this.retryService = const NoopMessageRetryService(),
     this.settings,
+    this.auditLogs,
   });
 
   final MessageRepository messages;
@@ -29,6 +31,7 @@ final class LocalMessageRecoveryService {
   final PaymentSourceGuard sourceGuard;
   final MessageRetryServicePort retryService;
   final SettingsRepository? settings;
+  final AuditLogRepository? auditLogs;
 
   Future<Result<MessageRecoveryReport>> recoverPending() async {
     final enabled = await _processOldMessagesOnResume();
@@ -47,6 +50,10 @@ final class LocalMessageRecoveryService {
     for (final message in list) {
       final due = await retryService.isDue(message.id);
       if (!due) {
+        skipped++;
+        continue;
+      }
+      if (await _hasCommittedDeliveryState(message.id)) {
         skipped++;
         continue;
       }
@@ -104,6 +111,19 @@ final class LocalMessageRecoveryService {
     }
     return Success(MessageRecoveryReport(attempted: attempted, processed: processed, skipped: skipped, failed: failed, errors: List.unmodifiable(errors)));
   }
+
+  Future<bool> _hasCommittedDeliveryState(String messageId) async {
+    final repo = auditLogs;
+    if (repo == null) return false;
+    final logs = await repo.findByEntity('message', messageId);
+    if (logs is Failure<List<AuditLog>>) return false;
+    return (logs as Success<List<AuditLog>>).value.any(
+      (entry) =>
+          entry.action == 'voucher_committed' ||
+          entry.action == 'pos_order_committed',
+    );
+  }
+
 
   PaymentEvent _eventForPersistedMessage(IncomingMessage message) {
     final sender = message.sender.trim();
