@@ -28,6 +28,7 @@ final class LocalCustomerService implements CustomerService {
     required String displayName,
     required CustomerIdentifierType identifierType,
     required String identifierValue,
+    CustomerStatus status = CustomerStatus.active,
   }) {
     final name = displayName.trim();
     final value = identifierValue.trim();
@@ -72,10 +73,13 @@ final class LocalCustomerService implements CustomerService {
       }
 
       final now = clock.now();
+      final initialStatus = status == CustomerStatus.provisional
+          ? CustomerStatus.provisional
+          : CustomerStatus.active;
       final customer = Customer(
         id: ids.next('customer'),
         displayName: name,
-        status: CustomerStatus.active,
+        status: initialStatus,
         createdAt: now,
         updatedAt: now,
       );
@@ -96,10 +100,50 @@ final class LocalCustomerService implements CustomerService {
         entityType: 'customer',
         entityId: customer.id,
         action: 'created',
-        payloadJson: '{"identifier":"$storedValue"}',
+        payloadJson:
+            '{"identifier":"$storedValue","status":"${initialStatus.name}"}',
       );
       if (audited is Failure<void>) return Failure(audited.error);
       return Success(customer);
+    });
+  }
+
+  @override
+  Future<Result<Customer>> promoteToActive(String customerId) {
+    return unitOfWork.run(() async {
+      final found = await customers.findById(customerId);
+      if (found is Failure<Customer?>) return Failure(found.error);
+      final customer = (found as Success<Customer?>).value;
+      if (customer == null) {
+        return const Failure(
+          AppFailure(code: 'customer_not_found', message: 'الحساب غير موجود'),
+        );
+      }
+      if (customer.status == CustomerStatus.active) {
+        return Success(customer);
+      }
+      if (customer.status != CustomerStatus.provisional) {
+        return const Failure(
+          AppFailure(code: 'customer_not_promotable', message: 'لا يمكن اعتماد هذا الحساب كعميل'),
+        );
+      }
+      final updated = Customer(
+        id: customer.id,
+        displayName: customer.displayName,
+        status: CustomerStatus.active,
+        createdAt: customer.createdAt,
+        updatedAt: clock.now(),
+        mergedIntoId: customer.mergedIntoId,
+      );
+      final saved = await customers.save(updated);
+      if (saved is Failure<void>) return Failure(saved.error);
+      final audited = await _audit(
+        entityType: 'customer',
+        entityId: customer.id,
+        action: 'promoted_to_active',
+      );
+      if (audited is Failure<void>) return Failure(audited.error);
+      return Success(updated);
     });
   }
 
