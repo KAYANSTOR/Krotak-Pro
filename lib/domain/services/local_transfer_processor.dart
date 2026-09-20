@@ -321,7 +321,7 @@ final class LocalTransferProcessor implements TransferProcessor {
         final credit = await balances.credit(
           customerId: resolution.customer!.id,
           amount: transfer.amount,
-          reference: transfer.reference.isEmpty ? 'batch-credit:' + operationId : transfer.reference,
+          reference: transfer.reference.isEmpty ? null : transfer.reference,
         );
         if (credit is Failure<Transaction>) return Failure<Transaction>(credit.error);
         final tx = (credit as Success<Transaction>).value;
@@ -1332,7 +1332,7 @@ final class _DeliveryState {
       final total = Money(minorUnits: transfer.amount.minorUnits * quantity, currencyCode: transfer.amount.currencyCode);
       final credit = await balances.credit(
         customerId: customer.id, amount: total,
-        reference: transfer.reference.isEmpty ? null : transfer.reference,
+        reference: transfer.reference.isEmpty ? 'batch-credit:' + operationId : transfer.reference,
       );
       if (credit is Failure<Transaction>) {
         await releaseAll();
