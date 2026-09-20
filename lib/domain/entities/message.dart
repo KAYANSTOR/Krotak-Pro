@@ -116,6 +116,7 @@ final class ParsedTransfer {
     required this.identifierType,
     required this.reference,
     this.templateId,
+    this.posId,
     this.rawIdentifier,
     this.quantity = 1,
     this.deliveryOverride,
@@ -128,6 +129,8 @@ final class ParsedTransfer {
   final TransferIdentifierType identifierType;
   final String reference;
   final String? templateId;
+  /// Exact POS scope captured from the matched inbound template.
+  final String? posId;
   final String? rawIdentifier;
   final int quantity;
   final String? deliveryOverride;
