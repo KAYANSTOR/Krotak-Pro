@@ -12,15 +12,6 @@ import '../repositories/repositories.dart';
 /// idempotent per POS (stable ids `tpl-pos-{posId}-{variant}`, upsert),
 /// so calling it again for the same POS is harmless.
 ///
-/// Fidelity note: the 5th template ("قالب طلب رصيد نقطة البيع") mirrors
-/// the video visually (name/priority/sample "111") but is not yet
-/// functionally wired — [LocalMessageParser] always requires a captured
-/// `{amount}`, and a bare balance-request code has none. Making it truly
-/// functional needs a small dedicated "balance query" path (matching the
-/// literal code against the body and resolving the identifier from
-/// `message.sender` instead of the body) plus a service that replies with
-/// the POS balance — deliberately left as follow-up work rather than
-/// bolted on here.
 final class DefaultPosTemplatesSeeder {
   const DefaultPosTemplatesSeeder({required this.templates});
 
@@ -99,7 +90,7 @@ final class DefaultPosTemplatesSeeder {
       variant: 'balance-request',
       name: 'قالب طلب رصيد نقطة البيع',
       priority: 4,
-      pattern: '{amount}',
+      pattern: '111',
       sampleBody: '111',
       identifierKind: TemplateIdentifierKind.balanceRequestCode,
       senderNameLabel: 'غير معروف',
