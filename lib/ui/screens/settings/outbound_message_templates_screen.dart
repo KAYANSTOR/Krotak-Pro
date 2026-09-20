@@ -75,6 +75,8 @@ class _OutboundMessageTemplatesScreenState
           'serial',
           'code',
           'secret',
+          'SECRET',
+          'CODE',
           'cards',
           'QUANTITY_TEXT',
           'CUSTOMER_PHONE',
