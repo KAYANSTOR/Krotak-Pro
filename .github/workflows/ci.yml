@@ -25,6 +25,9 @@ jobs:
         run: flutter test
 
   build-apk:
+    # Release signing is intentionally skipped on pull requests. Main/workflow_dispatch
+    # must have protected signing secrets configured before a release can be produced.
+    if: github.event_name != 'pull_request'
     needs: analyze-test
     runs-on: ubuntu-latest
     permissions:
