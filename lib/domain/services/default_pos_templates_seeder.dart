@@ -2,14 +2,14 @@ import '../../core/result.dart';
 import '../entities/message.dart';
 import '../repositories/repositories.dart';
 
-/// Seeds the 5 built-in parse templates for a single point-of-sale, run
-/// once right after a new POS point is created — mirrors the product
-/// video: "نقطة بيع جديدة" → 5 قوالب تلقائية (نشط) تظهر مباشرة.
+/// Seeds the 5 built-in parse templates for a single point-of-sale as part of
+/// the centralized POS profile creation transaction. The seeding is keyed by
+/// `posId`, so each POS gets its own copy and repeated calls are idempotent.
 ///
 /// Unlike [DefaultWalletTemplatesSeeder] (global, gated by a settings
-/// flag), this seeder is invoked directly by the UI at POS-creation time
-/// and is keyed by `posId`, so each POS gets its own copy. It is
-/// idempotent per POS (stable ids `tpl-pos-{posId}-{variant}`, upsert),
+/// flag), this seeder has a POS-specific key and is owned by the profile
+/// lifecycle service.
+////// idempotent per POS (stable ids `tpl-pos-{posId}-{variant}`, upsert),
 /// so calling it again for the same POS is harmless.
 ///
 /// Fidelity note: the 5th template ("قالب طلب رصيد نقطة البيع") mirrors
