@@ -8,6 +8,24 @@ CI على main — analyze + test + Android debug APK build
 
 **قرارات المنتج:** [product-decisions.md](product-decisions.md)
 
+## تحديثات الإصدار والتوثيق (2026-09-21)
+
+### دليل النظام ✅
+- تمت إضافة [دليل النظام](system-guide.md) ليصف الوظائف الموجودة فعليًا في `main` بدل الاعتماد على الـroadmap أو الفروع القديمة.
+- تم تحديث `README.md` لربط المستخدم بدليل الميزات وحالة التوزيع الحالية.
+- تم فصل الوضع الحالي عن النشر المستقبلي إلى Google Play.
+
+### حماية توقيع APK 🔐
+- أزيل مفتاح التوقيع القديم من شجرة المشروع.
+- أزيلت كلمات مرور التوقيع المضمنة من CI والسكربت المحلي.
+- Release signing لا يقبل fallback إلى debug.
+- CI يتطلب `APK_KEYSTORE_B64` و`APK_KEYSTORE_PASSWORD` و`APK_KEY_PASSWORD`.
+- CI ينشر SHA-256 للـAPK بجانب الإصدار.
+- التفاصيل: [apk-release-security.md](apk-release-security.md)
+- التوزيع الحالي: [distribution-plan.md](distribution-plan.md)
+
+> **مطلوب قبل أول Release بعد هذا التغيير:** إنشاء مفتاح جديد طويل الأمد وتسجيل أسراره في GitHub Secrets. المفتاح القديم الموجود في تاريخ Git يُعامل على أنه مكشوف ولا يُستخدم مستقبلًا.
+
 ## Post-V1
 
 ### Phase 39 — الملخص اليومي لنقاط البيع (2026-09-21) ✅ مكتمل ومتحقق آليًا
@@ -19,7 +37,6 @@ CI على main — analyze + test + Android debug APK build
 - CI #1132: analyze + full tests + release APK ✅.
 - PR #20 مدموج في `main` ✅.
 - تقرير: [phase-39-pos-daily-summary.md](phase-39-pos-daily-summary.md)
-
 
 ### Phase 38 — حل يدوي للمبلغ الغامض (2026-09-20) ✅ برمجيًا
 - أكثر من فئة بنفس القيمة لا تُرفض؛ تُعلَّق حتى يختار المشغّل الفئة.
@@ -39,4 +56,4 @@ CI على main — analyze + test + Android debug APK build
 - استرداد مستقل يمنع إعادة إرسال الرسالة التي نجحت.
 - تقرير: [phase-36-pos-customer-card-delivery.md](phase-36-pos-customer-card-delivery.md)
 
-المراحل السابقة موثقة في المستودع. المتبقي الغير برمجي: تحقق جهاز حقيقي (مرحلة 12).
+المراحل السابقة موثقة في المستودع. المتبقي غير البرمجي: تحقق جهاز حقيقي (مرحلة 12).
