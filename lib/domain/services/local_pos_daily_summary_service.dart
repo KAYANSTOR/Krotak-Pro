@@ -5,6 +5,7 @@ import '../../core/id_generator.dart';
 import '../../core/result.dart';
 import '../entities/audit.dart';
 import '../entities/pos_account.dart';
+import '../entities/pos_account.dart';
 import '../entities/setting.dart';
 import '../entities/transaction.dart';
 import '../phone_normalizer.dart';
