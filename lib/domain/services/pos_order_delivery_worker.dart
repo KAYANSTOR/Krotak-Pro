@@ -376,6 +376,7 @@ final class PosOrderDeliveryWorker {
         throw const FormatException('POS order commit is not an object');
       }
       final map = Map<String, Object?>.from(decoded);
+      final occurredAt = entries.last.occurredAt;
       final operationId = _requiredString(map, 'operationId');
       final posId = _requiredString(map, 'posId');
       final posName = _requiredString(map, 'posName');
@@ -422,6 +423,7 @@ final class PosOrderDeliveryWorker {
           ),
           quantity: quantity,
           items: items,
+          occurredAt: occurredAt,
         ),
       );
     } catch (error) {
@@ -516,6 +518,7 @@ final class _PosOrderCommit {
     required this.unitCharge,
     required this.quantity,
     required this.items,
+    required this.occurredAt,
   });
 
   final String operationId;
@@ -528,8 +531,7 @@ final class _PosOrderCommit {
   final Money unitCharge;
   final int quantity;
   final List<_PosOrderItem> items;
-
-  DateTime get occurredAt => DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
+  final DateTime occurredAt;
 }
 
 final class _PosOrderItem {
