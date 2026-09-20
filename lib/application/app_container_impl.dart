@@ -27,6 +27,7 @@ import '../domain/services/local_promotion_catalog.dart';
 import '../domain/services/local_promotion_progress_service.dart';
 import '../domain/services/local_pos_account_registry.dart';
 import '../domain/services/local_pos_balance_request_service.dart';
+import '../domain/services/local_pos_daily_summary_service.dart';
 import '../domain/services/local_system_health_service.dart';
 import '../domain/services/local_voucher_ops_service.dart';
 import '../domain/services/pending_attention_alarm_service.dart';
@@ -65,7 +66,7 @@ final class AppContainer {
     required this.inventoryService, required this.saleService, required this.advanceService, required this.broadcastService,
     required this.promotions, required this.promotionProgress, required this.systemHealth, required this.voucherOps,
     required this.pendingAlarm, required LocalMessageParser messageParser, required this.transferProcessor,
-    required this.licenseService, required this.backupService, required this.maintenanceService, required this.mergeService, required this.settlementService,
+    required this.licenseService, required this.backupService, required this.maintenanceService, required this.dailyPosSummary, required this.mergeService, required this.settlementService,
     required this.recoveryService, required this.deliveryWorker, required this.posOrderDeliveryWorker, required this.retryService, required this.pendingReview, required this.smsBridge,
     required this.smsHandler, required this.notificationBridge, required this.notificationSources,
     required this.notificationHandler, required this.clock, required this.ids, required this.themeModeNotifier,
@@ -106,6 +107,7 @@ final class AppContainer {
   final LocalLicenseService licenseService;
   final LocalBackupService backupService;
   final LocalMaintenanceService maintenanceService;
+  final LocalPosDailySummaryService dailyPosSummary;
   final LocalAccountMergeService mergeService;
   final LocalSettlementService settlementService;
   final LocalMessageRecoveryService recoveryService;
@@ -228,6 +230,16 @@ final class AppContainer {
     final notificationSources = LocalPaymentSourceRegistry(settings: settings, clock: clock);
     final sourceGuard = PaymentSourceGuard(wallets: wallets, templates: transferTemplates, notificationSources: notificationSources, posAccounts: posRegistry);
     final posBalanceRequests = LocalPosBalanceRequestService(posRegistry: posRegistry, balances: balanceService, settings: settings, auditLogs: auditLogs, messageSender: messageSender, clock: clock, ids: ids);
+    final dailyPosSummary = LocalPosDailySummaryService(
+      posRegistry: posRegistry,
+      transactions: transactions,
+      balances: balanceService,
+      settings: settings,
+      auditLogs: auditLogs,
+      messageSender: messageSender,
+      clock: clock,
+      ids: ids,
+    );
     final smsEngine = UnifiedPaymentEventEngine(messages: messages, parser: parser, processor: processor, ids: ids, settings: settings, sourceGuard: sourceGuard, posBalanceRequestService: posBalanceRequests);
     final notificationEngine = UnifiedPaymentEventEngine(messages: messages, parser: parser, processor: processor, ids: ids, settings: settings, sourceGuard: sourceGuard, posBalanceRequestService: posBalanceRequests);
     final recoveryService = LocalMessageRecoveryService(messages: messages, parser: parser, processor: processor, sourceGuard: sourceGuard, retryService: retryService, settings: settings, auditLogs: auditLogs);
@@ -261,7 +273,7 @@ final class AppContainer {
       }
     }
 
-    return AppContainer._(database: database, customers: customers, wallets: wallets, pointsOfSale: pointsOfSale, categories: categories, cards: cards, messages: messages, transferTemplates: transferTemplates, transactions: transactions, sales: sales, auditLogs: auditLogs, licenses: licenses, settings: settings, unitOfWork: uow, customerService: customerService, balanceService: balanceService, catalogService: catalogService, walletCatalog: walletCatalog, posCatalog: posCatalog, posRegistry: posRegistry, inventoryService: inventoryService, saleService: saleService, advanceService: advanceService, broadcastService: broadcastService, promotions: promotions, promotionProgress: promotionProgress, systemHealth: systemHealth, voucherOps: voucherOps, pendingAlarm: pendingAlarm, messageParser: parser, transferProcessor: processor, licenseService: licenseService, backupService: backupService, maintenanceService: maintenanceService, mergeService: mergeService, settlementService: settlementService, recoveryService: recoveryService, deliveryWorker: deliveryWorker, posOrderDeliveryWorker: posOrderDeliveryWorker, retryService: retryService, pendingReview: pendingReview, smsBridge: smsBridge, smsHandler: smsHandler, notificationBridge: notificationBridge, notificationSources: notificationSources, notificationHandler: notificationHandler, clock: clock, ids: ids, themeModeNotifier: ValueNotifier<ThemeMode>(theme));
+    return AppContainer._(database: database, customers: customers, wallets: wallets, pointsOfSale: pointsOfSale, categories: categories, cards: cards, messages: messages, transferTemplates: transferTemplates, transactions: transactions, sales: sales, auditLogs: auditLogs, licenses: licenses, settings: settings, unitOfWork: uow, customerService: customerService, balanceService: balanceService, catalogService: catalogService, walletCatalog: walletCatalog, posCatalog: posCatalog, posRegistry: posRegistry, inventoryService: inventoryService, saleService: saleService, advanceService: advanceService, broadcastService: broadcastService, promotions: promotions, promotionProgress: promotionProgress, systemHealth: systemHealth, voucherOps: voucherOps, pendingAlarm: pendingAlarm, messageParser: parser, transferProcessor: processor, licenseService: licenseService, backupService: backupService, maintenanceService: maintenanceService, dailyPosSummary: dailyPosSummary, mergeService: mergeService, settlementService: settlementService, recoveryService: recoveryService, deliveryWorker: deliveryWorker, posOrderDeliveryWorker: posOrderDeliveryWorker, retryService: retryService, pendingReview: pendingReview, smsBridge: smsBridge, smsHandler: smsHandler, notificationBridge: notificationBridge, notificationSources: notificationSources, notificationHandler: notificationHandler, clock: clock, ids: ids, themeModeNotifier: ValueNotifier<ThemeMode>(theme));
   }
 
   Future<void> startBackgroundHandlers() async {
@@ -290,6 +302,7 @@ final class AppContainer {
         await deliveryWorker.tick();
         await posOrderDeliveryWorker.tick();
       } catch (_) {}
+      await _runDailyPosSummary();
       return;
     }
     _recoveryBusy = true;
@@ -297,8 +310,18 @@ final class AppContainer {
       await recoveryService.recoverPending();
       await deliveryWorker.tick();
       await posOrderDeliveryWorker.tick();
+      await _runDailyPosSummary();
     } finally {
       _recoveryBusy = false;
+    }
+  }
+
+  Future<void> _runDailyPosSummary() async {
+    if (_disposed) return;
+    try {
+      await dailyPosSummary.sendDue();
+    } catch (_) {
+      // Background summary delivery must never interrupt SMS recovery.
     }
   }
 
