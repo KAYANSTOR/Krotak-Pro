@@ -50,6 +50,7 @@ abstract final class SettingKeys {
   static const posInstantChargeConfirmTemplate =
       'pos_instant_charge_confirm_template';
   static const lowStockAlertTemplate = 'low_stock_alert_template';
+  static const lowStockActiveJson = 'low_stock_active_json';
 
   static const customOutboundTemplates = 'custom_outbound_templates';
   static const walletExtras = 'wallet_extras';
@@ -101,7 +102,7 @@ abstract final class SettingDefaults {
   static const posInstantChargeConfirmTemplate =
       'تم إرسال كرت {amount} ر.ي إلى {phone}';
   static const lowStockAlertTemplate =
-      'تنبيه مخزون منخفض: الفئة {category} متبقي {count} كرت فقط';
+      'عذراً، كروت فئة {category} غير متوفرة حالياً (المتبقي: {count}). يرجى التواصل مع الإدارة.';
   static const preferredSimSlot = '0';
   static const preferredSendSimSlot = '0';
   static const simAutoFailover = true;
