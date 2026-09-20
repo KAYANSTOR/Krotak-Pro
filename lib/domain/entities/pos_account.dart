@@ -18,6 +18,7 @@ final class PosAccount {
     this.notifyPhone,
     this.status = PointOfSaleStatus.active,
     this.percentageMode = PosPercentageMode.defaultCategory,
+    this.creditLimitMinorUnits,
   });
 
   final String posId;
@@ -28,6 +29,9 @@ final class PosAccount {
   final PointOfSaleStatus status;
   final PosPercentageMode percentageMode;
 
+  /// سقف الدين المسموح به لنقطة البيع (بالهللة/الوحدة الصغرى). null = بلا سقف.
+  final int? creditLimitMinorUnits;
+
   PosAccount copyWith({
     String? customerId,
     String? name,
@@ -35,7 +39,9 @@ final class PosAccount {
     String? notifyPhone,
     PointOfSaleStatus? status,
     PosPercentageMode? percentageMode,
+    int? creditLimitMinorUnits,
     bool clearNotifyPhone = false,
+    bool clearCreditLimit = false,
   }) {
     return PosAccount(
       posId: posId,
@@ -45,6 +51,9 @@ final class PosAccount {
       notifyPhone: clearNotifyPhone ? null : (notifyPhone ?? this.notifyPhone),
       status: status ?? this.status,
       percentageMode: percentageMode ?? this.percentageMode,
+      creditLimitMinorUnits: clearCreditLimit
+          ? null
+          : (creditLimitMinorUnits ?? this.creditLimitMinorUnits),
     );
   }
 
@@ -56,6 +65,7 @@ final class PosAccount {
         'notifyPhone': notifyPhone,
         'status': status.name,
         'percentageMode': percentageMode.name,
+        'creditLimitMinorUnits': creditLimitMinorUnits,
       };
 
   /// Defensive decoder for persisted settings. Old/corrupt records must never
@@ -85,6 +95,7 @@ final class PosAccount {
       notifyPhone: json['notifyPhone'] as String?,
       status: status,
       percentageMode: percentageMode,
+      creditLimitMinorUnits: (json['creditLimitMinorUnits'] as num?)?.toInt(),
     );
   }
 

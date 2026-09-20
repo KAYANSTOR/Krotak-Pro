@@ -286,7 +286,7 @@ void main() {
       expect(audit.logs.any((l) => l.action == 'transfer_processed'), isTrue);
     });
 
-    test('rejects when customer missing', () async {
+    test('rejects phone customer when CustomerService absent (no auto-provision)', () async {
       messages.store['m2'] = IncomingMessage(
         id: 'm2',
         sender: 'bank',
@@ -303,10 +303,89 @@ void main() {
         reference: 'REF-2',
       );
 
+      // processor created without customerService → still rejects
       final result = await processor.process(transfer);
       expect(result, isA<Failure<Transaction>>());
       expect((result as Failure).error.code, 'customer_not_found');
       expect(messages.store['m2']!.status, MessageProcessingStatus.rejected);
+      expect(audit.logs.any((l) => l.action == 'transfer_unresolved'), isTrue);
+    });
+
+    test('auto-provisions unknown phone customer and credits', () async {
+      messages.store['m2b'] = IncomingMessage(
+        id: 'm2b',
+        sender: 'JAIB',
+        body: 'body',
+        receivedAt: DateTime.utc(2026, 9, 11),
+        status: MessageProcessingStatus.received,
+      );
+
+      final clock = FixedClock(DateTime.utc(2026, 9, 11));
+      final ids = SequentialIdGenerator();
+      final withProvision = LocalTransferProcessor(
+        messages: messages,
+        customers: customers,
+        balances: balances,
+        auditLogs: audit,
+        unitOfWork: const _PassthroughUnitOfWork(),
+        clock: clock,
+        ids: ids,
+        customerService: _FakeCustomerService(customers, ids, clock),
+      );
+
+      final transfer = ParsedTransfer(
+        messageId: 'm2b',
+        amount: const Money(minorUnits: 25000, currencyCode: 'YER'),
+        customerIdentifier: '777999888',
+        identifierType: TransferIdentifierType.phone,
+        reference: 'REF-AUTO',
+      );
+
+      final result = await withProvision.process(transfer);
+      expect(result, isA<Success<Transaction>>());
+      expect(messages.store['m2b']!.status, MessageProcessingStatus.processed);
+      expect(balances.credits.length, greaterThanOrEqualTo(1));
+      expect(audit.logs.any((l) => l.action == 'ledger_account_auto_provisioned'), isTrue);
+      expect(audit.logs.any((l) => l.action == 'transfer_processed'), isTrue);
+      // customer was created
+      final found = await customers.findByIdentifier('777999888');
+      expect((found as Success).value, isNotNull);
+    });
+
+    test('rejects account identifier when customer missing (no auto-provision)', () async {
+      messages.store['m2c'] = IncomingMessage(
+        id: 'm2c',
+        sender: 'bank',
+        body: 'body',
+        receivedAt: DateTime.utc(2026, 9, 11),
+        status: MessageProcessingStatus.received,
+      );
+
+      final clock = FixedClock(DateTime.utc(2026, 9, 11));
+      final ids = SequentialIdGenerator();
+      final withProvision = LocalTransferProcessor(
+        messages: messages,
+        customers: customers,
+        balances: balances,
+        auditLogs: audit,
+        unitOfWork: const _PassthroughUnitOfWork(),
+        clock: clock,
+        ids: ids,
+        customerService: _FakeCustomerService(customers, ids, clock),
+      );
+
+      final transfer = ParsedTransfer(
+        messageId: 'm2c',
+        amount: const Money(minorUnits: 1000, currencyCode: 'YER'),
+        customerIdentifier: 'ACC-9988',
+        identifierType: TransferIdentifierType.account,
+        reference: 'REF-ACC',
+      );
+
+      final result = await withProvision.process(transfer);
+      expect(result, isA<Failure<Transaction>>());
+      expect((result as Failure).error.code, 'customer_not_found');
+      expect(messages.store['m2c']!.status, MessageProcessingStatus.rejected);
       expect(audit.logs.any((l) => l.action == 'transfer_unresolved'), isTrue);
     });
 
@@ -334,6 +413,75 @@ void main() {
   });
 }
 
+
+final class _FakeCustomerService implements CustomerService {
+  _FakeCustomerService(this.customers, this.ids, this.clock);
+  final _FakeCustomers customers;
+  final IdGenerator ids;
+  final Clock clock;
+
+  @override
+  Future<Result<Customer>> create({
+    required String displayName,
+    required CustomerIdentifierType identifierType,
+    required String identifierValue,
+    CustomerStatus status = CustomerStatus.active,
+  }) async {
+    final existing = await customers.findByIdentifier(identifierValue.trim());
+    if (existing is Success<Customer?> && existing.value != null) {
+      return const Failure(AppFailure(code: 'duplicate_identifier', message: 'Identifier already exists'));
+    }
+    final now = clock.now();
+    final customer = Customer(
+      id: ids.next('customer'),
+      displayName: displayName,
+      status: status,
+      createdAt: now,
+      updatedAt: now,
+    );
+    await customers.save(customer);
+    await customers.saveIdentifier(CustomerIdentifier(
+      id: ids.next('identifier'),
+      customerId: customer.id,
+      type: identifierType,
+      value: identifierValue.trim(),
+      isPrimary: true,
+    ));
+    return Success(customer);
+  }
+
+  @override
+  Future<Result<Customer>> promoteToActive(String customerId) async {
+    final existing = await customers.findById(customerId);
+    if (existing is Failure<Customer?>) return Failure(existing.error);
+    final customer = (existing as Success<Customer?>).value;
+    if (customer == null) {
+      return const Failure(AppFailure(code: 'customer_not_found', message: 'Customer was not found'));
+    }
+    final updated = customer.copyWith(status: CustomerStatus.active, updatedAt: clock.now());
+    final saved = await customers.save(updated);
+    if (saved is Failure<void>) return Failure(saved.error);
+    return Success(updated);
+  }
+
+  @override
+  Future<Result<void>> blacklist(String customerId) async => const Success(null);
+
+  @override
+  Future<Result<void>> addIdentifier({
+    required String customerId,
+    required CustomerIdentifierType type,
+    required String value,
+    required bool isPrimary,
+  }) async => const Success(null);
+
+  @override
+  Future<Result<void>> bindPrimaryGsm({
+    required String customerId,
+    required String phone,
+  }) async => const Success(null);
+}
+
 final class _PassthroughUnitOfWork implements UnitOfWork {
   const _PassthroughUnitOfWork();
   @override
@@ -342,11 +490,6 @@ final class _PassthroughUnitOfWork implements UnitOfWork {
 
 final class _FakeMessages implements MessageRepository {
   final store = <String, IncomingMessage>{};
-  @override
-  Future<Result<void>> delete(String id) async {
-    store.remove(id);
-    return const Success(null);
-  }
 
   @override
   Future<Result<void>> save(IncomingMessage message) async {
@@ -402,6 +545,12 @@ final class _FakeMessages implements MessageRepository {
     );
     return const Success(null);
   }
+
+  @override
+  Future<Result<void>> delete(String id) async {
+    store.remove(id);
+    return const Success(null);
+  }
 }
 
 final class _FakeCustomers implements CustomerRepository {
@@ -426,11 +575,18 @@ final class _FakeCustomers implements CustomerRepository {
       Success(identifiers[customerId] ?? const []);
 
   @override
-  Future<Result<void>> save(Customer customer) async => const Success(null);
+  Future<Result<void>> save(Customer customer) async {
+    byId[customer.id] = customer;
+    return const Success(null);
+  }
 
   @override
-  Future<Result<void>> saveIdentifier(CustomerIdentifier identifier) async =>
-      const Success(null);
+  Future<Result<void>> saveIdentifier(CustomerIdentifier identifier) async {
+    identifiers.putIfAbsent(identifier.customerId, () => []).add(identifier);
+    // Also index by value for findByIdentifier
+    byId[identifier.value] = byId[identifier.customerId]!;
+    return const Success(null);
+  }
 }
 
 final class _FakeBalances implements CustomerBalanceService {

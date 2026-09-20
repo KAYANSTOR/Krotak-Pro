@@ -81,6 +81,7 @@ Color cardStatusContainer(CardStatus status, NetSemanticColors net) => switch (s
 
 String customerStatusLabel(CustomerStatus status) => switch (status) {
       CustomerStatus.active => 'نشط',
+      CustomerStatus.provisional => 'دفتر مؤقت',
       CustomerStatus.blacklisted => 'قائمة سوداء',
       CustomerStatus.merged => 'مدموج',
       CustomerStatus.archived => 'مؤرشف',

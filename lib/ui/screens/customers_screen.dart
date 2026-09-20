@@ -247,6 +247,12 @@ class _CustomersScreenState extends State<CustomersScreen> {
                       tint: net.warning,
                     ),
                     NetIndicatorTile(
+                      label: 'دفتر مؤقت',
+                      value: '${_allRows.where((r) => r.isProvisional).length}',
+                      icon: Icons.account_balance_wallet_outlined,
+                      tint: net.warning,
+                    ),
+                    NetIndicatorTile(
                       label: 'إجمالي المدين',
                       value: formatMoneyMinor(_debtorTotalMinor),
                       icon: Icons.south_west_rounded,
@@ -615,6 +621,8 @@ final class _AccountRow {
   final String? altLabel;
 
   bool get hasPhone => phone != null && phone!.trim().isNotEmpty;
+
+  bool get isProvisional => customer.status == CustomerStatus.provisional;
 }
 
 class _AccountCard extends StatelessWidget {
@@ -725,36 +733,66 @@ class _AccountCard extends StatelessWidget {
               ],
             ),
           ],
-          if (!row.hasPhone) ...[
+          if (row.isProvisional || !row.hasPhone) ...[
             const SizedBox(height: NetSpacing.sm),
             Row(
               children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: NetSpacing.sm,
-                    vertical: 3,
-                  ),
-                  decoration: BoxDecoration(
-                    color: net.errorContainer,
-                    borderRadius: NetRadii.xsAll,
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.link_off_rounded, size: 12, color: net.rejected),
-                      const SizedBox(width: NetSpacing.xs),
-                      Text(
-                        'غير مربوط',
-                        style: TextStyle(
-                          fontFamily: NetTypography.family,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          color: net.rejected,
+                if (row.isProvisional)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: NetSpacing.sm,
+                      vertical: 3,
+                    ),
+                    decoration: BoxDecoration(
+                      color: net.warningContainer,
+                      borderRadius: NetRadii.xsAll,
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.account_balance_wallet_outlined, size: 12, color: net.warning),
+                        const SizedBox(width: NetSpacing.xs),
+                        Text(
+                          'دفتر مؤقت',
+                          style: TextStyle(
+                            fontFamily: NetTypography.family,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: net.warning,
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
+                if (row.isProvisional && !row.hasPhone)
+                  const SizedBox(width: NetSpacing.xs),
+                if (!row.hasPhone)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: NetSpacing.sm,
+                      vertical: 3,
+                    ),
+                    decoration: BoxDecoration(
+                      color: net.errorContainer,
+                      borderRadius: NetRadii.xsAll,
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.link_off_rounded, size: 12, color: net.rejected),
+                        const SizedBox(width: NetSpacing.xs),
+                        Text(
+                          'غير مربوط',
+                          style: TextStyle(
+                            fontFamily: NetTypography.family,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: net.rejected,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 const Spacer(),
                 Text(
                   'اضغط للتفاصيل',

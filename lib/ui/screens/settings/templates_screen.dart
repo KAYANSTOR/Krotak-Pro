@@ -18,10 +18,20 @@ import 'template_wizard_screen.dart';
 /// - FAB بنفسجي: قالب جديد +
 /// - ربط Domain: listByWallet / save / delete + reloadTemplates
 class TemplatesScreen extends StatefulWidget {
-  const TemplatesScreen({super.key, this.walletId, this.walletName});
+  const TemplatesScreen({
+    super.key,
+    this.walletId,
+    this.walletName,
+    this.posId,
+    this.posName,
+  });
 
   final String? walletId;
   final String? walletName;
+
+  /// Scope the list to a single point-of-sale (parallel to [walletId]).
+  final String? posId;
+  final String? posName;
 
   @override
   State<TemplatesScreen> createState() => _TemplatesScreenState();
@@ -56,16 +66,22 @@ class _TemplatesScreenState extends State<TemplatesScreen> {
         names[w.id] = w.name;
       }
     }
-    final r = widget.walletId == null
+    final r = widget.posId != null
         ? await c.transferTemplates.listAll()
-        : await c.transferTemplates.listByWallet(widget.walletId);
+        : widget.walletId == null
+            ? await c.transferTemplates.listAll()
+            : await c.transferTemplates.listByWallet(widget.walletId);
     if (!mounted) return;
     setState(() {
       _loading = false;
       _walletNames = names;
       if (r is Success<List<TransferTemplate>>) {
         // ترتيب حسب الأولوية تصاعدياً (الأقل = أعلى أولوية) كما في الفيديو
-        final list = List<TransferTemplate>.from(r.value);
+        final list = List<TransferTemplate>.from(
+          widget.posId == null
+              ? r.value
+              : r.value.where((t) => t.posId == widget.posId),
+        );
         list.sort((a, b) => a.priority.compareTo(b.priority));
         _items = list;
       } else {
@@ -80,6 +96,7 @@ class _TemplatesScreenState extends State<TemplatesScreen> {
         builder: (_) => TemplateWizardScreen(
           existing: existing,
           initialWalletId: widget.walletId ?? existing?.walletId,
+          initialPosId: widget.posId ?? existing?.posId,
         ),
       ),
     );
@@ -226,12 +243,13 @@ class _TemplatesScreenState extends State<TemplatesScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final title = widget.walletName != null
-        ? 'قوالب ${widget.walletName}'
-        : 'قوالب التحويل';
-    final subtitle = widget.walletName != null
+    final ownerName = widget.posName ?? widget.walletName;
+    final title = ownerName != null ? 'قوالب $ownerName' : 'قوالب التحويل';
+    final subtitle = widget.posName != null
         ? 'إدارة قوالب استخراج البيانات لهذه المحفظة'
-        : 'إدارة قوالب استخراج البيانات';
+        : widget.walletName != null
+            ? 'إدارة قوالب استخراج البيانات لهذه المحفظة'
+            : 'إدارة قوالب استخراج البيانات';
 
     return Directionality(
       textDirection: TextDirection.rtl,
@@ -336,6 +354,19 @@ class _TemplatesScreenState extends State<TemplatesScreen> {
 
 /// بطاقة قالب مطابقة لإطار `tpl_sys50.jpg`:
 /// [⋮] [Switch]  …  [اسم + شارات]  [✓]
+/// مسودة = القالب ناقص حقلاً مطلوباً (المبلغ، أو معرّف العميل حسب نوعه) —
+/// لا يمكن أن يكون نشطاً فعلياً حتى يُستكمل. مطابق لحالة "مسودة" في الفيديو.
+bool _isTemplateDraft(TransferTemplate t) {
+  final p = t.pattern;
+  final hasAmount = p.contains('{amount}') || p.contains('%amount');
+  final hasIdentifier = switch (t.identifierKind) {
+    TemplateIdentifierKind.phone => p.contains('{phone}') || p.contains('%phone'),
+    TemplateIdentifierKind.balanceRequestCode => true, // لا يُستخرج من نص الرسالة
+    _ => p.contains('{account}') || p.contains('%account'),
+  };
+  return !hasAmount || !hasIdentifier;
+}
+
 class _TemplateCard extends StatelessWidget {
   const _TemplateCard({
     required this.template,
@@ -352,7 +383,8 @@ class _TemplateCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = template;
-    final active = t.isActive;
+    final draft = _isTemplateDraft(t);
+    final active = t.isActive && !draft;
 
     return Material(
       color: Theme.of(context).colorScheme.surface,
@@ -384,11 +416,11 @@ class _TemplateCard extends StatelessWidget {
                 size: 22,
               ),
             ),
-            // Switch
+            // Switch — مسودة لا يمكن تفعيلها حتى تُستكمل
             Switch.adaptive(
               value: active,
               activeColor: context.kayan.primary,
-              onChanged: onToggle,
+              onChanged: draft ? null : onToggle,
             ),
             const SizedBox(width: 4),
             // المحتوى النصي
@@ -410,15 +442,17 @@ class _TemplateCard extends StatelessWidget {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
-                      // شارة نشط / متوقف
+                      // شارة نشط / متوقف / مسودة
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                         decoration: BoxDecoration(
-                          color: active
-                              ? context.netColors.available.withValues(alpha: 0.14)
-                              : Theme.of(context)
-                                  .colorScheme
-                                  .surfaceContainerHighest,
+                          color: draft
+                              ? const Color(0xFFF59E0B).withValues(alpha: 0.14)
+                              : active
+                                  ? context.netColors.available.withValues(alpha: 0.14)
+                                  : Theme.of(context)
+                                      .colorScheme
+                                      .surfaceContainerHighest,
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Row(
@@ -429,25 +463,29 @@ class _TemplateCard extends StatelessWidget {
                               height: 6,
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
-                                color: active
-                                    ? context.netColors.available
-                                    : Theme.of(context)
-                                        .colorScheme
-                                        .onSurfaceVariant,
+                                color: draft
+                                    ? const Color(0xFFF59E0B)
+                                    : active
+                                        ? context.netColors.available
+                                        : Theme.of(context)
+                                            .colorScheme
+                                            .onSurfaceVariant,
                               ),
                             ),
                             const SizedBox(width: 5),
                             Text(
-                              active ? 'نشط' : 'متوقف',
+                              draft ? 'مسودة' : (active ? 'نشط' : 'متوقف'),
                               style: TextStyle(
                                 fontFamily: 'Tajawal',
                                 fontSize: 11,
                                 fontWeight: FontWeight.w600,
-                                color: active
-                                    ? context.netColors.available
-                                    : Theme.of(context)
-                                        .colorScheme
-                                        .onSurfaceVariant,
+                                color: draft
+                                    ? const Color(0xFFF59E0B)
+                                    : active
+                                        ? context.netColors.available
+                                        : Theme.of(context)
+                                            .colorScheme
+                                            .onSurfaceVariant,
                               ),
                             ),
                           ],
@@ -479,22 +517,26 @@ class _TemplateCard extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 10),
-            // أيقونة ✓ خضراء (مطابقة للفيديو)
+            // أيقونة ✓ خضراء / ✏️ مسودة (مطابقة للفيديو)
             Container(
               width: 36,
               height: 36,
               decoration: BoxDecoration(
-                color: active
-                    ? context.netColors.availableContainer
-                    : Theme.of(context).colorScheme.surfaceContainerHighest,
+                color: draft
+                    ? const Color(0xFFF59E0B).withValues(alpha: 0.14)
+                    : active
+                        ? context.netColors.availableContainer
+                        : Theme.of(context).colorScheme.surfaceContainerHighest,
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Icon(
-                Icons.check_circle,
+                draft ? Icons.edit_note_rounded : Icons.check_circle,
                 size: 22,
-                color: active
-                    ? context.netColors.available
-                    : Theme.of(context).colorScheme.onSurfaceVariant,
+                color: draft
+                    ? const Color(0xFFF59E0B)
+                    : active
+                        ? context.netColors.available
+                        : Theme.of(context).colorScheme.onSurfaceVariant,
               ),
             ),
           ],

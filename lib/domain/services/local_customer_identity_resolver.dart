@@ -102,7 +102,8 @@ final class LocalCustomerIdentityResolver {
       }
       return _withDeliveryPhone(live, trimmed);
     }
-    if (customer.status != CustomerStatus.active) {
+    if (customer.status != CustomerStatus.active &&
+        customer.status != CustomerStatus.provisional) {
       return Success(
         CustomerIdentityResolution.unresolved(
           reasonCode: 'customer_not_active',

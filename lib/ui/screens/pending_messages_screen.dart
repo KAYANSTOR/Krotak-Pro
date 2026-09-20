@@ -11,6 +11,7 @@ import '../theme/kayan_colors.dart';
 import '../theme/kayan_palette.dart';
 import '../theme/net_semantic_colors.dart';
 import '../widgets/async_views.dart';
+import '../widgets/net/net_app_bar_title.dart';
 
 /// الرسائل المعلّقة (قيد التأكيد) — مطابقة منطق الفيديو + Domain.
 ///
@@ -259,30 +260,12 @@ class _PendingMessagesScreenState extends State<PendingMessagesScreen>
               color: Theme.of(context).colorScheme.onSurface,
             ),
           ),
-          title: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                'الرسائل المعلّقة',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontFamily: 'Tajawal',
-                  fontWeight: FontWeight.w800,
-                  fontSize: 18,
-                  color: Theme.of(context).colorScheme.onSurface,
-                ),
-              ),
-              Text(
-                'قيد التأكيد — تحتاج تدخلاً يدوياً',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontFamily: 'Tajawal',
-                  fontSize: 12,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ],
+          title: const NetAppBarTitle(
+            icon: Icons.pending_actions_rounded,
+            title: 'الرسائل المعلّقة',
+            subtitle: 'قيد التأكيد — تحتاج تدخلاً يدوياً',
           ),
+          centerTitle: false,
           actions: [
             if (_alertEnabled)
               IconButton(
@@ -553,127 +536,79 @@ class _PendingCard extends StatelessWidget {
                 ),
               ),
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
                   color: context.netColors.warningContainer,
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
-                  'معلّقة',
+                  _fmtAmount(row.amount),
                   style: TextStyle(
                     fontFamily: 'Tajawal',
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 13,
                     color: context.netColors.warning,
                   ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 12),
-          _infoRow(context, Icons.phone_android, 'الجوال', row.phone ?? '—'),
-          _infoRow(
-            context,
-            Icons.payments_outlined,
-            'المبلغ',
-            _fmtAmount(row.amount),
-          ),
-          if (row.reference != null && row.reference!.isNotEmpty)
-            _infoRow(context, Icons.tag, 'المرجع', row.reference!),
-          _infoRow(context, Icons.info_outline, 'السبب', row.reason),
-          const SizedBox(height: 14),
-          if (busy)
-            const Center(
-              child: SizedBox(
-                width: 24,
-                height: 24,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-            )
-          else
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: onReject,
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: context.netColors.rejected,
-                      side: BorderSide(
-                        color: context.netColors.rejected.withValues(alpha: 0.4),
-                      ),
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    child: const Text(
-                      'رفض',
-                      style: TextStyle(
-                        fontFamily: 'Tajawal',
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  flex: 2,
-                  child: FilledButton(
-                    onPressed: onApprove,
-                    style: FilledButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    child: const Text(
-                      'اعتماد',
-                      style: TextStyle(
-                        fontFamily: 'Tajawal',
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _infoRow(
-    BuildContext context,
-    IconData icon,
-    String label,
-    String value,
-  ) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, size: 16, color: Theme.of(context).colorScheme.onSurfaceVariant),
-          const SizedBox(width: 6),
-          Text(
-            '$label: ',
-            style: TextStyle(
-              fontFamily: 'Tajawal',
-              fontSize: 13,
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
+          const SizedBox(height: 10),
+          if (row.phone != null && row.phone!.isNotEmpty)
+            Text(
+              'الجوال: ${row.phone}',
               style: TextStyle(
                 fontFamily: 'Tajawal',
                 fontSize: 13,
                 color: Theme.of(context).colorScheme.onSurface,
-                fontWeight: FontWeight.w600,
               ),
             ),
+          if (row.reference != null && row.reference!.isNotEmpty)
+            Text(
+              'المرجع: ${row.reference}',
+              style: TextStyle(
+                fontFamily: 'Tajawal',
+                fontSize: 12,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+          const SizedBox(height: 6),
+          Text(
+            row.reason,
+            style: TextStyle(
+              fontFamily: 'Tajawal',
+              fontSize: 12.5,
+              color: context.netColors.warning,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: FilledButton(
+                  onPressed: busy ? null : onApprove,
+                  child: busy
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        )
+                      : const Text('اعتماد', style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w700)),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: busy ? null : onReject,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: KayanColors.error,
+                    side: const BorderSide(color: KayanColors.error),
+                  ),
+                  child: const Text('رفض', style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w700)),
+                ),
+              ),
+            ],
           ),
         ],
       ),

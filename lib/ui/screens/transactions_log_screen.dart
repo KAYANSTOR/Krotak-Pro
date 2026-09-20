@@ -10,6 +10,7 @@ import '../theme/net_tokens.dart';
 import '../widgets/async_views.dart';
 import '../widgets/net/net_surface_card.dart';
 import '../widgets/net/net_transaction_detail_sheet.dart';
+import '../widgets/net/net_app_bar_title.dart';
 
 /// سجل العمليات — مطابقة إطارات الفيديو (`frame_t500s` / `inv_t480s`).
 ///
@@ -106,18 +107,10 @@ class _TransactionsLogScreenState extends State<TransactionsLogScreen> {
     return s;
   }
 
-  int get _net => _depositSum - _outflowSum;
+  int get _netSum => _depositSum - _outflowSum;
 
   bool _isInflow(TransactionType t) =>
-      t == TransactionType.deposit || t == TransactionType.reward;
-
-  String _fmtMinor(int minor) {
-    final major = minor / 100.0;
-    final s = minor % 100 == 0
-        ? major.toInt().toString()
-        : major.toStringAsFixed(2);
-    return '$s ر.ي';
-  }
+      t == TransactionType.deposit || t == TransactionType.reversal;
 
   String _fmtSigned(int minor, {required bool positive}) {
     final major = minor / 100.0;
@@ -215,29 +208,10 @@ class _TransactionsLogScreenState extends State<TransactionsLogScreen> {
           onPressed: () => Navigator.maybePop(context),
           icon: Icon(Icons.arrow_forward_rounded, color: palette.textPrimary),
         ),
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              'سجل العمليات',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontFamily: NetTypography.family,
-                fontWeight: FontWeight.w800,
-                fontSize: 18,
-                color: palette.textPrimary,
-              ),
-            ),
-            Text(
-              'عرض وتصفية جميع المعاملات المسجلة',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontFamily: NetTypography.family,
-                fontSize: 12,
-                color: palette.textSecondary,
-              ),
-            ),
-          ],
+        title: const NetAppBarTitle(
+          icon: Icons.receipt_long_rounded,
+          title: 'سجل العمليات',
+          subtitle: 'عرض وتصفية جميع المعاملات المسجلة',
         ),
         actions: [
           IconButton(
@@ -254,7 +228,6 @@ class _TransactionsLogScreenState extends State<TransactionsLogScreen> {
       ),
       body: Column(
         children: [
-          // بحث
           Padding(
             padding: const EdgeInsets.fromLTRB(
               NetSpacing.lg,
@@ -278,96 +251,87 @@ class _TransactionsLogScreenState extends State<TransactionsLogScreen> {
                     ? null
                     : IconButton(
                         tooltip: 'مسح البحث',
-                        icon: const Icon(Icons.close_rounded, size: 18),
                         onPressed: () => setState(_searchCtrl.clear),
+                        icon: Icon(Icons.clear_rounded, color: palette.textTertiary),
                       ),
                 filled: true,
                 fillColor: palette.surface,
                 border: OutlineInputBorder(
-                  borderRadius: NetRadii.smAll,
-                  borderSide: BorderSide.none,
+                  borderRadius: NetRadii.mdAll,
+                  borderSide: BorderSide(color: palette.border),
                 ),
                 enabledBorder: OutlineInputBorder(
-                  borderRadius: NetRadii.smAll,
+                  borderRadius: NetRadii.mdAll,
                   borderSide: BorderSide(color: palette.border),
                 ),
                 focusedBorder: OutlineInputBorder(
-                  borderRadius: NetRadii.smAll,
-                  borderSide: BorderSide(color: palette.primary, width: 1.4),
+                  borderRadius: NetRadii.mdAll,
+                  borderSide: BorderSide(color: palette.primary, width: 1.5),
                 ),
                 contentPadding: const EdgeInsets.symmetric(
                   horizontal: NetSpacing.md,
-                  vertical: NetSpacing.md,
+                  vertical: NetSpacing.sm,
                 ),
               ),
             ),
           ),
-
-          // شرائح الفلاتر
-          SizedBox(
-            height: 42,
-            child: ListView(
-              scrollDirection: Axis.horizontal,
-              padding: NetSpacing.pageH,
-              children: [
-                if (_hasFilters)
-                  Padding(
-                    padding: const EdgeInsetsDirectional.only(start: NetSpacing.sm),
-                    child: ActionChip(
-                      avatar: const Icon(Icons.close_rounded, size: 15),
-                      label: const Text(
-                        'مسح الكل',
-                        style: TextStyle(fontFamily: NetTypography.family, fontSize: 12),
-                      ),
-                      onPressed: _clearAll,
-                    ),
-                  ),
-                _FilterPill(
-                  selected: _typeFilter.isNotEmpty,
-                  label: _typeFilter.isEmpty
-                      ? 'كل الأنواع'
-                      : '${_typeFilter.length} أنواع',
-                  icon: Icons.category_rounded,
-                  onTap: _openTypeSheet,
-                ),
-                _FilterPill(
-                  selected: _from != null || _to != null,
-                  label: (_from == null && _to == null)
-                      ? 'كل التواريخ'
-                      : 'تواريخ محددة',
-                  icon: Icons.calendar_today_rounded,
-                  onTap: _openDateSheet,
-                ),
-              ],
-            ),
-          ),
-
-          // ملخص ثابت أعلى القائمة
-          if (!_loading && _error == null)
+          if (_hasFilters)
             Padding(
               padding: const EdgeInsets.fromLTRB(
                 NetSpacing.lg,
-                NetSpacing.sm,
+                0,
                 NetSpacing.lg,
                 NetSpacing.sm,
               ),
-              child: _SummaryBar(
-                count: items.length,
-                netLabel: _fmtSigned(_net.abs(), positive: _net >= 0),
-                depositLabel: _fmtSigned(_depositSum, positive: true),
-                outflowLabel: _fmtSigned(_outflowSum, positive: false),
+              child: Wrap(
+                spacing: NetSpacing.sm,
+                runSpacing: NetSpacing.xs,
+                children: [
+                  if (_from != null || _to != null)
+                    _FilterChip(
+                      label: _dateChipLabel(),
+                      onDeleted: () => setState(() {
+                        _from = null;
+                        _to = null;
+                      }),
+                    ),
+                  if (_typeFilter.isNotEmpty)
+                    _FilterChip(
+                      selected: true,
+                      label: '${_typeFilter.length} أنواع',
+                      onDeleted: () => setState(() => _typeFilter.clear()),
+                    ),
+                  TextButton.icon(
+                    onPressed: _clearAll,
+                    icon: const Icon(Icons.filter_alt_off_rounded, size: 16),
+                    label: const Text('مسح الكل'),
+                    style: TextButton.styleFrom(
+                      foregroundColor: net.error,
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      visualDensity: VisualDensity.compact,
+                    ),
+                  ),
+                ],
               ),
             ),
-
+          _SummaryBar(
+            count: items.length,
+            netLabel: _fmtSigned(_netSum.abs(), positive: _netSum >= 0),
+            depositLabel: _fmtSigned(_depositSum, positive: true),
+            outflowLabel: _fmtSigned(_outflowSum, positive: false),
+            netPositive: _netSum >= 0,
+          ),
           Expanded(
             child: _loading
-                ? const AsyncLoadingView(skeleton: true, skeletonCount: 5)
+                ? const Center(child: CircularProgressIndicator())
                 : _error != null
-                    ? AsyncErrorView(message: _error!, onRetry: _load)
+                    ? AsyncErrorView(
+                        message: _error!,
+                        onRetry: _load,
+                      )
                     : items.isEmpty
                         ? AsyncEmptyView(
-                            message: 'لا عمليات في الفترة/التصفية المحددة',
-                            icon: Icons.receipt_long_outlined,
+                            message: 'لا توجد عمليات',
                             hint: _hasFilters
                                 ? 'جرّب توسيع نطاق التاريخ أو مسح الفلاتر'
                                 : 'ستظهر هنا كل حركات الإيداع والصرف',
@@ -375,115 +339,151 @@ class _TransactionsLogScreenState extends State<TransactionsLogScreen> {
                             onAction: _hasFilters ? _clearAll : null,
                           )
                         : RefreshIndicator(
-                            color: palette.primary,
                             onRefresh: _load,
-                            child: ListView.builder(
-                              padding: const EdgeInsets.only(bottom: NetSpacing.xxl),
-                              itemCount: items.length,
-                              itemBuilder: (_, i) {
-                                final tx = items[i];
-                                final day = _dayOf(tx.createdAt);
-                                final isFirstOfDay = i == 0 ||
-                                    _dayOf(items[i - 1].createdAt) != day;
-                                return Column(
-                                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                                  children: [
-                                    if (isFirstOfDay)
-                                      _DayHeader(label: arabicDayLabel(day)),
-                                    _TxCard(
-                                      tx: tx,
-                                      label: _typeLabel(tx.type),
-                                      inflow: _isInflow(tx.type),
-                                      amountLabel: _fmtMinor(tx.amount.minorUnits),
-                                      onTap: () =>
-                                          NetTransactionDetailSheet.show(context, tx),
-                                    ),
-                                  ],
-                                );
-                              },
-                            ),
+                            child: _buildGroupedList(items),
                           ),
           ),
         ],
       ),
     );
   }
+
+  String _dateChipLabel() {
+    if (_from != null && _to != null) {
+      return '${_fmtShort(_from!)} → ${_fmtShort(_to!)}';
+    }
+    if (_from != null) return 'من ${_fmtShort(_from!)}';
+    if (_to != null) return 'حتى ${_fmtShort(_to!)}';
+    return 'تاريخ';
+  }
+
+  String _fmtShort(DateTime d) =>
+      '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}';
+
+  Widget _buildGroupedList(List<Transaction> items) {
+    final groups = <DateTime, List<Transaction>>{};
+    for (final tx in items) {
+      final day = _dayOf(tx.createdAt);
+      (groups[day] ??= []).add(tx);
+    }
+    final days = groups.keys.toList()..sort((a, b) => b.compareTo(a));
+
+    return ListView.builder(
+      padding: const EdgeInsets.only(bottom: NetSpacing.xxl),
+      itemCount: days.length,
+      itemBuilder: (context, i) {
+        final day = days[i];
+        final txs = groups[day]!;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _DayHeader(day: day, count: txs.length),
+            ...txs.map(
+              (tx) => _TxCard(
+                tx: tx,
+                label: _typeLabel(tx.type),
+                inflow: _isInflow(tx.type),
+                amountLabel: _fmtSigned(
+                  tx.amount.minorUnits,
+                  positive: _isInflow(tx.type),
+                ),
+                onTap: () => NetTransactionDetailSheet.show(context, tx),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
 }
 
-class _FilterPill extends StatelessWidget {
-  const _FilterPill({
-    required this.selected,
+class _FilterChip extends StatelessWidget {
+  const _FilterChip({
     required this.label,
-    required this.icon,
-    required this.onTap,
+    this.selected = true,
+    this.onDeleted,
   });
 
-  final bool selected;
   final String label;
-  final IconData icon;
-  final VoidCallback onTap;
+  final bool selected;
+  final VoidCallback? onDeleted;
 
   @override
   Widget build(BuildContext context) {
     final palette = KayanPalette.of(context);
-    return Padding(
-      padding: const EdgeInsetsDirectional.only(start: NetSpacing.sm),
-      child: FilterChip(
-        selected: selected,
-        showCheckmark: false,
-        avatar: Icon(
-          icon,
-          size: 14,
-          color: selected ? Colors.white : palette.textSecondary,
+    return FilterChip(
+      selected: selected,
+      label: Text(
+        label,
+        style: TextStyle(
+          fontFamily: NetTypography.family,
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
         ),
-        label: Text(
-          label,
-          style: TextStyle(
-            fontFamily: NetTypography.family,
-            fontSize: 12,
-            fontWeight: FontWeight.w700,
-            color: selected ? Colors.white : palette.textPrimary,
-          ),
-        ),
-        selectedColor: palette.primary,
-        backgroundColor: palette.surface,
-        side: BorderSide(color: selected ? palette.primary : palette.border),
-        onSelected: (_) => onTap(),
       ),
+      onSelected: (_) {},
+      onDeleted: onDeleted,
+      deleteIcon: onDeleted == null
+          ? null
+          : Icon(Icons.close_rounded, size: 16, color: palette.textSecondary),
+      selectedColor: palette.primary.withValues(
+        alpha: palette.isDark ? 0.22 : 0.12,
+      ),
+      checkmarkColor: palette.primary,
+      side: BorderSide(color: palette.border),
+      visualDensity: VisualDensity.compact,
     );
   }
 }
 
 class _DayHeader extends StatelessWidget {
-  const _DayHeader({required this.label});
+  const _DayHeader({required this.day, required this.count});
 
-  final String label;
+  final DateTime day;
+  final int count;
 
   @override
   Widget build(BuildContext context) {
     final palette = KayanPalette.of(context);
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final yesterday = today.subtract(const Duration(days: 1));
+    String label;
+    if (day == today) {
+      label = 'اليوم';
+    } else if (day == yesterday) {
+      label = 'أمس';
+    } else {
+      label =
+          '${day.day.toString().padLeft(2, '0')}/${day.month.toString().padLeft(2, '0')}/${day.year}';
+    }
     return Padding(
       padding: const EdgeInsets.fromLTRB(
-        NetSpacing.xl,
+        NetSpacing.lg,
         NetSpacing.md,
-        NetSpacing.xl,
-        NetSpacing.xs,
+        NetSpacing.lg,
+        NetSpacing.sm,
       ),
       child: Row(
         children: [
-          Icon(Icons.calendar_today_rounded, size: 13, color: palette.textSecondary),
-          const SizedBox(width: NetSpacing.sm),
           Text(
             label,
             style: TextStyle(
               fontFamily: NetTypography.family,
-              fontSize: 12,
               fontWeight: FontWeight.w800,
+              fontSize: 13,
               color: palette.textSecondary,
             ),
           ),
           const SizedBox(width: NetSpacing.sm),
-          Expanded(child: Divider(height: 1, color: palette.border)),
+          Text(
+            '($count)',
+            style: TextStyle(
+              fontFamily: NetTypography.family,
+              fontSize: 12,
+              color: palette.textTertiary,
+            ),
+          ),
         ],
       ),
     );
@@ -513,7 +513,7 @@ class _AdvancedOptionsSheet extends StatelessWidget {
           NetSpacing.lg,
           NetSpacing.md,
           NetSpacing.lg,
-          NetSpacing.xxl,
+          NetSpacing.xl,
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -526,9 +526,9 @@ class _AdvancedOptionsSheet extends StatelessWidget {
                 borderRadius: NetRadii.pillAll,
               ),
             ),
-            const SizedBox(height: NetSpacing.lg),
+            const SizedBox(height: NetSpacing.md),
             Text(
-              'خيارات التصفية المتقدمة',
+              'خيارات متقدمة',
               style: TextStyle(
                 fontFamily: NetTypography.family,
                 fontWeight: FontWeight.w800,
@@ -536,12 +536,13 @@ class _AdvancedOptionsSheet extends StatelessWidget {
                 color: palette.textPrimary,
               ),
             ),
-            const SizedBox(height: NetSpacing.sm),
+            const SizedBox(height: NetSpacing.md),
             ListTile(
-              leading: Icon(Icons.calendar_month_rounded, color: palette.primary),
+              leading: Icon(Icons.date_range_rounded, color: palette.primary),
               title: const Text('نطاق التاريخ'),
               subtitle: Text(
-                hasDateRange ? 'نطاق محدد حاليًا' : 'اختر تاريخ البداية والنهاية',
+                hasDateRange ? 'مفعّل' : 'اختر من / إلى',
+                style: TextStyle(fontFamily: NetTypography.family),
               ),
               onTap: () => Navigator.pop(context, 'date'),
             ),
@@ -549,7 +550,8 @@ class _AdvancedOptionsSheet extends StatelessWidget {
               leading: Icon(Icons.category_rounded, color: palette.primary),
               title: const Text('نوع العملية'),
               subtitle: Text(
-                typeCount == 0 ? 'كل الأنواع' : '$typeCount أنواع محددة',
+                typeCount == 0 ? 'الكل' : '$typeCount محدد',
+                style: TextStyle(fontFamily: NetTypography.family),
               ),
               onTap: () => Navigator.pop(context, 'type'),
             ),
@@ -566,127 +568,90 @@ class _SummaryBar extends StatelessWidget {
     required this.netLabel,
     required this.depositLabel,
     required this.outflowLabel,
+    required this.netPositive,
   });
 
   final int count;
   final String netLabel;
   final String depositLabel;
   final String outflowLabel;
+  final bool netPositive;
 
   @override
   Widget build(BuildContext context) {
     final palette = KayanPalette.of(context);
     final net = context.netColors;
-    final isPositive = netLabel.startsWith('+');
-
-    return NetSurfaceCard(
-      padding: NetSpacing.cardTight,
-      child: Column(
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: NetSpacing.sm,
-                  vertical: NetSpacing.xs,
-                ),
-                decoration: BoxDecoration(
-                  color: palette.surfaceVariant,
-                  borderRadius: NetRadii.xsAll,
-                ),
-                child: Text(
-                  '$count عملية',
-                  style: TextStyle(
-                    fontFamily: NetTypography.family,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 12,
-                    color: palette.textSecondary,
-                  ),
-                ),
-              ),
-              const Spacer(),
-              Text(
-                'الصافي: $netLabel',
-                style: TextStyle(
-                  fontFamily: NetTypography.family,
-                  fontWeight: FontWeight.w800,
-                  fontSize: 13,
-                  color: isPositive ? net.available : net.error,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: NetSpacing.sm),
-          Row(
-            children: [
-              Expanded(
-                child: _SummaryTile(
-                  icon: Icons.arrow_downward_rounded,
-                  label: 'إجمالي الإيداعات',
-                  value: depositLabel,
-                  color: net.available,
-                  background: net.availableContainer,
-                ),
-              ),
-              const SizedBox(width: NetSpacing.sm),
-              Expanded(
-                child: _SummaryTile(
-                  icon: Icons.arrow_upward_rounded,
-                  label: 'إجمالي الصرف / الخصم',
-                  value: outflowLabel,
-                  color: net.error,
-                  background: net.errorContainer,
-                ),
-              ),
-            ],
-          ),
-        ],
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        NetSpacing.lg,
+        0,
+        NetSpacing.lg,
+        NetSpacing.sm,
+      ),
+      child: NetSurfaceCard(
+        padding: const EdgeInsets.symmetric(
+          horizontal: NetSpacing.md,
+          vertical: NetSpacing.sm,
+        ),
+        child: Row(
+          children: [
+            _SumCell(label: 'العدد', value: '$count'),
+            _vDiv(palette),
+            _SumCell(
+              label: 'صافي',
+              value: netLabel,
+              color: netPositive ? net.available : net.error,
+            ),
+            _vDiv(palette),
+            _SumCell(
+              label: 'إجمالي الإيداعات',
+              value: depositLabel,
+              color: net.available,
+            ),
+            _vDiv(palette),
+            _SumCell(
+              label: 'إجمالي الصرف',
+              value: outflowLabel,
+              color: net.error,
+            ),
+          ],
+        ),
       ),
     );
   }
+
+  Widget _vDiv(KayanPalette palette) => Container(
+        width: 1,
+        height: 28,
+        margin: const EdgeInsets.symmetric(horizontal: 4),
+        color: palette.border,
+      );
 }
 
-class _SummaryTile extends StatelessWidget {
-  const _SummaryTile({
-    required this.icon,
-    required this.label,
-    required this.value,
-    required this.color,
-    required this.background,
-  });
+class _SumCell extends StatelessWidget {
+  const _SumCell({required this.label, required this.value, this.color});
 
-  final IconData icon;
   final String label;
   final String value;
-  final Color color;
-  final Color background;
+  final Color? color;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(NetSpacing.sm),
-      decoration: BoxDecoration(
-        color: background,
-        borderRadius: NetRadii.xsAll,
-      ),
+    final palette = KayanPalette.of(context);
+    return Expanded(
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Icon(icon, size: 14, color: color),
-              const SizedBox(width: NetSpacing.xs),
-              Text(
-                label,
-                style: TextStyle(
-                  fontFamily: NetTypography.family,
-                  fontSize: 11,
-                  color: color,
-                ),
-              ),
-            ],
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontFamily: NetTypography.family,
+              fontSize: 10,
+              color: palette.textTertiary,
+            ),
           ),
-          const SizedBox(height: NetSpacing.xxs),
+          const SizedBox(height: 2),
           Text(
             value,
             maxLines: 1,
@@ -694,8 +659,8 @@ class _SummaryTile extends StatelessWidget {
             style: TextStyle(
               fontFamily: NetTypography.family,
               fontWeight: FontWeight.w800,
-              fontSize: 14,
-              color: color,
+              fontSize: 12,
+              color: color ?? palette.textPrimary,
             ),
           ),
         ],
@@ -787,50 +752,23 @@ class _TxCard extends StatelessWidget {
                       color: palette.textSecondary,
                     ),
                   ),
-                Row(
-                  children: [
-                    Icon(Icons.schedule_rounded, size: 12, color: palette.textTertiary),
-                    const SizedBox(width: NetSpacing.xs),
-                    Text(
-                      _fmtTime(tx.createdAt),
-                      style: TextStyle(
-                        fontFamily: NetTypography.family,
-                        fontSize: 11,
-                        color: palette.textTertiary,
-                      ),
-                    ),
-                    const SizedBox(width: NetSpacing.sm),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: NetSpacing.sm,
-                        vertical: 1,
-                      ),
-                      decoration: BoxDecoration(
-                        color: palette.surfaceVariant,
-                        borderRadius: NetRadii.pillAll,
-                      ),
-                      child: Text(
-                        transactionStatusLabel(tx.status),
-                        style: TextStyle(
-                          fontFamily: NetTypography.family,
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700,
-                          color: palette.textSecondary,
-                        ),
-                      ),
-                    ),
-                  ],
+                Text(
+                  _fmtTime(tx.createdAt),
+                  style: TextStyle(
+                    fontFamily: NetTypography.family,
+                    fontSize: 11,
+                    color: palette.textTertiary,
+                  ),
                 ),
               ],
             ),
           ),
-          const SizedBox(width: NetSpacing.sm),
           Text(
-            '${inflow ? '+' : '-'}$amountLabel',
+            amountLabel,
             style: TextStyle(
               fontFamily: NetTypography.family,
               fontWeight: FontWeight.w800,
-              fontSize: 13.5,
+              fontSize: 14,
               color: color,
             ),
           ),
@@ -840,9 +778,9 @@ class _TxCard extends StatelessWidget {
   }
 }
 
-/// ورقة تصفية الأنواع — مجموعات مطابقة للفيديو.
 class _TypeFilterSheet extends StatefulWidget {
   const _TypeFilterSheet({required this.initial});
+
   final Set<TransactionType> initial;
 
   @override
@@ -851,32 +789,6 @@ class _TypeFilterSheet extends StatefulWidget {
 
 class _TypeFilterSheetState extends State<_TypeFilterSheet> {
   late Set<TransactionType> _selected;
-
-  static const _groups = <String, List<TransactionType>>{
-    'تعديل رصيد وتسوية': [
-      TransactionType.deposit,
-      TransactionType.settlement,
-    ],
-    'عمليات صرف الكروت والمكافآت': [
-      TransactionType.sale,
-      TransactionType.advance,
-      TransactionType.reward,
-    ],
-    'الخصومات والتسويات والإلغاء': [
-      TransactionType.withdrawal,
-      TransactionType.reversal,
-    ],
-  };
-
-  static String _label(TransactionType t) => switch (t) {
-        TransactionType.deposit => 'تعديل رصيد - إضافة (+)',
-        TransactionType.settlement => 'تسوية حساب نقطة بيع',
-        TransactionType.sale => 'صرف كرت آلي / يدوي',
-        TransactionType.advance => 'صرف كرت سلفني (آجل)',
-        TransactionType.reward => 'صرف كرت مكافأة ترويجية',
-        TransactionType.withdrawal => 'تعديل رصيد - خصم (-) / خصم يدوي',
-        TransactionType.reversal => 'إلغاء مكافأة ترويجية (عكس)',
-      };
 
   @override
   void initState() {
@@ -954,23 +866,6 @@ class _TypeFilterSheetState extends State<_TypeFilterSheet> {
                   ],
                 ),
               ),
-              Padding(
-                padding: NetSpacing.pageH,
-                child: Row(
-                  children: [
-                    TextButton(
-                      onPressed: () => setState(
-                        () => _selected = TransactionType.values.toSet(),
-                      ),
-                      child: const Text('تحديد الكل'),
-                    ),
-                    TextButton(
-                      onPressed: () => setState(() => _selected.clear()),
-                      child: const Text('إلغاء التحديد'),
-                    ),
-                  ],
-                ),
-              ),
               Expanded(
                 child: ListView(
                   controller: scroll,
@@ -981,55 +876,38 @@ class _TypeFilterSheetState extends State<_TypeFilterSheet> {
                     NetSpacing.lg,
                   ),
                   children: [
-                    for (final entry in _groups.entries) ...[
-                      Padding(
-                        padding: const EdgeInsets.only(
-                          top: NetSpacing.md,
-                          bottom: NetSpacing.sm,
-                        ),
-                        child: Text(
-                          entry.key,
-                          style: TextStyle(
-                            fontFamily: NetTypography.family,
-                            fontWeight: FontWeight.w800,
-                            fontSize: 13,
-                            color: palette.primary,
+                    Wrap(
+                      spacing: NetSpacing.sm,
+                      runSpacing: NetSpacing.sm,
+                      children: TransactionType.values.map((t) {
+                        final selected = _selected.contains(t);
+                        return FilterChip(
+                          selected: selected,
+                          label: Text(
+                            _TransactionsLogScreenState._typeLabel(t),
+                            style: TextStyle(
+                              fontFamily: NetTypography.family,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
-                        ),
-                      ),
-                      Wrap(
-                        spacing: NetSpacing.sm,
-                        runSpacing: NetSpacing.sm,
-                        children: entry.value.map((t) {
-                          final on = _selected.contains(t);
-                          return FilterChip(
-                            selected: on,
-                            showCheckmark: false,
-                            label: Text(
-                              _label(t),
-                              style: TextStyle(
-                                fontFamily: NetTypography.family,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color: on ? Colors.white : palette.textPrimary,
-                              ),
-                            ),
-                            selectedColor: palette.primary,
-                            backgroundColor: palette.surfaceVariant,
-                            side: BorderSide(
-                              color: on ? palette.primary : palette.border,
-                            ),
-                            onSelected: (v) => setState(() {
+                          onSelected: (v) {
+                            setState(() {
                               if (v) {
                                 _selected.add(t);
                               } else {
                                 _selected.remove(t);
                               }
-                            }),
-                          );
-                        }).toList(),
-                      ),
-                    ],
+                            });
+                          },
+                          selectedColor: palette.primary.withValues(
+                            alpha: palette.isDark ? 0.22 : 0.12,
+                          ),
+                          checkmarkColor: palette.primary,
+                          side: BorderSide(color: palette.border),
+                        );
+                      }).toList(),
+                    ),
                   ],
                 ),
               ),
@@ -1037,16 +915,16 @@ class _TypeFilterSheetState extends State<_TypeFilterSheet> {
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(
                     NetSpacing.lg,
-                    0,
+                    NetSpacing.sm,
                     NetSpacing.lg,
-                    NetSpacing.lg,
+                    NetSpacing.md,
                   ),
                   child: Row(
                     children: [
                       Expanded(
                         child: OutlinedButton(
-                          onPressed: () => Navigator.pop(context, widget.initial),
-                          child: const Text('إلغاء'),
+                          onPressed: () => setState(() => _selected.clear()),
+                          child: const Text('مسح'),
                         ),
                       ),
                       const SizedBox(width: NetSpacing.md),
@@ -1071,6 +949,7 @@ class _TypeFilterSheetState extends State<_TypeFilterSheet> {
 
 class _DateFilterSheet extends StatefulWidget {
   const _DateFilterSheet({this.from, this.to});
+
   final DateTime? from;
   final DateTime? to;
 
@@ -1089,27 +968,24 @@ class _DateFilterSheetState extends State<_DateFilterSheet> {
     _to = widget.to;
   }
 
-  Future<void> _pick(bool isFrom) async {
-    final now = DateTime.now();
+  Future<void> _pickFrom() async {
     final picked = await showDatePicker(
       context: context,
-      initialDate: (isFrom ? _from : _to) ?? now,
-      firstDate: DateTime(now.year - 5),
-      lastDate: now,
+      initialDate: _from ?? DateTime.now(),
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now().add(const Duration(days: 1)),
     );
-    if (picked == null) return;
-    setState(() {
-      if (isFrom) {
-        _from = picked;
-      } else {
-        _to = picked;
-      }
-    });
+    if (picked != null) setState(() => _from = picked);
   }
 
-  String _fmt(DateTime? d) {
-    if (d == null) return '—';
-    return '${d.year}/${d.month.toString().padLeft(2, '0')}/${d.day.toString().padLeft(2, '0')}';
+  Future<void> _pickTo() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _to ?? DateTime.now(),
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now().add(const Duration(days: 1)),
+    );
+    if (picked != null) setState(() => _to = picked);
   }
 
   @override
@@ -1126,7 +1002,7 @@ class _DateFilterSheetState extends State<_DateFilterSheet> {
           NetSpacing.lg,
           NetSpacing.md,
           NetSpacing.lg,
-          NetSpacing.xxl,
+          NetSpacing.xl,
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -1139,7 +1015,7 @@ class _DateFilterSheetState extends State<_DateFilterSheet> {
                 borderRadius: NetRadii.pillAll,
               ),
             ),
-            const SizedBox(height: NetSpacing.lg),
+            const SizedBox(height: NetSpacing.md),
             Text(
               'نطاق التاريخ',
               style: TextStyle(
@@ -1150,36 +1026,41 @@ class _DateFilterSheetState extends State<_DateFilterSheet> {
               ),
             ),
             const SizedBox(height: NetSpacing.lg),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () => _pick(true),
-                    child: Text('من: ${_fmt(_from)}'),
-                  ),
-                ),
-                const SizedBox(width: NetSpacing.sm),
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () => _pick(false),
-                    child: Text('إلى: ${_fmt(_to)}'),
-                  ),
-                ),
-              ],
+            ListTile(
+              leading: Icon(Icons.calendar_today_rounded, color: palette.primary),
+              title: const Text('من تاريخ'),
+              subtitle: Text(
+                _from == null
+                    ? 'غير محدد'
+                    : '${_from!.day}/${_from!.month}/${_from!.year}',
+                style: TextStyle(fontFamily: NetTypography.family),
+              ),
+              onTap: _pickFrom,
             ),
-            const SizedBox(height: NetSpacing.lg),
+            ListTile(
+              leading: Icon(Icons.event_rounded, color: palette.primary),
+              title: const Text('إلى تاريخ'),
+              subtitle: Text(
+                _to == null
+                    ? 'غير محدد'
+                    : '${_to!.day}/${_to!.month}/${_to!.year}',
+                style: TextStyle(fontFamily: NetTypography.family),
+              ),
+              onTap: _pickTo,
+            ),
+            const SizedBox(height: NetSpacing.md),
             Row(
               children: [
                 Expanded(
                   child: OutlinedButton(
-                    onPressed: () => Navigator.pop(context, {
-                      'from': null,
-                      'to': null,
+                    onPressed: () => setState(() {
+                      _from = null;
+                      _to = null;
                     }),
                     child: const Text('مسح'),
                   ),
                 ),
-                const SizedBox(width: NetSpacing.sm),
+                const SizedBox(width: NetSpacing.md),
                 Expanded(
                   flex: 2,
                   child: FilledButton(

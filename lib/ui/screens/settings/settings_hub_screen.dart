@@ -15,11 +15,12 @@ import '../../widgets/settings/settings_cards.dart';
 import '../../widgets/settings/settings_section_header.dart';
 import '../system_check_screen.dart';
 import '../wallets_pos_screen.dart';
+import 'backup_restore_screen.dart';
 import 'clean_logs_screen.dart';
+import 'deep_clean_screen.dart';
 import 'export_ledger_screen.dart';
 import 'low_stock_settings_screen.dart';
 import 'network_name_settings_screen.dart';
-import 'about_screen.dart';
 import 'renew_subscription_screen.dart';
 import 'outbound_message_templates_screen.dart';
 import 'sim_settings_screen.dart';
@@ -49,7 +50,6 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
   bool _autoPosSettlement = SettingDefaults.autoPosSettlementEnabled;
   int _lowStock = SettingDefaults.lowStockThreshold;
 
-  // ── Settings search (presentation only) ──
   final _searchCtrl = TextEditingController();
   String _query = '';
 
@@ -59,9 +59,11 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
   static const _themeKeywords = 'الوضع الداكن المظهر الثيم ليلي فاتح';
   static const _walletsKeywords =
       'المحافظ نقاط البيع محاكاة القوالب قوالب التحويل طلبات الرصيد ملخص العمليات اليومي التسوية التلقائية';
-  static const _maintenanceKeywords = 'تنظيف السجلات تصدير السجل الأرشفة';
+  static const _maintenanceKeywords = 'تنظيف السجلات تصدير السجل الأرشفة نسخ احتياطي استعادة بيانات تنظيف عميق فهارس';
   static const _aboutKeywords =
-      'عن التطبيق الإصدار المبرمج الحقوق كيان سوفت الموقع ${AppBrand.name}';
+      'عن التطبيق المبرمج الحقوق كيان سوفت إصدار كروتك ${AppBrand.latinName} الموقع';
+
+  bool _sectionVisible(String keywords) {
     final q = _query.trim().toLowerCase();
     if (q.isEmpty) return true;
     return keywords.toLowerCase().contains(q);
@@ -94,17 +96,10 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
       child: TextField(
         controller: _searchCtrl,
         onChanged: (v) => setState(() => _query = v),
-        style: TextStyle(
-          fontFamily: NetTypography.family,
-          color: palette.textPrimary,
-        ),
+        style: TextStyle(fontFamily: NetTypography.family, color: palette.textPrimary),
         decoration: InputDecoration(
           hintText: 'ابحث في الإعدادات...',
-          hintStyle: TextStyle(
-            fontFamily: NetTypography.family,
-            color: palette.textTertiary,
-            fontSize: 13,
-          ),
+          hintStyle: TextStyle(fontFamily: NetTypography.family, color: palette.textTertiary, fontSize: 13),
           prefixIcon: Icon(Icons.search_rounded, color: palette.textTertiary),
           suffixIcon: _query.isEmpty
               ? null
@@ -118,24 +113,14 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
                 ),
           filled: true,
           fillColor: palette.surface,
-          border: OutlineInputBorder(
-            borderRadius: NetRadii.pillAll,
-            borderSide: BorderSide.none,
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: NetRadii.pillAll,
-            borderSide: BorderSide(color: palette.border),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: NetRadii.pillAll,
-            borderSide: BorderSide(color: palette.primary, width: 1.4),
-          ),
+          border: OutlineInputBorder(borderRadius: NetRadii.pillAll, borderSide: BorderSide.none),
+          enabledBorder: OutlineInputBorder(borderRadius: NetRadii.pillAll, borderSide: BorderSide(color: palette.border)),
+          focusedBorder: OutlineInputBorder(borderRadius: NetRadii.pillAll, borderSide: BorderSide(color: palette.primary, width: 1.4)),
         ),
       ),
     );
   }
 
-  /// Operational readiness at a glance (derived from the settings already loaded).
   Widget _readinessCard(BuildContext context) {
     final net = context.netColors;
     final palette = KayanPalette.of(context);
@@ -145,40 +130,21 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
       (label: 'سلفني', ok: _salafni, icon: Icons.card_giftcard_rounded),
       (label: 'المظهر الداكن', ok: _darkMode, icon: Icons.dark_mode_rounded),
     ];
-
     return NetSurfaceCard(
       margin: const EdgeInsets.only(top: NetSpacing.sm, bottom: NetSpacing.sm),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
-            children: [
-              Icon(
-                Icons.health_and_safety_rounded,
-                size: NetSizes.iconSm,
-                color: palette.primary,
-              ),
-              const SizedBox(width: NetSpacing.sm),
-              Expanded(
-                child: Text(
-                  'جاهزية التشغيل',
-                  style: TextStyle(
-                    fontFamily: NetTypography.family,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 14.5,
-                    color: palette.textPrimary,
-                  ),
-                ),
-              ),
-              TextButton.icon(
-                onPressed: () => Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const SystemCheckScreen()),
-                ),
-                icon: const Icon(Icons.chevron_left_rounded, size: NetSizes.iconSm),
-                label: const Text('فحص النظام'),
-              ),
-            ],
-          ),
+          Row(children: [
+            Icon(Icons.health_and_safety_rounded, size: NetSizes.iconSm, color: palette.primary),
+            const SizedBox(width: NetSpacing.sm),
+            Expanded(child: Text('جاهزية التشغيل', style: TextStyle(fontFamily: NetTypography.family, fontWeight: FontWeight.w800, fontSize: 14.5, color: palette.textPrimary))),
+            TextButton.icon(
+              onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SystemCheckScreen())),
+              icon: const Icon(Icons.chevron_left_rounded, size: NetSizes.iconSm),
+              label: const Text('فحص النظام'),
+            ),
+          ]),
           const SizedBox(height: NetSpacing.sm),
           Wrap(
             spacing: NetSpacing.sm,
@@ -186,34 +152,13 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
             children: [
               for (final pill in pills)
                 Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: NetSpacing.sm,
-                    vertical: NetSpacing.xs,
-                  ),
-                  decoration: BoxDecoration(
-                    color: pill.ok ? net.successContainer : palette.surfaceVariant,
-                    borderRadius: NetRadii.pillAll,
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        pill.ok ? Icons.check_circle_rounded : Icons.cancel_outlined,
-                        size: 13,
-                        color: pill.ok ? net.success : palette.textSecondary,
-                      ),
-                      const SizedBox(width: NetSpacing.xs),
-                      Text(
-                        pill.label,
-                        style: TextStyle(
-                          fontFamily: NetTypography.family,
-                          fontSize: 11.5,
-                          fontWeight: FontWeight.w700,
-                          color: pill.ok ? net.success : palette.textSecondary,
-                        ),
-                      ),
-                    ],
-                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: NetSpacing.sm, vertical: NetSpacing.xs),
+                  decoration: BoxDecoration(color: pill.ok ? net.successContainer : palette.surfaceVariant, borderRadius: NetRadii.pillAll),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    Icon(pill.ok ? Icons.check_circle_rounded : Icons.cancel_outlined, size: 13, color: pill.ok ? net.success : palette.textSecondary),
+                    const SizedBox(width: NetSpacing.xs),
+                    Text(pill.label, style: TextStyle(fontFamily: NetTypography.family, fontSize: 11.5, fontWeight: FontWeight.w700, color: pill.ok ? net.success : palette.textSecondary)),
+                  ]),
                 ),
             ],
           ),
@@ -224,13 +169,11 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
 
   Future<void> _load() async {
     final c = AppScope.of(context);
-
     Future<String?> read(String key) async {
       final r = await c.settings.find(key);
       if (r is Success<AppSetting?>) return r.value?.value;
       return null;
     }
-
     final name = await read(SettingKeys.networkName);
     final auto = await read(SettingKeys.smsAutoProcessingEnabled);
     final cat = await read(SettingKeys.processCategoryAmountsOnly);
@@ -241,7 +184,6 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
     final daily = await read(SettingKeys.dailyOpsSummaryAutoSend);
     final settle = await read(SettingKeys.autoPosSettlementEnabled);
     final low = await read(SettingKeys.lowStockThreshold);
-
     if (!mounted) return;
     setState(() {
       _loading = false;
@@ -250,30 +192,22 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
       _categoryOnly = SettingBool.read(cat, defaultValue: SettingDefaults.processCategoryAmountsOnly);
       _oldMsgs = SettingBool.read(old, defaultValue: SettingDefaults.processOldMessagesOnResume);
       _salafni = SettingBool.read(sal, defaultValue: SettingDefaults.salafniEnabled);
-      _interventionAlert = SettingBool.read(
-        intervention,
-        defaultValue: SettingDefaults.pendingAttentionAlertEnabled,
-      );
+      _interventionAlert = SettingBool.read(intervention, defaultValue: SettingDefaults.pendingAttentionAlertEnabled);
       _dailySummary = SettingBool.read(daily, defaultValue: SettingDefaults.dailyOpsSummaryAutoSend);
       _autoPosSettlement = SettingBool.read(settle, defaultValue: SettingDefaults.autoPosSettlementEnabled);
       _lowStock = SettingInt.read(low, defaultValue: SettingDefaults.lowStockThreshold);
       final t = (theme ?? SettingDefaults.themeMode).toLowerCase();
-      // `system` القديمة تُقرأ كوضع نهاري ثابت (توافق خلفي).
       _themeMode = NetThemeSchedule.parse(theme);
       _darkMode = t == 'dark';
-      c.themeModeNotifier.value =
-          NetThemeSchedule.resolve(_themeMode, c.clock.now());
+      c.themeModeNotifier.value = NetThemeSchedule.resolve(_themeMode, c.clock.now());
     });
   }
 
   Future<void> _saveBool(String key, bool value) async {
     final c = AppScope.of(context);
-    await c.settings.save(
-      AppSetting(key: key, value: value.toString(), updatedAt: c.clock.now()),
-    );
+    await c.settings.save(AppSetting(key: key, value: value.toString(), updatedAt: c.clock.now()));
   }
 
-  /// يفتح ورقة اختيار المظهر (نهار / ليل / تلقائي) ويطبّق الاختيار فورًا.
   Future<void> _openThemePicker() async {
     final picked = await ThemeModeSheet.show(context, _themeMode);
     if (!mounted || picked == null || picked == _themeMode) return;
@@ -284,13 +218,7 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
       _darkMode = picked == NetThemeMode.dark;
     });
     c.themeModeNotifier.value = NetThemeSchedule.resolve(picked, c.clock.now());
-    final result = await c.settings.save(
-      AppSetting(
-        key: SettingKeys.themeMode,
-        value: NetThemeSchedule.encode(picked),
-        updatedAt: c.clock.now(),
-      ),
-    );
+    final result = await c.settings.save(AppSetting(key: SettingKeys.themeMode, value: NetThemeSchedule.encode(picked), updatedAt: c.clock.now()));
     if (!mounted) return;
     if (result is Failure) {
       setState(() {
@@ -298,30 +226,19 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
         _darkMode = previous == NetThemeMode.dark;
       });
       c.themeModeNotifier.value = NetThemeSchedule.resolve(previous, c.clock.now());
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'تعذر حفظ إعداد المظهر',
-            style: TextStyle(fontFamily: 'Tajawal'),
-          ),
-        ),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تعذر حفظ إعداد المظهر', style: TextStyle(fontFamily: 'Tajawal'))));
       return;
     }
     NetThemeRawCache.raw = NetThemeSchedule.encode(picked);
   }
 
   Future<void> _openNetworkName() async {
-    await Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const NetworkNameSettingsScreen()),
-    );
+    await Navigator.of(context).push(MaterialPageRoute(builder: (_) => const NetworkNameSettingsScreen()));
     if (mounted) await _load();
   }
 
   Future<void> _openLowStock() async {
-    await Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const LowStockSettingsScreen()),
-    );
+    await Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LowStockSettingsScreen()));
     if (mounted) await _load();
   }
 
@@ -342,279 +259,73 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
                         onRefresh: _load,
                         color: KayanPalette.of(context).primary,
                         child: SettingsSearchScope(
-                            query: _query,
-                            child: ListView(
-                          padding: const EdgeInsets.fromLTRB(16, 4, 16, 40),
-                          children: [
-                            _readinessCard(context),
-                            _searchField(context),
-                            if (!_anySectionVisible)
-                              Padding(
-                                padding: const EdgeInsets.symmetric(vertical: 24),
-                                child: AsyncEmptyView(
-                                  message: 'لا توجد إعدادات مطابقة للبحث',
-                                  icon: Icons.search_off_rounded,
-                                  hint: 'جرّب كلمة أخرى مثل: الرسائل، المظهر، المحافظ',
-                                  compact: true,
+                          query: _query,
+                          child: ListView(
+                            padding: const EdgeInsets.fromLTRB(16, 4, 16, 40),
+                            children: [
+                              _readinessCard(context),
+                              _searchField(context),
+                              if (!_anySectionVisible)
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(vertical: 24),
+                                  child: AsyncEmptyView(message: 'لا توجد إعدادات مطابقة للبحث', icon: Icons.search_off_rounded, hint: 'جرّب كلمة أخرى مثل: الرسائل، المظهر، المحافظ', compact: true),
                                 ),
-                              ),
-                            if (_sectionVisible(_systemKeywords))
-                              const SettingsSectionHeader(title: 'النظام'),
-                            if (_sectionVisible(_systemKeywords))
-                              SettingsGroupCard(
-                              children: [
-                                SettingsGroupNavRow(
-                                  icon: Icons.badge_outlined,
-                                  title: 'اسم الشبكة',
-                                  subtitle: 'الاسم الحالي: $_networkName',
-                                  searchText: 'النظام الشبكة الاسم',
-                                  onTap: _openNetworkName,
-                                ),
-                                SettingsGroupSwitchRow(
-                                  icon: Icons.check_circle_outline,
-                                  title: 'المعالجة التلقائية للرسائل',
-                                  subtitle:
-                                      'الخدمة تعمل — يتم استقبال ومعالجة الرسائل تلقائياً',
-                                  value: _autoSms,
-                                  onChanged: (v) async {
-                                    setState(() => _autoSms = v);
-                                    await _saveBool(SettingKeys.smsAutoProcessingEnabled, v);
-                                  },
-                                ),
-                                SettingsGroupSwitchRow(
-                                  icon: Icons.filter_alt_outlined,
-                                  title: 'معالجة مبالغ الفئات فقط',
-                                  subtitle:
-                                      'عند التفعيل، سيتم فقط معالجة رسائل المحافظ التي تطابق مبالغ الفئات المعرفة في النظام',
-                                  value: _categoryOnly,
-                                  onChanged: (v) async {
-                                    setState(() => _categoryOnly = v);
-                                    await _saveBool(SettingKeys.processCategoryAmountsOnly, v);
-                                  },
-                                ),
-                                SettingsGroupSwitchRow(
-                                  icon: Icons.history,
-                                  title: 'معالجة الرسائل القديمة (عند التوقف)',
-                                  subtitle:
-                                      'تفعيل لمعالجة رسائل SMS التي وصلت أثناء إغلاق أو توقف التطبيق عند فتحه مجدداً',
-                                  value: _oldMsgs,
-                                  onChanged: (v) async {
-                                    setState(() => _oldMsgs = v);
-                                    await _saveBool(SettingKeys.processOldMessagesOnResume, v);
-                                  },
-                                ),
-                                SettingsGroupSwitchRow(
-                                  icon: Icons.notifications_active_outlined,
-                                  title: 'تنبيه العمليات التي تتطلب تدخلاً',
-                                  subtitle: _interventionAlert
-                                      ? 'يصدر تنبيه صوتي عند وجود عملية معلّقة تحتاج تدخلاً يدوياً'
-                                      : 'التنبيه الصوتي معطّل — الرسائل المعلّقة تظهر في القائمة دون صوت',
-                                  value: _interventionAlert,
-                                  onChanged: (v) async {
-                                    setState(() => _interventionAlert = v);
-                                    await _saveBool(SettingKeys.pendingAttentionAlertEnabled, v);
-                                  },
-                                ),
-                                SettingsGroupSwitchRow(
-                                  icon: Icons.card_giftcard_outlined,
-                                  title: 'خدمة سلفني',
-                                  subtitle: _salafni
-                                      ? 'الميزة مفعلة — يتم استقبال ومعالجة طلبات سلفني آلياً للعملاء المؤهلين'
-                                      : 'الميزة معطلة',
-                                  value: _salafni,
-                                  onChanged: (v) async {
-                                    setState(() => _salafni = v);
-                                    await _saveBool(SettingKeys.salafniEnabled, v);
-                                  },
-                                ),
-                                SettingsGroupNavRow(
-                                  icon: Icons.message_outlined,
-                                  title: 'قوالب رسائل العملاء والعروض والنظام',
-                                  subtitle: 'صيغ SMS الجاهزة للعملاء والعروض ونقاط البيع — قابلة للتعديل',
-                                  onTap: () => Navigator.of(context).push(
-                                    MaterialPageRoute(
-                                      builder: (_) => const OutboundMessageTemplatesScreen(),
-                                    ),
-                                  ),
-                                ),
-                                SettingsGroupNavRow(
-                                  icon: Icons.notifications_active_outlined,
-                                  title: 'تنبيهات انخفاض مخزون الكروت',
-                                  subtitle:
-                                      'سيتم تنبيهك عندما يقل مخزون أي فئة عن $_lowStock كرت',
-                                  onTap: _openLowStock,
-                                ),
-                                SettingsGroupNavRow(
-                                  icon: Icons.sim_card_outlined,
-                                  title: 'إعدادات شرائح الاتصال',
-                                  subtitle: 'إدارة شرائح القراءة والإرسال و Failover',
-                                  onTap: () => Navigator.of(context).push(
-                                    MaterialPageRoute(builder: (_) => const SimSettingsScreen()),
-                                  ),
-                                ),
-                                SettingsGroupNavRow(
-                                  icon: Icons.health_and_safety_outlined,
-                                  title: 'فحص النظام',
-                                  subtitle:
-                                      'التحقق من جاهزية أذونات النظام والتشغيل في الخلفية',
-                                  onTap: () => Navigator.of(context).push(
-                                    MaterialPageRoute(builder: (_) => const SystemCheckScreen()),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            if (_sectionVisible(_licenseKeywords))
-                              const SettingsSectionHeader(title: 'الترخيص'),
-                            if (_sectionVisible(_licenseKeywords))
-                            SettingsGroupCard(
-                              children: [
-                                SettingsGroupNavRow(
-                                  icon: Icons.workspace_premium_outlined,
-                                  title: 'تجديد الاشتراك',
-                                  subtitle:
-                                      'تجديد الترخيص أو إضافة رصيد SMS قبل انتهاء الباقة الحالية',
-                                  onTap: () => Navigator.of(context).push(
-                                    MaterialPageRoute(
-                                      builder: (_) => const RenewSubscriptionScreen(),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            if (_sectionVisible(_themeKeywords))
-                              const SettingsSectionHeader(title: 'المظهر'),
-                            if (_sectionVisible(_themeKeywords))
-                            SettingsGroupCard(
-                              children: [
-                                SettingsGroupNavRow(
-                                  icon: _darkMode
-                                      ? Icons.dark_mode_rounded
-                                      : Icons.light_mode_rounded,
-                                  title: 'المظهر',
-                                  subtitle:
-                                      '${NetThemeSchedule.label(_themeMode)} — ${NetThemeSchedule.hint(_themeMode)}',
-                                  searchText:
-                                      'المظهر الثيم ليلي فاتح نهاري تلقائي دارك ${NetThemeSchedule.label(_themeMode)}',
-                                  onTap: _openThemePicker,
-                                ),
-                              ],
-                            ),
-                            if (_sectionVisible(_walletsKeywords))
-                              const SettingsSectionHeader(title: 'إعدادات المحافظ ونقاط البيع'),
-                            if (_sectionVisible(_walletsKeywords))
-                            SettingsGroupCard(
-                              children: [
-                                SettingsGroupNavRow(
-                                  icon: Icons.account_balance_wallet_outlined,
-                                  title: 'إدارة المحافظ ونقاط البيع',
-                                  subtitle: 'إضافة وتعديل المحافظ ونقاط البيع',
-                                  searchText: 'إعدادات المحافظ ونقاط البيع',
-                                  onTap: () => Navigator.of(context).push(
-                                    MaterialPageRoute(builder: (_) => const WalletsPosScreen()),
-                                  ),
-                                ),
-                                SettingsGroupNavRow(
-                                  icon: Icons.science_outlined,
-                                  title: 'محاكاة القوالب',
-                                  subtitle: 'اختبار ومحاكاة استخراج بيانات الرسائل',
-                                  searchText: 'المحاكاة محاكاة القوالب اختبار',
-                                  onTap: () => Navigator.of(context).push(
-                                    MaterialPageRoute(
-                                      builder: (_) => const TemplateSimulationScreen(),
-                                    ),
-                                  ),
-                                ),
-                                SettingsGroupNavRow(
-                                  icon: Icons.receipt_long_outlined,
-                                  title: 'قوالب التحويل',
-                                  subtitle: 'إدارة قوالب رسائل المحافظ وترتيبها',
-                                  onTap: () => Navigator.of(context).push(
-                                    MaterialPageRoute(builder: (_) => const TemplatesScreen()),
-                                  ),
-                                ),
-                                SettingsGroupNavRow(
-                                  icon: Icons.notifications_outlined,
-                                  title: 'إعدادات طلبات الرصيد لنقاط البيع',
-                                  subtitle: 'تخصيص رمز طلب الرصيد، الحد اليومي وقالب الرد',
-                                  onTap: () => Navigator.of(context).push(
-                                    MaterialPageRoute(
-                                      builder: (_) => const WalletNotificationSettingsScreen(),
-                                    ),
-                                  ),
-                                ),
-                                SettingsGroupSwitchRow(
-                                  icon: Icons.summarize_outlined,
-                                  title: 'إرسال ملخص العمليات اليومي تلقائياً',
-                                  subtitle: _dailySummary
-                                      ? 'ميزة رسالة الملخص اليومي مفعلة'
-                                      : 'ميزة رسالة الملخص اليومي معطلة',
-                                  value: _dailySummary,
-                                  onChanged: (v) async {
-                                    setState(() => _dailySummary = v);
-                                    await _saveBool(SettingKeys.dailyOpsSummaryAutoSend, v);
-                                  },
-                                ),
-                                SettingsGroupSwitchRow(
-                                  icon: Icons.account_balance_outlined,
-                                  title: 'التسوية التلقائية لنقاط البيع',
-                                  subtitle: _autoPosSettlement
-                                      ? 'التسوية التلقائية مفعلة'
-                                      : 'التسوية التلقائية معطلة',
-                                  value: _autoPosSettlement,
-                                  onChanged: (v) async {
-                                    setState(() => _autoPosSettlement = v);
-                                    await _saveBool(SettingKeys.autoPosSettlementEnabled, v);
-                                  },
-                                ),
-                              ],
-                            ),
-                            if (_sectionVisible(_maintenanceKeywords))
-                              const SettingsSectionHeader(title: 'الصيانة'),
-                            if (_sectionVisible(_maintenanceKeywords))
-                            SettingsGroupCard(
-                              children: [
-                                SettingsGroupNavRow(
-                                  icon: Icons.cleaning_services_outlined,
-                                  title: 'تنظيف السجلات',
-                                  searchText: 'الصيانة حذف السجلات',
-                                  subtitle: 'حذف الرسائل القديمة والسجلات حسب سياسة الاحتفاظ',
-                                  onTap: () => Navigator.of(context).push(
-                                    MaterialPageRoute(builder: (_) => const CleanLogsScreen()),
-                                  ),
-                                ),
-                                SettingsGroupNavRow(
-                                  icon: Icons.file_download_outlined,
-                                  title: 'تصدير السجل',
-                                  subtitle: 'تصدير سجل العمليات للتحليل أو الأرشفة',
-                                  searchText: 'الصيانة الأرشفة أرشيف',
-                                  onTap: () => Navigator.of(context).push(
-                                    MaterialPageRoute(builder: (_) => const ExportLedgerScreen()),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            if (_sectionVisible(_aboutKeywords))
-                              const SettingsSectionHeader(title: 'عن التطبيق'),
-                            if (_sectionVisible(_aboutKeywords))
-                              SettingsGroupCard(
-                                children: [
+                              if (_sectionVisible(_systemKeywords)) const SettingsSectionHeader(title: 'النظام'),
+                              if (_sectionVisible(_systemKeywords))
+                                SettingsGroupCard(children: [
+                                  SettingsGroupNavRow(icon: Icons.badge_outlined, title: 'اسم الشبكة', subtitle: 'الاسم الحالي: '+_networkName, searchText: 'النظام الشبكة الاسم', onTap: _openNetworkName),
+                                  SettingsGroupSwitchRow(icon: Icons.check_circle_outline, title: 'المعالجة التلقائية للرسائل', subtitle: 'الخدمة تعمل — يتم استقبال ومعالجة الرسائل تلقائياً', value: _autoSms, onChanged: (v) async { setState(() => _autoSms = v); await _saveBool(SettingKeys.smsAutoProcessingEnabled, v); }),
+                                  SettingsGroupSwitchRow(icon: Icons.filter_alt_outlined, title: 'معالجة مبالغ الفئات فقط', subtitle: 'عند التفعيل، سيتم فقط معالجة رسائل المحافظ التي تطابق مبالغ الفئات المعرفة في النظام', value: _categoryOnly, onChanged: (v) async { setState(() => _categoryOnly = v); await _saveBool(SettingKeys.processCategoryAmountsOnly, v); }),
+                                  SettingsGroupSwitchRow(icon: Icons.history, title: 'معالجة الرسائل القديمة (عند التوقف)', subtitle: 'تفعيل لمعالجة رسائل SMS التي وصلت أثناء إغلاق أو توقف التطبيق عند فتحه مجدداً', value: _oldMsgs, onChanged: (v) async { setState(() => _oldMsgs = v); await _saveBool(SettingKeys.processOldMessagesOnResume, v); }),
+                                  SettingsGroupSwitchRow(icon: Icons.notifications_active_outlined, title: 'تنبيه العمليات التي تتطلب تدخلاً', subtitle: _interventionAlert ? 'يصدر تنبيه صوتي عند وجود عملية معلّقة تحتاج تدخلاً يدوياً' : 'التنبيه الصوتي معطّل — الرسائل المعلّقة تظهر في القائمة دون صوت', value: _interventionAlert, onChanged: (v) async { setState(() => _interventionAlert = v); await _saveBool(SettingKeys.pendingAttentionAlertEnabled, v); }),
+                                  SettingsGroupSwitchRow(icon: Icons.card_giftcard_outlined, title: 'خدمة سلفني', subtitle: _salafni ? 'الميزة مفعلة — يتم استقبال ومعالجة طلبات سلفني آلياً للعملاء المؤهلين' : 'الميزة متوقفة', value: _salafni, onChanged: (v) async { setState(() => _salafni = v); await _saveBool(SettingKeys.salafniEnabled, v); }),
+                                  SettingsGroupNavRow(icon: Icons.message_outlined, title: 'قوالب رسائل العملاء والعروض والنظام وسلفني', subtitle: 'صيغ SMS للعملاء والعروض ونقاط البيع وسلفني — مطابقة الفيديو', onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const OutboundMessageTemplatesScreen()))),
+                                  if (_salafni)
+                                    SettingsGroupNavRow(icon: Icons.sms_outlined, title: 'قوالب رسائل سلفني', subtitle: 'قبول / رفض / سداد — ضمن شاشة القوالب الموحدة', onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const OutboundMessageTemplatesScreen(initialTab: 3)))),
+                                  SettingsGroupNavRow(icon: Icons.notifications_active_outlined, title: 'تنبيهات انخفاض مخزون الكروت', subtitle: 'سيتم تنبيهك عندما يقل مخزون أي فئة عن '+_lowStock.toString()+' كرت', onTap: _openLowStock),
+                                  SettingsGroupNavRow(icon: Icons.sim_card_outlined, title: 'شرائح الاتصال', subtitle: 'اختيار شريحة الاستقبال والإرسال', onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SimSettingsScreen()))),
+                                  SettingsGroupNavRow(icon: Icons.health_and_safety_outlined, title: 'فحص النظام', subtitle: 'جاهزية الأذونات والخدمات', onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SystemCheckScreen()))),
+                                ]),
+                              if (_sectionVisible(_licenseKeywords)) const SettingsSectionHeader(title: 'الاشتراك'),
+                              if (_sectionVisible(_licenseKeywords))
+                                SettingsGroupCard(children: [
+                                  SettingsGroupNavRow(icon: Icons.workspace_premium_outlined, title: 'تجديد الاشتراك', subtitle: 'الباقة ورصيد الرسائل', onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const RenewSubscriptionScreen()))),
+                                ]),
+                              if (_sectionVisible(_themeKeywords)) const SettingsSectionHeader(title: 'المظهر'),
+                              if (_sectionVisible(_themeKeywords))
+                                SettingsGroupCard(children: [
+                                  SettingsGroupNavRow(icon: Icons.dark_mode_outlined, title: 'الوضع الداكن', subtitle: NetThemeSchedule.label(_themeMode), onTap: _openThemePicker),
+                                ]),
+                              if (_sectionVisible(_walletsKeywords)) const SettingsSectionHeader(title: 'المحافظ ونقاط البيع'),
+                              if (_sectionVisible(_walletsKeywords))
+                                SettingsGroupCard(children: [
+                                  SettingsGroupNavRow(icon: Icons.account_balance_wallet_outlined, title: 'إدارة المحافظ ونقاط البيع', subtitle: 'تفعيل وإعداد المصادر', onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const WalletsPosScreen()))),
+                                  SettingsGroupNavRow(icon: Icons.science_outlined, title: 'محاكاة القوالب', subtitle: 'اختبار مطابقة الرسائل', onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const TemplateSimulationScreen()))),
+                                  SettingsGroupNavRow(icon: Icons.rule_outlined, title: 'قوالب التحويل', subtitle: 'إدارة قوالب تحليل SMS', onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const TemplatesScreen()))),
+                                  SettingsGroupNavRow(icon: Icons.notifications_none_outlined, title: 'طلبات رصيد نقاط البيع', subtitle: 'كود الطلب والحد اليومي', onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const WalletNotificationSettingsScreen()))),
+                                  SettingsGroupSwitchRow(icon: Icons.summarize_outlined, title: 'ملخص العمليات اليومي', subtitle: 'إرسال ملخص تلقائي', value: _dailySummary, onChanged: (v) async { setState(() => _dailySummary = v); await _saveBool(SettingKeys.dailyOpsSummaryAutoSend, v); }),
+                                  SettingsGroupSwitchRow(icon: Icons.handshake_outlined, title: 'التسوية التلقائية', subtitle: 'تسوية حسابات نقاط البيع', value: _autoPosSettlement, onChanged: (v) async { setState(() => _autoPosSettlement = v); await _saveBool(SettingKeys.autoPosSettlementEnabled, v); }),
+                                ]),
+                              if (_sectionVisible(_maintenanceKeywords)) const SettingsSectionHeader(title: 'الصيانة'),
+                              if (_sectionVisible(_maintenanceKeywords))
+                                SettingsGroupCard(children: [
                                   SettingsGroupNavRow(
-                                    icon: Icons.info_outline_rounded,
-                                    title: 'عن التطبيق',
-                                    subtitle:
-                                        'الإصدار ${AppBrand.version} · ${AppBrand.developer} · ${AppBrand.company}',
-                                    searchText:
-                                        'عن التطبيق الإصدار المبرمج الحقوق الموقع',
-                                    onTap: () => Navigator.of(context).push(
-                                      MaterialPageRoute(
-                                        builder: (_) => const AboutScreen(),
-                                      ),
-                                    ),
+                                    icon: Icons.backup_outlined,
+                                    title: 'النسخ الاحتياطي واستعادة البيانات',
+                                    subtitle: 'إعدادات + قاعدة البيانات كاملة · تشفير AES-GCM (.krt)',
+                                    searchText: 'نسخ احتياطي استعادة بيانات',
+                                    onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const BackupRestoreScreen())),
                                   ),
-                                ],
-                              ),
-                          ],
-                        )),
+                                  SettingsGroupNavRow(icon: Icons.cleaning_services_outlined, title: 'تنظيف السجلات', subtitle: 'حذف السجلات القديمة', onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const CleanLogsScreen()))),
+                                  SettingsGroupNavRow(icon: Icons.auto_fix_high_outlined, title: 'تنظيف عميق للنظام', subtitle: 'إعادة بناء فهارس قاعدة البيانات لتحرير المساحة وتسريع الأداء', onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const DeepCleanScreen()))),
+                                  SettingsGroupNavRow(icon: Icons.upload_file_outlined, title: 'تصدير السجل', subtitle: 'تصدير دفتر الحسابات', onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ExportLedgerScreen()))),
+                                ]),
+                              if (_sectionVisible(_aboutKeywords)) const SettingsSectionHeader(title: 'عن التطبيق'),
+                              if (_sectionVisible(_aboutKeywords))
+                                const _AboutAppCard(),
+                            ],
+                          ),
+                        ),
                       ),
               ),
             ],
@@ -628,46 +339,120 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
 class _Header extends StatelessWidget {
   const _Header({required this.onBack});
   final VoidCallback onBack;
-
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final palette = KayanPalette.of(context);
     return Padding(
       padding: const EdgeInsets.fromLTRB(8, 8, 8, 4),
       child: Row(
         children: [
-          IconButton(
-            tooltip: 'رجوع',
-            onPressed: onBack,
-            icon: Icon(Icons.arrow_forward_rounded, color: scheme.onSurface),
-          ),
+          IconButton(onPressed: onBack, icon: Icon(Icons.arrow_forward_rounded, color: palette.textPrimary)),
           Expanded(
             child: Column(
-              mainAxisSize: MainAxisSize.min,
               children: [
-                Text(
-                  'الإعدادات',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontFamily: NetTypography.family,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w800,
-                    color: scheme.onSurface,
-                  ),
-                ),
-                Text(
-                  'تحكم كامل بالشبكة والتشغيل والمظهر',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontFamily: NetTypography.family,
-                    fontSize: 11.5,
-                    color: scheme.onSurfaceVariant,
-                  ),
-                ),
+                Text('الإعدادات', textAlign: TextAlign.center, style: TextStyle(fontFamily: NetTypography.family, fontWeight: FontWeight.w800, fontSize: 18, color: palette.textPrimary)),
+                Text('إعدادات النظام والتشغيل', textAlign: TextAlign.center, style: TextStyle(fontFamily: NetTypography.family, fontSize: 12, color: palette.textSecondary)),
               ],
             ),
           ),
           const SizedBox(width: 48),
+        ],
+      ),
+    );
+  }
+}
+
+class _AboutAppCard extends StatelessWidget {
+  const _AboutAppCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = KayanPalette.of(context);
+    return NetSurfaceCard(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.fromLTRB(16, 20, 16, 20),
+      child: Column(
+        children: [
+          // أيقونة التطبيق الفعلية فوق اسم التطبيق.
+          Container(
+            width: 72,
+            height: 72,
+            clipBehavior: Clip.antiAlias,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: palette.primary.withValues(alpha: 0.25)),
+            ),
+            child: Image.asset(
+              'assets/icon/app_icon.png',
+              fit: BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) => Container(
+                alignment: Alignment.center,
+                color: palette.primary.withValues(alpha: 0.12),
+                child: Icon(Icons.wifi_tethering_rounded, color: palette.primary, size: 30),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            AppBrand.name,
+            style: TextStyle(
+              fontFamily: NetTypography.family,
+              fontWeight: FontWeight.w800,
+              fontSize: 17,
+              color: palette.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'الإصدار ${AppBrand.version} (${AppBrand.latinName})',
+            style: TextStyle(
+              fontFamily: NetTypography.family,
+              fontWeight: FontWeight.w600,
+              fontSize: 14,
+              color: palette.textSecondary,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'المبرمج: ${AppBrand.developer}',
+            style: TextStyle(
+              fontFamily: NetTypography.family,
+              fontWeight: FontWeight.w600,
+              fontSize: 14,
+              color: palette.textSecondary,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            AppBrand.company,
+            style: TextStyle(
+              fontFamily: NetTypography.family,
+              fontWeight: FontWeight.w600,
+              fontSize: 14,
+              color: palette.textSecondary,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'ت: ${AppBrand.phone}',
+            style: TextStyle(
+              fontFamily: NetTypography.family,
+              fontWeight: FontWeight.w600,
+              fontSize: 14,
+              color: palette.textSecondary,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'جميع الحقوق محفوظة © ${AppBrand.company}\n${AppBrand.website}',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontFamily: NetTypography.family,
+              fontWeight: FontWeight.w500,
+              fontSize: 13,
+              color: palette.textSecondary,
+            ),
+          ),
         ],
       ),
     );

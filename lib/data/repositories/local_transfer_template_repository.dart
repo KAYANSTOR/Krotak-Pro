@@ -5,12 +5,15 @@ final class LocalTransferTemplateRepository implements TransferTemplateRepositor
 
   final AppDatabase database;
 
+  static const _columns = 'id, name, pattern, is_active, '
+      'wallet_id, priority, sample_body, sender_code, identifier_kind, '
+      'pos_id, sender_name_label, note_label, require_reference';
+
   @override
   Future<Result<List<domain.TransferTemplate>>> listAll() async {
     try {
       final rows = await database.customSelect(
-        'SELECT id, name, pattern, is_active, '
-        'wallet_id, priority, sample_body, sender_code, identifier_kind '
+        'SELECT $_columns '
         'FROM transfer_templates ORDER BY priority ASC, name ASC',
         readsFrom: {database.transferTemplates},
       ).get();
@@ -25,14 +28,12 @@ final class LocalTransferTemplateRepository implements TransferTemplateRepositor
     try {
       final rows = walletId == null
           ? await database.customSelect(
-              'SELECT id, name, pattern, is_active, '
-              'wallet_id, priority, sample_body, sender_code, identifier_kind '
+              'SELECT $_columns '
               'FROM transfer_templates ORDER BY priority ASC, name ASC',
               readsFrom: {database.transferTemplates},
             ).get()
           : await database.customSelect(
-              'SELECT id, name, pattern, is_active, '
-              'wallet_id, priority, sample_body, sender_code, identifier_kind '
+              'SELECT $_columns '
               'FROM transfer_templates WHERE wallet_id = ? '
               'ORDER BY priority ASC, name ASC',
               variables: [Variable.withString(walletId)],
@@ -48,8 +49,7 @@ final class LocalTransferTemplateRepository implements TransferTemplateRepositor
   Future<Result<domain.TransferTemplate?>> findById(String id) async {
     try {
       final rows = await database.customSelect(
-        'SELECT id, name, pattern, is_active, '
-        'wallet_id, priority, sample_body, sender_code, identifier_kind '
+        'SELECT $_columns '
         'FROM transfer_templates WHERE id = ? LIMIT 1',
         variables: [Variable.withString(id)],
         readsFrom: {database.transferTemplates},
@@ -74,7 +74,8 @@ final class LocalTransferTemplateRepository implements TransferTemplateRepositor
           );
       await database.customStatement(
         'UPDATE transfer_templates SET '
-        'wallet_id = ?, priority = ?, sample_body = ?, sender_code = ?, identifier_kind = ? '
+        'wallet_id = ?, priority = ?, sample_body = ?, sender_code = ?, identifier_kind = ?, '
+        'pos_id = ?, sender_name_label = ?, note_label = ?, require_reference = ? '
         'WHERE id = ?',
         [
           template.walletId,
@@ -82,6 +83,10 @@ final class LocalTransferTemplateRepository implements TransferTemplateRepositor
           template.sampleBody,
           template.senderCode,
           template.identifierKind.name,
+          template.posId,
+          template.senderNameLabel,
+          template.noteLabel,
+          template.requireReference ? 1 : 0,
           template.id,
         ],
       );
@@ -115,10 +120,17 @@ final class LocalTransferTemplateRepository implements TransferTemplateRepositor
       pattern: row.read<String>('pattern'),
       isActive: row.read<bool>('is_active'),
       walletId: row.read<String?>('wallet_id'),
+      posId: row.read<String?>('pos_id'),
       priority: row.read<int?>('priority') ?? 0,
       sampleBody: row.read<String?>('sample_body'),
       senderCode: row.read<String?>('sender_code'),
       identifierKind: kind,
+      senderNameLabel: row.read<String?>('sender_name_label'),
+      noteLabel: row.read<String?>('note_label'),
+      // Raw ALTER-ed column (not a declared BoolColumn) — read as int and
+      // coerce manually rather than `read<bool>()`, and default to the
+      // safe value (required) for any pre-existing row where it's null.
+      requireReference: (row.read<int?>('require_reference') ?? 1) != 0,
     );
   }
 }

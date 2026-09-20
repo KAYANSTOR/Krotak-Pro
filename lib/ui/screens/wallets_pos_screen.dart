@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 
 import '../../core/result.dart';
+import '../../domain/entities/customer.dart';
 import '../../domain/entities/pos_account.dart';
 import '../../domain/entities/wallet.dart';
+import '../../domain/services/default_pos_templates_seeder.dart';
+import '../../platform/contact_picker_bridge.dart';
 import '../app_scope.dart';
 import '../theme/kayan_colors.dart';
 import '../theme/kayan_palette.dart';
@@ -449,6 +452,350 @@ class _WalletsPosScreenState extends State<WalletsPosScreen>
     );
   }
 
+  /// نموذج "نقطة بيع جديدة" / "تعديل نقطة البيع" — مطابق لحقول الفيديو:
+  /// رقم الجوال، الاسم، سقف الدين المسموح به، ونسبة نقطة البيع.
+  Future<void> _editPos(PointOfSale? existing) async {
+    final acc = existing != null ? _posAccounts[existing.id] : null;
+    final phoneCtrl = TextEditingController(
+      text: acc?.notifyPhone ??
+          (acc != null && acc.identifiers.isNotEmpty ? acc.identifiers.first : ''),
+    );
+    final nameCtrl = TextEditingController(text: existing?.name ?? '');
+    final creditCtrl = TextEditingController(
+      text: existing == null
+          ? '50000'
+          : (acc?.creditLimitMinorUnits != null
+              ? (acc!.creditLimitMinorUnits! ~/ 100).toString()
+              : ''),
+    );
+    var mode = acc?.percentageMode ?? PosPercentageMode.defaultCategory;
+    final contactPicker = ContactPickerBridge();
+    var picking = false;
+
+    final ok = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return Directionality(
+          textDirection: TextDirection.rtl,
+          child: StatefulBuilder(
+            builder: (ctx, setLocal) {
+              final inset = MediaQuery.viewInsetsOf(ctx).bottom;
+              return Padding(
+                padding: EdgeInsets.only(bottom: inset),
+                child: Builder(builder: (sheetCtx) {
+                  final sheetPalette = KayanPalette.of(sheetCtx);
+                  return Container(
+                  decoration: BoxDecoration(
+                    color: sheetPalette.surface,
+                    borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                  ),
+                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Center(
+                          child: Container(
+                            width: 40,
+                            height: 4,
+                            decoration: BoxDecoration(
+                              color: sheetPalette.border,
+                              borderRadius: BorderRadius.circular(2),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          existing == null ? 'نقطة بيع جديدة' : 'تعديل نقطة البيع',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontFamily: 'Tajawal',
+                            fontWeight: FontWeight.w800,
+                            fontSize: 18,
+                            color: sheetPalette.primary,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        TextField(
+                          controller: phoneCtrl,
+                          keyboardType: TextInputType.phone,
+                          decoration: InputDecoration(
+                            labelText: 'رقم جوال نقطة البيع',
+                            prefixIcon: IconButton(
+                              icon: picking
+                                  ? const SizedBox(
+                                      width: 18,
+                                      height: 18,
+                                      child: CircularProgressIndicator(strokeWidth: 2),
+                                    )
+                                  : const Icon(Icons.contact_phone_outlined),
+                              onPressed: picking
+                                  ? null
+                                  : () async {
+                                      setLocal(() => picking = true);
+                                      final phone = await contactPicker.pickPhone();
+                                      if (!mounted) return;
+                                      setLocal(() => picking = false);
+                                      if (phone != null && phone.isNotEmpty) {
+                                        phoneCtrl.text = phone;
+                                        phoneCtrl.selection =
+                                            TextSelection.collapsed(offset: phone.length);
+                                      }
+                                    },
+                            ),
+                            border: const OutlineInputBorder(),
+                          ),
+                          style: const TextStyle(fontFamily: 'Tajawal'),
+                        ),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: nameCtrl,
+                          decoration: const InputDecoration(
+                            labelText: 'إسم نقطة البيع',
+                            border: OutlineInputBorder(),
+                          ),
+                          style: const TextStyle(fontFamily: 'Tajawal'),
+                        ),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: creditCtrl,
+                          keyboardType: TextInputType.number,
+                          decoration: const InputDecoration(
+                            labelText: 'سقف الدين المسموح به (ر.ي) *',
+                            border: OutlineInputBorder(),
+                          ),
+                          style: const TextStyle(fontFamily: 'Tajawal'),
+                        ),
+                        const SizedBox(height: 16),
+                        const Text('نسبة نقطة البيع',
+                            style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w700)),
+                        RadioListTile<PosPercentageMode>(
+                          contentPadding: EdgeInsets.zero,
+                          value: PosPercentageMode.defaultCategory,
+                          groupValue: mode,
+                          activeColor: const Color(0xFF0F766E),
+                          onChanged: (v) => setLocal(() => mode = v!),
+                          title: Text(
+                            existing == null
+                                ? 'إنشاء نقطة البيع بالنسبة الافتراضية'
+                                : 'النسبة الافتراضية لفئات الكروت',
+                            style: const TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w700),
+                          ),
+                          subtitle: const Text(
+                            'استخدام نسب الخصم المحددة مسبقاً لكل فئة كروت',
+                            style: TextStyle(fontFamily: 'Tajawal', fontSize: 12),
+                          ),
+                        ),
+                        RadioListTile<PosPercentageMode>(
+                          contentPadding: EdgeInsets.zero,
+                          value: PosPercentageMode.zero,
+                          groupValue: mode,
+                          activeColor: const Color(0xFF0F766E),
+                          onChanged: (v) => setLocal(() => mode = v!),
+                          title: Text(
+                            existing == null
+                                ? 'إنشاء نقطة البيع بنسبة صفر'
+                                : 'نسبة صفر لجميع الفئات (0%)',
+                            style: const TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w700),
+                          ),
+                          subtitle: const Text(
+                            'تطبيق نسبة خصم 0% لجميع فئات الكروت لنقطة البيع هذه',
+                            style: TextStyle(fontFamily: 'Tajawal', fontSize: 12),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: TextButton(
+                                onPressed: () => Navigator.pop(ctx, false),
+                                child: const Text('إلغاء', style: TextStyle(fontFamily: 'Tajawal')),
+                              ),
+                            ),
+                            Expanded(
+                              flex: 2,
+                              child: FilledButton(
+                                style: FilledButton.styleFrom(
+                                  backgroundColor: const Color(0xFF0F766E),
+                                  minimumSize: const Size.fromHeight(48),
+                                ),
+                                onPressed: () {
+                                  if (nameCtrl.text.trim().isEmpty) return;
+                                  if (phoneCtrl.text.trim().isEmpty) return;
+                                  Navigator.pop(ctx, true);
+                                },
+                                child: Text(
+                                  existing == null ? 'إنشاء' : 'حفظ',
+                                  style: const TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w700),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+                }),
+              );
+            },
+          ),
+        );
+      },
+    );
+
+    if (ok != true || !mounted) {
+      phoneCtrl.dispose();
+      nameCtrl.dispose();
+      creditCtrl.dispose();
+      return;
+    }
+
+    final name = nameCtrl.text.trim();
+    final phone = phoneCtrl.text.trim();
+    final creditRial = int.tryParse(creditCtrl.text.trim()) ?? 0;
+    final creditMinor = creditRial > 0 ? creditRial * 100 : null;
+    phoneCtrl.dispose();
+    nameCtrl.dispose();
+    creditCtrl.dispose();
+
+    final c = AppScope.of(context);
+
+    if (existing == null) {
+      final customerResult = await c.customerService.create(
+        displayName: name,
+        identifierType: CustomerIdentifierType.phoneNumber,
+        identifierValue: phone,
+      );
+      if (customerResult is Failure) {
+        if (mounted) _snack((customerResult as Failure).error.message);
+        return;
+      }
+      final customer = (customerResult as Success<Customer>).value;
+
+      final posResult = await c.posCatalog.savePointOfSale(name: name);
+      if (posResult is Failure) {
+        if (mounted) _snack((posResult as Failure).error.message);
+        return;
+      }
+      final pos = (posResult as Success<PointOfSale>).value;
+
+      final account = PosAccount(
+        posId: pos.id,
+        customerId: customer.id,
+        name: name,
+        identifiers: [phone],
+        notifyPhone: phone,
+        percentageMode: mode,
+        creditLimitMinorUnits: creditMinor,
+      );
+      final savedAccount = await c.posRegistry.save(account);
+      if (savedAccount is Failure) {
+        if (mounted) _snack((savedAccount as Failure).error.message);
+        return;
+      }
+
+      await DefaultPosTemplatesSeeder(templates: c.transferTemplates)
+          .seedForPos(posId: pos.id, posName: name);
+      await c.reloadTemplates();
+
+      if (!mounted) return;
+      _snack('تم الحفظ — تم إضافة نقطة البيع');
+      await _load();
+
+      if (!mounted) return;
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => TemplatesScreen(posId: pos.id, posName: name),
+        ),
+      );
+      return;
+    }
+
+    final posUpdate = await c.posCatalog.updatePointOfSale(
+      id: existing.id,
+      name: name,
+      status: existing.status,
+    );
+    if (posUpdate is Failure && mounted) {
+      _snack((posUpdate as Failure).error.message);
+    }
+
+    if (acc == null) {
+      await _load();
+      return;
+    }
+    final nextAccount = acc.copyWith(
+      name: name,
+      identifiers: [phone],
+      notifyPhone: phone,
+      percentageMode: mode,
+      creditLimitMinorUnits: creditMinor,
+      clearCreditLimit: creditMinor == null,
+    );
+    final savedAccount = await c.posRegistry.save(nextAccount);
+    if (savedAccount is Failure && mounted) {
+      _snack((savedAccount as Failure).error.message);
+    }
+    await _load();
+  }
+
+  void _posMenu(PointOfSale p) {
+    showModalBottomSheet<void>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.edit_outlined, color: Color(0xFF0F766E)),
+                title: const Text('تعديل', style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w600)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _editPos(p);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.settings_suggest_outlined, color: Color(0xFF0F766E)),
+                title: const Text('إدارة القوالب', style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w600)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => TemplatesScreen(posId: p.id, posName: p.name),
+                    ),
+                  );
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.delete_outline, color: Color(0xFFDC2626)),
+                title: const Text('حذف', style: TextStyle(fontFamily: 'Tajawal', color: Color(0xFFDC2626))),
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  final r = await AppScope.of(context).posCatalog.updatePointOfSale(
+                        id: p.id,
+                        name: p.name,
+                        status: PointOfSaleStatus.archived,
+                      );
+                  if (r is Failure && mounted) _snack((r as Failure).error.message);
+                  await _load();
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   void _snack(String msg) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -517,16 +864,21 @@ class _WalletsPosScreenState extends State<WalletsPosScreen>
                       ),
                     ],
                   ),
-        floatingActionButton: FloatingActionButton(
-          backgroundColor: context.kayan.primary,
+        floatingActionButton: FloatingActionButton.extended(
+          backgroundColor: KayanColors.accentPink,
+          shape: const StadiumBorder(),
           onPressed: () {
             if (_tabs.index == 0) {
               _editWallet(null);
             } else {
-              _load();
+              _editPos(null);
             }
           },
-          child: const Icon(Icons.add),
+          icon: const Icon(Icons.add),
+          label: Text(
+            _tabs.index == 0 ? 'إضافة محفظة' : 'إضافة نقطة بيع',
+            style: const TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w700),
+          ),
         ),
       ),
     );
@@ -649,8 +1001,11 @@ class _WalletsPosScreenState extends State<WalletsPosScreen>
   Widget _posList() {
     final items = _filteredPos.where((p) => p.status != PointOfSaleStatus.archived).toList();
     if (items.isEmpty) {
-      return const Center(
-          child: Text('لا توجد نقاط بيع', style: TextStyle(fontFamily: 'Tajawal')));
+      return AsyncEmptyView(
+        message: 'لا توجد نقاط بيع',
+        actionLabel: 'إضافة نقطة بيع',
+        onAction: () => _editPos(null),
+      );
     }
     return RefreshIndicator(
       onRefresh: _load,
@@ -674,14 +1029,19 @@ class _WalletsPosScreenState extends State<WalletsPosScreen>
                   color: Theme.of(context).colorScheme.outlineVariant,
                 ),
               ),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
               child: Row(
                 children: [
+                  IconButton(
+                    icon: const Icon(Icons.more_vert, size: 20, color: Color(0xFF94A3B8)),
+                    onPressed: () => _posMenu(p),
+                  ),
                   Switch.adaptive(
                     value: active,
                     activeColor: context.kayan.primary,
                     onChanged: _togglingIds.contains(p.id) ? null : (_) => _togglePos(p),
                   ),
+                  const SizedBox(width: 4),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
