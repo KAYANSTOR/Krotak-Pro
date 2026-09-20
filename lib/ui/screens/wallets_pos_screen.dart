@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../core/result.dart';
-import '../../domain/entities/customer.dart';
 import '../../domain/entities/pos_account.dart';
 import '../../domain/entities/wallet.dart';
-import '../../domain/services/default_pos_templates_seeder.dart';
 import '../../platform/contact_picker_bridge.dart';
 import '../app_scope.dart';
 import '../theme/kayan_colors.dart';
@@ -15,7 +13,9 @@ import 'settings/templates_screen.dart';
 
 /// إدارة المحافظ ونقاط البيع — مطابقة فيديو المنتج + مفتاح تفعيل فعّال.
 class WalletsPosScreen extends StatefulWidget {
-  const WalletsPosScreen({super.key});
+  const WalletsPosScreen({super.key, this.focusPosId});
+
+  final String? focusPosId;
 
   @override
   State<WalletsPosScreen> createState() => _WalletsPosScreenState();
@@ -32,6 +32,8 @@ class _WalletsPosScreenState extends State<WalletsPosScreen>
   Set<String> _togglingIds = {};
   List<PointOfSale> _pos = const [];
   Map<String, PosAccount> _posAccounts = const {};
+  bool _showArchivedPos = false;
+  bool _focusHandled = false;
 
   static const _brandColors = <String, Color>{
     'جيب': Color(0xFF0EA5E9),
@@ -43,7 +45,7 @@ class _WalletsPosScreenState extends State<WalletsPosScreen>
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 2, vsync: this);
+    _tabs = TabController(length: 2, vsync: this, initialIndex: widget.focusPosId != null ? 1 : 0);
     _tabs.addListener(() {
       if (!_tabs.indexIsChanging) setState(() {});
     });
@@ -68,31 +70,55 @@ class _WalletsPosScreenState extends State<WalletsPosScreen>
     });
     final c = AppScope.of(context);
     final wallets = await c.walletCatalog.listEnriched();
-    final posResult = await c.pointsOfSale.listAll();
-    final accountsMap = <String, PosAccount>{};
-    if (posResult is Success<List<PointOfSale>>) {
-      for (final p in posResult.value) {
-        final r = await c.posRegistry.findByPosId(p.id);
-        if (r is Success<PosAccount?> && r.value != null) {
-          accountsMap[p.id] = r.value!;
-        }
+    final profiles = await c.posProfiles.listPointOfSaleProfiles(
+      includeArchived: true,
+    );
+
+    if (!mounted) return;
+    if (wallets is Failure) {
+      setState(() {
+        _loading = false;
+        _error = (wallets as Failure).error.message;
+      });
+      return;
+    }
+    if (profiles is Failure) {
+      setState(() {
+        _loading = false;
+        _error = (profiles as Failure).error.message;
+      });
+      return;
+    }
+
+    final profileList = (profiles as Success<List<PointOfSaleProfile>>).value;
+    final nextAccounts = <String, PosAccount>{};
+    for (final profile in profileList) {
+      final account = profile.account;
+      if (account != null) {
+        nextAccounts[profile.pointOfSale.id] = account;
       }
     }
-    if (!mounted) return;
+
     setState(() {
       _loading = false;
-      if (wallets is Failure) {
-        _error = (wallets as Failure).error.message;
-        return;
-      }
-      if (posResult is Failure) {
-        _error = (posResult as Failure).error.message;
-        return;
-      }
       _wallets = (wallets as Success<List<Wallet>>).value;
-      _pos = (posResult as Success<List<PointOfSale>>).value;
-      _posAccounts = accountsMap;
+      _pos = [for (final profile in profileList) profile.pointOfSale];
+      _posAccounts = nextAccounts;
     });
+
+    final focusId = widget.focusPosId;
+    if (!_focusHandled && focusId != null && mounted) {
+      final target = _pos.where((p) => p.id == focusId).firstOrNull;
+      if (target != null) {
+        _focusHandled = true;
+        _showArchivedPos = target.status == PointOfSaleStatus.archived;
+        WidgetsBinding.instance.addPostFrameCallback((_) async {
+          if (!mounted) return;
+          _tabs.animateTo(1);
+          await _editPos(target);
+        });
+      }
+    }
   }
 
   List<Wallet> get _filteredWallets {
@@ -161,53 +187,40 @@ class _WalletsPosScreenState extends State<WalletsPosScreen>
   }
 
   Future<void> _togglePos(PointOfSale pos) async {
-    if (_togglingIds.contains(pos.id)) return;
+    if (_togglingIds.contains(pos.id) ||
+        pos.status == PointOfSaleStatus.archived) return;
+
     final next = pos.status == PointOfSaleStatus.active
         ? PointOfSaleStatus.suspended
         : PointOfSaleStatus.active;
+
     setState(() {
       _togglingIds = {..._togglingIds, pos.id};
-      _pos = [
-        for (final p in _pos)
-          if (p.id == pos.id)
-            PointOfSale(id: p.id, name: p.name, status: next, createdAt: p.createdAt)
-          else
-            p,
-      ];
     });
-    final r = await AppScope.of(context).posCatalog.updatePointOfSale(
-          id: pos.id,
-          name: pos.name,
-          status: next,
-        );
-    if (!mounted) return;
-    if (r is Success) {
-      final acc = _posAccounts[pos.id];
-      if (acc != null) {
-        await AppScope.of(context).posRegistry.save(acc.copyWith(status: next));
-      }
-    }
+
+    final r = await AppScope.of(context).posProfiles.setPointOfSaleStatus(
+      id: pos.id,
+      status: next,
+    );
+
     if (!mounted) return;
     setState(() {
       final s = {..._togglingIds}..remove(pos.id);
       _togglingIds = s;
     });
+
     if (r is Failure) {
-      setState(() {
-        _pos = [
-          for (final p in _pos)
-            if (p.id == pos.id)
-              PointOfSale(id: p.id, name: p.name, status: pos.status, createdAt: p.createdAt)
-            else
-              p,
-        ];
-      });
       _snack((r as Failure).error.message);
+      await _load();
       return;
     }
-    _snack(next == PointOfSaleStatus.active
-        ? 'تم تفعيل نقطة البيع «${pos.name}»'
-        : 'تم إيقاف نقطة البيع «${pos.name}»');
+
+    _snack(
+      next == PointOfSaleStatus.active
+          ? 'تم تفعيل نقطة البيع «${pos.name}»'
+          : 'تم إيقاف نقطة البيع «${pos.name}»',
+    );
+    await _load();
   }
 
   Future<void> _editWallet(Wallet? existing) async {
