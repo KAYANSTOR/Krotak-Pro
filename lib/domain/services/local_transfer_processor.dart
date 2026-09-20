@@ -1276,6 +1276,32 @@ final class _DeliveryState {
       ));
     }
 
+    if (isPosOrder) {
+      final pos = posAccount!;
+      return _deliverPosOrder(
+        transfer: transfer,
+        message: message,
+        posAccount: pos,
+        category: category,
+        items: [
+          for (var index = 0; index < reservations.length; index++)
+            _PosOrderItem(
+              card: reservations[index].card,
+              reservationId: reservations[index].reservationId,
+              saleOperationId: operationId + ':' + index.toString(),
+            ),
+        ],
+        customerDestination: destination,
+        posDestination: pos.notifyPhone?.trim().isNotEmpty == true
+            ? pos.notifyPhone!.trim()
+            : message.sender.trim(),
+        unitCharge: posCharge,
+        operationId: operationId,
+        sender: sender,
+        transactionRepo: transactionRepo,
+      );
+    }
+
     if (lastTransaction == null) {
       const failure = AppFailure(code: 'sale_ledger_missing', message: 'تم إكمال الدفعة لكن سجل العملية غير موجود');
       await _persistTerminalFailure(messageId: message.id, status: MessageProcessingStatus.failed,
