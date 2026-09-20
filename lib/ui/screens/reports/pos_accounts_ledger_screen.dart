@@ -62,6 +62,11 @@ class _SettlementRow {
 enum _SettleMethod { walletTransfer, bankDeposit, cash }
 
 class _PosAccountsLedgerScreenState extends State<PosAccountsLedgerScreen> {
+  Future<void> _openManagement({String? posId}) async {
+    await AppRoutes.openWalletsAndPos(context, focusPosId: posId);
+    if (mounted) await _load();
+  }
+
   bool _loading = true;
   String? _error;
   List<_LedgerRow> _rows = const [];
@@ -187,7 +192,7 @@ class _PosAccountsLedgerScreenState extends State<PosAccountsLedgerScreen> {
           actions: [
             IconButton(
               tooltip: 'إدارة نقاط البيع',
-              onPressed: () => AppRoutes.openWalletsAndPos(context),
+              onPressed: () => _openManagement(),
               icon: const Icon(Icons.settings_outlined),
             ),
           ],
@@ -368,8 +373,7 @@ class _PosAccountsLedgerScreenState extends State<PosAccountsLedgerScreen> {
                                   : 'لا نتائج لهذا البحث',
                               icon: Icons.storefront_outlined,
                               actionLabel: 'إدارة نقاط البيع',
-                              onAction: () =>
-                                  AppRoutes.openWalletsAndPos(context),
+                              onAction: () => _openManagement(),
                             ),
                           )
                         else
@@ -377,10 +381,7 @@ class _PosAccountsLedgerScreenState extends State<PosAccountsLedgerScreen> {
                             (row) => _PosLedgerCard(
                               row: row,
                               onOpen: () => _openLedger(row),
-                              onManage: () => AppRoutes.openWalletsAndPos(
-                                context,
-                                focusPosId: row.pos.id,
-                              ),
+                              onManage: () => _openManagement(posId: row.pos.id),
                             ),
                           ),
                       ],
