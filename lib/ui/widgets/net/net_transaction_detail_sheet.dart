@@ -19,6 +19,9 @@ import 'net_sheet.dart';
 /// تفاصيل العملية — مطابقة تخطيط إطار «بيانات الحركة» في التطبيق المرجعي
 /// (رأس، مبلغ مميّز، صفوف تفاصيل، إجراءا مشاركة/حفظ) مع مسميات NET وألوانها.
 ///
+/// نص الإيصال مُستخرج في [buildTransactionReceiptText] ليكون قابلاً للاختبار
+/// مستقلاً عن الواجهة.
+///
 /// قراءة فقط: لا تعدّل أي حركة أو رصيد، وتقرأ العميل المرتبط لعرض المستفيد.
 class NetTransactionDetailSheet extends StatefulWidget {
   const NetTransactionDetailSheet({super.key, required this.transaction});
@@ -120,18 +123,15 @@ class _NetTransactionDetailSheetState extends State<NetTransactionDetailSheet> {
   }
 
   /// نص الإيصال المستخدم في النسخ والحفظ (عرض فقط، لا يعدّل أي بيانات).
-  String get _receiptText {
-    final lines = <String>[
-      'NET — بيانات الحركة',
-      'المبلغ: $_amountText $_currencyLabel',
-      'رقم مرجع العملية: $_reference',
-      'العملية: ${transactionTypeLabel(_tx.type)}',
-      'الحالة: ${transactionStatusLabel(_tx.status)}',
-      'تاريخ العملية: $_dateLabel',
-      'المستفيد: ${_beneficiaryLabel.replaceAll('\n', ' ')}',
-    ];
-    return lines.join('\n');
-  }
+  String get _receiptText => buildTransactionReceiptText(
+        amountText: _amountText,
+        currencyLabel: _currencyLabel,
+        reference: _reference,
+        typeLabel: transactionTypeLabel(_tx.type),
+        statusLabel: transactionStatusLabel(_tx.status),
+        dateLabel: _dateLabel,
+        beneficiaryLabel: _beneficiaryLabel,
+      );
 
   Future<void> _copyReceipt() async {
     final messenger = ScaffoldMessenger.of(context);
@@ -355,4 +355,27 @@ class _DetailRow extends StatelessWidget {
       ],
     );
   }
+}
+
+/// نص إيصال العملية — دالة نقية قابلة للاختبار بدون واجهة.
+///
+/// تُشترك فيها زرّي «مشاركة» و«حفظ»، فأي تعديل في الصيغة يظهر في الاثنين.
+String buildTransactionReceiptText({
+  required String amountText,
+  required String currencyLabel,
+  required String reference,
+  required String typeLabel,
+  required String statusLabel,
+  required String dateLabel,
+  required String beneficiaryLabel,
+}) {
+  return <String>[
+    'NET — بيانات الحركة',
+    'المبلغ: $amountText $currencyLabel',
+    'رقم مرجع العملية: $reference',
+    'العملية: $typeLabel',
+    'الحالة: $statusLabel',
+    'تاريخ العملية: $dateLabel',
+    'المستفيد: ${beneficiaryLabel.replaceAll('\n', ' ')}',
+  ].join('\n');
 }
