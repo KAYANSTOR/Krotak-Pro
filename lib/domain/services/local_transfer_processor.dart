@@ -629,6 +629,31 @@ final class LocalTransferProcessor implements TransferProcessor {
       return Failure<Transaction>(completed.error);
     }
 
+    if (isPosOrder) {
+      final pos = posAccount!;
+      return _deliverPosOrder(
+        transfer: transfer,
+        message: message,
+        posAccount: pos,
+        category: category,
+        items: <_PosOrderItem>[
+          _PosOrderItem(
+            card: card,
+            reservationId: reservationId,
+            saleOperationId: operationId,
+          ),
+        ],
+        customerDestination: destination,
+        posDestination: pos.notifyPhone?.trim().isNotEmpty == true
+            ? pos.notifyPhone!.trim()
+            : message.sender.trim(),
+        unitCharge: posCharge,
+        operationId: operationId,
+        sender: sender,
+        transactionRepo: transactionRepo,
+      );
+    }
+
     final commitAudit = await auditLogs.append(
       AuditLog(
         id: ids.next('audit'),
@@ -727,6 +752,228 @@ final class LocalTransferProcessor implements TransferProcessor {
     return Success<Transaction>(saleLedger);
   }
 
+
+  Future<Result<Transaction>> _deliverPosOrder({
+    required ParsedTransfer transfer,
+    required IncomingMessage message,
+    required PosAccount posAccount,
+    required CardCategory category,
+    required List<_PosOrderItem> items,
+    required String customerDestination,
+    required String posDestination,
+    required Money unitCharge,
+    required String operationId,
+    required MessageSender sender,
+    required TransactionRepository transactionRepo,
+  }) async {
+    final settingsRepo = settings;
+    if (settingsRepo == null) {
+      const failure = AppFailure(
+        code: 'pos_message_templates_unavailable',
+        message: 'POS outbound message templates are not configured',
+      );
+      await _persistTerminalFailure(
+        messageId: message.id,
+        status: MessageProcessingStatus.failed,
+        action: 'pos_order_message_configuration_failed',
+        error: failure,
+        transfer: transfer,
+        deliveryPhone: customerDestination,
+      );
+      return const Failure<Transaction>(failure);
+    }
+
+    final rendered = await PosOrderMessageRenderer(settings: settingsRepo).render(
+      posAccount: posAccount,
+      customerPhone: customerDestination,
+      posNotificationPhone: posDestination,
+      categoryName: category.name,
+      faceValue: category.faceValue,
+      unitCharge: unitCharge,
+      cards: items.map((e) => e.card).toList(growable: false),
+      quantity: items.length,
+    );
+    if (rendered is Failure<PosOrderMessages>) {
+      await _persistTerminalFailure(
+        messageId: message.id,
+        status: MessageProcessingStatus.failed,
+        action: 'pos_order_message_render_failed',
+        error: rendered.error,
+        transfer: transfer,
+        deliveryPhone: customerDestination,
+      );
+      return Failure<Transaction>(rendered.error);
+    }
+    final messagesBody = (rendered as Success<PosOrderMessages>).value;
+
+    final commitPayload = jsonEncode({
+      'operationId': operationId,
+      'posId': posAccount.posId,
+      'posName': posAccount.name,
+      'customerDestination': customerDestination,
+      'posDestination': posDestination,
+      'categoryId': category.id,
+      'categoryName': category.name,
+      'faceValueMinor': category.faceValue.minorUnits,
+      'currencyCode': category.faceValue.currencyCode,
+      'unitChargeMinor': unitCharge.minorUnits,
+      'totalChargeMinor': messagesBody.totalCharge.minorUnits,
+      'quantity': items.length,
+      'items': [
+        for (final item in items)
+          {
+            'cardId': item.card.id,
+            'reservationId': item.reservationId,
+            'saleOperationId': item.saleOperationId,
+          },
+      ],
+    });
+
+    final commitAudit = await auditLogs.append(
+      AuditLog(
+        id: ids.next('audit'),
+        entityType: 'message',
+        entityId: message.id,
+        action: 'pos_order_committed',
+        occurredAt: clock.now(),
+        payloadJson: commitPayload,
+      ),
+    );
+    if (commitAudit is Failure<void>) {
+      await _persistTerminalFailure(
+        messageId: message.id,
+        status: MessageProcessingStatus.failed,
+        action: 'pos_order_commit_state_persist_failed',
+        error: commitAudit.error,
+        transfer: transfer,
+        deliveryPhone: customerDestination,
+      );
+      return Failure<Transaction>(commitAudit.error);
+    }
+
+    await messages.updateStatus(message.id, MessageProcessingStatus.sending);
+
+    final customerSent = await sender.send(
+      destination: messagesBody.customerDestination,
+      body: messagesBody.customerBody,
+    );
+    if (customerSent is Failure<void>) {
+      await auditLogs.append(
+        AuditLog(
+          id: ids.next('audit'),
+          entityType: 'message',
+          entityId: message.id,
+          action: 'pos_order_customer_sms_failed',
+          occurredAt: clock.now(),
+          payloadJson: jsonEncode({
+            'operationId': operationId,
+            'destination': messagesBody.customerDestination,
+            'error': customerSent.error.code,
+          }),
+        ),
+      );
+      await messages.updateStatus(message.id, MessageProcessingStatus.failed);
+      final ledger = await transactionRepo.findByReference('sale-op:$operationId');
+      if (ledger is Success<Transaction?> && ledger.value != null) {
+        return Success<Transaction>(ledger.value!);
+      }
+      return Failure<Transaction>(customerSent.error);
+    }
+
+    final customerAudit = await auditLogs.append(
+      AuditLog(
+        id: ids.next('audit'),
+        entityType: 'message',
+        entityId: message.id,
+        action: 'pos_order_customer_sms_succeeded',
+        occurredAt: clock.now(),
+        payloadJson: jsonEncode({
+          'operationId': operationId,
+          'destination': messagesBody.customerDestination,
+          'quantity': items.length,
+        }),
+      ),
+    );
+    if (customerAudit is Failure<void>) {
+      await messages.updateStatus(message.id, MessageProcessingStatus.failed);
+      final ledger = await transactionRepo.findByReference('sale-op:$operationId');
+      if (ledger is Success<Transaction?> && ledger.value != null) {
+        return Success<Transaction>(ledger.value!);
+      }
+      return Failure<Transaction>(customerAudit.error);
+    }
+
+    final posSent = await sender.send(
+      destination: messagesBody.posDestination,
+      body: messagesBody.posBody,
+    );
+    if (posSent is Failure<void>) {
+      await auditLogs.append(
+        AuditLog(
+          id: ids.next('audit'),
+          entityType: 'message',
+          entityId: message.id,
+          action: 'pos_order_pos_sms_failed',
+          occurredAt: clock.now(),
+          payloadJson: jsonEncode({
+            'operationId': operationId,
+            'destination': messagesBody.posDestination,
+            'error': posSent.error.code,
+          }),
+        ),
+      );
+      await messages.updateStatus(message.id, MessageProcessingStatus.failed);
+      final ledger = await transactionRepo.findByReference('sale-op:$operationId');
+      if (ledger is Success<Transaction?> && ledger.value != null) {
+        return Success<Transaction>(ledger.value!);
+      }
+      return Failure<Transaction>(posSent.error);
+    }
+
+    final posAudit = await auditLogs.append(
+      AuditLog(
+        id: ids.next('audit'),
+        entityType: 'message',
+        entityId: message.id,
+        action: 'pos_order_pos_sms_succeeded',
+        occurredAt: clock.now(),
+        payloadJson: jsonEncode({
+          'operationId': operationId,
+          'destination': messagesBody.posDestination,
+        }),
+      ),
+    );
+    if (posAudit is Failure<void>) {
+      await messages.updateStatus(message.id, MessageProcessingStatus.failed);
+      final ledger = await transactionRepo.findByReference('sale-op:$operationId');
+      if (ledger is Success<Transaction?> && ledger.value != null) {
+        return Success<Transaction>(ledger.value!);
+      }
+      return Failure<Transaction>(posAudit.error);
+    }
+
+    final ledger = await transactionRepo.findByReference('sale-op:$operationId');
+    if (ledger is Failure<Transaction?>) return Failure<Transaction>(ledger.error);
+    final saleLedger = (ledger as Success<Transaction?>).value;
+    if (saleLedger == null) {
+      const failure = AppFailure(
+        code: 'sale_ledger_missing',
+        message: 'POS order completed but its ledger record could not be found',
+      );
+      await _persistTerminalFailure(
+        messageId: message.id,
+        status: MessageProcessingStatus.failed,
+        action: 'pos_order_ledger_missing',
+        error: failure,
+        transfer: transfer,
+        deliveryPhone: customerDestination,
+      );
+      return const Failure<Transaction>(failure);
+    }
+
+    await messages.updateStatus(message.id, MessageProcessingStatus.processed);
+    return Success<Transaction>(saleLedger);
+  }
 
 
   Future<Result<List<CardCategory>>> _matchActiveCategory(Money amount) async {
@@ -1062,3 +1309,15 @@ final class _DeliveryState {
   }
 
 
+
+final class _PosOrderItem {
+  const _PosOrderItem({
+    required this.card,
+    required this.reservationId,
+    required this.saleOperationId,
+  });
+
+  final Card card;
+  final String reservationId;
+  final String saleOperationId;
+}
