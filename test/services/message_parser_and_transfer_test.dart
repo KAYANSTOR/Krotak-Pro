@@ -345,7 +345,7 @@ void main() {
       expect(result, isA<Success<Transaction>>());
       expect(messages.store['m2b']!.status, MessageProcessingStatus.processed);
       expect(balances.credits.length, greaterThanOrEqualTo(1));
-      expect(audit.logs.any((l) => l.action == 'customer_auto_provisioned'), isTrue);
+      expect(audit.logs.any((l) => l.action == 'ledger_account_auto_provisioned'), isTrue);
       expect(audit.logs.any((l) => l.action == 'transfer_processed'), isTrue);
       // customer was created
       final found = await customers.findByIdentifier('777999888');
