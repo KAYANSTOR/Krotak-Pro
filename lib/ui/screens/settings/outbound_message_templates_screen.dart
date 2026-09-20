@@ -464,8 +464,8 @@ class _OutboundMessageTemplatesScreenState
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
         title: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Text('قوالب رسائل العملاء', style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w800, fontSize: 17)),
-          Text('تخصيص وإدارة قوالب رسائل SMS المرسلة للعملاء، مكافآت العروض ورسائل النظام', style: TextStyle(fontFamily: 'Tajawal', fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+          const Text('قوالب الرسائل', style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w800, fontSize: 17)),
+          Text('تخصيص وإدارة رسائل العملاء ونقاط البيع والنظام وسلفني', style: TextStyle(fontFamily: 'Tajawal', fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant)),
         ]),
         backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         foregroundColor: Theme.of(context).colorScheme.onSurface,
