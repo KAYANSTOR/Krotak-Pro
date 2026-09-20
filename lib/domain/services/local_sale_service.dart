@@ -292,7 +292,8 @@ final class LocalSaleService implements SaleService, ReservedSaleService {
         currencyCode: category.faceValue.currencyCode,
       );
       if (balance is Failure<Money>) return Failure(balance.error);
-      if ((balance as Success<Money>).value.minorUnits < category.faceValue.minorUnits) {
+      final chargeAmount = saleAmount ?? category.faceValue;
+      if (!allowNegativeBalance && (balance as Success<Money>).value.minorUnits < chargeAmount.minorUnits) {
         return const Failure(
           AppFailure(
             code: 'insufficient_balance',
