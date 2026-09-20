@@ -13,6 +13,7 @@ import 'package:net_app/domain/services/local_catalog_services.dart';
 import 'package:net_app/domain/services/local_customer_service.dart';
 import 'package:net_app/domain/services/local_pos_account_registry.dart';
 import 'package:net_app/domain/services/local_pos_profile_service.dart';
+import 'package:net_app/domain/services/default_pos_templates_seeder.dart';
 
 void main() {
   late AppDatabase database;
@@ -57,7 +58,7 @@ void main() {
     await database.close();
   });
 
-  test('create seeds five templates and binds ledger phone', () async {
+  test('create seeds the full POS template catalog and binds ledger phone', () async {
     final created = await profiles.create(
       name: 'كشك النور',
       phone: '779776919',
@@ -72,7 +73,7 @@ void main() {
     final listed = await templates.listAll();
     final all = (listed as Success).value as List;
     final forPos = all.where((t) => t.posId == profile.pointOfSale.id).toList();
-    expect(forPos.length, 5);
+    expect(forPos.length, DefaultPosTemplatesSeeder.catalogSize);
   });
 
   test('rejects duplicate POS name', () async {
