@@ -8,10 +8,13 @@ import '../entities/card.dart';
 import '../entities/message.dart';
 import '../entities/money.dart';
 import '../entities/pos_account.dart';
+import '../entities/wallet.dart';
 import '../repositories/repositories.dart';
 import 'local_message_retry_service.dart';
+import 'local_pos_account_registry.dart';
 import 'message_retry_policy.dart';
 import 'pos_order_message_renderer.dart';
+import 'services.dart';
 
 /// Recovery worker for POS orders that have already committed their cards.
 ///
