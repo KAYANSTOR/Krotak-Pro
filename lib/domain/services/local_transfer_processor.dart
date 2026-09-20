@@ -12,6 +12,7 @@ import '../entities/transaction.dart';
 import '../repositories/repositories.dart';
 import '../repositories/unit_of_work.dart';
 import 'local_customer_identity_resolver.dart';
+import 'contact_directory.dart';
 import 'services.dart';
 
 /// Completes the real incoming-transfer business flow using the existing
@@ -35,6 +36,7 @@ final class LocalTransferProcessor implements TransferProcessor {
     this.settings,
     this.advanceService,
     this.customerService,
+    this.contactDirectory,
     this.reservationTtl = const Duration(minutes: 5),
   });
 
@@ -55,6 +57,7 @@ final class LocalTransferProcessor implements TransferProcessor {
   final SettingsRepository? settings;
   final AdvanceService? advanceService;
   final CustomerService? customerService;
+  final ContactDirectory? contactDirectory;
   final Duration reservationTtl;
 
   List<CardCategory>? _categoryCache;
@@ -169,6 +172,47 @@ final class LocalTransferProcessor implements TransferProcessor {
         deliveryPhone: resolution.deliveryPhone,
       );
       return Failure<Transaction>(failure);
+    }
+
+    // If account was provisional but the phone is now in contacts, promote
+    // to a full customer and adopt the contact display name.
+    final liveCustomer = resolution.customer;
+    if (liveCustomer != null &&
+        liveCustomer.status == CustomerStatus.provisional &&
+        customerService != null &&
+        contactDirectory != null) {
+      final match = await contactDirectory!.findByPhone(
+        transfer.customerIdentifier,
+      );
+      if (match != null && match.displayName.trim().isNotEmpty) {
+        final promoted = await customerService!.promoteToActive(liveCustomer.id);
+        if (promoted is Success<Customer>) {
+          final named = promoted.value.copyWith(
+            displayName: match.displayName.trim(),
+            updatedAt: clock.now(),
+          );
+          await customers.save(named);
+          resolutionResult = await _resolver.resolve(
+            identifierValue: transfer.customerIdentifier,
+            identifierType: transfer.identifierType,
+          );
+          if (resolutionResult is Success<CustomerIdentityResolution>) {
+            resolution =
+                (resolutionResult as Success<CustomerIdentityResolution>).value;
+          }
+          await auditLogs.append(
+            AuditLog(
+              id: ids.next('audit'),
+              entityType: 'customer',
+              entityId: named.id,
+              action: 'promoted_from_contacts',
+              occurredAt: clock.now(),
+              payloadJson:
+                  '{\"phone\":\"${transfer.customerIdentifier}\",\"displayName\":\"${match.displayName.trim()}\"}',
+            ),
+          );
+        }
+      }
     }
 
     final bindPhone =
@@ -620,11 +664,20 @@ final class LocalTransferProcessor implements TransferProcessor {
       );
     }
     final phone = transfer.customerIdentifier.trim();
+    // Contacts decide identity: in phonebook => full customer with name;
+    // otherwise provisional ledger-only account.
+    var displayName = phone;
+    var status = CustomerStatus.provisional;
+    final match = await contactDirectory?.findByPhone(phone);
+    if (match != null && match.displayName.trim().isNotEmpty) {
+      displayName = match.displayName.trim();
+      status = CustomerStatus.active;
+    }
     final created = await service.create(
-      displayName: phone,
+      displayName: displayName,
       identifierType: CustomerIdentifierType.phoneNumber,
       identifierValue: phone,
-      status: CustomerStatus.provisional,
+      status: status,
     );
     if (created is Success<Customer>) return created;
     if (created is Failure<Customer> &&
