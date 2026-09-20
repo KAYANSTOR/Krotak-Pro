@@ -20,9 +20,7 @@ abstract final class RejectionCategories {
   static const unmatchedAmount = 'المبلغ لا يطابق أي فئة كرت نشطة';
   static const other = 'سبب آخر';
 
-  /// Map terminal audit action → category chip label.
   static String fromAuditAction(String? action) {
-    // Prefer canonical RejectionCodes when audit stores domain codes.
     switch (action) {
       case RejectionCodes.voucherSendFailed:
       case 'sms_delivery_failed':
@@ -55,13 +53,13 @@ abstract final class RejectionCategories {
       case 'pending_message_rejected':
         return rejectedFromPending;
       case 'transfer_ambiguous_category':
+      case 'transfer_ambiguous_category_pending':
         return ambiguousCategory;
       default:
         return other;
     }
   }
 
-  /// Prefer longer product reason text when known.
   static String reasonText(String? action, {String? payloadReason}) {
     if (payloadReason != null && payloadReason.trim().isNotEmpty) {
       return payloadReason.trim();
@@ -76,6 +74,7 @@ abstract final class RejectionCategories {
       case 'transfer_unresolved':
         return unresolvedCustomer;
       case 'transfer_ambiguous_category':
+      case 'transfer_ambiguous_category_pending':
         return ambiguousCategory;
       case 'transfer_unmatched_amount':
         return unmatchedAmount;
@@ -111,7 +110,6 @@ final class RejectedMessageItem {
   final String? auditAction;
 }
 
-/// Loads rejected messages with audit-derived category/reason (PD-08).
 final class RejectedMessageCatalog {
   const RejectedMessageCatalog({
     required this.messages,
@@ -129,6 +127,7 @@ final class RejectedMessageCatalog {
     'pending_message_rejected',
     'transfer_unresolved',
     'transfer_ambiguous_category',
+    'transfer_ambiguous_category_pending',
     'transfer_unmatched_amount',
     'transfer_reservation_failed',
     'transfer_rejected',
@@ -191,9 +190,7 @@ final class RejectedMessageCatalog {
 
     final category = RejectionCategories.fromAuditAction(action);
     final reason = RejectionCategories.reasonText(action, payloadReason: payloadReason);
-    final isNew = viewedAfter == null
-        ? true
-        : m.receivedAt.isAfter(viewedAfter);
+    final isNew = viewedAfter == null ? true : m.receivedAt.isAfter(viewedAfter);
 
     return RejectedMessageItem(
       message: m,
