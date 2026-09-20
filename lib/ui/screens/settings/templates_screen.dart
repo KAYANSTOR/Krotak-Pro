@@ -9,6 +9,7 @@ import '../../theme/net_semantic_colors.dart';
 import '../../widgets/async_views.dart';
 import 'template_simulation_screen.dart';
 import 'template_wizard_screen.dart';
+import '../../../domain/services/local_transfer_template_activation_service.dart';
 
 /// قائمة قوالب التحويل — مطابقة 100% لإطار فيديو Z Net (`tpl_sys50.jpg`).
 ///
@@ -108,7 +109,7 @@ class _TemplatesScreenState extends State<TemplatesScreen> {
 
   Future<void> _toggle(TransferTemplate t, bool active) async {
     final c = AppScope.of(context);
-    final r = await c.transferTemplates.save(t.copyWith(isActive: active));
+    final r = await LocalTransferTemplateActivationService(c.transferTemplates).saveExclusive(t.copyWith(isActive: active));
     if (r is Failure && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
