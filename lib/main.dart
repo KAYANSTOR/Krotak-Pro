@@ -128,7 +128,7 @@ class _NetAppState extends State<NetApp> with WidgetsBindingObserver {
         child: ValueListenableBuilder<ThemeMode>(
           valueListenable: widget.container.themeModeNotifier,
           builder: (context, mode, _) => MaterialApp(
-            title: 'NET',
+            title: 'Krotak',
             debugShowCheckedModeBanner: false,
             theme: buildKayanLightTheme(),
             darkTheme: buildKayanDarkTheme(),
