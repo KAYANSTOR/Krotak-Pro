@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# contacts identity apply — processor only
 import base64, gzip, pathlib
 ROOT = pathlib.Path(__file__).resolve().parent
 
