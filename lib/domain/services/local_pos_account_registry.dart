@@ -44,18 +44,41 @@ final class LocalPosAccountRegistry {
     return const Success(null);
   }
 
-  Future<Result<PosAccount?>> findByIdentifier(String raw) async {
+  /// Resolves identifiers for active POS only; used by automation.
+  Future<Result<PosAccount?>> findByIdentifier(String raw) {
+    return _findByIdentifier(raw, includeInactive: false);
+  }
+
+  /// Resolves an identifier regardless of POS status; used by management
+  /// validation so suspended/archived phone numbers cannot be duplicated.
+  Future<Result<PosAccount?>> findByIdentifierAnyStatus(String raw) {
+    return _findByIdentifier(raw, includeInactive: true);
+  }
+
+  Future<Result<PosAccount?>> _findByIdentifier(
+    String raw, {
+    required bool includeInactive,
+  }) async {
     final needle = _normalize(raw);
     if (needle.isEmpty) return const Success(null);
     final all = await listAll();
     if (all is Failure<List<PosAccount>>) return Failure(all.error);
     PosAccount? hit;
     for (final account in (all as Success<List<PosAccount>>).value) {
-      if (account.status != PointOfSaleStatus.active) continue;
-      final keys = <String>{_normalize(account.name), ...account.identifiers.map(_normalize)};
+      if (!includeInactive && account.status != PointOfSaleStatus.active) continue;
+      final keys = <String>{
+        _normalize(account.name),
+        ...account.identifiers.map(_normalize),
+        if (account.notifyPhone != null) _normalize(account.notifyPhone!),
+      };
       if (keys.contains(needle)) {
         if (hit != null && hit.posId != account.posId) {
-          return const Failure(AppFailure(code: 'pos_identifier_ambiguous', message: 'Identifier matches more than one point of sale'));
+          return const Failure(
+            AppFailure(
+              code: 'pos_identifier_ambiguous',
+              message: 'Identifier matches more than one point of sale',
+            ),
+          );
         }
         hit = account;
       }

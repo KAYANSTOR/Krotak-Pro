@@ -2,12 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../core/result.dart';
-import '../../../domain/entities/customer.dart';
 import '../../../domain/entities/money.dart';
 import '../../../domain/entities/pos_account.dart';
 import '../../../domain/entities/transaction.dart';
-import '../../../domain/entities/wallet.dart';
 import '../../app_scope.dart';
+import '../../routing/app_routes.dart';
 import '../../theme/kayan_palette.dart';
 import '../../theme/net_semantic_colors.dart';
 import '../../theme/net_tokens.dart';
@@ -67,6 +66,7 @@ class _PosAccountsLedgerScreenState extends State<PosAccountsLedgerScreen> {
   List<_LedgerRow> _rows = const [];
   final _searchCtrl = TextEditingController();
   String _query = '';
+  PointOfSaleStatus? _statusFilter;
 
   int get _debtTotal =>
       _rows.fold(0, (a, r) => a + r.debtMinor);
@@ -75,14 +75,21 @@ class _PosAccountsLedgerScreenState extends State<PosAccountsLedgerScreen> {
 
   List<_LedgerRow> get _visible {
     final q = _query.trim().toLowerCase();
-    if (q.isEmpty) return _rows;
     return _rows.where((r) {
+      if (_statusFilter != null && r.pos.status != _statusFilter) {
+        return false;
+      }
+      if (q.isEmpty) return true;
+
       final name = (r.customerName ?? r.pos.name).toLowerCase();
       if (name.contains(q)) return true;
+
       final acc = r.account;
       if (acc != null) {
         if ((acc.notifyPhone ?? '').contains(q)) return true;
-        if (acc.identifiers.any((i) => i.toLowerCase().contains(q))) return true;
+        if (acc.identifiers.any((i) => i.toLowerCase().contains(q))) {
+          return true;
+        }
       }
       return false;
     }).toList(growable: false);
@@ -105,58 +112,43 @@ class _PosAccountsLedgerScreenState extends State<PosAccountsLedgerScreen> {
       _loading = true;
       _error = null;
     });
-    final c = AppScope.of(context);
-    final listed = await c.pointsOfSale.listAll();
-    final accounts = await c.posRegistry.listAll();
+
+    final profiles = await AppScope.of(context).posProfiles.listPointOfSaleProfiles(
+      includeArchived: true,
+    );
     if (!mounted) return;
-    if (listed is Failure || accounts is Failure) {
+
+    if (profiles is Failure) {
       setState(() {
         _loading = false;
-        _error = 'تعذر تحميل نقاط البيع';
+        _error = (profiles as Failure).error.message;
       });
       return;
     }
-    final posList =
-        (listed as Success<List<PointOfSale>>).value;
-    final accList = (accounts as Success<List<PosAccount>>).value;
-    final byPos = {for (final a in accList) a.posId: a};
 
     final rows = <_LedgerRow>[];
-    for (final pos in posList) {
-      final acc = byPos[pos.id];
-      var debt = 0;
-      var prepaid = 0;
-      String? customerName;
-      if (acc != null) {
-        final cr = await c.customers.findById(acc.customerId);
-        if (cr is Success<Customer?> && cr.value != null) {
-          customerName = cr.value!.displayName;
-        }
-        final bal = await c.balanceService.getBalance(
-          customerId: acc.customerId,
-          currencyCode: 'YER',
-        );
-        if (bal is Success<Money>) {
-          final minor = bal.value.minorUnits;
-          if (minor < 0) {
-            debt = -minor;
-          } else {
-            prepaid = minor;
-          }
-        }
-      }
-      rows.add(_LedgerRow(
-        pos: pos,
-        account: acc,
-        customerId: acc?.customerId ?? '',
-        debtMinor: debt,
-        prepaidMinor: prepaid,
-        customerName: customerName,
-      ));
+    for (final profile
+        in (profiles as Success<List<PointOfSaleProfile>>).value) {
+      final pos = profile.pointOfSale;
+      final account = profile.account;
+      rows.add(
+        _LedgerRow(
+          pos: pos,
+          account: account,
+          customerId: account?.customerId ?? '',
+          debtMinor: profile.debtMinorUnits,
+          prepaidMinor: profile.prepaidMinorUnits,
+          customerName: profile.customer?.displayName,
+        ),
+      );
     }
-    rows.sort((a, b) => (b.debtMinor + b.prepaidMinor)
-        .compareTo(a.debtMinor + a.prepaidMinor));
-    if (!mounted) return;
+
+    rows.sort(
+      (a, b) => (b.debtMinor + b.prepaidMinor).compareTo(
+        a.debtMinor + a.prepaidMinor,
+      ),
+    );
+
     setState(() {
       _loading = false;
       _rows = rows;
@@ -167,23 +159,13 @@ class _PosAccountsLedgerScreenState extends State<PosAccountsLedgerScreen> {
 
   Future<void> _settle(_LedgerRow row) async {
     final acc = row.account;
-    if (acc == null) return;
+    if (acc == null || row.pos.status == PointOfSaleStatus.archived) return;
     final done = await NetSheet.show<bool>(
       context,
       builder: (_) => _SettlementSheet(row: row),
     );
     if (done != true || !mounted) return;
     await _load();
-  }
-
-  // ── نقطة بيع جديدة / تعديل ─────────────────────────────────────────
-
-  Future<void> _editPos(_LedgerRow? row) async {
-    final created = await NetSheet.show<bool>(
-      context,
-      builder: (_) => _PosFormSheet(existing: row),
-    );
-    if (created == true) await _load();
   }
 
   @override
@@ -199,16 +181,6 @@ class _PosAccountsLedgerScreenState extends State<PosAccountsLedgerScreen> {
         appBar: AppBar(
           title: const Text(
             'حسابات نقاط البيع',
-            style: TextStyle(fontFamily: NetTypography.family),
-          ),
-        ),
-        floatingActionButton: FloatingActionButton.extended(
-          backgroundColor: palette.primary,
-          foregroundColor: Colors.white,
-          onPressed: () => _editPos(null),
-          icon: const Icon(Icons.add_business_rounded),
-          label: const Text(
-            'نقطة بيع جديدة',
             style: TextStyle(fontFamily: NetTypography.family),
           ),
         ),
@@ -259,6 +231,16 @@ class _PosAccountsLedgerScreenState extends State<PosAccountsLedgerScreen> {
                                   fontFamily: NetTypography.family,
                                   fontSize: 11.5,
                                   color: palette.textSecondary,
+                                ),
+                              ),
+                              const SizedBox(height: NetSpacing.xs),
+                              Text(
+                                _statusSummary(),
+                                style: TextStyle(
+                                  fontFamily: NetTypography.family,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: palette.textTertiary,
                                 ),
                               ),
                               const SizedBox(height: NetSpacing.md),
@@ -341,20 +323,45 @@ class _PosAccountsLedgerScreenState extends State<PosAccountsLedgerScreen> {
                           ),
                         ),
 
+                        Wrap(
+                          spacing: NetSpacing.xs,
+                          runSpacing: NetSpacing.xs,
+                          children: [
+                            for (final filter in <(String, PointOfSaleStatus?)>[
+                              ('الكل', null),
+                              ('نشطة', PointOfSaleStatus.active),
+                              ('موقوفة', PointOfSaleStatus.suspended),
+                              ('مؤرشفة', PointOfSaleStatus.archived),
+                            ])
+                              ChoiceChip(
+                                label: Text(
+                                  filter.$1,
+                                  style: TextStyle(
+                                    fontFamily: NetTypography.family,
+                                    fontSize: 11.5,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                selected: _statusFilter == filter.$2,
+                                onSelected: (_) => setState(
+                                  () => _statusFilter = filter.$2,
+                                ),
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: NetSpacing.sm),
                         if (visible.isEmpty)
                           Padding(
                             padding:
                                 const EdgeInsets.only(top: NetSpacing.xxl),
                             child: AsyncEmptyView(
                               message: _query.isEmpty
-                                  ? 'لا نقاط بيع مسجّلة بعد'
+                                  ? 'لا نقاط بيع مطابقة للفلتر'
                                   : 'لا نتائج لهذا البحث',
                               icon: Icons.storefront_outlined,
-                              actionLabel: _query.isEmpty
-                                  ? 'إضافة نقطة بيع'
-                                  : null,
-                              onAction:
-                                  _query.isEmpty ? () => _editPos(null) : null,
+                              actionLabel: 'إدارة نقاط البيع',
+                              onAction: () =>
+                                  AppRoutes.openWalletsAndPos(context),
                             ),
                           )
                         else
@@ -362,7 +369,10 @@ class _PosAccountsLedgerScreenState extends State<PosAccountsLedgerScreen> {
                             (row) => _PosLedgerCard(
                               row: row,
                               onOpen: () => _openLedger(row),
-                              onEdit: () => _editPos(row),
+                              onManage: () => AppRoutes.openWalletsAndPos(
+                                context,
+                                focusPosId: row.pos.id,
+                              ),
                             ),
                           ),
                       ],
@@ -372,11 +382,34 @@ class _PosAccountsLedgerScreenState extends State<PosAccountsLedgerScreen> {
     );
   }
 
+  String _statusSummary() {
+    final active = _rows.where(
+      (r) => r.pos.status == PointOfSaleStatus.active,
+    ).length;
+    final suspended = _rows.where(
+      (r) => r.pos.status == PointOfSaleStatus.suspended,
+    ).length;
+    final archived = _rows.where(
+      (r) => r.pos.status == PointOfSaleStatus.archived,
+    ).length;
+    final incomplete = _rows.where((r) => r.account == null).length;
+
+    return '$active نشطة · $suspended موقوفة · $archived مؤرشفة'
+        ' · $incomplete غير مكتملة';
+  }
+
   // ── كشف حساب التسويات والمستحقات ───────────────────────────────────
 
   Future<void> _openLedger(_LedgerRow row) async {
     final acc = row.account;
-    if (acc == null) return;
+    if (acc == null) {
+      await AppRoutes.openWalletsAndPos(
+        context,
+        focusPosId: row.pos.id,
+      );
+      if (mounted) await _load();
+      return;
+    }
     final c = AppScope.of(context);
 
     // آخر التسويات: حركات تسوية مكتملة لهذا العميل (قراءة عرض فقط).
@@ -417,12 +450,12 @@ class _PosLedgerCard extends StatelessWidget {
   const _PosLedgerCard({
     required this.row,
     required this.onOpen,
-    required this.onEdit,
+    required this.onManage,
   });
 
   final _LedgerRow row;
   final VoidCallback onOpen;
-  final VoidCallback onEdit;
+  final VoidCallback onManage;
 
   @override
   Widget build(BuildContext context) {
@@ -433,6 +466,8 @@ class _PosLedgerCard extends StatelessWidget {
         (row.account?.identifiers.isNotEmpty ?? false
             ? row.account!.identifiers.first
             : null);
+    final archived = row.pos.status == PointOfSaleStatus.archived;
+    final incomplete = row.account == null;
 
     return NetSurfaceCard(
       margin: NetSpacing.pageH,
@@ -486,17 +521,47 @@ class _PosLedgerCard extends StatelessWidget {
               ),
               const SizedBox(width: NetSpacing.sm),
               IconButton(
-                tooltip: 'تعديل',
-                onPressed: onEdit,
+                tooltip: 'إدارة نقطة البيع',
+                onPressed: onManage,
                 icon: Icon(
-                  Icons.edit_outlined,
+                  Icons.settings_outlined,
                   size: 20,
                   color: palette.textSecondary,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: NetSpacing.md),
+          const SizedBox(height: NetSpacing.sm),
+          Wrap(
+            spacing: NetSpacing.xs,
+            runSpacing: NetSpacing.xs,
+            children: [
+              Chip(
+                label: Text(
+                  _statusLabel(row.pos.status),
+                  style: const TextStyle(
+                    fontFamily: NetTypography.family,
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                visualDensity: VisualDensity.compact,
+              ),
+              if (incomplete)
+                Chip(
+                  label: const Text(
+                    'بيانات الحساب غير مكتملة',
+                    style: TextStyle(
+                      fontFamily: NetTypography.family,
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  visualDensity: VisualDensity.compact,
+                ),
+            ],
+          ),
+          const SizedBox(height: NetSpacing.sm),
           Row(
             children: [
               Expanded(
@@ -518,9 +583,32 @@ class _PosLedgerCard extends StatelessWidget {
               ),
             ],
           ),
+          if (archived) ...[
+            const SizedBox(height: NetSpacing.xs),
+            Text(
+              'الحالة مؤرشفة — التسويات والمعالجة الآلية متوقفة.',
+              style: TextStyle(
+                fontFamily: NetTypography.family,
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: net.warning,
+              ),
+            ),
+          ],
         ],
       ),
     );
+  }
+}
+
+String _statusLabel(PointOfSaleStatus status) {
+  switch (status) {
+    case PointOfSaleStatus.active:
+      return 'نشطة';
+    case PointOfSaleStatus.suspended:
+      return 'موقوفة';
+    case PointOfSaleStatus.archived:
+      return 'مؤرشفة';
   }
 }
 
@@ -680,20 +768,31 @@ class _PosLedgerSheet extends StatelessWidget {
           ],
         ),
         const SizedBox(height: NetSpacing.lg),
-        FilledButton.icon(
-          style: FilledButton.styleFrom(
-            minimumSize: const Size.fromHeight(50),
+        if (row.pos.status != PointOfSaleStatus.archived)
+          FilledButton.icon(
+            style: FilledButton.styleFrom(
+              minimumSize: const Size.fromHeight(50),
+            ),
+            onPressed: () {
+              Navigator.of(context).pop();
+              onSettle();
+            },
+            icon: const Icon(Icons.payments_rounded, size: 20),
+            label: const Text(
+              'تسجيل تسوية مالية',
+              style: TextStyle(fontFamily: NetTypography.family),
+            ),
+          )
+        else
+          Text(
+            'هذه النقطة مؤرشفة، لذلك لا يمكن تسجيل تسوية جديدة أو تشغيل معالجة مالية آلية.',
+            style: TextStyle(
+              fontFamily: NetTypography.family,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: net.warning,
+            ),
           ),
-          onPressed: () {
-            Navigator.of(context).pop();
-            onSettle();
-          },
-          icon: const Icon(Icons.payments_rounded, size: 20),
-          label: const Text(
-            'تسجيل تسوية مالية',
-            style: TextStyle(fontFamily: NetTypography.family),
-          ),
-        ),
         const SizedBox(height: NetSpacing.lg),
         Text(
           'آخر التسويات المسجّلة',
@@ -1046,333 +1145,5 @@ class _SettlementSheetState extends State<_SettlementSheet> {
 
 // ── نقطة بيع جديدة / تعديل ───────────────────────────────────────────
 
-class _PosFormSheet extends StatefulWidget {
-  const _PosFormSheet({this.existing});
 
-  final _LedgerRow? existing;
-
-  @override
-  State<_PosFormSheet> createState() => _PosFormSheetState();
-}
-
-class _PosFormSheetState extends State<_PosFormSheet> {
-  late final TextEditingController _phoneCtrl;
-  late final TextEditingController _nameCtrl;
-  late final TextEditingController _limitCtrl;
-  PosPercentageMode _mode = PosPercentageMode.defaultCategory;
-  bool _busy = false;
-  String? _status;
-
-  bool get _isEdit => widget.existing != null;
-
-  @override
-  void initState() {
-    super.initState();
-    final acc = widget.existing?.account;
-    _phoneCtrl = TextEditingController(
-      text: acc?.notifyPhone ?? acc?.identifiers.firstOrNull ?? '',
-    );
-    _nameCtrl =
-        TextEditingController(text: widget.existing?.pos.name ?? '');
-    _limitCtrl = TextEditingController(text: '50000');
-    _mode = acc?.percentageMode ?? PosPercentageMode.defaultCategory;
-  }
-
-  @override
-  void dispose() {
-    _phoneCtrl.dispose();
-    _nameCtrl.dispose();
-    _limitCtrl.dispose();
-    super.dispose();
-  }
-
-  Future<void> _submit() async {
-    final phone = _phoneCtrl.text.trim();
-    final name = _nameCtrl.text.trim();
-    if (!RegExp(r'^7\d{8}$').hasMatch(phone)) {
-      setState(() => _status = 'الرقم يجب أن يبدأ بـ 7 ويتكون من 9 أرقام');
-      return;
-    }
-    if (name.isEmpty) {
-      setState(() => _status = 'أدخل اسم نقطة البيع');
-      return;
-    }
-    setState(() {
-      _busy = true;
-      _status = null;
-    });
-    final c = AppScope.of(context);
-
-    // فحص «الرقم مسجل مسبقاً» عبر هوية العملاء (نفس قاعدة الدفتر).
-    final existingById = await c.customers.findByIdentifier(phone);
-    if (existingById is Failure<Customer?>) {
-      setState(() {
-        _busy = false;
-        _status = (existingById as Failure).error.message;
-      });
-      return;
-    }
-    final existingCustomer =
-        (existingById as Success<Customer?>).value;
-
-    if (_isEdit) {
-      final row = widget.existing!;
-      final acc = row.account!;
-      final isSamePhone = acc.notifyPhone == phone ||
-          acc.identifiers.contains(phone);
-      if (existingCustomer != null &&
-          existingCustomer.id != acc.customerId &&
-          !isSamePhone) {
-        setState(() {
-          _busy = false;
-          _status = 'رقم الجوال "$phone" مسجل مسبقاً لحساب آخر';
-        });
-        return;
-      }
-      final r = await c.posCatalog.updatePointOfSale(
-        id: row.pos.id,
-        name: name,
-        status: row.pos.status,
-      );
-      if (r is Failure<PointOfSale>) {
-        setState(() {
-          _busy = false;
-          _status = 'تعذر حفظ التعديلات';
-        });
-        return;
-      }
-      await c.posRegistry.save(
-        acc.copyWith(
-          name: name,
-          notifyPhone: phone,
-          clearNotifyPhone: false,
-          percentageMode: _mode,
-        ),
-      );
-      if (!mounted) return;
-      Navigator.of(context).pop(true);
-      return;
-    }
-
-    // إنشاء جديد
-    if (existingCustomer != null) {
-      setState(() {
-        _busy = false;
-        _status = 'رقم الجوال "$phone" مسجل مسبقاً';
-      });
-      return;
-    }
-    final create = await c.customerService.create(
-      displayName: name,
-      identifierType: CustomerIdentifierType.phoneNumber,
-      identifierValue: phone,
-    );
-    if (create is Failure<Customer>) {
-      setState(() {
-        _busy = false;
-        _status = (create as Failure).error.message;
-      });
-      return;
-    }
-    final customer = (create as Success<Customer>).value;
-    final pos = await c.posCatalog.savePointOfSale(name: name);
-    if (pos is Failure<PointOfSale>) {
-      setState(() {
-        _busy = false;
-        _status = 'تعذر إنشاء نقطة البيع';
-      });
-      return;
-    }
-    await c.posRegistry.save(
-      PosAccount(
-        posId: (pos as Success<PointOfSale>).value.id,
-        customerId: customer.id,
-        name: name,
-        identifiers: [phone],
-        notifyPhone: phone,
-        percentageMode: _mode,
-      ),
-    );
-    if (!mounted) return;
-    Navigator.of(context).pop(true);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final palette = KayanPalette.of(context);
-    final net = context.netColors;
-
-    return NetSheet(
-      title: _isEdit ? 'تعديل نقطة البيع' : 'نقطة بيع جديدة',
-      subtitle: 'بيانات نقطة البيع وحسابها المالي في الدفتر',
-      icon: Icons.storefront_outlined,
-      children: [
-        TextField(
-          controller: _phoneCtrl,
-          keyboardType: TextInputType.phone,
-          maxLength: 9,
-          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-          onChanged: (_) => setState(() {}),
-          decoration: InputDecoration(
-            labelText: 'رقم جوال نقطة البيع',
-            labelStyle: TextStyle(
-              fontFamily: NetTypography.family,
-              color: palette.textSecondary,
-            ),
-            counterText: '',
-            filled: true,
-            fillColor: palette.surface,
-            border: OutlineInputBorder(
-              borderRadius: NetRadii.mdAll,
-              borderSide: BorderSide(color: palette.border),
-            ),
-          ),
-          style: TextStyle(
-            fontFamily: NetTypography.family,
-            fontWeight: FontWeight.w700,
-            color: palette.textPrimary,
-          ),
-        ),
-        const SizedBox(height: NetSpacing.md),
-        TextField(
-          controller: _nameCtrl,
-          onChanged: (_) => setState(() {}),
-          decoration: InputDecoration(
-            labelText: 'إسم نقطة البيع',
-            labelStyle: TextStyle(
-              fontFamily: NetTypography.family,
-              color: palette.textSecondary,
-            ),
-            filled: true,
-            fillColor: palette.surface,
-            border: OutlineInputBorder(
-              borderRadius: NetRadii.mdAll,
-              borderSide: BorderSide(color: palette.border),
-            ),
-          ),
-          style: TextStyle(
-            fontFamily: NetTypography.family,
-            fontWeight: FontWeight.w700,
-            color: palette.textPrimary,
-          ),
-        ),
-        const SizedBox(height: NetSpacing.md),
-        TextField(
-          controller: _limitCtrl,
-          keyboardType: TextInputType.number,
-          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-          decoration: InputDecoration(
-            labelText: 'سقف الدين المسموح به (ريال) *',
-            labelStyle: TextStyle(
-              fontFamily: NetTypography.family,
-              color: palette.textSecondary,
-            ),
-            filled: true,
-            fillColor: palette.surface,
-            border: OutlineInputBorder(
-              borderRadius: NetRadii.mdAll,
-              borderSide: BorderSide(color: palette.border),
-            ),
-          ),
-          style: TextStyle(
-            fontFamily: NetTypography.family,
-            fontWeight: FontWeight.w700,
-            color: palette.textPrimary,
-          ),
-        ),
-        const SizedBox(height: NetSpacing.lg),
-        Text(
-          'نسبة نقطة البيع',
-          style: TextStyle(
-            fontFamily: NetTypography.family,
-            fontSize: 12.5,
-            fontWeight: FontWeight.w700,
-            color: palette.textPrimary,
-          ),
-        ),
-        const SizedBox(height: NetSpacing.xs),
-        Column(
-          children: [
-            RadioListTile<PosPercentageMode>(
-              value: PosPercentageMode.defaultCategory,
-              groupValue: _mode,
-              onChanged: (v) =>
-                  setState(() => _mode = v ?? _mode),
-              title: Text(
-                'النسبة الافتراضية لفئات الكروت',
-                style: TextStyle(
-                  fontFamily: NetTypography.family,
-                  fontSize: 13.5,
-                  color: palette.textPrimary,
-                ),
-              ),
-              contentPadding: EdgeInsets.zero,
-              visualDensity: VisualDensity.compact,
-            ),
-            RadioListTile<PosPercentageMode>(
-              value: PosPercentageMode.zero,
-              groupValue: _mode,
-              onChanged: (v) =>
-                  setState(() => _mode = v ?? _mode),
-              title: Text(
-                '0% — بدون عمولة',
-                style: TextStyle(
-                  fontFamily: NetTypography.family,
-                  fontSize: 13.5,
-                  color: palette.textPrimary,
-                ),
-              ),
-              contentPadding: EdgeInsets.zero,
-              visualDensity: VisualDensity.compact,
-            ),
-          ],
-        ),
-        if (_status != null) ...[
-          const SizedBox(height: NetSpacing.sm),
-          Row(
-            children: [
-              Icon(
-                Icons.error_outline_rounded,
-                size: NetSizes.iconSm,
-                color: net.rejected,
-              ),
-              const SizedBox(width: NetSpacing.sm),
-              Expanded(
-                child: Text(
-                  _status!,
-                  style: TextStyle(
-                    fontFamily: NetTypography.family,
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w600,
-                    color: net.rejected,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-        const SizedBox(height: NetSpacing.lg),
-        FilledButton.icon(
-          style: FilledButton.styleFrom(
-            minimumSize: const Size.fromHeight(50),
-          ),
-          onPressed: _busy ? null : _submit,
-          icon: _busy
-              ? const SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: Colors.white,
-                  ),
-                )
-              : const Icon(Icons.check_circle_rounded, size: 20),
-          label: Text(
-            _isEdit ? 'حفظ التعديلات' : 'إنشاء نقطة البيع',
-            style: const TextStyle(fontFamily: NetTypography.family),
-          ),
-        ),
-      ],
-    );
-  }
 }
