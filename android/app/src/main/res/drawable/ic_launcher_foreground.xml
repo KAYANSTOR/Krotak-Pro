@@ -1,54 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- واجهة الأيقونة: بطاقة لؤلؤية (Pearl) تحمل حرف N بلون الهوية مع قُطر ذهبي
-     واحد محدود (Gold)، وثلاث عُقد شبكة صغيرة تعبّر عن «شبكة NET».
-     كل العناصر داخل المنطقة الآمنة (18..90) حتى لا تُقتطع بالقناع الدائري. -->
-<vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="108dp"
-    android:height="108dp"
-    android:viewportWidth="108"
-    android:viewportHeight="108">
-
-    <!-- ظل ناعم أسفل البطاقة لإحساس العمق -->
-    <path
-        android:fillColor="#04141A"
-        android:fillAlpha="0.28"
-        android:pathData="M40,30h28c7.732,0 14,6.268 14,14v28c0,7.732 -6.268,14 -14,14H40c-7.732,0 -14,-6.268 -14,-14V44c0,-7.732 6.268,-14 14,-14z" />
-
-    <!-- البطاقة اللؤلؤية -->
-    <path
-        android:fillColor="#FFFFFF"
-        android:fillAlpha="0.97"
-        android:pathData="M40,26h28c7.732,0 14,6.268 14,14v28c0,7.732 -6.268,14 -14,14H40c-7.732,0 -14,-6.268 -14,-14V40c0,-7.732 6.268,-14 14,-14z" />
-
-    <!-- إطار داخلي رقيق بلون الهوية لإبراز الحافة -->
-    <path
-        android:strokeWidth="1.1"
-        android:strokeColor="#0F766E"
-        android:strokeAlpha="0.16"
-        android:fillColor="#00000000"
-        android:pathData="M40,31h28c5.523,0 10,4.477 10,10v28c0,5.523 -4.477,10 -10,10H40c-5.523,0 -10,-4.477 -10,-10V41c0,-5.523 4.477,-10 10,-10z" />
-
-    <!-- ساقا حرف N بلون الهوية -->
-    <path
-        android:fillColor="#0F766E"
-        android:pathData="M41,40h7.2v28H41z" />
-    <path
-        android:fillColor="#0F766E"
-        android:pathData="M59.8,40H67v28h-7.2z" />
-
-    <!-- القُطر الذهبي: اللمسة الفاخرة الوحيدة داخل الشعار -->
-    <path
-        android:fillColor="#E0A82E"
-        android:pathData="M41,40 L48.2,40 L67,68 L59.8,68 Z" />
-
-    <!-- عُقد الشبكة: عقدة ذهبية رئيسية وعقدتان بلون الهوية مع وصلات رقيقة -->
-    <path
-        android:strokeWidth="1.5"
-        android:strokeColor="#E0A82E"
-        android:strokeAlpha="0.7"
-        android:fillColor="#00000000"
-        android:pathData="M72.4,45.2 L76.6,51.4 M76.6,56.6 L73.2,62.4" />
-    <path android:fillColor="#E0A82E" android:pathData="M72,42m-3.4,0a3.4,3.4 0,1 1,6.8 0a3.4,3.4 0,1 1,-6.8 0" />
-    <path android:fillColor="#0F766E" android:fillAlpha="0.85" android:pathData="M77,54m-2.6,0a2.6,2.6 0,1 1,5.2 0a2.6,2.6 0,1 1,-5.2 0" />
-    <path android:fillColor="#0F766E" android:fillAlpha="0.7" android:pathData="M73,65m-2.3,0a2.3,2.3 0,1 1,4.6 0a2.3,2.3 0,1 1,-4.6 0" />
-</vector>
+<!-- Krotak launcher artwork, kept within the adaptive-icon safe zone. -->
+<bitmap xmlns:android="http://schemas.android.com/apk/res/android"
+    android:src="@drawable/ic_launcher_art"
+    android:gravity="center" />
