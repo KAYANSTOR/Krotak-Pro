@@ -1,39 +1,44 @@
 #!/usr/bin/env sh
-# يستخرج مفتاح التوقيع الثابت المُخزّن في المستودع إلى مكانه المحلي، حتى تُوقّع
-# بناءاتك المحلية بنفس مفتاح بناءات CI — فيثبّت أي APK جديد فوق التطبيق المثبّت
-# مباشرةً بدون رسالة «حزمة التثبيت لا تتوافق مع النسخة المثبّتة».
+# تجهيز توقيع Release محليًا من أسرار يوفرها المطوّر عبر متغيرات البيئة.
 #
-# الاستخدام:  sh ./tools/setup_upload_keystore.sh
+# مطلوب:
+#   APK_KEYSTORE_B64
+#   APK_KEYSTORE_PASSWORD
+#   APK_KEY_PASSWORD
 #
-# ثم:  flutter build apk --release
-set -e
+# الاختياري:
+#   APK_KEY_ALIAS (الافتراضي: net-upload)
+#
+# لا يضع هذا السكربت أي مفتاح خاص أو كلمة مرور داخل المستودع.
+set -eu
 
-root=$(cd "$(dirname "$0")/.." && pwd)
+root=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
 cd "$root"
 
-if [ ! -f android/signing/net-upload.jks.b64 ]; then
-  echo "خطأ: لم يُعثر على android/signing/net-upload.jks.b64" >&2
-  exit 1
-fi
+: "${APK_KEYSTORE_B64:?خطأ: عرّف APK_KEYSTORE_B64 في البيئة}"
+: "${APK_KEYSTORE_PASSWORD:?خطأ: عرّف APK_KEYSTORE_PASSWORD في البيئة}"
+: "${APK_KEY_PASSWORD:?خطأ: عرّف APK_KEY_PASSWORD في البيئة}"
+APK_KEY_ALIAS="${APK_KEY_ALIAS:-net-upload}"
 
 mkdir -p android/app/keystore
 
-# GNU base64 يستخدم -d وmacOS يستخدم -D.
-if base64 -d android/signing/net-upload.jks.b64 > android/app/keystore/net-upload.jks 2>/dev/null; then
+if printf '%s' "$APK_KEYSTORE_B64" | base64 -d > android/app/keystore/net-upload.jks 2>/dev/null; then
   :
 else
-  base64 -D android/signing/net-upload.jks.b64 > android/app/keystore/net-upload.jks
+  printf '%s' "$APK_KEYSTORE_B64" | base64 -D > android/app/keystore/net-upload.jks
 fi
 
-{
-  echo "storeFile=keystore/net-upload.jks"
-  echo "storeType=PKCS12"
-  echo "keyAlias=net-upload"
-  echo "storePassword=netupload2026"
-  echo "keyPassword=netupload2026"
-} > android/key.properties
+chmod 600 android/app/keystore/net-upload.jks
 
-echo "تم تجهيز مفتاح التوقيع الثابت:"
-echo "  android/app/keystore/net-upload.jks"
-echo "  android/key.properties"
-echo "يمكنك الآن: flutter build apk --release"
+cat > android/key.properties <<EOF
+storeFile=keystore/net-upload.jks
+storeType=PKCS12
+keyAlias=$APK_KEY_ALIAS
+storePassword=$APK_KEYSTORE_PASSWORD
+keyPassword=$APK_KEY_PASSWORD
+EOF
+
+chmod 600 android/key.properties
+
+echo "تم تجهيز توقيع Release محليًا."
+echo "يمكنك الآن تنفيذ: flutter build apk --release"
