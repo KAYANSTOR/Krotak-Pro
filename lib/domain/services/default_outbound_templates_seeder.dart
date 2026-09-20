@@ -19,12 +19,16 @@ final class DefaultOutboundTemplatesSeeder {
   final Clock clock;
 
   /// Bump when new catalog keys are added so existing installs backfill.
-  static const seededKey = 'default_outbound_templates_seeded_v3';
+  static const seededKey = 'default_outbound_templates_seeded_v4';
 
   /// Full catalog keyed by [SettingKeys] → default body.
   static Map<String, String> catalog() => <String, String>{
         SettingKeys.voucherDeliverySmsTemplate:
             SettingDefaults.voucherDeliverySmsTemplate,
+        SettingKeys.posCustomerCardDeliveryTemplate:
+            SettingDefaults.posCustomerCardDeliveryTemplate,
+        SettingKeys.posOrderSuccessTemplate:
+            SettingDefaults.posOrderSuccessTemplate,
         SettingKeys.customerDebtPaymentTemplate:
             SettingDefaults.customerDebtPaymentTemplate,
         SettingKeys.promotionRewardSmsTemplate:
