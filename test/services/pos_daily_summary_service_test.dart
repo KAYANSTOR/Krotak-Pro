@@ -1,17 +1,16 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import '../../lib/core/clock.dart';
-import '../../lib/core/id_generator.dart';
-import '../../lib/core/result.dart';
-import '../../lib/domain/entities/audit.dart';
-import '../../lib/domain/entities/money.dart';
-import '../../lib/domain/entities/pos_account.dart';
-import '../../lib/domain/entities/setting.dart';
-import '../../lib/domain/entities/transaction.dart';
-import '../../lib/domain/repositories/repositories.dart';
-import '../../lib/domain/services/local_pos_daily_summary_service.dart';
-import '../../lib/domain/services/local_pos_account_registry.dart';
-import '../../lib/domain/services/services.dart';
+import 'package:net_app/core/clock.dart';
+import 'package:net_app/core/id_generator.dart';
+import 'package:net_app/core/result.dart';
+import 'package:net_app/domain/entities/audit.dart';
+import 'package:net_app/domain/entities/money.dart';
+import 'package:net_app/domain/entities/setting.dart';
+import 'package:net_app/domain/entities/transaction.dart';
+import 'package:net_app/domain/repositories/repositories.dart';
+import 'package:net_app/domain/services/local_pos_daily_summary_service.dart';
+import 'package:net_app/domain/services/local_pos_account_registry.dart';
+import 'package:net_app/domain/services/services.dart';
 
 void main() {
   test('sends yesterday summary from the shared POS customer ledger', () async {
@@ -52,7 +51,7 @@ void main() {
     final sender = _Sender();
     final audits = _Audits();
     final service = LocalPosDailySummaryService(
-      posRegistry: LocalPosAccountRegistry(settings: settings, clock: const FixedClock(DateTime(2026, 9, 21, 8))),
+      posRegistry: LocalPosAccountRegistry(settings: settings, clock: FixedClock(DateTime(2026, 9, 21, 8))),
       transactions: transactions,
       balances: _Balances(
         const Money(minorUnits: 700, currencyCode: 'YER'),
@@ -118,7 +117,7 @@ void main() {
     });
     final sender = _Sender();
     final service = LocalPosDailySummaryService(
-      posRegistry: LocalPosAccountRegistry(settings: settings, clock: const FixedClock(DateTime(2026, 9, 21))),
+      posRegistry: LocalPosAccountRegistry(settings: settings, clock: FixedClock(DateTime(2026, 9, 21))),
       transactions: _Transactions(const []),
       balances: _Balances(const Money(minorUnits: 0, currencyCode: 'YER')),
       settings: settings,
