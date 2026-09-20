@@ -145,6 +145,7 @@ final class UnifiedPaymentEventEngine implements PaymentEventEngine {
       identifierType: parsedTransfer.identifierType,
       reference: parsedTransfer.reference,
       templateId: parsedTransfer.templateId,
+      posId: parsedTransfer.posId,
       rawIdentifier: parsedTransfer.rawIdentifier,
       quantity: parsedTransfer.quantity,
       deliveryOverride: parsedTransfer.deliveryOverride,
