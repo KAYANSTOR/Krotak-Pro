@@ -17,6 +17,7 @@ import '../widgets/net/net_initial_avatar.dart';
 import '../widgets/net/net_sheet.dart';
 import '../widgets/net/net_surface_card.dart';
 import '../widgets/net/net_tab_header.dart';
+import 'broadcast_sheet.dart';
 
 enum _AccountFilter { all, debtor, creditor, unlinked }
 
@@ -215,6 +216,11 @@ class _CustomersScreenState extends State<CustomersScreen> {
               icon: Icons.person_add_alt_1_rounded,
               tooltip: 'إضافة حساب',
               onPressed: _showCreateSheet,
+            ),
+            NetHeaderAction(
+              icon: Icons.campaign_outlined,
+              tooltip: 'إرسال رسالة للعملاء',
+              onPressed: () => BroadcastSheet.show(context),
             ),
             NetHeaderAction(
               icon: Icons.volume_up_outlined,

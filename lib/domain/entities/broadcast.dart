@@ -11,6 +11,21 @@ enum BroadcastJobStatus {
 
 enum BroadcastRecipientStatus { pending, sent, skipped, failed }
 
+/// نطاق المستهدفين في الرسالة الجماعية.
+enum BroadcastAudience {
+  /// كل العملاء النشطين.
+  allCustomers,
+
+  /// العملاء الذين عليهم دين فقط.
+  debtorCustomers,
+
+  /// تحديد يدوي لعملاء بعينهم.
+  selectedCustomers,
+
+  /// حسابات نقاط البيع (على رقم الإشعار المحفوظ لكل نقطة).
+  posAccounts,
+}
+
 final class BroadcastRecipient {
   const BroadcastRecipient({
     required this.customerId,

@@ -138,10 +138,16 @@ abstract interface class LicenseService {
 }
 
 abstract interface class BroadcastService {
-  Future<Result<BroadcastPreview>> preview({required String body});
+  Future<Result<BroadcastPreview>> preview({
+    required String body,
+    BroadcastAudience audience = BroadcastAudience.allCustomers,
+    List<String> customerIds = const <String>[],
+  });
   Future<Result<BroadcastJob>> confirm({
     required String body,
     required String confirmationPhrase,
+    BroadcastAudience audience = BroadcastAudience.allCustomers,
+    List<String> customerIds = const <String>[],
   });
   Future<Result<BroadcastJob>> run(
     String jobId, {

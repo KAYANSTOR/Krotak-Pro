@@ -6,10 +6,15 @@ import '../../core/result.dart';
 import '../entities/audit.dart';
 import '../entities/broadcast.dart';
 import '../entities/customer.dart';
+import '../entities/pos_account.dart';
 import '../entities/setting.dart';
+import '../entities/transaction.dart';
+import '../entities/wallet.dart';
+import '../ledger.dart';
 import '../phone_normalizer.dart';
 import '../repositories/repositories.dart';
 import '../../data/repositories/local_broadcast_repository.dart';
+import 'local_pos_account_registry.dart';
 import 'services.dart';
 
 final class LocalBroadcastService implements BroadcastService {
@@ -21,6 +26,8 @@ final class LocalBroadcastService implements BroadcastService {
     required this.messageSender,
     required this.clock,
     required this.ids,
+    required this.transactions,
+    required this.posRegistry,
     this.sendDelay = Duration.zero,
   });
 
@@ -31,17 +38,31 @@ final class LocalBroadcastService implements BroadcastService {
   final MessageSender messageSender;
   final Clock clock;
   final IdGenerator ids;
+
+  /// قراءة دفتر العملاء لتصفية من عليهم دين فقط.
+  final TransactionRepository transactions;
+
+  /// حسابات نقاط البيع — تُستخدم كجهة مستهدفة مستقلة عن العملاء.
+  final LocalPosAccountRegistry posRegistry;
+
   final Duration sendDelay;
 
   static const requiredConfirmation = 'إرسال';
 
   @override
-  Future<Result<BroadcastPreview>> preview({required String body}) async {
+  Future<Result<BroadcastPreview>> preview({
+    required String body,
+    BroadcastAudience audience = BroadcastAudience.allCustomers,
+    List<String> customerIds = const <String>[],
+  }) async {
     final trimmed = body.trim();
     if (trimmed.isEmpty) {
       return const Failure(AppFailure(code: 'broadcast_empty_body', message: 'نص الرسالة فارغ'));
     }
-    final classified = await _classifyRecipients();
+    final classified = await _classifyRecipients(
+      audience: audience,
+      customerIds: customerIds,
+    );
     if (classified is Failure<_ClassifiedRecipients>) return Failure(classified.error);
     final bag = (classified as Success<_ClassifiedRecipients>).value;
     return Success(
@@ -59,20 +80,30 @@ final class LocalBroadcastService implements BroadcastService {
   Future<Result<BroadcastJob>> confirm({
     required String body,
     required String confirmationPhrase,
+    BroadcastAudience audience = BroadcastAudience.allCustomers,
+    List<String> customerIds = const <String>[],
   }) async {
     if (confirmationPhrase.trim() != requiredConfirmation) {
       return const Failure(
         AppFailure(code: 'broadcast_confirmation_required', message: 'يجب كتابة كلمة إرسال للتأكيد'),
       );
     }
-    final previewResult = await preview(body: body);
+    final previewResult = await preview(
+      body: body,
+      audience: audience,
+      customerIds: customerIds,
+    );
     if (previewResult is Failure<BroadcastPreview>) return Failure(previewResult.error);
     final previewValue = (previewResult as Success<BroadcastPreview>).value;
     if (previewValue.eligible.isEmpty) {
       return const Failure(AppFailure(code: 'broadcast_no_recipients', message: 'لا يوجد مستلمون مؤهلون'));
     }
 
-    final fingerprint = _fingerprint(previewValue.body, previewValue.eligible.map((e) => e.phone));
+    final fingerprint = _fingerprint(
+      previewValue.body,
+      previewValue.eligible.map((e) => e.phone),
+      audience.name,
+    );
     final existing = await jobs.findByFingerprint(fingerprint);
     if (existing is Failure<BroadcastJob?>) return Failure(existing.error);
     final existingJob = (existing as Success<BroadcastJob?>).value;
@@ -223,22 +254,54 @@ final class LocalBroadcastService implements BroadcastService {
     return Success(next);
   }
 
-  Future<Result<_ClassifiedRecipients>> _classifyRecipients() async {
+  Future<Result<_ClassifiedRecipients>> _classifyRecipients({
+    required BroadcastAudience audience,
+    required List<String> customerIds,
+  }) async {
+    if (audience == BroadcastAudience.posAccounts) {
+      return _classifyPosAccounts();
+    }
+
+    // تحديد يدوي بلا اختيار فعلي = لا مستلمين (بدل إرسال للجميع بالخطأ).
+    if (audience == BroadcastAudience.selectedCustomers && customerIds.isEmpty) {
+      return const Success(
+        _ClassifiedRecipients(
+          eligible: <BroadcastRecipient>[],
+          blacklisted: 0,
+          invalidPhone: 0,
+          inactive: 0,
+          ineligible: 0,
+        ),
+      );
+    }
+
     final listed = await customers.search('');
     if (listed is Failure<List<Customer>>) return Failure(listed.error);
     final eligible = <BroadcastRecipient>[];
     var blacklisted = 0;
     var invalidPhone = 0;
     var inactive = 0;
+    var ineligible = 0;
+    final selected = customerIds.toSet();
+    final currencyCode = await _currencyCode();
     final seenPhones = <String>{};
 
     for (final customer in (listed as Success<List<Customer>>).value) {
+      if (audience == BroadcastAudience.selectedCustomers &&
+          !selected.contains(customer.id)) {
+        continue;
+      }
       if (customer.status == CustomerStatus.blacklisted) {
         blacklisted++;
         continue;
       }
       if (customer.status != CustomerStatus.active) {
         inactive++;
+        continue;
+      }
+      if (audience == BroadcastAudience.debtorCustomers &&
+          !await _hasDebt(customer.id, currencyCode)) {
+        ineligible++;
         continue;
       }
       final idsResult = await customers.listIdentifiers(customer.id);
@@ -274,13 +337,76 @@ final class LocalBroadcastService implements BroadcastService {
         blacklisted: blacklisted,
         invalidPhone: invalidPhone,
         inactive: inactive,
+        ineligible: ineligible,
       ),
     );
   }
 
-  String _fingerprint(String body, Iterable<String> phones) {
+  /// نقاط البيع كجهة مستقلة عن دفاتر العملاء — يُرسل إلى رقم الإشعار لكل نقطة.
+  Future<Result<_ClassifiedRecipients>> _classifyPosAccounts() async {
+    final listed = await posRegistry.listAll();
+    if (listed is Failure<List<PosAccount>>) return Failure(listed.error);
+    final eligible = <BroadcastRecipient>[];
+    var invalidPhone = 0;
+    var inactive = 0;
+    final seenPhones = <String>{};
+
+    for (final account in (listed as Success<List<PosAccount>>).value) {
+      if (account.status != PointOfSaleStatus.active) {
+        inactive++;
+        continue;
+      }
+      final canonical = PhoneNormalizer.canonicalize(account.notifyPhone ?? '');
+      if (canonical == null) {
+        invalidPhone++;
+        continue;
+      }
+      if (!seenPhones.add(canonical)) continue;
+      eligible.add(
+        BroadcastRecipient(
+          customerId: account.posId,
+          phone: canonical,
+          displayName: account.name,
+          status: BroadcastRecipientStatus.pending,
+        ),
+      );
+    }
+    return Success(
+      _ClassifiedRecipients(
+        eligible: eligible,
+        blacklisted: 0,
+        invalidPhone: invalidPhone,
+        inactive: inactive,
+        ineligible: 0,
+      ),
+    );
+  }
+
+  /// هل على العميل دين قائم (رصيد سالب في الدفتر المكتمل)؟
+  Future<bool> _hasDebt(String customerId, String currencyCode) async {
+    final rows = await transactions.findByCustomer(customerId);
+    if (rows is! Success<List<Transaction>>) return false;
+    try {
+      final balance = sumCompletedLedger(
+        transactions: rows.value,
+        currencyCode: currencyCode,
+      );
+      return balance.minorUnits < 0;
+    } on MixedCurrencyLedger {
+      return false;
+    }
+  }
+
+  Future<String> _currencyCode() async {
+    final found = await settings.find(SettingKeys.defaultCurrency);
+    final value = found is Success<AppSetting?> ? found.value?.value.trim() : null;
+    if (value == null || value.isEmpty) return 'YER';
+    return value;
+  }
+
+  String _fingerprint(String body, Iterable<String> phones, String audience) {
     final joined = [...phones]..sort();
-    return '${body.hashCode}:${joined.join(',')}';
+    return '$audience:${body.hashCode}:${joined.join(',')}';
   }
 
   Future<int> _intSetting(String key, int fallback) async {
@@ -296,10 +422,14 @@ final class _ClassifiedRecipients {
     required this.blacklisted,
     required this.invalidPhone,
     required this.inactive,
+    required this.ineligible,
   });
 
   final List<BroadcastRecipient> eligible;
   final int blacklisted;
   final int invalidPhone;
   final int inactive;
+
+  /// مستبعدون لا ينطبق عليهم نطاق الرسالة (مثل: بلا دين عند تصفية المدينين).
+  final int ineligible;
 }

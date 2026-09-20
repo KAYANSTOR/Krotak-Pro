@@ -9,8 +9,12 @@ import 'package:net_app/data/repositories/local_broadcast_repository.dart';
 import 'package:net_app/data/repositories/local_repositories.dart';
 import 'package:net_app/domain/entities/broadcast.dart';
 import 'package:net_app/domain/entities/customer.dart';
+import 'package:net_app/domain/entities/money.dart';
+import 'package:net_app/domain/entities/pos_account.dart';
+import 'package:net_app/domain/entities/transaction.dart';
 import 'package:net_app/domain/services/local_broadcast_service.dart';
 import 'package:net_app/domain/services/local_customer_service.dart';
+import 'package:net_app/domain/services/local_pos_account_registry.dart';
 import 'package:net_app/domain/services/services.dart';
 
 final class _RecordingSender implements MessageSender {
@@ -59,6 +63,11 @@ void main() {
       messageSender: sender,
       clock: FixedClock(DateTime(2026, 9, 13)),
       ids: SequentialIdGenerator(start: 100),
+      transactions: LocalTransactionRepository(database),
+      posRegistry: LocalPosAccountRegistry(
+        settings: settings,
+        clock: FixedClock(DateTime(2026, 9, 13)),
+      ),
     );
   });
 
@@ -142,5 +151,73 @@ void main() {
     expect(done.status, BroadcastJobStatus.partiallyFailed);
     expect(done.sentCount, 1);
     expect(done.failedCount, 1);
+  });
+
+  test('debtor audience only targets customers with outstanding debt', () async {
+    final debtor = await addCustomer('مدين', '0777123456');
+    await addCustomer('بلا دين', '0777000111');
+    await LocalTransactionRepository(database).append(
+      Transaction(
+        id: 'tx-debt',
+        type: TransactionType.sale,
+        status: TransactionStatus.completed,
+        amount: const Money(minorUnits: 5000, currencyCode: 'YER'),
+        createdAt: DateTime.utc(2026, 9, 13),
+        customerId: debtor.id,
+      ),
+    );
+
+    final preview = await broadcast.preview(
+      body: 'تذكير بالسداد',
+      audience: BroadcastAudience.debtorCustomers,
+    );
+    final value = (preview as Success<BroadcastPreview>).value;
+    expect(value.eligibleCount, 1);
+    expect(value.eligible.single.displayName, 'مدين');
+  });
+
+  test('manual audience sends only to the selected customers', () async {
+    final first = await addCustomer('أول', '0777123456');
+    await addCustomer('ثاني', '0777000111');
+
+    final preview = await broadcast.preview(
+      body: 'رسالة محددة',
+      audience: BroadcastAudience.selectedCustomers,
+      customerIds: [first.id],
+    );
+    final value = (preview as Success<BroadcastPreview>).value;
+    expect(value.eligibleCount, 1);
+    expect(value.eligible.single.displayName, 'أول');
+
+    final empty = await broadcast.preview(
+      body: 'رسالة محددة',
+      audience: BroadcastAudience.selectedCustomers,
+    );
+    expect((empty as Success<BroadcastPreview>).value.eligibleCount, 0);
+  });
+
+  test('pos audience targets point-of-sale notification phones', () async {
+    await addCustomer('عميل', '0777123456');
+    await LocalPosAccountRegistry(
+      settings: settings,
+      clock: FixedClock(DateTime(2026, 9, 13)),
+    ).save(
+      const PosAccount(
+        posId: 'pos-1',
+        customerId: 'c-pos',
+        name: 'نقطة الأمانة',
+        identifiers: <String>['771122233'],
+        notifyPhone: '0771223344',
+      ),
+    );
+
+    final preview = await broadcast.preview(
+      body: 'تعميم للنقاط',
+      audience: BroadcastAudience.posAccounts,
+    );
+    final value = (preview as Success<BroadcastPreview>).value;
+    expect(value.eligibleCount, 1);
+    expect(value.eligible.single.displayName, 'نقطة الأمانة');
+    expect(value.eligible.single.phone, '771223344');
   });
 }

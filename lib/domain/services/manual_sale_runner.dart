@@ -11,7 +11,9 @@ import 'services.dart';
 ///
 /// - cash: deposit then sale
 /// - credit / pos: sale only (debt)
-/// - gift: sale only, audited as gift (no deposit)
+/// - gift: sale only — **no customer ledger entry at all** (a gift is never
+///   recorded as customer debt); the card is consumed and the sale is audited
+///   as a gift so it shows up in the offers/gifts trail instead of the account.
 final class ManualSaleRunner {
   const ManualSaleRunner(this.host);
 
@@ -173,19 +175,22 @@ final class ManualSaleRunner {
       final marked = await host.cards.markSold(card.id, sale.id);
       if (marked is Failure<void>) return Failure(marked.error);
 
-      final saleTxn = Transaction(
-        id: host.ids.next('txn'),
-        type: TransactionType.sale,
-        status: TransactionStatus.completed,
-        amount: category.faceValue,
-        createdAt: now,
-        customerId: customer.id,
-        reference: stableOperationId == null
-            ? 'manual:${sale.id}'
-            : 'manual-op:$stableOperationId',
-      );
-      final appended = await host.transactions.append(saleTxn);
-      if (appended is Failure<void>) return Failure(appended.error);
+      // بطاقة الهدية لا تُسجَّل على حساب العميل — لا حركة مدينة في دفتره.
+      if (method != ManualSaleMethod.gift) {
+        final saleTxn = Transaction(
+          id: host.ids.next('txn'),
+          type: TransactionType.sale,
+          status: TransactionStatus.completed,
+          amount: category.faceValue,
+          createdAt: now,
+          customerId: customer.id,
+          reference: stableOperationId == null
+              ? 'manual:${sale.id}'
+              : 'manual-op:$stableOperationId',
+        );
+        final appended = await host.transactions.append(saleTxn);
+        if (appended is Failure<void>) return Failure(appended.error);
+      }
 
       final savedSale = await host.sales.save(sale);
       if (savedSale is Failure<void>) return Failure(savedSale.error);
@@ -196,7 +201,9 @@ final class ManualSaleRunner {
           id: host.ids.next('audit'),
           entityType: 'sale',
           entityId: sale.id,
-          action: 'manual_completed',
+          action: method == ManualSaleMethod.gift
+              ? 'gift_completed'
+              : 'manual_completed',
           payloadJson:
               '{"cardId":"${card.id}","customerId":"${customer.id}","phone":"$phoneTrim","method":"$methodLabel","operationId":"${stableOperationId ?? ''}"}',
           occurredAt: now,
