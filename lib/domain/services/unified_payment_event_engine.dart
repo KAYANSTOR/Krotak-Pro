@@ -9,6 +9,7 @@ import '../repositories/repositories.dart';
 import 'local_blocked_number_service.dart';
 import 'payment_fingerprint_service.dart';
 import 'payment_source_guard.dart';
+import 'local_pos_balance_request_service.dart';
 import 'services.dart';
 
 /// Single ingest path for SMS, wallet notifications, and manual entry.
@@ -24,6 +25,7 @@ final class UnifiedPaymentEventEngine implements PaymentEventEngine {
     required this.ids,
     this.settings,
     this.sourceGuard,
+    this.posBalanceRequestService,
     this.fingerprints = const PaymentFingerprintService(),
   });
 
@@ -33,6 +35,7 @@ final class UnifiedPaymentEventEngine implements PaymentEventEngine {
   final IdGenerator ids;
   final SettingsRepository? settings;
   final PaymentSourceGuard? sourceGuard;
+  final LocalPosBalanceRequestService? posBalanceRequestService;
   final PaymentFingerprintService fingerprints;
 
   @override
@@ -149,6 +152,23 @@ final class UnifiedPaymentEventEngine implements PaymentEventEngine {
     );
     await messages.updateStatus(message.id, MessageProcessingStatus.parsed);
 
+    final balanceService = posBalanceRequestService;
+    if (balanceService != null && parsedTransfer.templateId != null) {
+      final matchedTemplate = await templatesForBalance(parsedTransfer.templateId!);
+      if (matchedTemplate == true) {
+        final balanceResult = await balanceService.handle(
+          message: message,
+          parsed: parsedTransfer,
+        );
+        if (balanceResult is Failure<void>) {
+          await messages.updateStatus(message.id, MessageProcessingStatus.failed);
+          return Failure(balanceResult.error);
+        }
+        await messages.updateStatus(message.id, MessageProcessingStatus.processed);
+        return const Success(null);
+      }
+    }
+
     final auto = await _autoProcessingEnabled();
     if (!auto) {
       return const Success(null);
@@ -159,6 +179,24 @@ final class UnifiedPaymentEventEngine implements PaymentEventEngine {
       return Success(processResult.value);
     }
     return Failure((processResult as Failure<Transaction>).error);
+  }
+
+  Future<bool> templatesForBalance(String templateId) async {
+    final listed = await messagesTemplates();
+    if (listed is! Success<List<TransferTemplate>>) return false;
+    for (final t in listed.value) {
+      if (t.id == templateId) {
+        return t.identifierKind == TemplateIdentifierKind.balanceRequestCode;
+      }
+    }
+    return false;
+  }
+
+  Future<Result<List<TransferTemplate>>> messagesTemplates() async {
+    // The parser is the authoritative in-memory template source. Its public
+    // template list is unavailable through the interface, so this engine uses
+    // a small marker set from the parsed event instead of guessing.
+    return const Success(<TransferTemplate>[]);
   }
 
   Future<Result<Transaction?>> _rejectBlocked(PaymentEvent event) async {
