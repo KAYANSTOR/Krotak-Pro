@@ -141,7 +141,7 @@ final class LocalTransferProcessor implements TransferProcessor {
             id: ids.next('audit'),
             entityType: 'message',
             entityId: message.id,
-            action: 'customer_auto_provisioned',
+            action: 'ledger_account_auto_provisioned',
             occurredAt: clock.now(),
             payloadJson:
                 '{\"customerId\":\"${provisioned.value.id}\",\"identifier\":\"${transfer.customerIdentifier}\",\"identifierType\":\"${transfer.identifierType.name}\"}',
@@ -601,6 +601,7 @@ final class LocalTransferProcessor implements TransferProcessor {
       displayName: phone,
       identifierType: CustomerIdentifierType.phoneNumber,
       identifierValue: phone,
+      status: CustomerStatus.provisional,
     );
     if (created is Success<Customer>) return created;
     if (created is Failure<Customer> &&

@@ -14,7 +14,10 @@ abstract interface class CustomerService {
     required String displayName,
     required CustomerIdentifierType identifierType,
     required String identifierValue,
+    CustomerStatus status = CustomerStatus.active,
   });
+
+  Future<Result<Customer>> promoteToActive(String customerId);
 
   Future<Result<void>> blacklist(String customerId);
 
