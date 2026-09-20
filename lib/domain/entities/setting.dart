@@ -39,6 +39,8 @@ abstract final class SettingKeys {
   static const promotionRewardSmsTemplate = 'promotion_reward_sms_template';
 
   static const voucherDeliverySmsTemplate = 'voucher_delivery_sms_template';
+  static const posCustomerCardDeliveryTemplate = 'pos_customer_card_delivery_template';
+  static const posOrderSuccessTemplate = 'pos_order_success_template';
   static const customerDebtPaymentTemplate = 'customer_debt_payment_template';
   static const posBalanceResponseTemplate = 'pos_balance_response_template';
   static const posCreditLimitExceededTemplate = 'pos_credit_limit_exceeded_template';
@@ -75,6 +77,10 @@ abstract final class SettingDefaults {
       'مكافأة عرض {title}\nالرقم: {serial}\nالرمز: {secret}';
   static const voucherDeliverySmsTemplate =
       'رقم الكرت: {serial}\nالرمز: {code}';
+  static const posCustomerCardDeliveryTemplate =
+      'شبكة {NETWORK_NAME}\nالفئة: {CARD_VALUE} {CURRENCY}\n{cards}';
+  static const posOrderSuccessTemplate =
+      'تم إرسال {QUANTITY_TEXT} بنجاح إلى {CUSTOMER_PHONE}\nالفئة: {CARD_VALUE} {CURRENCY}\nنقطة البيع: {POS_NAME}\nإجمالي الخصم من الحساب: {TOTAL} {CURRENCY}';
   static const customerDebtPaymentTemplate =
       'تم تأكيد سداد مبلغ {amount} ر.ي. رصيدك الحالي: {balance} ر.ي';
   static const posBalanceResponseTemplate =
