@@ -3,7 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:net_app/core/clock.dart';
 import 'package:net_app/core/id_generator.dart';
 import 'package:net_app/core/result.dart';
-import 'package:net_app/data/database/app_database.dart' hide Customer;
+import 'package:net_app/data/database/app_database.dart' hide Customer, Transaction;
 import 'package:net_app/data/database/drift_unit_of_work.dart';
 import 'package:net_app/data/repositories/local_broadcast_repository.dart';
 import 'package:net_app/data/repositories/local_repositories.dart';
