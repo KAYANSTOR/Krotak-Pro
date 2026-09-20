@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import '../../core/clock.dart';
 import '../../core/id_generator.dart';
 import '../../core/result.dart';
@@ -13,9 +15,8 @@ import 'services.dart';
 /// Sends the configured daily POS operational summary from the same customer
 /// ledger already used by the rest of the application.
 ///
-/// The service is intentionally database-agnostic: POS debt/balance remains on
-/// the POS customer account, so this feature does not introduce a second POS
-/// financial ledger.
+/// POS debt/balance remains on the POS customer account. This feature therefore
+/// does not create a second financial ledger just for POS summaries.
 final class LocalPosDailySummaryService {
   const LocalPosDailySummaryService({
     required this.posRegistry,
@@ -37,20 +38,21 @@ final class LocalPosDailySummaryService {
   final Clock clock;
   final IdGenerator ids;
 
-  /// Sends yesterday's summary once per POS per application day.
+  /// Sends yesterday's summary once per POS for the current application day.
   ///
-  /// Calling this method repeatedly is safe because the successful send marker
-  /// is persisted after the message succeeds.
+  /// Both a persisted marker and the audit trail act as idempotency fences.
+  /// This prevents a successful SMS from being sent again when one of the
+  /// post-send persistence writes fails.
   Future<Result<PosDailySummaryReport>> sendDue({DateTime? now}) async {
-    final enabledSetting = await settings.find(
+    final enabledResult = await settings.find(
       SettingKeys.dailyOpsSummaryAutoSend,
     );
-    if (enabledSetting is Failure<AppSetting?>) {
-      return Failure(enabledSetting.error);
+    if (enabledResult is Failure<AppSetting?>) {
+      return Failure(enabledResult.error);
     }
 
     final enabled = SettingBool.read(
-      (enabledSetting as Success<AppSetting?>).value?.value,
+      (enabledResult as Success<AppSetting?>).value?.value,
       defaultValue: SettingDefaults.dailyOpsSummaryAutoSend,
     );
     if (!enabled) {
@@ -67,48 +69,82 @@ final class LocalPosDailySummaryService {
     final current = (now ?? clock.now()).toLocal();
     final summaryDay = DateTime(current.year, current.month, current.day - 1);
     final dayKey = _dayKey(current);
+    final summaryDayKey = _dayKey(summaryDay);
 
     final accountsResult = await posRegistry.listAll();
     if (accountsResult is Failure<List<PosAccount>>) {
       return Failure(accountsResult.error);
     }
+    final accounts = (accountsResult as Success<List<PosAccount>>).value;
 
-    final completed = await transactions.listCompleted(currencyCode: 'YER');
-    if (completed is Failure<List<Transaction>>) {
-      return Failure(completed.error);
+    final completedResult = await transactions.listCompleted(
+      currencyCode: 'YER',
+    );
+    if (completedResult is Failure<List<Transaction>>) {
+      return Failure(completedResult.error);
     }
-    final rows = (completed as Success<List<Transaction>>).value;
+    final transactionsSnapshot =
+        (completedResult as Success<List<Transaction>>).value;
 
-    final template = await _loadTemplate();
-    if (template is Failure<String>) {
-      return Failure(template.error);
+    final templateResult = await _loadTemplate();
+    if (templateResult is Failure<String>) {
+      return Failure(templateResult.error);
     }
-    final templateText = (template as Success<String>).value;
+    final template = (templateResult as Success<String>).value;
 
     var sent = 0;
     var skipped = 0;
     var failed = 0;
     final errors = <String>[];
 
-    for (final account in accountsResult.value) {
+    for (final account in accounts) {
       if (account.status != PointOfSaleStatus.active) {
         skipped++;
         continue;
       }
 
       final markerKey = 'pos_daily_summary:${account.posId}:$dayKey';
-      final marker = await settings.find(markerKey);
-      if (marker is Failure<AppSetting?>) {
+      final markerResult = await settings.find(markerKey);
+      if (markerResult is Failure<AppSetting?>) {
         failed++;
         errors.add('${account.posId}:marker_read_failed');
         continue;
       }
-      if ((marker as Success<AppSetting?>).value != null) {
+      if ((markerResult as Success<AppSetting?>).value != null) {
         skipped++;
         continue;
       }
 
-      final accountRows = rows.where(
+      // Recovery fence: a successful audit entry means the SMS was already
+      // sent even if the lightweight settings marker was not persisted.
+      final auditResult = await auditLogs.findByEntity(
+        'pos_account',
+        account.posId,
+      );
+      if (auditResult is Failure<List<AuditLog>>) {
+        failed++;
+        errors.add('${account.posId}:audit_read_failed');
+        continue;
+      }
+      final alreadyAudited =
+          (auditResult as Success<List<AuditLog>>).value.any(
+        (log) =>
+            log.action == 'pos_daily_summary_sent' &&
+            (log.payloadJson ?? '').contains('"day":"$summaryDayKey"'),
+      );
+      if (alreadyAudited) {
+        skipped++;
+        await settings.save(
+          AppSetting(
+            key: markerKey,
+            value: 'sent:${ids.next('pos-summary-repair')}',
+            updatedAt: clock.now(),
+          ),
+        );
+        continue;
+      }
+
+      final accountRows = transactionsSnapshot.where(
         (row) =>
             row.customerId == account.customerId &&
             row.amount.currencyCode == 'YER',
@@ -124,11 +160,11 @@ final class LocalPosDailySummaryService {
         TransactionType.deposit,
       );
 
-      final balance = await balances.getBalance(
+      final balanceResult = await balances.getBalance(
         customerId: account.customerId,
         currencyCode: 'YER',
       );
-      if (balance is Failure) {
+      if (balanceResult is Failure) {
         failed++;
         errors.add('${account.posId}:balance_read_failed');
         await _auditFailure(
@@ -146,29 +182,47 @@ final class LocalPosDailySummaryService {
       }
 
       final body = _render(
-        templateText,
+        template,
         pos: account.name,
         salesMinorUnits: salesMinorUnits,
         transferMinorUnits: transferMinorUnits,
-        balanceMinorUnits: (balance as Success).value.minorUnits,
+        balanceMinorUnits:
+            (balanceResult as Success).value.minorUnits,
       );
 
-      final sentResult = await messageSender.send(
+      final sendResult = await messageSender.send(
         destination: destination,
         body: body,
       );
-      if (sentResult is Failure<void>) {
+      if (sendResult is Failure<void>) {
         failed++;
-        errors.add('${account.posId}:${sentResult.error.code}');
+        final code = sendResult.error.code.isEmpty
+            ? 'sms_send_failed'
+            : sendResult.error.code;
+        errors.add('${account.posId}:$code');
         await _auditFailure(
           account: account,
           day: summaryDay,
-          code: sentResult.error.code.isEmpty
-              ? 'sms_send_failed'
-              : sentResult.error.code,
+          code: code,
         );
         continue;
       }
+
+      final auditResultAfterSend = await auditLogs.append(
+        AuditLog(
+          id: ids.next('audit'),
+          entityType: 'pos_account',
+          entityId: account.posId,
+          action: 'pos_daily_summary_sent',
+          occurredAt: clock.now(),
+          payloadJson: jsonEncode(<String, Object?>{
+            'day': summaryDayKey,
+            'destination': destination,
+            'salesMinorUnits': salesMinorUnits,
+            'transferMinorUnits': transferMinorUnits,
+          }),
+        ),
+      );
 
       final markerSave = await settings.save(
         AppSetting(
@@ -177,32 +231,32 @@ final class LocalPosDailySummaryService {
           updatedAt: clock.now(),
         ),
       );
-      if (markerSave is Failure<void>) {
+
+      // The message has already been accepted by the sender. Persist at least
+      // one idempotency fence before allowing another run to continue.
+      if (auditResultAfterSend is Failure<void> &&
+          markerSave is Failure<void>) {
         failed++;
-        errors.add('${account.posId}:marker_write_failed');
+        errors.add(
+          '${account.posId}:post_send_persistence_failed',
+        );
+        // Best effort diagnostic. The next run may retry only if neither fence
+        // could be persisted.
         await _auditFailure(
           account: account,
           day: summaryDay,
-          code: 'marker_write_failed',
+          code: 'post_send_persistence_failed',
         );
         continue;
       }
 
-      final audit = await auditLogs.append(
-        AuditLog(
-          id: ids.next('audit'),
-          entityType: 'pos_account',
-          entityId: account.posId,
-          action: 'pos_daily_summary_sent',
-          occurredAt: clock.now(),
-          payloadJson:
-              '${{"day":"${_dayKey(summaryDay)}","destination":"${destination}","salesMinorUnits":$salesMinorUnits,"transferMinorUnits":$transferMinorUnits}}',
-        ),
-      );
-      if (audit is Failure<void>) {
+      if (auditResultAfterSend is Failure<void>) {
         failed++;
         errors.add('${account.posId}:audit_write_failed');
-        continue;
+      }
+      if (markerSave is Failure<void>) {
+        failed++;
+        errors.add('${account.posId}:marker_write_failed');
       }
 
       sent++;
@@ -213,7 +267,7 @@ final class LocalPosDailySummaryService {
         sent: sent,
         skipped: skipped,
         failed: failed,
-        errors: errors,
+        errors: List.unmodifiable(errors),
       ),
     );
   }
@@ -248,6 +302,7 @@ final class LocalPosDailySummaryService {
     final from = DateTime(day.year, day.month, day.day);
     final to = from.add(const Duration(days: 1));
     var total = 0;
+
     for (final row in rows) {
       final local = row.createdAt.toLocal();
       if (row.type != type || row.status != TransactionStatus.completed) {
@@ -256,6 +311,7 @@ final class LocalPosDailySummaryService {
       if (local.isBefore(from) || !local.isBefore(to)) continue;
       total += row.amount.minorUnits;
     }
+
     return total;
   }
 
@@ -273,6 +329,7 @@ final class LocalPosDailySummaryService {
       'balance': _displayMinor(balanceMinorUnits),
       'CURRENCY': 'ر.ي',
     };
+
     var result = template;
     for (final entry in values.entries) {
       result = result.replaceAll('{${entry.key}}', entry.value);
@@ -300,13 +357,15 @@ final class LocalPosDailySummaryService {
         entityId: account.posId,
         action: 'pos_daily_summary_failed',
         occurredAt: clock.now(),
-        payloadJson:
-            '${{"day":"${_dayKey(day)}","error":"${code}"}}',
+        payloadJson: jsonEncode(<String, Object?>{
+          'day': _dayKey(day),
+          'error': code,
+        }),
       ),
     );
   }
 }
-
+ 
 final class PosDailySummaryReport {
   const PosDailySummaryReport({
     required this.sent,
