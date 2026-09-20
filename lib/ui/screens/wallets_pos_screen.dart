@@ -452,6 +452,40 @@ class _WalletsPosScreenState extends State<WalletsPosScreen>
     );
   }
 
+  /// تحقق قبل الحفظ: الاسم والرقم مطلوبان، والاسم غير مكرر، والرقم غير مرتبط
+  /// بنقطة بيع أخرى ولا بحساب عميل قائم (فصل حسابات النقاط عن العملاء).
+  Future<String?> _posFormProblem({
+    required PointOfSale? existing,
+    required String? existingCustomerId,
+    required String name,
+    required String phone,
+  }) async {
+    final c = AppScope.of(context);
+    final positions = await c.pointsOfSale.listAll();
+    if (positions is Success<List<PointOfSale>>) {
+      for (final item in positions.value) {
+        if (existing != null && item.id == existing.id) continue;
+        if (item.name.trim() == name) return 'يوجد نقطة بيع أخرى بنفس الاسم';
+      }
+    }
+    final owner = await c.posRegistry.findByIdentifier(phone);
+    if (owner is Success<PosAccount?>) {
+      final found = owner.value;
+      if (found != null && found.posId != (existing?.id ?? '')) {
+        return 'الرقم مرتبط بنقطة بيع أخرى: ${found.name}';
+      }
+    }
+    final customer = await c.customers.findByIdentifier(phone);
+    if (customer is Success<Customer?>) {
+      final found = customer.value;
+      final ownCustomerId = existingCustomerId ?? '';
+      if (found != null && found.id != ownCustomerId) {
+        return 'الرقم مسجّل لحساب عميل آخر — استخدم رقماً مختلفاً لنقطة البيع';
+      }
+    }
+    return null;
+  }
+
   /// نموذج "نقطة بيع جديدة" / "تعديل نقطة البيع" — مطابق لحقول الفيديو:
   /// رقم الجوال، الاسم، سقف الدين المسموح به، ونسبة نقطة البيع.
   Future<void> _editPos(PointOfSale? existing) async {
@@ -471,6 +505,8 @@ class _WalletsPosScreenState extends State<WalletsPosScreen>
     var mode = acc?.percentageMode ?? PosPercentageMode.defaultCategory;
     final contactPicker = ContactPickerBridge();
     var picking = false;
+    var saving = false;
+    String? formError;
 
     final ok = await showModalBottomSheet<bool>(
       context: context,
@@ -606,6 +642,27 @@ class _WalletsPosScreenState extends State<WalletsPosScreen>
                             style: TextStyle(fontFamily: 'Tajawal', fontSize: 12),
                           ),
                         ),
+                        if (formError != null) ...[
+                          const SizedBox(height: 12),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                            decoration: BoxDecoration(
+                              color: sheetCtx.netColors.rejected.withValues(alpha: 0.10),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: sheetCtx.netColors.rejected.withValues(alpha: 0.35),
+                              ),
+                            ),
+                            child: Text(
+                              formError!,
+                              style: TextStyle(
+                                fontFamily: 'Tajawal',
+                                fontSize: 12.5,
+                                color: sheetCtx.netColors.rejected,
+                              ),
+                            ),
+                          ),
+                        ],
                         const SizedBox(height: 16),
                         Row(
                           children: [
@@ -622,15 +679,52 @@ class _WalletsPosScreenState extends State<WalletsPosScreen>
                                   backgroundColor: const Color(0xFF0F766E),
                                   minimumSize: const Size.fromHeight(48),
                                 ),
-                                onPressed: () {
-                                  if (nameCtrl.text.trim().isEmpty) return;
-                                  if (phoneCtrl.text.trim().isEmpty) return;
-                                  Navigator.pop(ctx, true);
-                                },
-                                child: Text(
-                                  existing == null ? 'إنشاء' : 'حفظ',
-                                  style: const TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w700),
-                                ),
+                                onPressed: saving
+                                    ? null
+                                    : () async {
+                                        final name = nameCtrl.text.trim();
+                                        final phone = phoneCtrl.text.trim();
+                                        if (name.isEmpty) {
+                                          setLocal(() => formError = 'أدخل اسم نقطة البيع');
+                                          return;
+                                        }
+                                        if (phone.isEmpty) {
+                                          setLocal(() => formError = 'أدخل رقم جوال نقطة البيع');
+                                          return;
+                                        }
+                                        setLocal(() {
+                                          saving = true;
+                                          formError = null;
+                                        });
+                                        final problem = await _posFormProblem(
+                                          existing: existing,
+                                          existingCustomerId: acc?.customerId,
+                                          name: name,
+                                          phone: phone,
+                                        );
+                                        if (!mounted) return;
+                                        if (problem != null) {
+                                          setLocal(() {
+                                            saving = false;
+                                            formError = problem;
+                                          });
+                                          return;
+                                        }
+                                        if (ctx.mounted) Navigator.pop(ctx, true);
+                                      },
+                                child: saving
+                                    ? const SizedBox(
+                                        width: 20,
+                                        height: 20,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: Colors.white,
+                                        ),
+                                      )
+                                    : Text(
+                                        existing == null ? 'إنشاء' : 'حفظ',
+                                        style: const TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w700),
+                                      ),
                               ),
                             ),
                           ],
