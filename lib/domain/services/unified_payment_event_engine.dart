@@ -4,7 +4,9 @@ import '../entities/message.dart';
 import '../entities/payment_event.dart';
 import '../entities/setting.dart';
 import '../entities/transaction.dart';
+import '../rejection_codes.dart';
 import '../repositories/repositories.dart';
+import 'local_blocked_number_service.dart';
 import 'payment_fingerprint_service.dart';
 import 'payment_source_guard.dart';
 import 'services.dart';
@@ -54,6 +56,16 @@ final class UnifiedPaymentEventEngine implements PaymentEventEngine {
       }
     }
 
+    if (settings != null) {
+      final blocked = LocalBlockedNumberService(settings: settings!);
+      if (await blocked.hitsRawEvent(
+        sourceKey: event.sourceKey,
+        body: event.body,
+      )) {
+        return _rejectBlocked(event);
+      }
+    }
+
     final provisional = event.toProvisionalMessage(id: ids.next('msg'));
     final parseResult = parser.parse(provisional);
     final parsed = parseResult is Success<ParsedTransfer>
@@ -68,6 +80,13 @@ final class UnifiedPaymentEventEngine implements PaymentEventEngine {
       );
       if (templateAuthorization is Failure<void>) {
         return Failure(templateAuthorization.error);
+      }
+    }
+
+    if (parsed != null && settings != null) {
+      final blocked = LocalBlockedNumberService(settings: settings!);
+      if (await blocked.isBlocked(parsed.customerIdentifier)) {
+        return _rejectBlocked(event);
       }
     }
 
@@ -137,6 +156,24 @@ final class UnifiedPaymentEventEngine implements PaymentEventEngine {
       return Success(processResult.value);
     }
     return Failure((processResult as Failure<Transaction>).error);
+  }
+
+  Future<Result<Transaction?>> _rejectBlocked(PaymentEvent event) async {
+    final message = IncomingMessage(
+      id: ids.next('msg'),
+      sender: event.sourceKey,
+      body: event.body,
+      receivedAt: event.receivedAt,
+      status: MessageProcessingStatus.rejected,
+      customerIdentifier: event.sourceKey,
+    );
+    await messages.save(message);
+    return const Failure(
+      AppFailure(
+        code: RejectionCodes.blacklisted,
+        message: 'Blocked number — processing skipped before parse',
+      ),
+    );
   }
 
   Future<bool> _autoProcessingEnabled() async {
