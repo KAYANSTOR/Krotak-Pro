@@ -5,6 +5,7 @@ import '../entities/card.dart';
 import '../entities/customer.dart';
 import '../entities/message.dart';
 import '../entities/payment_event.dart';
+import '../entities/pos_profile.dart';
 import '../entities/money.dart';
 import '../entities/transaction.dart';
 import '../entities/wallet.dart';
@@ -75,6 +76,36 @@ abstract interface class PointOfSaleCatalogService {
     required String name,
     required PointOfSaleStatus status,
   });
+}
+
+/// Single owner of the complete POS profile lifecycle and read model.
+abstract interface class PointOfSaleProfileService {
+  Future<Result<List<PointOfSaleProfile>>> listPointOfSaleProfiles({
+    bool includeArchived = true,
+  });
+
+  Future<Result<PointOfSaleProfile>> createPointOfSaleProfile({
+    required String name,
+    required String phone,
+    required int? creditLimitMinorUnits,
+    required PosPercentageMode percentageMode,
+  });
+
+  Future<Result<PointOfSaleProfile>> updatePointOfSaleProfile({
+    required String id,
+    required String name,
+    required String phone,
+    required int? creditLimitMinorUnits,
+    required PosPercentageMode percentageMode,
+    required PointOfSaleStatus status,
+  });
+
+  Future<Result<PointOfSaleProfile>> setPointOfSaleStatus({
+    required String id,
+    required PointOfSaleStatus status,
+  });
+
+  Future<Result<PointOfSaleProfile>> archivePointOfSale(String id);
 }
 
 abstract interface class CardInventoryService {
