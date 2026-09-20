@@ -1465,7 +1465,7 @@ final class LocalTransferProcessor implements TransferProcessor {
     }
 
     if (isPosOrder) {
-      final pos = posAccount;
+      final pos = posAccount!;
       return _deliverPosOrder(
         transfer: transfer,
         message: message,
