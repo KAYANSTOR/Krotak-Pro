@@ -196,11 +196,6 @@ final class LocalTransferProcessor implements TransferProcessor {
       }
       resolution = (resolutionResult as Success<CustomerIdentityResolution>).value;
     }
-    if (resolutionResult is Failure<CustomerIdentityResolution>) {
-      return Failure<Transaction>(resolutionResult.error);
-    }
-    var resolution = (resolutionResult as Success<CustomerIdentityResolution>).value;
-
     // Auto-provision unknown phone senders from enabled-wallet transfers so
     // card delivery proceeds without a pre-registered customer account.
     if ((!resolution.isResolved || resolution.customer == null) &&
