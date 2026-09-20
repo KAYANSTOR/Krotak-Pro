@@ -74,7 +74,6 @@ void main() {
     expect(parsed, isA<Failure<ParsedTransfer>>());
   });
 
-
   test('POS instant charge extracts sender ledger and destination', () {
     final parser = LocalMessageParser(templates: [posTemplate]);
     final parsed = parser.parse(_msg('شحن 779776919 100'));
@@ -104,8 +103,6 @@ void main() {
     );
     expect(parsed, isA<Failure<ParsedTransfer>>());
   });
-}
-
 
   test('custom POS balance template is parsed as a balance request', () {
     final parser = LocalMessageParser(
