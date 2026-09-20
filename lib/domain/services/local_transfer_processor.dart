@@ -1330,7 +1330,7 @@ final class _DeliveryState {
         reference: transfer.reference.isEmpty ? 'batch-credit:' + operationId : transfer.reference,
       );
       if (credit is Failure<Transaction>) {
-        await releaseAll();
+        await releaseFreshReservations();
         await _persistTerminalFailure(messageId: message.id, status: MessageProcessingStatus.failed,
           action: 'transfer_batch_credit_failed', error: credit.error, transfer: transfer, deliveryPhone: destination);
         return Failure<Transaction>(credit.error);
