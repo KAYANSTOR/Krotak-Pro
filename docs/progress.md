@@ -10,14 +10,20 @@ CI على main — analyze + test + Android debug APK build
 
 ## Post-V1
 
+### Phase 33 — الأرقام المحظورة (2026-09-20) ✅ برمجيًا
+- قائمة مستقلة عن حالة العميل `blacklisted`، مخزّنة في `SettingKeys.blockedPhones`.
+- رفض المرسِل أو أي رقم في جسم الرسالة قبل `parse` ودون إيداع.
+- شاشة «الأرقام المحظورة» من الإعدادات.
+- تقرير: [phase-33-blocked-numbers.md](phase-33-blocked-numbers.md)
+
 ### Phase 32 — التسوية التلقائية لنقاط البيع (2026-09-20) ✅ برمجيًا
-- حوالة محفظة يطابق معرفها نقطة بيع نشطة تُقيَّد إيداعاً `pos-settle:{posId}:{ref}` دون بيع كرت.
+- حوالة محفظة يطابق معرفها نقطة بيع نشطة تُقي’د إيداعاً `pos-settle:{posId}:{ref}` دون بيع كرت.
 - Audit `pos_auto_settled` + SMS بـ `{SETTLEMENT_AMOUNT}` / `{REMAINING_BALANCE}`.
 - تقرير: [phase-32-pos-auto-settlement.md](phase-32-pos-auto-settlement.md)
 
 ### Phase 31 — تسعير الجملة بعد نسبة العمولة (2026-09-20) ✅ برمجيًا
 - `PosPercentageMode` يسعّر كرت نقطة البيع: خصم عمولة الفئة أو الوجه الكامل عند 0%.
-- طلب POS يُقيَّد بالصافي كمديونية دون إيداع مقابل.
+- طلب POS يُقي’د بالصافي كمديونية دون إيداع مقابل.
 - تقرير: [phase-31-pos-wholesale-pricing.md](phase-31-pos-wholesale-pricing.md)
 
 ### Phase 30 — الشحن الفوري لرقم ثالث (2026-09-20) ✅ برمجيًا
