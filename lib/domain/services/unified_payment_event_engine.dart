@@ -143,6 +143,9 @@ final class UnifiedPaymentEventEngine implements PaymentEventEngine {
       reference: parsedTransfer.reference,
       templateId: parsedTransfer.templateId,
       rawIdentifier: parsedTransfer.rawIdentifier,
+      quantity: parsedTransfer.quantity,
+      deliveryOverride: parsedTransfer.deliveryOverride,
+      instantCharge: parsedTransfer.instantCharge,
     );
     await messages.updateStatus(message.id, MessageProcessingStatus.parsed);
 
