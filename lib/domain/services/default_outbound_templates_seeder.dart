@@ -19,26 +19,19 @@ final class DefaultOutboundTemplatesSeeder {
   final Clock clock;
 
   /// Bump when new catalog keys are added so existing installs backfill.
-  static const seededKey = 'default_outbound_templates_seeded_v2';
+  static const seededKey = 'default_outbound_templates_seeded_v3';
 
   /// Full catalog keyed by [SettingKeys] → default body.
   static Map<String, String> catalog() => <String, String>{
-        // —— العملاء ——
         SettingKeys.voucherDeliverySmsTemplate:
             SettingDefaults.voucherDeliverySmsTemplate,
         SettingKeys.customerDebtPaymentTemplate:
             SettingDefaults.customerDebtPaymentTemplate,
-
-        // —— العروض ——
         SettingKeys.promotionRewardSmsTemplate:
             SettingDefaults.promotionRewardSmsTemplate,
-
-        // —— سلفني ——
         SettingKeys.salafniAcceptedTemplate: LocalAdvanceService.defaultAccepted,
         SettingKeys.salafniRejectedTemplate: LocalAdvanceService.defaultRejected,
         SettingKeys.salafniSettledTemplate: LocalAdvanceService.defaultSettled,
-
-        // —— النظام / نقاط البيع ——
         SettingKeys.posBalanceResponseTemplate:
             SettingDefaults.posBalanceResponseTemplate,
         SettingKeys.posCreditLimitExceededTemplate:
@@ -57,6 +50,8 @@ final class DefaultOutboundTemplatesSeeder {
             SettingDefaults.posCustomerSmsTailTemplate,
         SettingKeys.lowStockAlertTemplate:
             SettingDefaults.lowStockAlertTemplate,
+        SettingKeys.posInstantChargeConfirmTemplate:
+            SettingDefaults.posInstantChargeConfirmTemplate,
       };
 
   Future<Result<void>> seedIfNeeded() async {
