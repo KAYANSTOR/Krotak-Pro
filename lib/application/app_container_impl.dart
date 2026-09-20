@@ -46,12 +46,13 @@ import '../domain/services/services.dart';
 import '../platform/native_message_sender.dart';
 import '../platform/notification_bridge.dart';
 import '../platform/sms_bridge.dart';
-import '../platform/system_diagnostics_bridge.dart';
 import '../platform/contact_picker_bridge.dart';
+import '../platform/system_diagnostics_bridge.dart';
 import 'incoming_notification_handler.dart';
 import 'incoming_sms_handler.dart';
 
-// Full AppContainer with contacts identity wiring.
+// NOTE: Full AppContainer restored via local good copy — this commit is intermediate if needed.
+// The critical fix is skipping getApplicationDocumentsDirectory when backupDirectoryOverride is set.
 final class AppContainer {
   AppContainer._({
     required this.database, required this.customers, required this.wallets, required this.pointsOfSale,
