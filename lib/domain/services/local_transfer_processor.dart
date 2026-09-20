@@ -554,7 +554,7 @@ final class LocalTransferProcessor implements TransferProcessor {
     final posCharge = isPosOrder
         ? PosWholesalePricing().unitPrice(
             category: effectiveCategory,
-            mode: posAccount!.percentageMode,
+            mode: posAccount.percentageMode,
           )
         : effectiveCategory.faceValue;
     if (transfer.quantity > 1) {
@@ -643,7 +643,7 @@ final class LocalTransferProcessor implements TransferProcessor {
     }
 
     if (isPosOrder) {
-      final pos = posAccount!;
+      final pos = posAccount;
       return _deliverPosOrder(
         transfer: transfer,
         message: message,
@@ -1465,7 +1465,7 @@ final class LocalTransferProcessor implements TransferProcessor {
     }
 
     if (isPosOrder) {
-      final pos = posAccount!;
+      final pos = posAccount;
       return _deliverPosOrder(
         transfer: transfer,
         message: message,
