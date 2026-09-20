@@ -891,7 +891,7 @@ final class _DeliveryState {
     required MessageSender sender,
     required TransactionRepository transactionRepo,
   }) async {
-    final quantity = transfer.quantity.clamp(2, 20);
+    final quantity = transfer.quantity.clamp(2, 20).toInt();
     final reservations = <({Card card, String reservationId})>[];
     final now = clock.now();
 
