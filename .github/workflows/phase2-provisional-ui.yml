@@ -1,0 +1,27 @@
+name: phase2-provisional-ui
+on:
+  workflow_dispatch:
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Restore customers_screen from known-good tip
+        run: |
+          curl -fsSL -o lib/ui/screens/customers_screen.dart \
+            https://raw.githubusercontent.com/KAYANSTOR/net-flutter/92f4ab51c6fd0a72c1fe641aa39bdfa4ac3ec4de/lib/ui/screens/customers_screen.dart
+          curl -fsSL -o lib/ui/screens/customer_detail_screen.dart \
+            https://raw.githubusercontent.com/KAYANSTOR/net-flutter/92f4ab51c6fd0a72c1fe641aa39bdfa4ac3ec4de/lib/ui/screens/customer_detail_screen.dart
+          wc -c lib/ui/screens/customers_screen.dart lib/ui/screens/customer_detail_screen.dart
+      - name: Apply phase-2 provisional UI patches
+        run: python3 tools/patch_phase2_ui_inline.py
+      - name: Commit
+        run: |
+          git config user.name "KAYANSTOR"
+          git config user.email "jarallhalkboudi@gmail.com"
+          git add -A
+          git diff --cached --quiet && echo No changes && exit 0
+          git commit -m "feat(accounts): phase-2 provisional UI — badge, promote, bind"
+          git push
