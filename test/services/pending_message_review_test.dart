@@ -115,7 +115,8 @@ final class _FakeCustomerService implements CustomerService {
   _FakeCustomerService(this.customers);
   final _FakeCustomers customers;
   int created = 0;
-  @override Future<Result<Customer>> create({required String displayName, required CustomerIdentifierType identifierType, required String identifierValue}) async { created++; final c = Customer(id: 'c-new-$created', displayName: displayName, status: CustomerStatus.active, createdAt: DateTime.utc(2026, 9, 12), updatedAt: DateTime.utc(2026, 9, 12)); customers.store[c.id] = c; customers.byIdentifier[identifierValue] = c.id; return Success(c); }
+  @override Future<Result<Customer>> create({required String displayName, required CustomerIdentifierType identifierType, required String identifierValue, CustomerStatus status = CustomerStatus.active}) async { created++; final c = Customer(id: 'c-new-$created', displayName: displayName, status: status, createdAt: DateTime.utc(2026, 9, 12), updatedAt: DateTime.utc(2026, 9, 12)); customers.store[c.id] = c; customers.byIdentifier[identifierValue] = c.id; return Success(c); }
+  @override Future<Result<Customer>> promoteToActive(String customerId) async { final c = customers.store[customerId]; if (c == null) return const Failure(AppFailure(code: 'customer_not_found', message: 'Customer was not found')); final updated = c.copyWith(status: CustomerStatus.active); customers.store[customerId] = updated; return Success(updated); }
   @override Future<Result<void>> blacklist(String customerId) async => const Success(null);
   @override Future<Result<void>> addIdentifier({required String customerId, required CustomerIdentifierType type, required String value, required bool isPrimary}) async => const Success(null);
   @override Future<Result<void>> bindPrimaryGsm({required String customerId, required String phone}) async { customers.byIdentifier[phone] = customerId; return const Success(null); }

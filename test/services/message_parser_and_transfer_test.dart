@@ -425,6 +425,7 @@ final class _FakeCustomerService implements CustomerService {
     required String displayName,
     required CustomerIdentifierType identifierType,
     required String identifierValue,
+    CustomerStatus status = CustomerStatus.active,
   }) async {
     final existing = await customers.findByIdentifier(identifierValue.trim());
     if (existing is Success<Customer?> && existing.value != null) {
@@ -434,7 +435,7 @@ final class _FakeCustomerService implements CustomerService {
     final customer = Customer(
       id: ids.next('customer'),
       displayName: displayName,
-      status: CustomerStatus.active,
+      status: status,
       createdAt: now,
       updatedAt: now,
     );
@@ -447,6 +448,20 @@ final class _FakeCustomerService implements CustomerService {
       isPrimary: true,
     ));
     return Success(customer);
+  }
+
+  @override
+  Future<Result<Customer>> promoteToActive(String customerId) async {
+    final existing = await customers.findById(customerId);
+    if (existing is Failure<Customer?>) return Failure(existing.error);
+    final customer = (existing as Success<Customer?>).value;
+    if (customer == null) {
+      return const Failure(AppFailure(code: 'customer_not_found', message: 'Customer was not found'));
+    }
+    final updated = customer.copyWith(status: CustomerStatus.active, updatedAt: clock.now());
+    final saved = await customers.save(updated);
+    if (saved is Failure<void>) return Failure(saved.error);
+    return Success(updated);
   }
 
   @override
