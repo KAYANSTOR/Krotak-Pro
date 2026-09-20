@@ -1,0 +1,19 @@
+name: apply-phase2-join
+on:
+  workflow_dispatch:
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 tools/join_phase2.py
+      - name: Commit
+        run: |
+          git config user.name "KAYANSTOR"
+          git config user.email "jarallhalkboudi@gmail.com"
+          git add -A
+          git diff --cached --quiet && echo No changes && exit 0
+          git commit -m "feat(accounts): phase-2 provisional UI complete — badge, promote, bind"
+          git push
