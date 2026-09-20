@@ -69,6 +69,8 @@ final class PosOrderMessageRenderer {
         'serial': first.serialNumber,
         'code': first.secretCode,
         'secret': first.secretCode,
+        'SECRET': first.secretCode,
+        'CODE': first.secretCode,
         'CARD_CODE': first.serialNumber,
         'CARD_VALUE': _money(faceValue),
         'CURRENCY': _currency(faceValue),
