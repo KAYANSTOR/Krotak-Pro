@@ -509,27 +509,27 @@ final class LocalTransferProcessor implements TransferProcessor {
     }
     final card = (reserved as Success<Card>).value;
 
-    final credit = isPosOrder
-        ? const Success<Transaction?>(null)
-        : await balances.credit(
-            customerId: customer.id,
-            amount: effectiveAmount,
-            reference: transfer.reference.isEmpty ? null : transfer.reference,
-          );
-    if (credit is Failure<Transaction?>) {
-      await inventoryService.releaseReservation(
-        cardId: card.id,
-        reservationId: reservationId,
+    if (!isPosOrder) {
+      final credit = await balances.credit(
+        customerId: customer.id,
+        amount: effectiveAmount,
+        reference: transfer.reference.isEmpty ? null : transfer.reference,
       );
-      await _persistTerminalFailure(
-        messageId: message.id,
-        status: MessageProcessingStatus.failed,
-        action: 'transfer_credit_failed',
-        error: credit.error,
-        transfer: transfer,
-        deliveryPhone: destination,
-      );
-      return Failure<Transaction>(credit.error);
+      if (credit is Failure<Transaction>) {
+        await inventoryService.releaseReservation(
+          cardId: card.id,
+          reservationId: reservationId,
+        );
+        await _persistTerminalFailure(
+          messageId: message.id,
+          status: MessageProcessingStatus.failed,
+          action: 'transfer_credit_failed',
+          error: credit.error,
+          transfer: transfer,
+          deliveryPhone: destination,
+        );
+        return Failure<Transaction>(credit.error);
+      }
     }
 
     final completed = await saleCompleter.completeReservedSale(
