@@ -160,6 +160,16 @@ final class LocalMessageParser implements MessageParser {
     final buf = StringBuffer();
     var i = 0;
     while (i < unified.length) {
+      // فواصل وعلامات قد تختلف فيها المسافات بين المصدر والرسالة الفعلية
+      // (`رص:{ref}` مقابل `رص: {ref}`) — نتجاهل المسافات حولها في الاتجاهين.
+      if (_flexibleSeparators.contains(unified[i])) {
+        buf.write(r'\s*');
+        buf.write('\\');
+        buf.write(unified[i]);
+        buf.write(r'\s*');
+        i++;
+        continue;
+      }
       if (unified.startsWith('{amount}', i)) {
         buf.write(r'(?<amount>[\d]+(?:[.,]\d{1,2})?)');
         i += '{amount}'.length;
@@ -184,7 +194,8 @@ final class LocalMessageParser implements MessageParser {
       }
       final ch = unified[i];
       if (ch == ' ' || ch == '\t' || ch == '\n') {
-        buf.write(r'\s+');
+        // `\s*` لا `\s+`: النموذج والرسالة قد يختلفان في وجود فراغ واحد فقط.
+        buf.write(r'\s*');
         while (i + 1 < unified.length &&
             (unified[i + 1] == ' ' ||
                 unified[i + 1] == '\t' ||
@@ -203,16 +214,26 @@ final class LocalMessageParser implements MessageParser {
     return RegExp(buf.toString(), caseSensitive: false, unicode: true);
   }
 
-  /// Collapse whitespace, strip bidi marks, and map Eastern digits.
+  /// Collapse whitespace, strip bidi marks, unify Arabic letter variants, and
+  /// map Eastern digits — must be applied identically to the pattern and the
+  /// incoming body so harmless spelling differences never block a match.
   String _normalizeBody(String input) {
     var s = _normalizeDigits(input.trim());
     s = s
         .replaceAll(RegExp(r'[\u200e\u200f\u202a-\u202e\u2066-\u2069]'), '')
         .replaceAll(RegExp(r'\u00a0'), ' ')
+        .replaceAll(RegExp(r'[\u064b-\u065f\u0670\u06d6-\u06ed]'), '')
+        .replaceAll('\u0640', '')
+        .replaceAll(RegExp('[\u0622\u0623\u0625\u0627\u0671]'), '\u0627')
+        .replaceAll('\u0649', '\u064a')
+        .replaceAll('\u0629', '\u0647')
         .replaceAll(RegExp(r'[ \t\u00a0]+'), ' ')
         .replaceAll(RegExp(r'\s*\n\s*'), ' ');
     return s.trim();
   }
+
+  /// علامات ترقيم/فواصل تُطابَق مع تجاهل المسافات حولها.
+  static const _flexibleSeparators = <String>{':', '-', '/', ',', '.', '\u060c'};
 
   String _normalizeDigits(String input) {
     const eastern = '٠١٢٣٤٥٦٧٨٩';

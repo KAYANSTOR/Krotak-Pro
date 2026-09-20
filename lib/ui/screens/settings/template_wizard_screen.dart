@@ -93,13 +93,33 @@ class _TemplateWizardScreenState extends State<TemplateWizardScreen> {
     };
   }
 
+  /// مسميات عربية واضحة لما يمثله كل نوع معرّف — بلا رموز إنجليزية أو أكواد.
   String _kindLabel(TemplateIdentifierKind k) => switch (k) {
-        TemplateIdentifierKind.phone => 'الجوال (GSM)',
-        TemplateIdentifierKind.alternativeNumber => 'الرقم البديل (Alternative Number)',
-        TemplateIdentifierKind.account => 'رقم الحساب',
-        TemplateIdentifierKind.senderNameOnly => 'اسم المرسل فقط (Sender Name Only)',
-        TemplateIdentifierKind.balanceRequestCode => 'كود خاص (Balance Request Code)',
+        TemplateIdentifierKind.phone => 'رقم جوال العميل (GSM) — الأكثر استخداماً',
+        TemplateIdentifierKind.alternativeNumber => 'الرقم البديل المحفوظ للعميل',
+        TemplateIdentifierKind.account => 'رقم أو اسم الحساب البنكي للعميل',
+        TemplateIdentifierKind.senderNameOnly => 'اسم المرسل فقط (بدون رقم)',
+        TemplateIdentifierKind.balanceRequestCode => 'رمز خاص لطلب الرصيد',
       };
+
+  /// المتغيرات المتاحة داخل النمط — كل متغير بمسمّى عربي يشرح ما يخصّه.
+  static const _variables = <({String token, String label, String hint})>[
+    (token: '{amount}', label: 'المبلغ', hint: 'المبلغ المحوَّل'),
+    (token: '{phone}', label: 'رقم الجوال', hint: 'رقم جوال العميل'),
+    (token: '{account}', label: 'الحساب / الاسم', hint: 'اسم أو حساب المرسل'),
+    (token: '{ref}', label: 'المرجع', hint: 'رقم عملية التحويل'),
+  ];
+
+  /// يُضاف المتغير إلى نهاية النمط — بلا كتابة يدوية للأكواد.
+  void _insertToken(String token) {
+    final current = _patternCtrl.text;
+    final needsSpace = current.isNotEmpty && !current.endsWith(' ');
+    _patternCtrl.text = '$current${needsSpace ? ' ' : ''}$token';
+    _patternCtrl.selection = TextSelection.collapsed(
+      offset: _patternCtrl.text.length,
+    );
+    setState(() {});
+  }
 
   bool _validateStep() {
     switch (_step) {
@@ -378,18 +398,21 @@ class _TemplateWizardScreenState extends State<TemplateWizardScreen> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text(
-          'اربط حقول الاستخراج داخل النمط. استخدم العناصر النائبة:',
+          'اضغط أي متغير لإضافته إلى النمط بدل كتابته يدوياً:',
           style: TextStyle(fontFamily: 'Tajawal', color: kayan.textSecondary, fontSize: 13),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 10),
         Wrap(
           spacing: 8,
           runSpacing: 8,
-          children: const [
-            _Chip('{amount}'),
-            _Chip('{phone}'),
-            _Chip('{account}'),
-            _Chip('{ref}'),
+          children: [
+            for (final v in _variables)
+              _VariableChip(
+                label: v.label,
+                token: v.token,
+                hint: v.hint,
+                onTap: () => _insertToken(v.token),
+              ),
           ],
         ),
         const SizedBox(height: 16),
@@ -397,12 +420,14 @@ class _TemplateWizardScreenState extends State<TemplateWizardScreen> {
         TextField(
           controller: _patternCtrl,
           maxLines: 5,
-          decoration: _dec(hint: '… {amount} … {phone} … {ref}'),
+          decoration: _dec(
+            hint: 'مثال: تم تحويل {amount} ر.ي إلى {phone} رقم العملية {ref}',
+          ),
           style: const TextStyle(fontFamily: 'Tajawal', height: 1.4),
         ),
         const SizedBox(height: 12),
         Text(
-          'يجب وجود {amount} و {ref}. المعرّف: {phone} أو {account} حسب نوع المعرّف.',
+          'المطلوب: {amount} (المبلغ) و {ref} (المرجع)، ومعرّف العميل: {phone} (رقم الجوال) أو {account} (الحساب/الاسم).',
           style: TextStyle(fontFamily: 'Tajawal', fontSize: 12, color: kayan.textTertiary),
         ),
       ],
@@ -641,23 +666,60 @@ class _StepIndicator extends StatelessWidget {
   }
 }
 
-class _Chip extends StatelessWidget {
-  const _Chip(this.text);
-  final String text;
+/// شريحة متغير: المسمّى العربي أولاً ثم الرمز، والضغط يضيفه للنمط.
+class _VariableChip extends StatelessWidget {
+  const _VariableChip({
+    required this.label,
+    required this.token,
+    required this.hint,
+    required this.onTap,
+  });
+
+  final String label;
+  final String token;
+  final String hint;
+  final VoidCallback onTap;
+
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: context.kayan.primary.withValues(alpha: 0.1),
+    final primary = context.kayan.primary;
+    return Tooltip(
+      message: hint,
+      child: Material(
+        color: primary.withValues(alpha: 0.10),
         borderRadius: BorderRadius.circular(8),
-      ),
-      child: Text(
-        text,
-        style: TextStyle(
-          fontFamily: 'Tajawal',
-          fontWeight: FontWeight.w600,
-          color: context.kayan.primary,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(8),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.add_rounded, size: 14, color: primary),
+                const SizedBox(width: 4),
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontFamily: 'Tajawal',
+                    fontWeight: FontWeight.w700,
+                    color: primary,
+                    fontSize: 13,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  token,
+                  style: TextStyle(
+                    fontFamily: 'Tajawal',
+                    fontWeight: FontWeight.w500,
+                    color: primary.withValues(alpha: 0.65),
+                    fontSize: 11,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );

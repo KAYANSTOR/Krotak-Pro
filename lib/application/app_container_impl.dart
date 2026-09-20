@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+import '../core/app_brand.dart';
 import '../core/clock.dart';
 import '../core/id_generator.dart';
 import '../core/result.dart';
@@ -184,8 +185,23 @@ final class AppContainer {
     final advanceService = LocalAdvanceService(advances: advanceRepository, customers: customers, categories: categories, cards: cards, inventory: inventoryService, transactions: transactions, sales: sales, auditLogs: auditLogs, settings: settings, unitOfWork: uow, messageSender: messageSender, clock: clock, ids: ids);
     final processor = LocalTransferProcessor(messages: messages, customers: customers, balances: balanceService, auditLogs: auditLogs, unitOfWork: uow, clock: clock, ids: ids, categories: categories, cards: cards, inventory: inventoryService, transactions: transactions, reservedSales: saleService, messageSender: messageSender, settings: settings, advanceService: advanceService, customerService: customerService);
     final licenseService = LocalLicenseService(licenses: licenses, clock: clock);
-    final backupDirectory = backupDirectoryOverride ?? Directory(p.join((await getApplicationDocumentsDirectory()).path, 'backups'));
-    final backupService = LocalBackupService(settings: settings, clock: clock, ids: ids, backupDirectory: backupDirectory);
+    final documentsDirectory = await getApplicationDocumentsDirectory();
+    final backupDirectory = backupDirectoryOverride ??
+        Directory(p.join(documentsDirectory.path, '${AppBrand.latinName}_Backups'));
+    // مجلدات قديمة تُقرأ للاستعادة فقط (اسم قديم) — لا يُكتب فيها.
+    final legacyBackupDirectories = backupDirectoryOverride != null
+        ? const <Directory>[]
+        : <Directory>[
+            Directory(p.join(documentsDirectory.path, 'ZNet_Backups')),
+            Directory(p.join(documentsDirectory.path, 'backups')),
+          ];
+    final backupService = LocalBackupService(
+      settings: settings,
+      clock: clock,
+      ids: ids,
+      backupDirectory: backupDirectory,
+      legacyDirectories: legacyBackupDirectories,
+    );
     final maintenanceService = LocalMaintenanceService(messages: messages, clock: clock);
     final mergeService = LocalAccountMergeService(customers: customers, transactions: transactions, auditLogs: auditLogs, unitOfWork: uow, clock: clock, ids: ids);
     final settlementService = LocalSettlementService(customers: customers, transactions: transactions, auditLogs: auditLogs, unitOfWork: uow, clock: clock, ids: ids);

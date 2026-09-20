@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- اسم التطبيق الظاهر على الجهاز. غيّره هنا فقط. -->
+    <string name="app_name">كروتك</string>
+    <string name="notification_listener_label">كروتك — إشعارات المحافظ</string>
+</resources>

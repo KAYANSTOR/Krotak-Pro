@@ -7,6 +7,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:sqlite3_flutter_libs/sqlite3_flutter_libs.dart';
 
 import 'application/app_container.dart';
+import 'core/app_brand.dart';
 import 'core/result.dart';
 import 'domain/entities/message.dart';
 import 'domain/entities/setting.dart';
@@ -128,7 +129,7 @@ class _NetAppState extends State<NetApp> with WidgetsBindingObserver {
         child: ValueListenableBuilder<ThemeMode>(
           valueListenable: widget.container.themeModeNotifier,
           builder: (context, mode, _) => MaterialApp(
-            title: 'NET',
+            title: AppBrand.name,
             debugShowCheckedModeBanner: false,
             theme: buildKayanLightTheme(),
             darkTheme: buildKayanDarkTheme(),

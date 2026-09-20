@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/app_brand.dart';
 import '../../../core/result.dart';
 import '../../../domain/entities/setting.dart';
 import '../../app_scope.dart';
@@ -18,8 +19,8 @@ import 'clean_logs_screen.dart';
 import 'export_ledger_screen.dart';
 import 'low_stock_settings_screen.dart';
 import 'network_name_settings_screen.dart';
+import 'about_screen.dart';
 import 'renew_subscription_screen.dart';
-import 'salafni_templates_screen.dart';
 import 'outbound_message_templates_screen.dart';
 import 'sim_settings_screen.dart';
 import 'template_simulation_screen.dart';
@@ -59,8 +60,8 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
   static const _walletsKeywords =
       'المحافظ نقاط البيع محاكاة القوالب قوالب التحويل طلبات الرصيد ملخص العمليات اليومي التسوية التلقائية';
   static const _maintenanceKeywords = 'تنظيف السجلات تصدير السجل الأرشفة';
-
-  bool _sectionVisible(String keywords) {
+  static const _aboutKeywords =
+      'عن التطبيق الإصدار المبرمج الحقوق كيان سوفت الموقع ${AppBrand.name}';
     final q = _query.trim().toLowerCase();
     if (q.isEmpty) return true;
     return keywords.toLowerCase().contains(q);
@@ -71,7 +72,8 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
       _sectionVisible(_licenseKeywords) ||
       _sectionVisible(_themeKeywords) ||
       _sectionVisible(_walletsKeywords) ||
-      _sectionVisible(_maintenanceKeywords);
+      _sectionVisible(_maintenanceKeywords) ||
+      _sectionVisible(_aboutKeywords);
 
   @override
   void initState() {
@@ -435,17 +437,6 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
                                     ),
                                   ),
                                 ),
-                                if (_salafni)
-                                  SettingsGroupNavRow(
-                                    icon: Icons.sms_outlined,
-                                    title: 'قوالب رسائل سلفني',
-                                    subtitle: 'قبول / رفض / سداد',
-                                    onTap: () => Navigator.of(context).push(
-                                      MaterialPageRoute(
-                                        builder: (_) => const SalafniTemplatesScreen(),
-                                      ),
-                                    ),
-                                  ),
                                 SettingsGroupNavRow(
                                   icon: Icons.notifications_active_outlined,
                                   title: 'تنبيهات انخفاض مخزون الكروت',
@@ -602,6 +593,26 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
                                 ),
                               ],
                             ),
+                            if (_sectionVisible(_aboutKeywords))
+                              const SettingsSectionHeader(title: 'عن التطبيق'),
+                            if (_sectionVisible(_aboutKeywords))
+                              SettingsGroupCard(
+                                children: [
+                                  SettingsGroupNavRow(
+                                    icon: Icons.info_outline_rounded,
+                                    title: 'عن التطبيق',
+                                    subtitle:
+                                        'الإصدار ${AppBrand.version} · ${AppBrand.developer} · ${AppBrand.company}',
+                                    searchText:
+                                        'عن التطبيق الإصدار المبرمج الحقوق الموقع',
+                                    onTap: () => Navigator.of(context).push(
+                                      MaterialPageRoute(
+                                        builder: (_) => const AboutScreen(),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
                           ],
                         )),
                       ),

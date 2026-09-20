@@ -98,8 +98,24 @@ class _InventoryScreenState extends State<InventoryScreen> {
               e.id.contains(q))
           .toList();
     }
-    return list;
+    // ترتيب العرض: المتاح في الأعلى ثم المحجوز، والمباع في الأسفل.
+    final ordered = List<domain.Card>.of(list);
+    ordered.sort((a, b) {
+      final byRank = _statusRank(a.status).compareTo(_statusRank(b.status));
+      if (byRank != 0) return byRank;
+      return a.serialNumber.compareTo(b.serialNumber);
+    });
+    return ordered;
   }
+
+  /// ترتيب حالات الكرت في القائمة — المتاح أولاً والمباع آخراً.
+  static int _statusRank(domain.CardStatus status) => switch (status) {
+        domain.CardStatus.available => 0,
+        domain.CardStatus.reserved => 1,
+        domain.CardStatus.disabled => 2,
+        domain.CardStatus.expired => 3,
+        domain.CardStatus.sold => 4,
+      };
 
   /// Display-only counts per category/status over the already-loaded cards.
   int _countFor(String categoryId, domain.CardStatus status) => _cards

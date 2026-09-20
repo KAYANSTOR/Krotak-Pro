@@ -6,6 +6,7 @@ import 'dart:typed_data';
 import 'package:cryptography/cryptography.dart';
 import 'package:path/path.dart' as p;
 
+import '../../core/app_brand.dart';
 import '../../core/clock.dart';
 import '../../core/id_generator.dart';
 import '../../core/result.dart';
@@ -14,19 +15,21 @@ import '../repositories/repositories.dart';
 
 /// Phase 6 encrypted backup / restore (screenshot-aligned).
 ///
-/// Format `.znet`:
+/// Format `.krt`:
 /// - AES-GCM 256-bit
 /// - PBKDF2-HMAC-SHA256, 10_000 iterations
 /// - SHA-256 fingerprint of plaintext JSON
 ///
 /// Restore applies settings only and **never** touches license rows
-/// (license counter stays under [LicenseRepository]).
+/// (license counter stays under [LicenseRepository]). Legacy `.znet`
+/// backups remain restorable.
 final class LocalBackupService {
   const LocalBackupService({
     required this.settings,
     required this.clock,
     required this.ids,
     required this.backupDirectory,
+    this.legacyDirectories = const <Directory>[],
   });
 
   final SettingsRepository settings;
@@ -34,7 +37,14 @@ final class LocalBackupService {
   final IdGenerator ids;
   final Directory backupDirectory;
 
-  static const formatId = 'znet-backup-v1';
+  /// مجلدات النسخ الاحتياطي القديمة — تُقرأ للاستعادة فقط ولا يُكتب فيها.
+  final List<Directory> legacyDirectories;
+
+  /// صيغة النسخة الحالية (اسم التطبيق) — والقديمة `znet-backup-v1` ما زالت مقروءة.
+  static const formatId = '${AppBrand.latinName}-backup-v1';
+  static const legacyFormatIds = <String>['znet-backup-v1'];
+  static const fileExtension = '.krt';
+  static const restorableExtensions = <String>['.krt', '.znet', '.json'];
   static const pbkdf2Iterations = 10000;
   static const minPasswordLength = 4;
 
@@ -133,7 +143,7 @@ final class LocalBackupService {
       };
 
       final fileName =
-          'net-backup-${clock.now().millisecondsSinceEpoch}.znet';
+          '${AppBrand.latinName}-backup-${clock.now().millisecondsSinceEpoch}$fileExtension';
       final file = File(p.join(backupDirectory.path, fileName));
       await file.writeAsString(
         const JsonEncoder.withIndent('  ').convert(envelope),
@@ -162,7 +172,8 @@ final class LocalBackupService {
       final decoded = jsonDecode(raw) as Map<String, dynamic>;
 
       Map<String, dynamic> settingsMap;
-      if (decoded['format'] == formatId) {
+      final format = decoded['format'];
+      if (format == formatId || legacyFormatIds.contains(format)) {
         final pwd = (password ?? '').trim();
         if (pwd.length < minPasswordLength) {
           return const Failure(
@@ -207,15 +218,19 @@ final class LocalBackupService {
 
   Future<Result<List<File>>> listBackups() async {
     try {
-      if (!await backupDirectory.exists()) return const Success([]);
-      final files = backupDirectory
-          .listSync()
-          .whereType<File>()
-          .where(
-            (f) => f.path.endsWith('.znet') || f.path.endsWith('.json'),
-          )
-          .toList()
-        ..sort((a, b) => b.path.compareTo(a.path));
+      final files = <File>[];
+      for (final directory in [backupDirectory, ...legacyDirectories]) {
+        if (!await directory.exists()) continue;
+        files.addAll(
+          directory
+              .listSync()
+              .whereType<File>()
+              .where(
+                (f) => restorableExtensions.any(f.path.endsWith),
+              ),
+        );
+      }
+      files.sort((a, b) => b.path.compareTo(a.path));
       return Success(files);
     } catch (e) {
       return Failure(

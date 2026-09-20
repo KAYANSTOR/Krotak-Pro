@@ -38,7 +38,7 @@ void main() {
   late LocalBackupService service;
 
   setUp(() async {
-    dir = await Directory.systemTemp.createTemp('znet-backup-');
+    dir = await Directory.systemTemp.createTemp('kartak-backup-');
     settings = _MemSettings();
     await settings.save(
       AppSetting(
@@ -69,7 +69,8 @@ void main() {
     final created = await service.createBackup(password: 'secret-pass', label: 't1');
     expect(created, isA<Success<File>>());
     final file = (created as Success<File>).value;
-    expect(file.path.endsWith('.znet'), isTrue);
+    expect(file.path.endsWith('.krt'), isTrue);
+    expect(file.path.contains('znet'), isFalse);
 
     settings.map.clear();
     final restored = await service.restoreFromFile(file, password: 'secret-pass');
