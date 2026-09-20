@@ -118,8 +118,7 @@ class _TemplateWizardScreenState extends State<TemplateWizardScreen> {
         'ايداع {amount} لحساب {account} رقم العملية {ref}',
       TemplateIdentifierKind.senderNameOnly =>
         'تحويل {amount} من المرسل مرجع {ref}',
-      TemplateIdentifierKind.balanceRequestCode =>
-        'رصيد {amount} كود {account} مرجع {ref}',
+      TemplateIdentifierKind.balanceRequestCode => '111',
     };
   }
 
@@ -245,8 +244,13 @@ class _TemplateWizardScreenState extends State<TemplateWizardScreen> {
           _toast('أدخل نمط الاستخراج');
           return false;
         }
-        if (!p.contains('{amount}') && !p.contains('%amount')) {
+        if (_kind != TemplateIdentifierKind.balanceRequestCode &&
+            !p.contains('{amount}') && !p.contains('%amount')) {
           _toast('النمط يجب أن يحتوي على {amount}');
+          return false;
+        }
+        if (_kind == TemplateIdentifierKind.balanceRequestCode && p.isEmpty) {
+          _toast('أدخل رمز طلب الرصيد');
           return false;
         }
         // {ref} (رقم العملية) اختياري — لا نفرضه.
