@@ -171,7 +171,9 @@ final class LocalMessageParser implements MessageParser {
         .replaceAll('%amount', '{amount}')
         .replaceAll('%phone', '{phone}')
         .replaceAll('%account', '{account}')
-        .replaceAll('%ref', '{ref}');
+        .replaceAll('%ref', '{ref}')
+        .replaceAll('%qty', '{qty}')
+        .replaceAll('%dest', '{dest}');
 
     final buf = StringBuffer();
     var i = 0;
