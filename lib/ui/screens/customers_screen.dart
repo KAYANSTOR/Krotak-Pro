@@ -452,3 +452,366 @@ class _CustomersScreenState extends State<CustomersScreen> {
     );
   }
 }
+
+/// ورقة توزيع الأرصدة: مؤشرات مجمّعة + رسم بياني أفقي لأعلى الأرصدة.
+class _BalancesDistributionSheet extends StatelessWidget {
+  const _BalancesDistributionSheet({
+    required this.rows,
+    required this.accountsCount,
+    required this.debtorTotalMinor,
+    required this.creditorTotalMinor,
+    required this.unlinkedCount,
+  });
+
+  final List<_AccountRow> rows;
+  final int accountsCount;
+  final int debtorTotalMinor;
+  final int creditorTotalMinor;
+  final int unlinkedCount;
+
+  @override
+  Widget build(BuildContext context) {
+    final net = context.netColors;
+    return NetSheet(
+      title: 'توزيع أرصدة الحسابات',
+      subtitle: 'مؤشرات عامة وأعلى الأرصدة المسجّلة — عرض فقط',
+      icon: Icons.bar_chart_rounded,
+      children: [
+        NetIndicatorGrid(
+          indicators: [
+            NetIndicatorTile(
+              label: 'الحسابات',
+              value: '$accountsCount',
+              icon: Icons.groups_rounded,
+            ),
+            NetIndicatorTile(
+              label: 'غير مربوط',
+              value: '$unlinkedCount',
+              icon: Icons.link_off_rounded,
+              tint: net.warning,
+            ),
+            NetIndicatorTile(
+              label: 'إجمالي المدين',
+              value: formatMoneyMinor(debtorTotalMinor),
+              icon: Icons.south_west_rounded,
+              tint: net.error,
+            ),
+            NetIndicatorTile(
+              label: 'إجمالي الدائن',
+              value: formatMoneyMinor(creditorTotalMinor),
+              icon: Icons.north_east_rounded,
+              tint: net.success,
+            ),
+          ],
+        ),
+        const SizedBox(height: NetSpacing.lg),
+        NetHorizontalBars(
+          labelWidth: 88,
+          emptyMessage: 'لا توجد أرصدة مسجّلة بعد',
+          data: [
+            for (final row in rows)
+              NetBarDatum(
+                label: row.customer.displayName,
+                value: (row.balance?.minorUnits ?? 0).abs() / 100,
+                color: (row.balance?.minorUnits ?? 0) < 0
+                    ? net.error
+                    : net.success,
+                valueLabel: formatMoneyMinor(
+                  (row.balance?.minorUnits ?? 0).abs(),
+                ),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+/// يفتح تطبيق الاتصال أو الرسائل على رقم العميل — إجراء واجهة فقط.
+///
+/// لا يرسل شيئاً بنفسه: يعرض الرقم في تطبيق النظام المناسب.
+Future<void> _openContact(
+  BuildContext context,
+  String scheme,
+  String phone,
+) async {
+  final messenger = ScaffoldMessenger.of(context);
+  var opened = false;
+  try {
+    opened = await launchUrl(
+      Uri(scheme: scheme, path: phone),
+      mode: LaunchMode.externalApplication,
+    );
+  } on Object {
+    opened = false;
+  }
+  if (!opened) {
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          scheme == 'tel' ? 'تعذّر فتح تطبيق الاتصال' : 'تعذّر فتح تطبيق الرسائل',
+        ),
+      ),
+    );
+  }
+}
+
+/// زر إجراء صغير داخل بطاقة الحساب.
+class _ContactButton extends StatelessWidget {
+  const _ContactButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = KayanPalette.of(context);
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(NetRadii.sm),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 9),
+          decoration: BoxDecoration(
+            color: palette.surfaceVariant,
+            borderRadius: BorderRadius.circular(NetRadii.sm),
+            border: Border.all(color: palette.border),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 16, color: palette.primary),
+              const SizedBox(width: NetSpacing.xs),
+              Text(
+                label,
+                style: TextStyle(
+                  fontFamily: NetTypography.family,
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w700,
+                  color: palette.textPrimary,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+final class _AccountRow {
+  const _AccountRow({
+    required this.customer,
+    this.balance,
+    this.phone,
+    this.altId,
+    this.altLabel,
+  });
+
+  final Customer customer;
+  final Money? balance;
+  final String? phone;
+  final String? altId;
+  final String? altLabel;
+
+  bool get hasPhone => phone != null && phone!.trim().isNotEmpty;
+
+  bool get isProvisional => customer.status == CustomerStatus.provisional;
+}
+
+class _AccountCard extends StatelessWidget {
+  const _AccountCard({
+    required this.row,
+    required this.onTap,
+    required this.onLongPress,
+  });
+
+  final _AccountRow row;
+  final VoidCallback onTap;
+  final VoidCallback onLongPress;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = KayanPalette.of(context);
+    final net = context.netColors;
+
+    final title = row.customer.displayName;
+    late final String subtitle;
+    late final IconData subIcon;
+    if (row.hasPhone) {
+      subtitle = row.phone!;
+      subIcon = Icons.phone_android_rounded;
+    } else if (row.altId != null) {
+      subtitle = '${row.altLabel ?? 'الرقم البديل'}: ${row.altId}';
+      subIcon = row.altLabel == 'اسم المرسل'
+          ? Icons.alternate_email_rounded
+          : Icons.tag_rounded;
+    } else {
+      subtitle = row.customer.id;
+      subIcon = Icons.badge_outlined;
+    }
+
+    return NetSurfaceCard(
+      margin: NetSpacing.pageH,
+      onTap: onTap,
+      padding: const EdgeInsets.all(NetSpacing.md),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              NetInitialAvatar(name: title),
+              const SizedBox(width: NetSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontFamily: NetTypography.family,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14.5,
+                        color: palette.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: NetSpacing.xxs),
+                    Row(
+                      children: [
+                        Icon(subIcon, size: 13, color: palette.textTertiary),
+                        const SizedBox(width: NetSpacing.xs),
+                        Flexible(
+                          child: Text(
+                            subtitle,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontFamily: NetTypography.family,
+                              fontSize: 12,
+                              color: palette.textSecondary,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: NetSpacing.sm),
+              NetBalancePill(amountMinor: row.balance?.minorUnits ?? 0),
+            ],
+          ),
+          if (row.hasPhone) ...[
+            const SizedBox(height: NetSpacing.md),
+            Row(
+              children: [
+                Expanded(
+                  child: _ContactButton(
+                    icon: Icons.call_rounded,
+                    label: 'اتصال',
+                    onTap: () =>
+                        _openContact(context, 'tel', row.phone!.trim()),
+                  ),
+                ),
+                const SizedBox(width: NetSpacing.sm),
+                Expanded(
+                  child: _ContactButton(
+                    icon: Icons.sms_outlined,
+                    label: 'رسالة',
+                    onTap: () =>
+                        _openContact(context, 'sms', row.phone!.trim()),
+                  ),
+                ),
+              ],
+            ),
+          ],
+          if (row.isProvisional || !row.hasPhone) ...[
+            const SizedBox(height: NetSpacing.sm),
+            Row(
+              children: [
+                if (row.isProvisional)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: NetSpacing.sm,
+                      vertical: 3,
+                    ),
+                    decoration: BoxDecoration(
+                      color: net.warningContainer,
+                      borderRadius: NetRadii.xsAll,
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.account_balance_wallet_outlined, size: 12, color: net.warning),
+                        const SizedBox(width: NetSpacing.xs),
+                        Text(
+                          'دفتر مؤقت',
+                          style: TextStyle(
+                            fontFamily: NetTypography.family,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: net.warning,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                if (row.isProvisional && !row.hasPhone)
+                  const SizedBox(width: NetSpacing.xs),
+                if (!row.hasPhone)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: NetSpacing.sm,
+                      vertical: 3,
+                    ),
+                    decoration: BoxDecoration(
+                      color: net.errorContainer,
+                      borderRadius: NetRadii.xsAll,
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.link_off_rounded, size: 12, color: net.rejected),
+                        const SizedBox(width: NetSpacing.xs),
+                        Text(
+                          'غير مربوط',
+                          style: TextStyle(
+                            fontFamily: NetTypography.family,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: net.rejected,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                const Spacer(),
+                Text(
+                  'اضغط للتفاصيل',
+                  style: TextStyle(
+                    fontFamily: NetTypography.family,
+                    fontSize: 11,
+                    color: palette.textTertiary,
+                  ),
+                ),
+                Icon(
+                  Icons.chevron_left_rounded,
+                  size: NetSizes.iconSm,
+                  color: palette.textTertiary,
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
