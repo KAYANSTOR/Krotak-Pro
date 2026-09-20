@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import '../../core/clock.dart';
 import '../../core/id_generator.dart';
 import '../../core/result.dart';
@@ -17,6 +19,7 @@ import 'services.dart';
 import 'local_pos_account_registry.dart';
 import 'local_category_commission_store.dart';
 import 'pos_wholesale_pricing.dart';
+import 'pos_order_message_renderer.dart';
 
 /// Completes the real incoming-transfer business flow using the existing
 /// catalog, inventory, sale and native SMS boundaries.
@@ -126,10 +129,73 @@ final class LocalTransferProcessor implements TransferProcessor {
       );
     }
 
-    var resolutionResult = await _resolver.resolve(
-      identifierValue: transfer.customerIdentifier,
-      identifierType: transfer.identifierType,
-    );
+    final posLookup = posRegistry == null
+        ? null
+        : transfer.posId != null && transfer.posId!.trim().isNotEmpty
+            ? await posRegistry!.findByPosId(transfer.posId!.trim())
+            : await posRegistry!.findByIdentifier(message.sender);
+    if (transfer.posId != null && posLookup is Failure<PosAccount?>) {
+      return Failure<Transaction>(posLookup.error);
+    }
+    final posAccount = posLookup is Success<PosAccount?> ? posLookup.value : null;
+    final isPosOrder = posAccount != null &&
+        posAccount.status == PointOfSaleStatus.active &&
+        (transfer.posId == null || transfer.posId == posAccount.posId);
+
+    CustomerIdentityResolution resolution;
+    Result<CustomerIdentityResolution> resolutionResult;
+    if (isPosOrder) {
+      final posCustomerResult = await customers.findById(posAccount.customerId);
+      if (posCustomerResult is Failure<Customer?>) {
+        return Failure<Transaction>(posCustomerResult.error);
+      }
+      final posCustomer = (posCustomerResult as Success<Customer?>).value;
+      if (posCustomer == null) {
+        const failure = AppFailure(
+          code: 'pos_account_customer_missing',
+          message: 'POS ledger account customer was not found',
+        );
+        await _persistTerminalFailure(
+          messageId: message.id,
+          status: MessageProcessingStatus.failed,
+          action: 'pos_order_invalid_account',
+          error: failure,
+          transfer: transfer,
+          deliveryPhone: transfer.deliveryOverride ?? transfer.customerIdentifier,
+        );
+        return const Failure<Transaction>(failure);
+      }
+      final destination = (transfer.deliveryOverride ?? transfer.customerIdentifier).trim();
+      if (destination.isEmpty) {
+        const failure = AppFailure(
+          code: 'pos_customer_phone_missing',
+          message: 'POS order customer phone is missing',
+        );
+        await _persistTerminalFailure(
+          messageId: message.id,
+          status: MessageProcessingStatus.rejected,
+          action: 'pos_order_missing_destination',
+          error: failure,
+          transfer: transfer,
+        );
+        return const Failure<Transaction>(failure);
+      }
+      resolution = CustomerIdentityResolution.resolved(
+        customer: posCustomer,
+        deliveryPhone: destination,
+        matchedIdentifier: null,
+      );
+      resolutionResult = Success(resolution);
+    } else {
+      resolutionResult = await _resolver.resolve(
+        identifierValue: transfer.customerIdentifier,
+        identifierType: transfer.identifierType,
+      );
+      if (resolutionResult is Failure<CustomerIdentityResolution>) {
+        return Failure<Transaction>(resolutionResult.error);
+      }
+      resolution = (resolutionResult as Success<CustomerIdentityResolution>).value;
+    }
     if (resolutionResult is Failure<CustomerIdentityResolution>) {
       return Failure<Transaction>(resolutionResult.error);
     }
@@ -184,7 +250,8 @@ final class LocalTransferProcessor implements TransferProcessor {
     // If account was provisional but the phone is now in contacts, promote
     // to a full customer and adopt the contact display name.
     final liveCustomer = resolution.customer;
-    if (liveCustomer != null &&
+    if (!isPosOrder &&
+        liveCustomer != null &&
         liveCustomer.status == CustomerStatus.provisional &&
         customerService != null &&
         contactDirectory != null) {
@@ -224,7 +291,8 @@ final class LocalTransferProcessor implements TransferProcessor {
 
     final bindPhone =
         (resolution.deliveryPhone ?? transfer.customerIdentifier).trim();
-    if (customerService != null &&
+    if (!isPosOrder &&
+        customerService != null &&
         bindPhone.isNotEmpty &&
         transfer.identifierType == TransferIdentifierType.phone) {
       await customerService!.bindPrimaryGsm(
@@ -287,7 +355,11 @@ final class LocalTransferProcessor implements TransferProcessor {
     final sender = messageSender!;
     final transactionRepo = transactions!;
     final customer = resolution.customer!;
-    final destination = resolution.deliveryPhone?.trim() ?? '';
+    final destination = (isPosOrder
+            ? (transfer.deliveryOverride ?? transfer.customerIdentifier)
+            : resolution.deliveryPhone)
+        ?.trim() ??
+        '';
     if (destination.isEmpty) {
       const failure = AppFailure(
         code: 'delivery_phone_missing',
@@ -459,14 +531,6 @@ final class LocalTransferProcessor implements TransferProcessor {
     }
 
     final category = matches.single;
-    final posLookup = posRegistry == null
-        ? null
-        : await posRegistry!.findByIdentifier(message.sender);
-    final posAccount = posLookup is Success<PosAccount?>
-        ? posLookup.value
-        : null;
-    final isPosOrder = posAccount != null &&
-        posAccount.status == PointOfSaleStatus.active;
     var effectiveCategory = category;
     if (isPosOrder && categoryCommissionStore != null) {
       final commission = await categoryCommissionStore!.bpsFor(category.id);
