@@ -90,7 +90,8 @@ final class LocalSaleService implements SaleService, ReservedSaleService {
           AppFailure(code: 'customer_not_found', message: 'Customer was not found'),
         );
       }
-      if (customer.status != CustomerStatus.active) {
+      if (customer.status != CustomerStatus.active &&
+          customer.status != CustomerStatus.provisional) {
         return const Failure(
           AppFailure(
             code: 'customer_not_sellable',
@@ -243,7 +244,8 @@ final class LocalSaleService implements SaleService, ReservedSaleService {
           AppFailure(code: 'customer_not_found', message: 'Customer was not found'),
         );
       }
-      if (customer.status != CustomerStatus.active) {
+      if (customer.status != CustomerStatus.active &&
+          customer.status != CustomerStatus.provisional) {
         return const Failure(
           AppFailure(
             code: 'customer_not_sellable',

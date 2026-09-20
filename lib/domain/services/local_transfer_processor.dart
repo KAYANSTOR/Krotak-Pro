@@ -6,6 +6,7 @@ import '../entities/customer.dart';
 import '../entities/audit.dart';
 import '../entities/card.dart';
 import '../entities/message.dart';
+import '../entities/money.dart';
 import '../entities/setting.dart';
 import '../entities/transaction.dart';
 import '../repositories/repositories.dart';
@@ -16,7 +17,7 @@ import 'services.dart';
 /// Completes the real incoming-transfer business flow using the existing
 /// catalog, inventory, sale and native SMS boundaries.
 final class LocalTransferProcessor implements TransferProcessor {
-  const LocalTransferProcessor({
+  LocalTransferProcessor({
     required this.messages,
     required this.customers,
     required this.balances,
@@ -55,6 +56,10 @@ final class LocalTransferProcessor implements TransferProcessor {
   final AdvanceService? advanceService;
   final CustomerService? customerService;
   final Duration reservationTtl;
+
+  List<CardCategory>? _categoryCache;
+  DateTime? _categoryCacheAt;
+  static const Duration _categoryCacheTtl = Duration(seconds: 45);
 
   LocalCustomerIdentityResolver get _resolver =>
       identityResolver ?? LocalCustomerIdentityResolver(customers: customers);
@@ -350,19 +355,11 @@ final class LocalTransferProcessor implements TransferProcessor {
       }
     }
 
-    final allCategories = await categoriesRepo.listAll();
-    if (allCategories is Failure<List<CardCategory>>) {
-      return Failure<Transaction>(allCategories.error);
+    final matchResult = await _matchActiveCategory(effectiveAmount);
+    if (matchResult is Failure<List<CardCategory>>) {
+      return Failure<Transaction>(matchResult.error);
     }
-    final matches = (allCategories as Success<List<CardCategory>>)
-        .value
-        .where(
-          (category) =>
-              category.isActive &&
-              category.faceValue.currencyCode == effectiveAmount.currencyCode &&
-              category.faceValue.minorUnits == effectiveAmount.minorUnits,
-        )
-        .toList(growable: false);
+    final matches = (matchResult as Success<List<CardCategory>>).value;
     if (matches.isEmpty) {
       final categoryOnly = await _processCategoryAmountsOnly();
       if (categoryOnly) {
@@ -581,6 +578,32 @@ final class LocalTransferProcessor implements TransferProcessor {
     return Success<Transaction>(saleLedger);
   }
 
+
+
+  Future<Result<List<CardCategory>>> _matchActiveCategory(Money amount) async {
+    final categoriesRepo = categories!;
+    final now = clock.now();
+    final stale = _categoryCache == null ||
+        _categoryCacheAt == null ||
+        now.difference(_categoryCacheAt!) > _categoryCacheTtl;
+    if (stale) {
+      final all = await categoriesRepo.listAll();
+      if (all is Failure<List<CardCategory>>) {
+        return Failure(all.error);
+      }
+      _categoryCache = (all as Success<List<CardCategory>>).value;
+      _categoryCacheAt = now;
+    }
+    final matches = _categoryCache!
+        .where(
+          (category) =>
+              category.isActive &&
+              category.faceValue.currencyCode == amount.currencyCode &&
+              category.faceValue.minorUnits == amount.minorUnits,
+        )
+        .toList(growable: false);
+    return Success(matches);
+  }
 
   bool _canAutoProvision(ParsedTransfer transfer) {
     if (transfer.identifierType != TransferIdentifierType.phone) return false;
