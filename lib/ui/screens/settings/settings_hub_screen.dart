@@ -58,7 +58,7 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
   static const _licenseKeywords = 'تجديد الاشتراك الترخيص رصيد الرسائل الباقة';
   static const _themeKeywords = 'الوضع الداكن المظهر الثيم ليلي فاتح';
   static const _walletsKeywords =
-      'المحافظ نقاط البيع محاكاة القوالب قوالب التحويل طلبات الرصيد ملخص العمليات اليومي التسوية التلقائية';
+      'المحافظ نقاط البيع محاكاة القوالب قوالب التحويل قوالب رسائل نقاط البيع طلبات الرصيد ملخص العمليات اليومي التسوية التلقائية';
   static const _maintenanceKeywords = 'تنظيف السجلات تصدير السجل الأرشفة نسخ احتياطي استعادة بيانات تنظيف عميق فهارس';
   static const _aboutKeywords =
       'عن التطبيق المبرمج الحقوق كيان سوفت إصدار كروتك ${AppBrand.latinName} الموقع';
