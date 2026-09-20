@@ -4,6 +4,7 @@ import '../entities/payment_event.dart';
 import '../entities/wallet.dart';
 import '../repositories/repositories.dart';
 import 'local_payment_source_registry.dart';
+import 'local_pos_account_registry.dart';
 
 /// Authorizes inbound payment events against explicitly configured payment sources.
 /// Commercial processing is never allowed merely because an SMS body matches a
@@ -14,17 +15,42 @@ final class PaymentSourceGuard {
     required this.wallets,
     required this.templates,
     this.notificationSources,
+    this.posAccounts,
   });
 
   final WalletRepository wallets;
   final TransferTemplateRepository templates;
   final LocalPaymentSourceRegistry? notificationSources;
+  final LocalPosAccountRegistry? posAccounts;
 
   Future<Result<void>> authorize(
     PaymentEvent event, {
     String? matchedTemplateId,
   }) async {
     if (event.channel == PaymentChannel.manual) return const Success(null);
+
+    final configuredTemplates = await templates.listAll();
+    if (configuredTemplates is Failure<List<TransferTemplate>>) return Failure(configuredTemplates.error);
+    final allTemplates = (configuredTemplates as Success<List<TransferTemplate>>).value;
+
+    if (event.channel == PaymentChannel.sms && posAccounts != null) {
+      final posResult = await posAccounts!.findByIdentifier(event.sourceKey);
+      if (posResult is Failure<PosAccount?>) return Failure(posResult.error);
+      final pos = (posResult as Success<PosAccount?>).value;
+      if (pos != null) {
+        if (pos.status != PointOfSaleStatus.active) {
+          return const Failure(AppFailure(code: 'untrusted_payment_source', message: 'Point of sale is not active'));
+        }
+        final posTemplates = allTemplates.where((t) => t.isActive && t.posId == pos.posId).toList(growable: false);
+        if (posTemplates.isEmpty) {
+          return const Failure(AppFailure(code: 'no_source_template', message: 'No active transfer template is linked to this point of sale'));
+        }
+        if (matchedTemplateId != null && !posTemplates.any((t) => t.id == matchedTemplateId)) {
+          return const Failure(AppFailure(code: 'template_source_mismatch', message: 'Matched template is not linked to the trusted point of sale'));
+        }
+        return const Success(null);
+      }
+    }
 
     final listedWallets = await wallets.listAll();
     if (listedWallets is Failure<List<Wallet>>) return Failure(listedWallets.error);
@@ -72,8 +98,6 @@ final class PaymentSourceGuard {
       ));
     }
 
-    final configuredTemplates = await templates.listAll();
-    if (configuredTemplates is Failure<List<TransferTemplate>>) return Failure(configuredTemplates.error);
     final walletId = wallet.id;
     final liveTemplates = (configuredTemplates as Success<List<TransferTemplate>>).value
         .where((t) => t.isActive && t.walletId == walletId)
