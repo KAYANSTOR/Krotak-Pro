@@ -605,6 +605,10 @@ class _TemplateWizardScreenState extends State<TemplateWizardScreen> {
             _Chip('رقم الجوال', '{phone}', () => _insertToken('{phone}')),
             _Chip('الحساب / الاسم', '{account}', () => _insertToken('{account}')),
             _Chip('المرجع', '{ref}', () => _insertToken('{ref}')),
+            if (_posId != null)
+              _Chip('عدد الكروت', '{qty}', () => _insertToken('{qty}')),
+            if (_posId != null)
+              _Chip('رقم التسليم', '{dest}', () => _insertToken('{dest}')),
           ],
         ),
         const SizedBox(height: 16),
@@ -619,7 +623,7 @@ class _TemplateWizardScreenState extends State<TemplateWizardScreen> {
         ),
         const SizedBox(height: 12),
         Text(
-          'يجب وجود {amount}. المعرّف: {phone} أو {account} حسب نوع المعرّف. {ref} اختياري.',
+          'يجب وجود {amount}. المعرّف: {phone} أو {account} حسب نوع المعرّف. {ref} اختياري. لقالب نقطة البيع يمكن استخدام {qty} للعدد و{dest} لرقم التسليم.',
           style: TextStyle(fontFamily: 'Tajawal', fontSize: 12, color: kayan.textTertiary),
         ),
       ],
