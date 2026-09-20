@@ -73,6 +73,8 @@ final class LocalMessageParser implements MessageParser {
 
     final body = _normalizeBody(message.body);
     for (final template in active) {
+      final balanceRequest = _tryBalanceRequest(template, message.id, message.sender, body);
+      if (balanceRequest != null) return Success(balanceRequest);
       final instant = _tryInstantCharge(template, message.id, message.sender, body);
       if (instant != null) return Success(instant);
       final parsed = _tryMatch(template, message.id, message.sender, body);
