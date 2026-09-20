@@ -1,0 +1,23 @@
+name: apply-contacts-on-push
+on:
+  push:
+    paths:
+      - 'tools/contacts/apply_remaining.py'
+      - 'tools/contacts/*.b64'
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply
+        run: python3 tools/contacts/apply_remaining.py
+      - name: Commit
+        run: |
+          git config user.name "KAYANSTOR"
+          git config user.email "jarallhalkboudi@gmail.com"
+          git add lib/domain/services/local_transfer_processor.dart || true
+          git diff --cached --quiet && echo No changes && exit 0
+          git commit -m "feat(identity): LocalTransferProcessor contacts-based provision + promote"
+          git push
