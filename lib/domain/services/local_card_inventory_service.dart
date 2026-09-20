@@ -23,6 +23,19 @@ final class LocalCardInventoryService implements CardInventoryService {
     required DateTime expiresAt,
   }) {
     return unitOfWork.run(() async {
+      final atomic = await cards.reserveFirstAvailable(
+        categoryId: categoryId,
+        reservationId: reservationId,
+        reservedAt: now,
+        expiresAt: expiresAt,
+      );
+      if (atomic is Success<Card>) return atomic;
+      if (atomic is Failure<Card> &&
+          atomic.error.code != 'card_unavailable' &&
+          atomic.error.code != 'not_implemented') {
+        return atomic;
+      }
+
       final foundCategory = await categories.findById(categoryId);
       if (foundCategory is Failure<CardCategory?>) {
         return Failure(foundCategory.error);

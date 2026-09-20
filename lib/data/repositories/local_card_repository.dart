@@ -104,6 +104,85 @@ final class LocalCardRepository implements CardRepository {
   }
 
   @override
+  Future<Result<domain.Card>> reserveFirstAvailable({
+    required String categoryId,
+    required String reservationId,
+    required DateTime reservedAt,
+    required DateTime expiresAt,
+  }) async {
+    try {
+      await (database.update(database.cards)
+            ..where(
+              (table) =>
+                  table.categoryId.equals(categoryId) &
+                  table.status.equals(domain.CardStatus.reserved.name) &
+                  table.reservationExpiresAt.isNotNull() &
+                  table.reservationExpiresAt.isSmallerOrEqualValue(reservedAt),
+            ))
+          .write(
+        const CardsCompanion(
+          status: Value('available'),
+          reservationId: Value(null),
+          reservedAt: Value(null),
+          reservationExpiresAt: Value(null),
+        ),
+      );
+
+      final candidate = await (database.select(database.cards)
+            ..where(
+              (table) =>
+                  table.categoryId.equals(categoryId) &
+                  table.status.equals(domain.CardStatus.available.name),
+            )
+            ..orderBy([(table) => OrderingTerm(expression: table.serialNumber)])
+            ..limit(1))
+          .getSingleOrNull();
+      if (candidate == null) {
+        return const Failure(
+          AppFailure(code: 'card_unavailable', message: 'No available card in category'),
+        );
+      }
+
+      final changed = await (database.update(database.cards)
+            ..where(
+              (table) =>
+                  table.id.equals(candidate.id) &
+                  table.status.equals(domain.CardStatus.available.name),
+            ))
+          .write(
+        CardsCompanion(
+          status: const Value('reserved'),
+          reservationId: Value(reservationId),
+          reservedAt: Value(reservedAt),
+          reservationExpiresAt: Value(expiresAt),
+        ),
+      );
+      if (changed != 1) {
+        return const Failure(
+          AppFailure(code: 'card_unavailable', message: 'No available card in category'),
+        );
+      }
+
+      return Success(
+        domain.Card(
+          id: candidate.id,
+          categoryId: candidate.categoryId,
+          serialNumber: candidate.serialNumber,
+          secretCode: candidate.secretCode,
+          status: domain.CardStatus.reserved,
+          reservation: domain.CardReservation(
+            reservationId: reservationId,
+            reservedAt: reservedAt,
+            expiresAt: expiresAt,
+          ),
+        ),
+      );
+    } catch (error) {
+      return Failure(_failure('card_reserve_first_failed', error));
+    }
+  }
+
+  @override
   Future<Result<void>> save(domain.Card card) async {
     try {
       await database.into(database.cards).insertOnConflictUpdate(
