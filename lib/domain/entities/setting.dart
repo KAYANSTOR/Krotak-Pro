@@ -12,6 +12,7 @@ abstract final class SettingKeys {
   static const processCategoryAmountsOnly = 'process_category_amounts_only';
   static const processOldMessagesOnResume = 'process_old_messages_on_resume';
   static const posBalanceRequestsEnabled = 'pos_balance_requests_enabled';
+  static const posBalanceRequestCounts = 'pos_balance_request_counts';
   static const dailyOpsSummaryAutoSend = 'daily_ops_summary_auto_send';
   static const themeMode = 'theme_mode';
   static const lastRejectedMessagesViewedAt = 'last_rejected_messages_viewed_at';
