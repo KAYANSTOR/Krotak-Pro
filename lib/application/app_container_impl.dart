@@ -25,7 +25,6 @@ import '../domain/services/local_message_retry_service.dart';
 import '../domain/services/local_promotion_catalog.dart';
 import '../domain/services/local_promotion_progress_service.dart';
 import '../domain/services/local_pos_account_registry.dart';
-import '../domain/services/local_point_of_sale_profile_service.dart';
 import '../domain/services/local_system_health_service.dart';
 import '../domain/services/local_voucher_ops_service.dart';
 import '../domain/services/pending_attention_alarm_service.dart';
@@ -61,7 +60,7 @@ final class AppContainer {
     required this.categories, required this.cards, required this.messages, required this.transferTemplates,
     required this.transactions, required this.sales, required this.auditLogs, required this.licenses,
     required this.settings, required this.unitOfWork, required this.customerService, required this.balanceService,
-    required this.catalogService, required this.walletCatalog, required this.posCatalog, required this.posRegistry, required this.posProfiles,
+    required this.catalogService, required this.walletCatalog, required this.posCatalog, required this.posRegistry,
     required this.inventoryService, required this.saleService, required this.advanceService, required this.broadcastService,
     required this.promotions, required this.promotionProgress, required this.systemHealth, required this.voucherOps,
     required this.pendingAlarm, required LocalMessageParser messageParser, required this.transferProcessor,
@@ -91,7 +90,6 @@ final class AppContainer {
   final LocalWalletCatalogService walletCatalog;
   final LocalPointOfSaleCatalogService posCatalog;
   final LocalPosAccountRegistry posRegistry;
-  final LocalPointOfSaleProfileService posProfiles;
   final CardInventoryService inventoryService;
   final SaleService saleService;
   final AdvanceService advanceService;
@@ -158,17 +156,6 @@ final class AppContainer {
     final walletCatalog = LocalWalletCatalogService(wallets: wallets, auditLogs: auditLogs, settings: settings, clock: clock, ids: ids);
     final posCatalog = LocalPointOfSaleCatalogService(pointsOfSale: pointsOfSale, auditLogs: auditLogs, clock: clock, ids: ids);
     final posRegistry = LocalPosAccountRegistry(settings: settings, clock: clock);
-    final posProfiles = LocalPointOfSaleProfileService(
-      customers: customers,
-      pointsOfSale: pointsOfSale,
-      posRegistry: posRegistry,
-      templates: transferTemplates,
-      auditLogs: auditLogs,
-      unitOfWork: uow,
-      balanceService: balanceService,
-      clock: clock,
-      ids: ids,
-    );
     final catalogService = LocalCardCatalogService(categories: categories, cards: cards, auditLogs: auditLogs, unitOfWork: uow, clock: clock, ids: ids);
     final inventoryService = LocalCardInventoryService(categories: categories, cards: cards, unitOfWork: uow);
     final promotions = LocalPromotionCatalog(settings: settings, clock: clock, ids: ids);
@@ -268,7 +255,7 @@ final class AppContainer {
       }
     }
 
-    return AppContainer._(database: database, customers: customers, wallets: wallets, pointsOfSale: pointsOfSale, categories: categories, cards: cards, messages: messages, transferTemplates: transferTemplates, transactions: transactions, sales: sales, auditLogs: auditLogs, licenses: licenses, settings: settings, unitOfWork: uow, customerService: customerService, balanceService: balanceService, catalogService: catalogService, walletCatalog: walletCatalog, posCatalog: posCatalog, posRegistry: posRegistry, posProfiles: posProfiles, inventoryService: inventoryService, saleService: saleService, advanceService: advanceService, broadcastService: broadcastService, promotions: promotions, promotionProgress: promotionProgress, systemHealth: systemHealth, voucherOps: voucherOps, pendingAlarm: pendingAlarm, messageParser: parser, transferProcessor: processor, licenseService: licenseService, backupService: backupService, maintenanceService: maintenanceService, mergeService: mergeService, settlementService: settlementService, recoveryService: recoveryService, deliveryWorker: deliveryWorker, retryService: retryService, pendingReview: pendingReview, smsBridge: smsBridge, smsHandler: smsHandler, notificationBridge: notificationBridge, notificationSources: notificationSources, notificationHandler: notificationHandler, clock: clock, ids: ids, themeModeNotifier: ValueNotifier<ThemeMode>(theme));
+    return AppContainer._(database: database, customers: customers, wallets: wallets, pointsOfSale: pointsOfSale, categories: categories, cards: cards, messages: messages, transferTemplates: transferTemplates, transactions: transactions, sales: sales, auditLogs: auditLogs, licenses: licenses, settings: settings, unitOfWork: uow, customerService: customerService, balanceService: balanceService, catalogService: catalogService, walletCatalog: walletCatalog, posCatalog: posCatalog, posRegistry: posRegistry, inventoryService: inventoryService, saleService: saleService, advanceService: advanceService, broadcastService: broadcastService, promotions: promotions, promotionProgress: promotionProgress, systemHealth: systemHealth, voucherOps: voucherOps, pendingAlarm: pendingAlarm, messageParser: parser, transferProcessor: processor, licenseService: licenseService, backupService: backupService, maintenanceService: maintenanceService, mergeService: mergeService, settlementService: settlementService, recoveryService: recoveryService, deliveryWorker: deliveryWorker, retryService: retryService, pendingReview: pendingReview, smsBridge: smsBridge, smsHandler: smsHandler, notificationBridge: notificationBridge, notificationSources: notificationSources, notificationHandler: notificationHandler, clock: clock, ids: ids, themeModeNotifier: ValueNotifier<ThemeMode>(theme));
   }
 
   Future<void> startBackgroundHandlers() async {
