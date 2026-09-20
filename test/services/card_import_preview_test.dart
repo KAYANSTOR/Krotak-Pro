@@ -6,6 +6,7 @@ import 'package:net_app/core/result.dart';
 import 'package:net_app/domain/entities/card.dart';
 import 'package:net_app/domain/services/card_import_file_reader.dart';
 import 'package:net_app/domain/services/card_import_parser.dart';
+import 'package:net_app/domain/services/card_import_preview.dart';
 import 'package:net_app/domain/services/services.dart';
 
 import '../helpers/in_memory_repositories.dart';
