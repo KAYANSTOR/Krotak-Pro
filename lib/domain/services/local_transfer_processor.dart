@@ -14,6 +14,9 @@ import '../repositories/unit_of_work.dart';
 import 'local_customer_identity_resolver.dart';
 import 'contact_directory.dart';
 import 'services.dart';
+import 'local_pos_account_registry.dart';
+import 'local_category_commission_store.dart';
+import 'pos_wholesale_pricing.dart';
 
 /// Completes the real incoming-transfer business flow using the existing
 /// catalog, inventory, sale and native SMS boundaries.
@@ -37,6 +40,8 @@ final class LocalTransferProcessor implements TransferProcessor {
     this.advanceService,
     this.customerService,
     this.contactDirectory,
+    this.posRegistry,
+    this.categoryCommissionStore,
     this.reservationTtl = const Duration(minutes: 5),
   });
 
@@ -58,6 +63,8 @@ final class LocalTransferProcessor implements TransferProcessor {
   final AdvanceService? advanceService;
   final CustomerService? customerService;
   final ContactDirectory? contactDirectory;
+  final LocalPosAccountRegistry? posRegistry;
+  final LocalCategoryCommissionStore? categoryCommissionStore;
   final Duration reservationTtl;
 
   List<CardCategory>? _categoryCache;
@@ -452,6 +459,27 @@ final class LocalTransferProcessor implements TransferProcessor {
     }
 
     final category = matches.single;
+    final posLookup = posRegistry == null
+        ? null
+        : await posRegistry!.findByIdentifier(message.sender);
+    final posAccount = posLookup is Success<PosAccount?>
+        ? posLookup.value
+        : null;
+    final isPosOrder = posAccount != null &&
+        posAccount.status == PointOfSaleStatus.active;
+    var effectiveCategory = category;
+    if (isPosOrder && categoryCommissionStore != null) {
+      final commission = await categoryCommissionStore!.bpsFor(category.id);
+      if (commission is Success<int>) {
+        effectiveCategory = category.withCommission(commission.value);
+      }
+    }
+    final posCharge = isPosOrder
+        ? PosWholesalePricing().unitPrice(
+            category: effectiveCategory,
+            mode: posAccount!.percentageMode,
+          )
+        : effectiveCategory.faceValue;
     final reservationId = 'transfer-reservation:$operationId';
     final now = clock.now();
     final reserved = await inventoryService.reserveAvailableCard(
@@ -481,12 +509,14 @@ final class LocalTransferProcessor implements TransferProcessor {
     }
     final card = (reserved as Success<Card>).value;
 
-    final credit = await balances.credit(
-      customerId: customer.id,
-      amount: effectiveAmount,
-      reference: transfer.reference.isEmpty ? null : transfer.reference,
-    );
-    if (credit is Failure<Transaction>) {
+    final credit = isPosOrder
+        ? const Success<Transaction?>(null)
+        : await balances.credit(
+            customerId: customer.id,
+            amount: effectiveAmount,
+            reference: transfer.reference.isEmpty ? null : transfer.reference,
+          );
+    if (credit is Failure<Transaction?>) {
       await inventoryService.releaseReservation(
         cardId: card.id,
         reservationId: reservationId,
@@ -507,6 +537,8 @@ final class LocalTransferProcessor implements TransferProcessor {
       cardId: card.id,
       reservationId: reservationId,
       operationId: operationId,
+      saleAmount: posCharge,
+      allowNegativeBalance: isPosOrder,
     );
     if (completed is Failure<Sale>) {
       await inventoryService.releaseReservation(
