@@ -8,13 +8,19 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Apply engine hotpath slice 2
-        run: python3 tools/hotpath/apply_hotpath_slice2.py
+      - name: Apply contacts identity via bootstrap
+        run: python3 tools/contacts/assemble_and_apply.py
       - name: Commit
         run: |
           git config user.name "KAYANSTOR"
           git config user.email "jarallhalkboudi@gmail.com"
           git add -A
           git diff --cached --quiet && echo No changes && exit 0
-          git commit -m "perf(engine): hotpath slice2 — atomic reserveFirstAvailable"
+          git commit -m "feat(identity): contacts-based customer vs provisional ledger
+
+- Phone in device contacts => CustomerStatus.active with contact name
+- Phone not in contacts => CustomerStatus.provisional (ledger only)
+- Later transfer promotes provisional when contacts match
+- MainActivity lookupContactByPhone + ContactPickerBridge.findByPhone
+- Wired via ContactDirectory in LocalTransferProcessor / AppContainer"
           git push
