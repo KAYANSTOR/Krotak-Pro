@@ -161,7 +161,7 @@ final class PosOrderMessageRenderer {
 
   String _quantityText(int quantity) {
     if (quantity == 1) return 'الكرت';
-    if (quantity == 2) return 'كرتين';
+    if (quantity == 2) return '2 كروت';
     return '$quantity كروت';
   }
 }
