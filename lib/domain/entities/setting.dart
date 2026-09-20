@@ -79,7 +79,7 @@ abstract final class SettingDefaults {
   static const voucherDeliverySmsTemplate =
       'رقم الكرت: {serial}\nالرمز: {code}';
   static const posCustomerCardDeliveryTemplate =
-      'شبكة {NETWORK_NAME}\nالفئة: {CARD_VALUE} {CURRENCY}\n{cards}';
+      'شبكة {NETWORK_NAME}\nالفئة: {category}\n{cards}';
   static const posOrderSuccessTemplate =
       'تم إرسال {QUANTITY_TEXT} بنجاح إلى {CUSTOMER_PHONE}\nالفئة: {CARD_VALUE} {CURRENCY}\nنقطة البيع: {POS_NAME}\nإجمالي الخصم من الحساب: {TOTAL} {CURRENCY}';
   static const customerDebtPaymentTemplate =
