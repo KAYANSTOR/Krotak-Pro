@@ -47,6 +47,10 @@ abstract final class SettingKeys {
   static const posCustomerSmsTailTemplate = 'pos_customer_sms_tail_template';
   static const lowStockAlertTemplate = 'low_stock_alert_template';
 
+  /// JSON array of operator-created outbound templates:
+  /// `[{id, title, tab, body}]`. Each body is also stored under `custom:{id}`.
+  static const customOutboundTemplates = 'custom_outbound_templates';
+
   /// JSON map: walletId → {senderId, sourceMode, packageName}.
   static const walletExtras = 'wallet_extras';
 
