@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../../../core/result.dart';
 import '../../../domain/entities/money.dart';
 import '../../../domain/entities/pos_account.dart';
+import '../../../domain/entities/pos_profile.dart';
 import '../../../domain/entities/transaction.dart';
 import '../../app_scope.dart';
 import '../../routing/app_routes.dart';
@@ -1143,7 +1144,3 @@ class _SettlementSheetState extends State<_SettlementSheet> {
   }
 }
 
-// ── نقطة بيع جديدة / تعديل ───────────────────────────────────────────
-
-
-}
