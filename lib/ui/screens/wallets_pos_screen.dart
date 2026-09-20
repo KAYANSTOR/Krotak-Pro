@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../core/result.dart';
 import '../../domain/entities/pos_account.dart';
+import '../../domain/entities/pos_profile.dart';
 import '../../domain/entities/wallet.dart';
-import '../../platform/contact_picker_bridge.dart';
 import '../app_scope.dart';
 import '../theme/kayan_colors.dart';
 import '../theme/kayan_palette.dart';
