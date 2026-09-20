@@ -2,20 +2,28 @@ import '../../core/result.dart';
 import '../entities/message.dart';
 import '../repositories/repositories.dart';
 
-/// Seeds the 5 built-in parse templates for a single point-of-sale, run
-/// once right after a new POS point is created — mirrors the product
-/// video: "نقطة بيع جديدة" → 5 قوالب تلقائية (نشط) تظهر مباشرة.
+/// Seeds the built-in **inbound** parse templates for a single point-of-sale.
 ///
-/// Unlike [DefaultWalletTemplatesSeeder] (global, gated by a settings
-/// flag), this seeder is invoked directly by the UI at POS-creation time
-/// and is keyed by `posId`, so each POS gets its own copy. It is
-/// idempotent per POS (stable ids `tpl-pos-{posId}-{variant}`, upsert),
-/// so calling it again for the same POS is harmless.
+/// Invoked by [LocalPosProfileService.create] right after a new POS is saved
+/// so the operator sees a full working catalog immediately (product video:
+/// «نقطة بيع جديدة» → قوالب نشطة تظهر مباشرة).
 ///
+/// Unlike [DefaultWalletTemplatesSeeder] (global, gated by a settings flag),
+/// this seeder is keyed by `posId` — each POS gets its own copy. Stable ids
+/// `tpl-pos-{posId}-{variant}` + repository upsert make the operation
+/// idempotent: calling [seedForPos] again backfills any missing variants
+/// without duplicating rows.
+///
+/// Catalog covers single-card, multi-card (`{qty}`), delivery override
+/// (`{dest}`), and balance-request — matching what [LocalMessageParser]
+/// already understands.
 final class DefaultPosTemplatesSeeder {
   const DefaultPosTemplatesSeeder({required this.templates});
 
   final TransferTemplateRepository templates;
+
+  /// Number of built-in variants currently defined (for tests / UI hints).
+  static int get catalogSize => _specs.length;
 
   Future<Result<int>> seedForPos({
     required String posId,
@@ -45,51 +53,121 @@ final class DefaultPosTemplatesSeeder {
     return Success(inserted);
   }
 
+  /// Full default inbound catalog.
+  ///
+  /// Priority is ascending in the parser (lower runs first). More-specific
+  /// patterns (`{qty}`, `{dest}`) therefore use lower numbers so they win
+  /// over the generic single-card patterns.
   static const _specs = <_TplSpec>[
+    // ── multi-card + optional delivery destination (most specific) ──
+    _TplSpec(
+      variant: 'multi-qty-dest',
+      name: 'طلب عدة كروت مع رقم التسليم',
+      priority: 0,
+      pattern: '{phone} {amount} {qty} {dest}',
+      sampleBody: '779776919 100 3 733000111',
+      senderNameLabel: 'غير معروف',
+      noteLabel: 'طلب كروت متعدد + تسليم',
+      requireReference: false,
+    ),
+    _TplSpec(
+      variant: 'multi-qty-dest-reversed',
+      name: 'طلب عدة كروت مع رقم التسليم (معكوس)',
+      priority: 1,
+      pattern: '{amount} {phone} {qty} {dest}',
+      sampleBody: '100 779776919 3 733000111',
+      senderNameLabel: 'غير معروف',
+      noteLabel: 'طلب كروت متعدد + تسليم',
+      requireReference: false,
+    ),
+    _TplSpec(
+      variant: 'multi-qty',
+      name: 'طلب عدة كروت لعميل',
+      priority: 2,
+      pattern: '{phone} {amount} {qty}',
+      sampleBody: '779776919 100 3',
+      senderNameLabel: 'غير معروف',
+      noteLabel: 'طلب كروت متعدد',
+      requireReference: false,
+    ),
+    _TplSpec(
+      variant: 'multi-qty-reversed',
+      name: 'طلب عدة كروت لعميل (معكوس)',
+      priority: 3,
+      pattern: '{amount} {phone} {qty}',
+      sampleBody: '100 779776919 3',
+      senderNameLabel: 'غير معروف',
+      noteLabel: 'طلب كروت متعدد',
+      requireReference: false,
+    ),
+    _TplSpec(
+      variant: 'dest',
+      name: 'طلب كرت مع رقم التسليم',
+      priority: 4,
+      pattern: '{phone} {amount} {dest}',
+      sampleBody: '779776919 100 733000111',
+      senderNameLabel: 'غير معروف',
+      noteLabel: 'طلب كرت + تسليم',
+      requireReference: false,
+    ),
+    _TplSpec(
+      variant: 'dest-reversed',
+      name: 'طلب كرت مع رقم التسليم (معكوس)',
+      priority: 5,
+      pattern: '{amount} {phone} {dest}',
+      sampleBody: '100 779776919 733000111',
+      senderNameLabel: 'غير معروف',
+      noteLabel: 'طلب كرت + تسليم',
+      requireReference: false,
+    ),
+
+    // ── single-card (generic) ──
     _TplSpec(
       variant: 'normal',
-      name: 'قالب نقطة البيع',
-      priority: 0,
+      name: 'طلب كرت لعميل',
+      priority: 10,
       pattern: '{phone} {amount}',
       sampleBody: '779776919 100',
       senderNameLabel: 'غير معروف',
-      noteLabel: 'تحويل مشترك',
+      noteLabel: 'طلب كرت',
       requireReference: false,
     ),
     _TplSpec(
       variant: 'reversed',
-      name: 'قالب نقطة البيع (معكوس)',
-      priority: 1,
+      name: 'طلب كرت لعميل (معكوس)',
+      priority: 11,
       pattern: '{amount} {phone}',
       sampleBody: '100 779776919',
       senderNameLabel: 'غير معروف',
-      noteLabel: 'تحويل مشترك',
+      noteLabel: 'طلب كرت',
       requireReference: false,
     ),
     _TplSpec(
       variant: 'arabic-digits',
-      name: 'قالب نقطة البيع (أرقام عربية)',
-      priority: 2,
+      name: 'طلب كرت (أرقام عربية)',
+      priority: 12,
       pattern: '{phone} {amount}',
       sampleBody: '٧٧٩٧٧٦٩١٩ ١٠٠',
       senderNameLabel: 'غير معروف',
-      noteLabel: 'تحويل مشترك',
+      noteLabel: 'طلب كرت',
       requireReference: false,
     ),
     _TplSpec(
       variant: 'arabic-digits-reversed',
-      name: 'قالب نقطة البيع (أرقام عربية معكوس)',
-      priority: 3,
+      name: 'طلب كرت (أرقام عربية معكوس)',
+      priority: 13,
       pattern: '{amount} {phone}',
       sampleBody: '١٠٠ ٧٧٩٧٧٦٩١٩',
       senderNameLabel: 'غير معروف',
-      noteLabel: 'تحويل مشترك',
+      noteLabel: 'طلب كرت',
       requireReference: false,
     ),
+
+    // ── balance ──
     _TplSpec(
       variant: 'balance-request',
-      name: 'قالب طلب رصيد نقطة البيع',
-      priority: 4,
+      name: 'طلب رصيد نقطة البيع',
+      priority: 20,
       pattern: '111',
       sampleBody: '111',
       identifierKind: TemplateIdentifierKind.balanceRequestCode,
@@ -122,7 +200,7 @@ final class _TplSpec {
   final String? senderNameLabel;
   final String? noteLabel;
 
-  /// These POS message formats carry no transaction reference at all —
-  /// opt out of the parser's default "reference required" safety check.
+  /// POS request formats carry no bank transaction reference — opt out of
+  /// the parser's default «reference required» safety check.
   final bool requireReference;
 }
