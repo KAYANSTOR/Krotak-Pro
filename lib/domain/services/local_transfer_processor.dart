@@ -480,6 +480,15 @@ final class LocalTransferProcessor implements TransferProcessor {
             mode: posAccount!.percentageMode,
           )
         : effectiveCategory.faceValue;
+    if (transfer.quantity > 1) {
+      return _processBatchSale(
+        transfer: transfer, message: message, customer: customer, destination: destination,
+        category: category, posAccount: posAccount, isPosOrder: isPosOrder, posCharge: posCharge,
+        operationId: operationId, inventoryService: inventoryService, saleCompleter: saleCompleter,
+        sender: sender, transactionRepo: transactionRepo,
+      );
+    }
+
     final reservationId = 'transfer-reservation:$operationId';
     final now = clock.now();
     final reserved = await inventoryService.reserveAvailableCard(
@@ -867,3 +876,125 @@ final class _DeliveryState {
   final String reservationId;
   final String categoryId;
 }
+  Future<Result<Transaction>> _processBatchSale({
+    required ParsedTransfer transfer,
+    required IncomingMessage message,
+    required Customer customer,
+    required String destination,
+    required CardCategory category,
+    required PosAccount? posAccount,
+    required bool isPosOrder,
+    required Money posCharge,
+    required String operationId,
+    required CardInventoryService inventoryService,
+    required ReservedSaleService saleCompleter,
+    required MessageSender sender,
+    required TransactionRepository transactionRepo,
+  }) async {
+    final quantity = transfer.quantity.clamp(2, 20);
+    final reservations = <({Card card, String reservationId})>[];
+    final now = clock.now();
+
+    Future<void> releaseAll() async {
+      for (final item in reservations) {
+        await inventoryService.releaseReservation(cardId: item.card.id, reservationId: item.reservationId);
+      }
+    }
+
+    for (var i = 0; i < quantity; i++) {
+      final reservationId = 'transfer-reservation:${operationId}:${i}';
+      final reserved = await inventoryService.reserveAvailableCard(
+        categoryId: category.id, reservationId: reservationId, now: now,
+        expiresAt: now.add(reservationTtl),
+      );
+      if (reserved is Failure<Card>) {
+        await releaseAll();
+        final failure = reserved.error.code == 'card_unavailable'
+            ? const AppFailure(code: 'out_of_stock', message: 'لا يوجد عدد كافٍ من الكروت المتاحة في الفئة')
+            : reserved.error;
+        await _persistTerminalFailure(messageId: message.id, status: MessageProcessingStatus.rejected,
+          action: 'transfer_batch_reservation_failed', error: failure, transfer: transfer, deliveryPhone: destination);
+        return Failure<Transaction>(failure);
+      }
+      reservations.add((card: (reserved as Success<Card>).value, reservationId: reservationId));
+    }
+
+    if (!isPosOrder) {
+      final total = Money(minorUnits: transfer.amount.minorUnits * quantity, currencyCode: transfer.amount.currencyCode);
+      final credit = await balances.credit(
+        customerId: customer.id, amount: total,
+        reference: transfer.reference.isEmpty ? null : transfer.reference,
+      );
+      if (credit is Failure<Transaction>) {
+        await releaseAll();
+        await _persistTerminalFailure(messageId: message.id, status: MessageProcessingStatus.failed,
+          action: 'transfer_batch_credit_failed', error: credit.error, transfer: transfer, deliveryPhone: destination);
+        return Failure<Transaction>(credit.error);
+      }
+    }
+
+    final sold = <Card>[];
+    Transaction? lastTransaction;
+    for (var i = 0; i < reservations.length; i++) {
+      final item = reservations[i];
+      final ref = 'sale-op:${operationId}:${i}';
+      final existing = await transactionRepo.findByReference(ref);
+      if (existing is Success<Transaction?> && existing.value != null) {
+        lastTransaction = existing.value;
+        sold.add(item.card);
+        continue;
+      }
+      final completed = await saleCompleter.completeReservedSale(
+        customerId: customer.id, cardId: item.card.id, reservationId: item.reservationId,
+        operationId: '${operationId}:${i}',
+        saleAmount: isPosOrder ? posCharge : transfer.amount,
+        allowNegativeBalance: isPosOrder,
+      );
+      if (completed is Failure<Sale>) {
+        await _persistTerminalFailure(messageId: message.id, status: MessageProcessingStatus.failed,
+          action: 'transfer_batch_sale_failed', error: completed.error, transfer: transfer, deliveryPhone: destination);
+        return Failure<Transaction>(completed.error);
+      }
+      final ledger = await transactionRepo.findByReference(ref);
+      if (ledger is Success<Transaction?> && ledger.value != null) lastTransaction = ledger.value;
+      sold.add(item.card);
+      await auditLogs.append(AuditLog(
+        id: ids.next('audit'), entityType: 'message', entityId: message.id,
+        action: 'voucher_batch_item_committed', occurredAt: clock.now(),
+        payloadJson: '{"operationId":"${operationId}","index":${i},"cardId":"${item.card.id}","reservationId":"${item.reservationId}"}',
+      ));
+    }
+
+    if (lastTransaction == null) {
+      const failure = AppFailure(code: 'sale_ledger_missing', message: 'تم إكمال الدفعة لكن سجل العملية غير موجود');
+      await _persistTerminalFailure(messageId: message.id, status: MessageProcessingStatus.failed,
+        action: 'transfer_batch_ledger_missing', error: failure, transfer: transfer, deliveryPhone: destination);
+      return const Failure<Transaction>(failure);
+    }
+
+    await messages.updateStatus(message.id, MessageProcessingStatus.sending);
+    final lines = <String>[];
+    for (var i = 0; i < sold.length; i++) {
+      final card = sold[i];
+      lines.add('الكرت ${i + 1}: ${card.serialNumber} - ${card.secretCode}');
+    }
+    final sent = await sender.send(
+      destination: destination,
+      body: 'تم تنفيذ طلب ${sold.length} كروت بنجاح\n${lines.join('\n')}',
+    );
+    if (sent is Failure<void>) {
+      await _persistTerminalFailure(messageId: message.id, status: MessageProcessingStatus.failed,
+        action: 'transfer_batch_delivery_failed', error: sent.error, transfer: transfer, deliveryPhone: destination);
+      return Failure<Transaction>(sent.error);
+    }
+
+    await auditLogs.append(AuditLog(
+      id: ids.next('audit'), entityType: 'message', entityId: message.id,
+      action: 'voucher_batch_delivered', occurredAt: clock.now(),
+      payloadJson: '{"operationId":"${operationId}","quantity":${sold.length},"destination":"${destination}"}',
+    ));
+    await messages.updateStatus(message.id, MessageProcessingStatus.processed);
+    return Success<Transaction>(lastTransaction);
+  }
+
+
