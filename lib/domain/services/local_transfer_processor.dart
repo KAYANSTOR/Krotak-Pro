@@ -1170,18 +1170,7 @@ final class LocalTransferProcessor implements TransferProcessor {
       ),
     );
   }
-}
 
-final class _DeliveryState {
-  const _DeliveryState({
-    required this.cardId,
-    required this.reservationId,
-    required this.categoryId,
-  });
-  final String cardId;
-  final String reservationId;
-  final String categoryId;
-}
   Future<Result<Transaction>> _processBatchSale({
     required ParsedTransfer transfer,
     required IncomingMessage message,
@@ -1427,6 +1416,20 @@ final class _DeliveryState {
     await messages.updateStatus(message.id, MessageProcessingStatus.processed);
     return Success<Transaction>(lastTransaction);
   }
+
+
+}
+
+final class _DeliveryState {
+  const _DeliveryState({
+    required this.cardId,
+    required this.reservationId,
+    required this.categoryId,
+  });
+  final String cardId;
+  final String reservationId;
+  final String categoryId;
+}
 
 
 
