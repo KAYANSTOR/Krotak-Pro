@@ -10,6 +10,11 @@ CI على main — analyze + test + Android debug APK build
 
 ## Post-V1
 
+### Phase 32 — التسوية التلقائية لنقاط البيع (2026-09-20) ✅ برمجيًا
+- إيداع محفظة لعميل نقطة بيع يُسوّي الدفتر دون بيع كرت عند تفعيل `autoPosSettlementEnabled`.
+- قوالب `{SETTLEMENT_AMOUNT}` / `{REMAINING_BALANCE}` + SMS إلى `notifyPhone`.
+- تقرير: [phase-32-pos-auto-settlement.md](phase-32-pos-auto-settlement.md)
+
 ### Phase 31 — تسعير الجملة بعد نسبة العمولة (2026-09-20) ✅ برمجيًا
 - `PosPercentageMode` يسعّر كرت نقطة البيع: خصم عمولة الفئة أو الوجه الكامل عند 0%.
 - طلب POS يُقيَّد بالصافي كمديونية دون إيداع مقابل.
