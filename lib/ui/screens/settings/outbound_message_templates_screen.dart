@@ -60,7 +60,40 @@ class _OutboundMessageTemplatesScreenState
     _TabDef('رسائل العروض', [
       _Tpl(SettingKeys.promotionRewardSmsTemplate, 'مكافأة العرض', SettingDefaults.promotionRewardSmsTemplate, const ['title', 'serial', 'secret', 'promotion_name', 'reward_value']),
     ]),
-    _TabDef('رسائل النظام', [
+    _TabDef('نقاط البيع', [
+      _Tpl(
+        SettingKeys.posCustomerCardDeliveryTemplate,
+        'تسليم كرت لعميل نقطة البيع',
+        SettingDefaults.posCustomerCardDeliveryTemplate,
+        const [
+          'NETWORK_NAME',
+          'CARD_VALUE',
+          'CURRENCY',
+          'serial',
+          'code',
+          'secret',
+          'cards',
+          'QUANTITY_TEXT',
+          'CUSTOMER_PHONE',
+          'category',
+        ],
+      ),
+      _Tpl(
+        SettingKeys.posOrderSuccessTemplate,
+        'تأكيد تنفيذ طلب نقطة البيع',
+        SettingDefaults.posOrderSuccessTemplate,
+        const [
+          'POS_NAME',
+          'CUSTOMER_PHONE',
+          'CARD_VALUE',
+          'CURRENCY',
+          'QUANTITY_TEXT',
+          'TOTAL',
+          'AMOUNT',
+          'NETWORK_NAME',
+          'category',
+        ],
+      ),
       _Tpl(SettingKeys.posBalanceResponseTemplate, 'رد رصيد نقطة البيع', SettingDefaults.posBalanceResponseTemplate, const ['pos', 'balance', 'debt']),
       _Tpl(SettingKeys.posCreditLimitExceededTemplate, 'تجاوز سقف دين نقطة البيع', SettingDefaults.posCreditLimitExceededTemplate, const ['pos', 'limit']),
       _Tpl(SettingKeys.dailyPosSummaryTemplate, 'ملخص العمليات اليومي لنقاط البيع', SettingDefaults.dailyPosSummaryTemplate, const ['pos', 'sales', 'transfers', 'balance']),
@@ -69,6 +102,8 @@ class _OutboundMessageTemplatesScreenState
       _Tpl(SettingKeys.posSettlementUnknownTemplate, 'تسوية غير مؤكدة', SettingDefaults.posSettlementUnknownTemplate, const ['pos']),
       _Tpl(SettingKeys.posRequestRejectedTemplate, 'إشعار رفض طلب نقطة البيع', SettingDefaults.posRequestRejectedTemplate, const ['pos', 'reason']),
       _Tpl(SettingKeys.posCustomerSmsTailTemplate, 'إضافة اسم نقطة البيع في الرسائل', SettingDefaults.posCustomerSmsTailTemplate, const ['pos', 'pos_name', 'CURRENCY']),
+    ]),
+    _TabDef('رسائل النظام', [
       _Tpl(SettingKeys.lowStockAlertTemplate, 'تنبيه انخفاض مخزون الكروت', SettingDefaults.lowStockAlertTemplate, const ['category', 'count']),
     ]),
     _TabDef('سلفني', [
@@ -247,7 +282,9 @@ class _OutboundMessageTemplatesScreenState
         .replaceAll('{pos}', 'الأمل').replaceAll('{pos_name}', 'الأمل').replaceAll('{debt}', '0').replaceAll('{limit}', '50000')
         .replaceAll('{sales}', '25000').replaceAll('{transfers}', '3').replaceAll('{reason}', 'رصيد غير كافٍ')
         .replaceAll('{remaining}', '0').replaceAll('{category}', '100 ر.ي').replaceAll('{count}', '2')
-        .replaceAll('{SETTLEMENT_AMOUNT}', '3000').replaceAll('{REMAINING_BALANCE}', '0');
+        .replaceAll('{SETTLEMENT_AMOUNT}', '3000').replaceAll('{REMAINING_BALANCE}', '0')
+        .replaceAll('{QUANTITY_TEXT}', 'الكرت').replaceAll('{QUANTITY}', '1').replaceAll('{CUSTOMER_PHONE}', '779776919')
+        .replaceAll('{POS_NAME}', 'الأمل').replaceAll('{TOTAL}', '90').replaceAll('{AMOUNT}', '90').replaceAll('{cards}', 'رقم الكرت: 1234567\\nالرمز: 987654');
   }
 
   Future<void> _edit(_Tpl? item) async {
@@ -255,7 +292,7 @@ class _OutboundMessageTemplatesScreenState
     var tabIndex = _tabs.index.clamp(0, _tabsData.length - 1);
     final nameCtrl = TextEditingController(text: item?.title ?? '');
     final bodyCtrl = TextEditingController(text: item != null ? (_values[item.keyName] ?? item.fallback) : '');
-    final vars = item?.vars ?? const ['CARD_CODE', 'CARD_VALUE', 'CURRENCY', 'NETWORK_NAME'];
+    final vars = item?.vars ?? const ['NETWORK_NAME', 'CARD_VALUE', 'CURRENCY', 'cards', 'CUSTOMER_PHONE', 'POS_NAME', 'QUANTITY_TEXT', 'TOTAL', 'category', 'reason'];
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
