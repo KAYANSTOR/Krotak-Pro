@@ -60,6 +60,9 @@ class _OutboundMessageTemplatesScreenState
     _TabDef('رسائل العروض', [
       _Tpl(SettingKeys.promotionRewardSmsTemplate, 'مكافأة العرض', SettingDefaults.promotionRewardSmsTemplate, const ['title', 'serial', 'secret', 'promotion_name', 'reward_value']),
     ]),
+    _TabDef('رسائل النظام', [
+      _Tpl(SettingKeys.lowStockAlertTemplate, 'تنبيه انخفاض مخزون الكروت', SettingDefaults.lowStockAlertTemplate, const ['category', 'count']),
+    ]),
     _TabDef('نقاط البيع', [
       _Tpl(
         SettingKeys.posCustomerCardDeliveryTemplate,
@@ -102,9 +105,6 @@ class _OutboundMessageTemplatesScreenState
       _Tpl(SettingKeys.posSettlementUnknownTemplate, 'تسوية غير مؤكدة', SettingDefaults.posSettlementUnknownTemplate, const ['pos']),
       _Tpl(SettingKeys.posRequestRejectedTemplate, 'إشعار رفض طلب نقطة البيع', SettingDefaults.posRequestRejectedTemplate, const ['pos', 'reason']),
       _Tpl(SettingKeys.posCustomerSmsTailTemplate, 'إضافة اسم نقطة البيع في الرسائل', SettingDefaults.posCustomerSmsTailTemplate, const ['pos', 'pos_name', 'CURRENCY']),
-    ]),
-    _TabDef('رسائل النظام', [
-      _Tpl(SettingKeys.lowStockAlertTemplate, 'تنبيه انخفاض مخزون الكروت', SettingDefaults.lowStockAlertTemplate, const ['category', 'count']),
     ]),
     _TabDef('سلفني', [
       _Tpl(SettingKeys.salafniAcceptedTemplate, 'قبول سلفني', LocalAdvanceService.defaultAccepted, const ['amount', 'serial', 'code']),
