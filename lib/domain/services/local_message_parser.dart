@@ -239,9 +239,7 @@ final class LocalMessageParser implements MessageParser {
       i++;
     }
 
-    return RegExp('^${buf.toString()}
-  }
-
+    return RegExp('^' + buf.toString() + r'$', caseSensitive: false, unicode: true);
   /// Collapse whitespace, strip bidi marks, unify Arabic letter variants, and
   /// map Eastern digits — must be applied identically to the pattern and the
   /// incoming body so harmless spelling differences never block a match.
