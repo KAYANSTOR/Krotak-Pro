@@ -310,6 +310,7 @@ final class LocalMessageParser implements MessageParser {
       identifierType: type,
       reference: ref ?? '',
       templateId: template.id,
+      posId: template.posId,
       rawIdentifier: phone ?? account,
       quantity: quantity,
       deliveryOverride: deliveryOverride,
