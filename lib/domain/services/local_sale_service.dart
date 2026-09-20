@@ -119,7 +119,8 @@ final class LocalSaleService implements SaleService, ReservedSaleService {
         currencyCode: category.faceValue.currencyCode,
       );
       if (balance is Failure<Money>) return Failure(balance.error);
-      if ((balance as Success<Money>).value.minorUnits < category.faceValue.minorUnits) {
+      final chargeAmount = saleAmount ?? category.faceValue;
+      if (!allowNegativeBalance && (balance as Success<Money>).value.minorUnits < chargeAmount.minorUnits) {
         return const Failure(
           AppFailure(
             code: 'insufficient_balance',
@@ -204,6 +205,8 @@ final class LocalSaleService implements SaleService, ReservedSaleService {
     required String cardId,
     required String reservationId,
     required String operationId,
+    Money? saleAmount,
+    bool allowNegativeBalance = false,
   }) {
     final stableOperationId = operationId.trim();
     if (stableOperationId.isEmpty) {
@@ -303,7 +306,7 @@ final class LocalSaleService implements SaleService, ReservedSaleService {
         id: stableOperationId,
         customerId: customerId,
         cardId: card.id,
-        amount: category.faceValue,
+        amount: chargeAmount,
         status: TransactionStatus.completed,
         createdAt: now,
       );
@@ -315,7 +318,7 @@ final class LocalSaleService implements SaleService, ReservedSaleService {
         id: ids.next('txn'),
         type: TransactionType.sale,
         status: TransactionStatus.completed,
-        amount: category.faceValue,
+        amount: chargeAmount,
         createdAt: now,
         customerId: customerId,
         reference: 'sale-op:$stableOperationId',
