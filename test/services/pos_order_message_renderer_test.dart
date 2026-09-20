@@ -117,7 +117,7 @@ void main() {
       categoryName: category.name,
       faceValue: category.faceValue,
       unitCharge: const Money(minorUnits: 8500, currencyCode: 'YER'),
-      cards: const <Card>[cards[0]],
+      cards: <Card>[cards[0]],
       quantity: 1,
     );
 
