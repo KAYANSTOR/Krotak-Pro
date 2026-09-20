@@ -8,8 +8,8 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Apply contacts-based customer identity
-        run: python3 tools/contacts/apply_contacts_identity.py
+      - name: Assemble and apply contacts identity
+        run: python3 tools/contacts/assemble_and_apply.py
       - name: Commit
         run: |
           git config user.name "KAYANSTOR"
