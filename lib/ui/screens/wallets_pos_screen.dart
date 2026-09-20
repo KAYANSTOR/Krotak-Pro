@@ -716,6 +716,7 @@ class _WalletsPosScreenState extends State<WalletsPosScreen>
   }
 
   void _posMenu(PointOfSale p) {
+    final archived = p.status == PointOfSaleStatus.archived;
     showModalBottomSheet<void>(
       context: context,
       shape: const RoundedRectangleBorder(
@@ -727,17 +728,24 @@ class _WalletsPosScreenState extends State<WalletsPosScreen>
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              if (!archived)
+                ListTile(
+                  leading: Icon(Icons.edit_outlined, color: context.kayan.primary),
+                  title: const Text(
+                    'تعديل بيانات نقطة البيع',
+                    style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w600),
+                  ),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _editPos(p);
+                  },
+                ),
               ListTile(
-                leading: const Icon(Icons.edit_outlined, color: Color(0xFF0F766E)),
-                title: const Text('تعديل', style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w600)),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _editPos(p);
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.settings_suggest_outlined, color: Color(0xFF0F766E)),
-                title: const Text('إدارة القوالب', style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w600)),
+                leading: Icon(Icons.settings_suggest_outlined, color: context.kayan.primary),
+                title: const Text(
+                  'إدارة القوالب',
+                  style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w600),
+                ),
                 onTap: () {
                   Navigator.pop(ctx);
                   Navigator.of(context).push(
@@ -748,16 +756,35 @@ class _WalletsPosScreenState extends State<WalletsPosScreen>
                 },
               ),
               ListTile(
-                leading: const Icon(Icons.delete_outline, color: Color(0xFFDC2626)),
-                title: const Text('حذف', style: TextStyle(fontFamily: 'Tajawal', color: Color(0xFFDC2626))),
+                leading: Icon(
+                  archived ? Icons.unarchive_outlined : Icons.archive_outlined,
+                  color: archived ? context.kayan.primary : context.netColors.rejected,
+                ),
+                title: Text(
+                  archived ? 'استعادة نقطة البيع' : 'أرشفة نقطة البيع',
+                  style: TextStyle(
+                    fontFamily: 'Tajawal',
+                    fontWeight: FontWeight.w600,
+                    color: archived ? context.kayan.primary : context.netColors.rejected,
+                  ),
+                ),
                 onTap: () async {
                   Navigator.pop(ctx);
-                  final r = await AppScope.of(context).posCatalog.updatePointOfSale(
-                        id: p.id,
-                        name: p.name,
-                        status: PointOfSaleStatus.archived,
-                      );
-                  if (r is Failure && mounted) _snack((r as Failure).error.message);
+                  final r = archived
+                      ? await AppScope.of(context).posProfiles.setPointOfSaleStatus(
+                          id: p.id,
+                          status: PointOfSaleStatus.active,
+                        )
+                      : await AppScope.of(context).posProfiles.archivePointOfSale(p.id);
+                  if (r is Failure && mounted) {
+                    _snack((r as Failure).error.message);
+                  } else if (mounted) {
+                    _snack(
+                      archived
+                          ? 'تمت استعادة نقطة البيع «${p.name}»'
+                          : 'تمت أرشفة نقطة البيع «${p.name}»',
+                    );
+                  }
                   await _load();
                 },
               ),
@@ -971,76 +998,153 @@ class _WalletsPosScreenState extends State<WalletsPosScreen>
   }
 
   Widget _posList() {
-    final items = _filteredPos.where((p) => p.status != PointOfSaleStatus.archived).toList();
-    if (items.isEmpty) {
-      return AsyncEmptyView(
-        message: 'لا توجد نقاط بيع',
-        actionLabel: 'إضافة نقطة بيع',
-        onAction: () => _editPos(null),
-      );
-    }
+    final all = _filteredPos;
+    final active = all.where((p) => p.status == PointOfSaleStatus.active).length;
+    final suspended = all.where((p) => p.status == PointOfSaleStatus.suspended).length;
+    final archived = all.where((p) => p.status == PointOfSaleStatus.archived).length;
+
+    final items = all
+        .where((p) => _showArchivedPos || p.status != PointOfSaleStatus.archived)
+        .toList(growable: false);
+
     return RefreshIndicator(
       onRefresh: _load,
-      child: ListView.separated(
+      child: ListView(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
-        itemCount: items.length,
-        separatorBuilder: (_, __) => const SizedBox(height: 10),
-        itemBuilder: (_, i) {
-          final p = items[i];
-          final active = p.status == PointOfSaleStatus.active;
-          final acc = _posAccounts[p.id];
-          final phone = acc?.notifyPhone ??
-              (acc != null && acc.identifiers.isNotEmpty ? acc.identifiers.first : null);
-          return Material(
-            color: Theme.of(context).colorScheme.surface,
-            borderRadius: BorderRadius.circular(16),
-            child: Container(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: Theme.of(context).colorScheme.outlineVariant,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '$active نشطة · $suspended موقوفة · $archived مؤرشفة',
+                  style: TextStyle(
+                    fontFamily: 'Tajawal',
+                    fontSize: 12,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
                 ),
               ),
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-              child: Row(
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.more_vert, size: 20, color: Color(0xFF94A3B8)),
-                    onPressed: () => _posMenu(p),
-                  ),
-                  Switch.adaptive(
-                    value: active,
-                    activeColor: context.kayan.primary,
-                    onChanged: _togglingIds.contains(p.id) ? null : (_) => _togglePos(p),
-                  ),
-                  const SizedBox(width: 4),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(p.name,
-                            style: const TextStyle(
-                                fontFamily: 'Tajawal', fontWeight: FontWeight.w800)),
-                        Text(
-                          phone == null ? 'نقطة بيع' : 'نقطة بيع — $phone',
-                          style: TextStyle(
-                              fontFamily: 'Tajawal',
-                              fontSize: 12,
-                              color: Theme.of(context).colorScheme.onSurfaceVariant),
-                        ),
-                      ],
+              FilterChip(
+                selected: _showArchivedPos,
+                label: const Text(
+                  'عرض المؤرشفة',
+                  style: TextStyle(fontFamily: 'Tajawal', fontSize: 11),
+                ),
+                onSelected: (value) => setState(() => _showArchivedPos = value),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          if (items.isEmpty)
+            AsyncEmptyView(
+              message: _showArchivedPos && archived > 0
+                  ? 'لا توجد نتائج مطابقة'
+                  : 'لا توجد نقاط بيع نشطة أو موقوفة',
+              actionLabel: 'إضافة نقطة بيع',
+              onAction: () => _editPos(null),
+            )
+          else
+            ...items.map((p) {
+              final acc = _posAccounts[p.id];
+              final phone = acc?.notifyPhone ??
+                  (acc != null && acc.identifiers.isNotEmpty
+                      ? acc.identifiers.first
+                      : null);
+              final isArchived = p.status == PointOfSaleStatus.archived;
+              final activeState = p.status == PointOfSaleStatus.active;
+              return Material(
+                color: Theme.of(context).colorScheme.surface,
+                borderRadius: BorderRadius.circular(16),
+                child: Container(
+                  margin: const EdgeInsets.only(bottom: 10),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: Theme.of(context).colorScheme.outlineVariant,
                     ),
                   ),
-                  Icon(
-                    Icons.storefront_outlined,
-                    color: context.kayan.primary,
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  child: Row(
+                    children: [
+                      IconButton(
+                        icon: Icon(
+                          Icons.more_vert,
+                          size: 20,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                        onPressed: () => _posMenu(p),
+                      ),
+                      if (!isArchived)
+                        Switch.adaptive(
+                          value: activeState,
+                          activeColor: context.kayan.primary,
+                          onChanged: _togglingIds.contains(p.id)
+                              ? null
+                              : (_) => _togglePos(p),
+                        )
+                      else
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          child: Text(
+                            'مؤرشف',
+                            style: TextStyle(
+                              fontFamily: 'Tajawal',
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: context.netColors.rejected,
+                            ),
+                          ),
+                        ),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              p.name,
+                              style: const TextStyle(
+                                fontFamily: 'Tajawal',
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            Text(
+                              phone == null ? 'نقطة بيع' : 'نقطة بيع — $phone',
+                              style: TextStyle(
+                                fontFamily: 'Tajawal',
+                                fontSize: 12,
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onSurfaceVariant,
+                              ),
+                            ),
+                            if (acc == null)
+                              Text(
+                                'بيانات الحساب غير مكتملة',
+                                style: TextStyle(
+                                  fontFamily: 'Tajawal',
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  color: context.netColors.warning,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                      Icon(
+                        isArchived
+                            ? Icons.inventory_2_outlined
+                            : Icons.storefront_outlined,
+                        color: context.kayan.primary,
+                      ),
+                    ],
                   ),
-                ],
-              ),
-            ),
-          );
-        },
+                ),
+              );
+            }),
+        ],
       ),
     );
   }
+
+
 }
