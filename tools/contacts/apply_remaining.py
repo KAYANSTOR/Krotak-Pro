@@ -11,8 +11,10 @@ FILES = {
     "lib__domain__services__local_transfer_processor_dart__b.b64",
   ],
   "android/app/src/main/kotlin/com/kayan/net_app/MainActivity.kt": [
-    "android__app__src__main__kotlin__com__kayan__net_app__MainActivity_kt__a.b64",
-    "android__app__src__main__kotlin__com__kayan__net_app__MainActivity_kt__b.b64",
+    "android__app__src__main__kotlin__com__kayan__net_app__MainActivity_kt__p0.b64",
+    "android__app__src__main__kotlin__com__kayan__net_app__MainActivity_kt__p1.b64",
+    "android__app__src__main__kotlin__com__kayan__net_app__MainActivity_kt__p2.b64",
+    "android__app__src__main__kotlin__com__kayan__net_app__MainActivity_kt__p3.b64",
   ],
 }
 for dest, parts in FILES.items():
