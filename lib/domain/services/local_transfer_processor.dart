@@ -115,6 +115,18 @@ final class LocalTransferProcessor implements TransferProcessor {
       }
       final existing = (existingLedger as Success<Transaction?>).value;
       if (existing != null) {
+        if (isPosOrder) {
+          final recovered = await _recoverCommittedPosSale(
+            operationId: operationId,
+            transfer: transfer,
+            message: message,
+            posAccount: posAccount,
+            transactionRepo: txRepo,
+            sender: messageSender,
+          );
+          if (recovered is Success<Transaction>) return recovered;
+          if (recovered is Failure<Transaction>) return recovered;
+        }
         await messages.updateStatus(message.id, MessageProcessingStatus.processed);
         return Success<Transaction>(existing);
       }
@@ -747,6 +759,93 @@ final class LocalTransferProcessor implements TransferProcessor {
     return Success<Transaction>(saleLedger);
   }
 
+
+  Future<Result<Transaction>> _recoverCommittedPosSale({
+    required String operationId,
+    required ParsedTransfer transfer,
+    required IncomingMessage message,
+    required PosAccount? posAccount,
+    required TransactionRepository transactionRepo,
+    required MessageSender? sender,
+  }) async {
+    if (posAccount == null ||
+        sender == null ||
+        sales == null ||
+        cards == null ||
+        categories == null ||
+        settings == null) {
+      return const Failure(
+        AppFailure(
+          code: 'pos_order_recovery_not_configured',
+          message: 'POS committed-sale recovery is not fully configured',
+        ),
+      );
+    }
+
+    final saleResult = await sales!.findById(operationId);
+    if (saleResult is Failure<Sale?>) return Failure(saleResult.error);
+    final sale = (saleResult as Success<Sale?>).value;
+    if (sale == null) {
+      return const Failure(
+        AppFailure(
+          code: 'pos_order_sale_missing',
+          message: 'Committed POS sale record was not found',
+        ),
+      );
+    }
+
+    final cardResult = await cards!.findById(sale.cardId);
+    if (cardResult is Failure<Card?>) return Failure(cardResult.error);
+    final card = (cardResult as Success<Card?>).value;
+    if (card == null) {
+      return const Failure(
+        AppFailure(
+          code: 'pos_order_card_missing',
+          message: 'Committed POS card was not found',
+        ),
+      );
+    }
+
+    final categoryResult = await categories!.findById(card.categoryId);
+    if (categoryResult is Failure<CardCategory?>) {
+      return Failure(categoryResult.error);
+    }
+    final category = (categoryResult as Success<CardCategory?>).value;
+    if (category == null) {
+      return const Failure(
+        AppFailure(
+          code: 'pos_order_category_missing',
+          message: 'Committed POS card category was not found',
+        ),
+      );
+    }
+
+    final destination =
+        (transfer.deliveryOverride ?? transfer.customerIdentifier).trim();
+    final posDestination = posAccount.notifyPhone?.trim().isNotEmpty == true
+        ? posAccount.notifyPhone!.trim()
+        : message.sender.trim();
+
+    return _deliverPosOrder(
+      transfer: transfer,
+      message: message,
+      posAccount: posAccount,
+      category: category,
+      items: <_PosOrderItem>[
+        _PosOrderItem(
+          card: card,
+          reservationId: 'recovered:' + operationId,
+          saleOperationId: operationId,
+        ),
+      ],
+      customerDestination: destination,
+      posDestination: posDestination,
+      unitCharge: sale.amount,
+      operationId: operationId,
+      sender: sender,
+      transactionRepo: transactionRepo,
+    );
+  }
 
   Future<Result<Transaction>> _deliverPosOrder({
     required ParsedTransfer transfer,
