@@ -33,11 +33,9 @@ abstract final class SettingKeys {
   static const deviceVerificationGates = 'device_verification_gates';
   static const lowStockThreshold = 'low_stock_threshold';
   static const pendingAttentionAlertEnabled = 'pending_attention_alert_enabled';
-  /// JSON array of [Promotion] objects.
   static const promotionsCatalog = 'promotions_catalog';
   static const promotionRewardSmsTemplate = 'promotion_reward_sms_template';
 
-  // Outbound message templates (customers / offers / system / POS) — product video catalog.
   static const voucherDeliverySmsTemplate = 'voucher_delivery_sms_template';
   static const customerDebtPaymentTemplate = 'customer_debt_payment_template';
   static const posBalanceResponseTemplate = 'pos_balance_response_template';
@@ -45,16 +43,12 @@ abstract final class SettingKeys {
   static const dailyPosSummaryTemplate = 'daily_pos_summary_template';
   static const posRequestRejectedTemplate = 'pos_request_rejected_template';
   static const posCustomerSmsTailTemplate = 'pos_customer_sms_tail_template';
+  static const posInstantChargeConfirmTemplate =
+      'pos_instant_charge_confirm_template';
   static const lowStockAlertTemplate = 'low_stock_alert_template';
 
-  /// JSON array of operator-created outbound templates:
-  /// `[{id, title, tab, body}]`. Each body is also stored under `custom:{id}`.
   static const customOutboundTemplates = 'custom_outbound_templates';
-
-  /// JSON map: walletId → {senderId, sourceMode, packageName}.
   static const walletExtras = 'wallet_extras';
-
-  /// Flag once default Yemen wallets (JAIB/JAWALI/ONE CASH/FLOOSAK) are seeded.
   static const defaultWalletsSeeded = 'default_wallets_seeded';
 }
 
@@ -96,6 +90,8 @@ abstract final class SettingDefaults {
   static const posRequestRejectedTemplate =
       'تم رفض طلب نقطة البيع {pos}: {reason}';
   static const posCustomerSmsTailTemplate = '\n— {pos}';
+  static const posInstantChargeConfirmTemplate =
+      'تم إرسال كرت {amount} ر.ي إلى {phone}';
   static const lowStockAlertTemplate =
       'تنبيه مخزون منخفض: الفئة {category} متبقي {count} كرت فقط';
   static const preferredSimSlot = '0';
