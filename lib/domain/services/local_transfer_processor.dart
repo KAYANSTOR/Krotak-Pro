@@ -551,7 +551,7 @@ final class LocalTransferProcessor implements TransferProcessor {
         effectiveCategory = category.withCommission(commission.value);
       }
     }
-    final posCharge = (isPosOrder && posAccount != null)
+    final posCharge = isPosOrder
         ? PosWholesalePricing().unitPrice(
             category: effectiveCategory,
             mode: posAccount.percentageMode,
