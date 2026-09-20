@@ -77,9 +77,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
   List<({String name, int available})> _lowStock = const [];
   SystemHealthSnapshot? _health;
 
-  /// Last 7 days of completed-sales totals (major units) for the KPI sparkline.
-  List<double> _weeklySalesSeries = const [0, 0, 0, 0, 0, 0, 0];
-
   /// Locally dismissed alert banners (presentation-only state).
   final Set<String> _dismissedAlerts = <String>{};
 
@@ -117,7 +114,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final now = c.clock.now();
     final dayStart = DateTime(now.year, now.month, now.day);
     final monthStart = DateTime(now.year, now.month, 1);
-    final weekStart = dayStart.subtract(const Duration(days: 6));
     final dateLabel = formatArabicDashboardDate(now);
 
     try {
@@ -144,9 +140,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
       );
 
       final healthResult = await c.systemHealth.check();
-
-      // Read-only extra query used purely for the KPI trend sparkline.
-      final weeklySales = await c.sales.listCompletedBetween(weekStart, now);
 
       // شريط الاشتراك (عرض فقط) — من الترخيص الفعلي إن وُجد.
       String? subscriptionLabel;
@@ -225,8 +218,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
         defaultValue: SettingDefaults.processCategoryAmountsOnly,
       );
 
-      final weeklySeries = _bucketDailyTotals(weeklySales, weekStart);
-
       if (!mounted) return;
       setState(() {
         _loading = false;
@@ -252,7 +243,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _recent =
             recent is Success<List<Transaction>> ? recent.value : const [];
         _lowStock = low;
-        _weeklySalesSeries = weeklySeries;
         _health = healthResult is Success<SystemHealthSnapshot>
             ? healthResult.value
             : null;
@@ -277,20 +267,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   /// Buckets completed sales into 7 daily totals (major units), oldest first.
-  static List<double> _bucketDailyTotals(Result<List<Sale>> result, DateTime start) {
-    final totals = List<double>.filled(7, 0);
-    if (result is! Success<List<Sale>>) return totals;
-    for (final sale in result.value) {
-      final local = sale.createdAt.toLocal();
-      final index = DateTime(local.year, local.month, local.day)
-          .difference(DateTime(start.year, start.month, start.day))
-          .inDays;
-      if (index < 0 || index > 6) continue;
-      totals[index] += sale.amount.minorUnits / 100.0;
-    }
-    return totals;
-  }
-
   void _openCardStockSheet() {
     CardStockSheet.show(
       context,
@@ -525,7 +501,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       value: formatMoneyMinor(_dailySalesMinor),
                       subtitle: '$_dailyCards كرت',
                       icon: Icons.trending_up_rounded,
-                      sparkline: _weeklySalesSeries,
                       onTap: _openDailySalesSheet,
                     ),
                   ),
@@ -537,7 +512,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       subtitle: '$_monthlyCards كرت',
                       icon: Icons.calendar_month_outlined,
                       accent: net.info,
-                      trailingLabel: 'هذا الشهر',
                       onTap: _openMonthlySalesSheet,
                     ),
                   ),

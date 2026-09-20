@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import '../../core/app_brand.dart';
 import '../../core/clock.dart';
 import '../../core/result.dart';
 import '../device_verification_gate.dart';
@@ -172,7 +173,7 @@ final class LocalDeviceVerificationService {
     return {
       'phase': 19,
       'matchingPhase': 11,
-      'appVersion': '1.0.11+11',
+      'appVersion': '${AppBrand.version}+${AppBrand.buildNumber}',
       'schema': 'net.device_verification.v1',
       'exportedAt': _clock.now().toIso8601String(),
       'passedCount': snap.passedCount,

@@ -115,7 +115,7 @@ void main() {
     final pack = service.exportEvidencePack(snap);
     expect(pack['phase'], 19);
     expect(pack['matchingPhase'], 11);
-    expect(pack['appVersion'], '1.0.11+11');
+    expect(pack['appVersion'], '1.0.13+13');
     expect(pack['schema'], 'net.device_verification.v1');
     expect(pack['readyForRelease'], isFalse);
     final gates = pack['gates'] as Map;
