@@ -1,6 +1,7 @@
 import '../../core/result.dart';
 import '../entities/message.dart';
 import '../entities/payment_event.dart';
+import '../entities/pos_account.dart';
 import '../entities/wallet.dart';
 import '../repositories/repositories.dart';
 import 'local_payment_source_registry.dart';
