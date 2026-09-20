@@ -16,6 +16,7 @@ abstract final class SettingKeys {
   static const themeMode = 'theme_mode';
   static const lastRejectedMessagesViewedAt = 'last_rejected_messages_viewed_at';
   static const notificationSources = 'notification_sources';
+  static const blockedPhones = 'blocked_phones';
   static const autoRetryFailedMessages = 'auto_retry_failed_messages';
   static const retryMaxAttempts = 'retry_max_attempts';
   static const retryBaseDelaySeconds = 'retry_base_delay_seconds';
