@@ -1,0 +1,20 @@
+name: patch-provisional-phase1
+on:
+  workflow_dispatch:
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply domain patch
+        run: python3 tools/patch_provisional_phase1.py
+      - name: Commit
+        run: |
+          git config user.name "KAYANSTOR"
+          git config user.email "jarallhalkboudi@gmail.com"
+          git add -A
+          git diff --cached --quiet && echo No changes && exit 0
+          git commit -m "feat(accounts): provisional ledger accounts for unknown phones (phase 1 domain)"
+          git push
