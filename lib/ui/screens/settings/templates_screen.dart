@@ -247,7 +247,7 @@ class _TemplatesScreenState extends State<TemplatesScreen> {
     final ownerName = widget.posName ?? widget.walletName;
     final title = ownerName != null ? 'قوالب $ownerName' : 'قوالب التحويل';
     final subtitle = widget.posName != null
-        ? 'إدارة قوالب استخراج البيانات لهذه المحفظة'
+        ? 'إدارة قوالب نقطة البيع — تحويلات، طلب رصيد، وقوالب مخصصة'
         : widget.walletName != null
             ? 'إدارة قوالب استخراج البيانات لهذه المحفظة'
             : 'إدارة قوالب استخراج البيانات';
@@ -312,8 +312,8 @@ class _TemplatesScreenState extends State<TemplatesScreen> {
           foregroundColor: Colors.white,
           elevation: 2,
           icon: const Icon(Icons.add, size: 22),
-          label: const Text(
-            'قالب جديد',
+          label: Text(
+            widget.posId != null ? 'قالب POS جديد' : 'قالب جديد',
             style: TextStyle(
               fontFamily: 'Tajawal',
               fontWeight: FontWeight.w700,
