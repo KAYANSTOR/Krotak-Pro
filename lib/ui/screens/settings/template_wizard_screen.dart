@@ -4,6 +4,7 @@ import '../../../core/result.dart';
 import '../../../domain/entities/message.dart';
 import '../../../domain/entities/wallet.dart';
 import '../../../domain/services/local_message_parser.dart';
+import '../../../domain/services/local_transfer_template_activation_service.dart';
 import '../../app_scope.dart';
 import '../../theme/net_semantic_colors.dart';
 import '../../theme/kayan_palette.dart';
@@ -304,7 +305,7 @@ class _TemplateWizardScreenState extends State<TemplateWizardScreen> {
       // نمط يلتقط {ref} صراحة يستفيد من حماية "عدم التكرار" الافتراضية.
       requireReference: _patternHasRef(_patternCtrl.text),
     );
-    final r = await c.transferTemplates.save(template);
+    final r = await LocalTransferTemplateActivationService(c.transferTemplates).saveExclusive(template);
     if (!mounted) return;
     setState(() => _saving = false);
     if (r is Failure) {
