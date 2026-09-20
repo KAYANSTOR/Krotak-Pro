@@ -465,59 +465,21 @@ class _WalletsPosScreenState extends State<WalletsPosScreen>
     );
   }
 
-  /// تحقق قبل الحفظ: الاسم والرقم مطلوبان، والاسم غير مكرر، والرقم غير مرتبط
-  /// بنقطة بيع أخرى ولا بحساب عميل قائم (فصل حسابات النقاط عن العملاء).
-  Future<String?> _posFormProblem({
-    required PointOfSale? existing,
-    required String? existingCustomerId,
-    required String name,
-    required String phone,
-  }) async {
-    final c = AppScope.of(context);
-    final positions = await c.pointsOfSale.listAll();
-    if (positions is Success<List<PointOfSale>>) {
-      for (final item in positions.value) {
-        if (existing != null && item.id == existing.id) continue;
-        if (item.name.trim() == name) return 'يوجد نقطة بيع أخرى بنفس الاسم';
-      }
-    }
-    final owner = await c.posRegistry.findByIdentifier(phone);
-    if (owner is Success<PosAccount?>) {
-      final found = owner.value;
-      if (found != null && found.posId != (existing?.id ?? '')) {
-        return 'الرقم مرتبط بنقطة بيع أخرى: ${found.name}';
-      }
-    }
-    final customer = await c.customers.findByIdentifier(phone);
-    if (customer is Success<Customer?>) {
-      final found = customer.value;
-      final ownCustomerId = existingCustomerId ?? '';
-      if (found != null && found.id != ownCustomerId) {
-        return 'الرقم مسجّل لحساب عميل آخر — استخدم رقماً مختلفاً لنقطة البيع';
-      }
-    }
-    return null;
-  }
-
-  /// نموذج "نقطة بيع جديدة" / "تعديل نقطة البيع" — مطابق لحقول الفيديو:
-  /// رقم الجوال، الاسم، سقف الدين المسموح به، ونسبة نقطة البيع.
   Future<void> _editPos(PointOfSale? existing) async {
     final acc = existing != null ? _posAccounts[existing.id] : null;
     final phoneCtrl = TextEditingController(
       text: acc?.notifyPhone ??
-          (acc != null && acc.identifiers.isNotEmpty ? acc.identifiers.first : ''),
-    );
-    final nameCtrl = TextEditingController(text: existing?.name ?? '');
-    final creditCtrl = TextEditingController(
-      text: existing == null
-          ? '50000'
-          : (acc?.creditLimitMinorUnits != null
-              ? (acc!.creditLimitMinorUnits! ~/ 100).toString()
+          (acc != null && acc.identifiers.isNotEmpty
+              ? acc.identifiers.first
               : ''),
     );
+    final nameCtrl = TextEditingController(text: existing?.name ?? '');
+    final limitCtrl = TextEditingController(
+      text: acc?.creditLimitMinorUnits == null
+          ? '50000'
+          : (acc!.creditLimitMinorUnits! ~/ 100).toString(),
+    );
     var mode = acc?.percentageMode ?? PosPercentageMode.defaultCategory;
-    final contactPicker = ContactPickerBridge();
-    var picking = false;
     var saving = false;
     String? formError;
 
@@ -525,329 +487,232 @@ class _WalletsPosScreenState extends State<WalletsPosScreen>
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx) {
-        return Directionality(
-          textDirection: TextDirection.rtl,
-          child: StatefulBuilder(
-            builder: (ctx, setLocal) {
-              final inset = MediaQuery.viewInsetsOf(ctx).bottom;
-              return Padding(
-                padding: EdgeInsets.only(bottom: inset),
-                child: Builder(builder: (sheetCtx) {
-                  final sheetPalette = KayanPalette.of(sheetCtx);
-                  return Container(
-                  decoration: BoxDecoration(
-                    color: sheetPalette.surface,
-                    borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-                  ),
-                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
-                  child: SingleChildScrollView(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Center(
-                          child: Container(
-                            width: 40,
-                            height: 4,
-                            decoration: BoxDecoration(
-                              color: sheetPalette.border,
-                              borderRadius: BorderRadius.circular(2),
-                            ),
+      builder: (ctx) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: StatefulBuilder(
+          builder: (ctx, setLocal) {
+            final inset = MediaQuery.viewInsetsOf(ctx).bottom;
+            final palette = KayanPalette.of(ctx);
+            return Padding(
+              padding: EdgeInsets.only(bottom: inset),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: palette.surface,
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                ),
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Center(
+                        child: Container(
+                          width: 40,
+                          height: 4,
+                          decoration: BoxDecoration(
+                            color: palette.border,
+                            borderRadius: BorderRadius.circular(2),
                           ),
                         ),
-                        const SizedBox(height: 16),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        existing == null ? 'نقطة بيع جديدة' : 'تعديل نقطة البيع',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontFamily: 'Tajawal',
+                          fontWeight: FontWeight.w800,
+                          fontSize: 18,
+                          color: palette.primary,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      TextField(
+                        controller: phoneCtrl,
+                        keyboardType: TextInputType.phone,
+                        decoration: const InputDecoration(
+                          labelText: 'رقم جوال نقطة البيع',
+                          border: OutlineInputBorder(),
+                        ),
+                        style: const TextStyle(fontFamily: 'Tajawal'),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: nameCtrl,
+                        decoration: const InputDecoration(
+                          labelText: 'اسم نقطة البيع',
+                          border: OutlineInputBorder(),
+                        ),
+                        style: const TextStyle(fontFamily: 'Tajawal'),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: limitCtrl,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          labelText: 'سقف الدين المسموح به (ر.ي)',
+                          border: OutlineInputBorder(),
+                        ),
+                        style: const TextStyle(fontFamily: 'Tajawal'),
+                      ),
+                      const SizedBox(height: 14),
+                      const Text(
+                        'نسبة نقطة البيع',
+                        style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w700),
+                      ),
+                      RadioListTile<PosPercentageMode>(
+                        contentPadding: EdgeInsets.zero,
+                        value: PosPercentageMode.defaultCategory,
+                        groupValue: mode,
+                        onChanged: (v) => setLocal(() => mode = v ?? mode),
+                        title: const Text(
+                          'النسبة الافتراضية لفئات الكروت',
+                          style: TextStyle(fontFamily: 'Tajawal'),
+                        ),
+                      ),
+                      RadioListTile<PosPercentageMode>(
+                        contentPadding: EdgeInsets.zero,
+                        value: PosPercentageMode.zero,
+                        groupValue: mode,
+                        onChanged: (v) => setLocal(() => mode = v ?? mode),
+                        title: const Text(
+                          '0% — بدون عمولة',
+                          style: TextStyle(fontFamily: 'Tajawal'),
+                        ),
+                      ),
+                      if (formError != null) ...[
+                        const SizedBox(height: 8),
                         Text(
-                          existing == null ? 'نقطة بيع جديدة' : 'تعديل نقطة البيع',
-                          textAlign: TextAlign.center,
+                          formError!,
                           style: TextStyle(
                             fontFamily: 'Tajawal',
-                            fontWeight: FontWeight.w800,
-                            fontSize: 18,
-                            color: sheetPalette.primary,
+                            color: context.netColors.rejected,
+                            fontWeight: FontWeight.w700,
                           ),
                         ),
-                        const SizedBox(height: 16),
-                        TextField(
-                          controller: phoneCtrl,
-                          keyboardType: TextInputType.phone,
-                          decoration: InputDecoration(
-                            labelText: 'رقم جوال نقطة البيع',
-                            prefixIcon: IconButton(
-                              icon: picking
-                                  ? const SizedBox(
-                                      width: 18,
-                                      height: 18,
-                                      child: CircularProgressIndicator(strokeWidth: 2),
-                                    )
-                                  : const Icon(Icons.contact_phone_outlined),
-                              onPressed: picking
+                      ],
+                      const SizedBox(height: 14),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextButton(
+                              onPressed: saving ? null : () => Navigator.pop(ctx, false),
+                              child: const Text('إلغاء', style: TextStyle(fontFamily: 'Tajawal')),
+                            ),
+                          ),
+                          Expanded(
+                            flex: 2,
+                            child: FilledButton(
+                              onPressed: saving
                                   ? null
                                   : () async {
-                                      setLocal(() => picking = true);
-                                      final phone = await contactPicker.pickPhone();
-                                      if (!mounted) return;
-                                      setLocal(() => picking = false);
-                                      if (phone != null && phone.isNotEmpty) {
-                                        phoneCtrl.text = phone;
-                                        phoneCtrl.selection =
-                                            TextSelection.collapsed(offset: phone.length);
+                                      final name = nameCtrl.text.trim();
+                                      final phone = phoneCtrl.text.trim();
+                                      final creditRial = int.tryParse(limitCtrl.text.trim());
+
+                                      if (name.isEmpty) {
+                                        setLocal(() => formError = 'أدخل اسم نقطة البيع');
+                                        return;
                                       }
+                                      if (creditRial != null && creditRial < 0) {
+                                        setLocal(() => formError = 'سقف الدين لا يمكن أن يكون سالباً');
+                                        return;
+                                      }
+
+                                      setLocal(() {
+                                        saving = true;
+                                        formError = null;
+                                      });
+
+                                      final result = existing == null
+                                          ? await AppScope.of(context).posProfiles.createPointOfSaleProfile(
+                                              name: name,
+                                              phone: phone,
+                                              creditLimitMinorUnits:
+                                                  creditRial == null ? null : creditRial * 100,
+                                              percentageMode: mode,
+                                            )
+                                          : await AppScope.of(context).posProfiles.updatePointOfSaleProfile(
+                                              id: existing.id,
+                                              name: name,
+                                              phone: phone,
+                                              creditLimitMinorUnits:
+                                                  creditRial == null ? null : creditRial * 100,
+                                              percentageMode: mode,
+                                              status: existing.status,
+                                            );
+
+                                      if (!mounted) return;
+                                      if (result is Failure) {
+                                        setLocal(() {
+                                          saving = false;
+                                          formError = (result as Failure).error.message;
+                                        });
+                                        return;
+                                      }
+                                      Navigator.pop(ctx, true);
                                     },
-                            ),
-                            border: const OutlineInputBorder(),
-                          ),
-                          style: const TextStyle(fontFamily: 'Tajawal'),
-                        ),
-                        const SizedBox(height: 12),
-                        TextField(
-                          controller: nameCtrl,
-                          decoration: const InputDecoration(
-                            labelText: 'إسم نقطة البيع',
-                            border: OutlineInputBorder(),
-                          ),
-                          style: const TextStyle(fontFamily: 'Tajawal'),
-                        ),
-                        const SizedBox(height: 12),
-                        TextField(
-                          controller: creditCtrl,
-                          keyboardType: TextInputType.number,
-                          decoration: const InputDecoration(
-                            labelText: 'سقف الدين المسموح به (ر.ي) *',
-                            border: OutlineInputBorder(),
-                          ),
-                          style: const TextStyle(fontFamily: 'Tajawal'),
-                        ),
-                        const SizedBox(height: 16),
-                        const Text('نسبة نقطة البيع',
-                            style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w700)),
-                        RadioListTile<PosPercentageMode>(
-                          contentPadding: EdgeInsets.zero,
-                          value: PosPercentageMode.defaultCategory,
-                          groupValue: mode,
-                          activeColor: const Color(0xFF0F766E),
-                          onChanged: (v) => setLocal(() => mode = v!),
-                          title: Text(
-                            existing == null
-                                ? 'إنشاء نقطة البيع بالنسبة الافتراضية'
-                                : 'النسبة الافتراضية لفئات الكروت',
-                            style: const TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w700),
-                          ),
-                          subtitle: const Text(
-                            'استخدام نسب الخصم المحددة مسبقاً لكل فئة كروت',
-                            style: TextStyle(fontFamily: 'Tajawal', fontSize: 12),
-                          ),
-                        ),
-                        RadioListTile<PosPercentageMode>(
-                          contentPadding: EdgeInsets.zero,
-                          value: PosPercentageMode.zero,
-                          groupValue: mode,
-                          activeColor: const Color(0xFF0F766E),
-                          onChanged: (v) => setLocal(() => mode = v!),
-                          title: Text(
-                            existing == null
-                                ? 'إنشاء نقطة البيع بنسبة صفر'
-                                : 'نسبة صفر لجميع الفئات (0%)',
-                            style: const TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w700),
-                          ),
-                          subtitle: const Text(
-                            'تطبيق نسبة خصم 0% لجميع فئات الكروت لنقطة البيع هذه',
-                            style: TextStyle(fontFamily: 'Tajawal', fontSize: 12),
-                          ),
-                        ),
-                        if (formError != null) ...[
-                          const SizedBox(height: 12),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                            decoration: BoxDecoration(
-                              color: sheetCtx.netColors.rejected.withValues(alpha: 0.10),
-                              borderRadius: BorderRadius.circular(10),
-                              border: Border.all(
-                                color: sheetCtx.netColors.rejected.withValues(alpha: 0.35),
-                              ),
-                            ),
-                            child: Text(
-                              formError!,
-                              style: TextStyle(
-                                fontFamily: 'Tajawal',
-                                fontSize: 12.5,
-                                color: sheetCtx.netColors.rejected,
-                              ),
+                              child: saving
+                                  ? const SizedBox(
+                                      width: 20,
+                                      height: 20,
+                                      child: CircularProgressIndicator(strokeWidth: 2),
+                                    )
+                                  : Text(
+                                      existing == null
+                                          ? 'إنشاء نقطة البيع'
+                                          : 'حفظ التعديلات',
+                                      style: const TextStyle(
+                                        fontFamily: 'Tajawal',
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
                             ),
                           ),
                         ],
-                        const SizedBox(height: 16),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: TextButton(
-                                onPressed: () => Navigator.pop(ctx, false),
-                                child: const Text('إلغاء', style: TextStyle(fontFamily: 'Tajawal')),
-                              ),
-                            ),
-                            Expanded(
-                              flex: 2,
-                              child: FilledButton(
-                                style: FilledButton.styleFrom(
-                                  backgroundColor: const Color(0xFF0F766E),
-                                  minimumSize: const Size.fromHeight(48),
-                                ),
-                                onPressed: saving
-                                    ? null
-                                    : () async {
-                                        final name = nameCtrl.text.trim();
-                                        final phone = phoneCtrl.text.trim();
-                                        if (name.isEmpty) {
-                                          setLocal(() => formError = 'أدخل اسم نقطة البيع');
-                                          return;
-                                        }
-                                        if (phone.isEmpty) {
-                                          setLocal(() => formError = 'أدخل رقم جوال نقطة البيع');
-                                          return;
-                                        }
-                                        setLocal(() {
-                                          saving = true;
-                                          formError = null;
-                                        });
-                                        final problem = await _posFormProblem(
-                                          existing: existing,
-                                          existingCustomerId: acc?.customerId,
-                                          name: name,
-                                          phone: phone,
-                                        );
-                                        if (!mounted) return;
-                                        if (problem != null) {
-                                          setLocal(() {
-                                            saving = false;
-                                            formError = problem;
-                                          });
-                                          return;
-                                        }
-                                        if (ctx.mounted) Navigator.pop(ctx, true);
-                                      },
-                                child: saving
-                                    ? const SizedBox(
-                                        width: 20,
-                                        height: 20,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                          color: Colors.white,
-                                        ),
-                                      )
-                                    : Text(
-                                        existing == null ? 'إنشاء' : 'حفظ',
-                                        style: const TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w700),
-                                      ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
-                );
-                }),
-              );
-            },
-          ),
-        );
-      },
+                ),
+              ),
+            );
+          },
+        ),
+      ),
     );
 
-    if (ok != true || !mounted) {
-      phoneCtrl.dispose();
-      nameCtrl.dispose();
-      creditCtrl.dispose();
-      return;
-    }
-
-    final name = nameCtrl.text.trim();
-    final phone = phoneCtrl.text.trim();
-    final creditRial = int.tryParse(creditCtrl.text.trim()) ?? 0;
-    final creditMinor = creditRial > 0 ? creditRial * 100 : null;
+    final createdName = nameCtrl.text.trim();
     phoneCtrl.dispose();
     nameCtrl.dispose();
-    creditCtrl.dispose();
+    limitCtrl.dispose();
 
-    final c = AppScope.of(context);
+    if (ok != true || !mounted) return;
 
-    if (existing == null) {
-      final customerResult = await c.customerService.create(
-        displayName: name,
-        identifierType: CustomerIdentifierType.phoneNumber,
-        identifierValue: phone,
-      );
-      if (customerResult is Failure) {
-        if (mounted) _snack((customerResult as Failure).error.message);
-        return;
-      }
-      final customer = (customerResult as Success<Customer>).value;
-
-      final posResult = await c.posCatalog.savePointOfSale(name: name);
-      if (posResult is Failure) {
-        if (mounted) _snack((posResult as Failure).error.message);
-        return;
-      }
-      final pos = (posResult as Success<PointOfSale>).value;
-
-      final account = PosAccount(
-        posId: pos.id,
-        customerId: customer.id,
-        name: name,
-        identifiers: [phone],
-        notifyPhone: phone,
-        percentageMode: mode,
-        creditLimitMinorUnits: creditMinor,
-      );
-      final savedAccount = await c.posRegistry.save(account);
-      if (savedAccount is Failure) {
-        if (mounted) _snack((savedAccount as Failure).error.message);
-        return;
-      }
-
-      await DefaultPosTemplatesSeeder(templates: c.transferTemplates)
-          .seedForPos(posId: pos.id, posName: name);
-      await c.reloadTemplates();
-
-      if (!mounted) return;
-      _snack('تم الحفظ — تم إضافة نقطة البيع');
-      await _load();
-
-      if (!mounted) return;
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => TemplatesScreen(posId: pos.id, posName: name),
-        ),
-      );
-      return;
-    }
-
-    final posUpdate = await c.posCatalog.updatePointOfSale(
-      id: existing.id,
-      name: name,
-      status: existing.status,
-    );
-    if (posUpdate is Failure && mounted) {
-      _snack((posUpdate as Failure).error.message);
-    }
-
-    if (acc == null) {
-      await _load();
-      return;
-    }
-    final nextAccount = acc.copyWith(
-      name: name,
-      identifiers: [phone],
-      notifyPhone: phone,
-      percentageMode: mode,
-      creditLimitMinorUnits: creditMinor,
-      clearCreditLimit: creditMinor == null,
-    );
-    final savedAccount = await c.posRegistry.save(nextAccount);
-    if (savedAccount is Failure && mounted) {
-      _snack((savedAccount as Failure).error.message);
-    }
+    final container = AppScope.of(context);
+    await container.reloadTemplates();
     await _load();
+
+    if (existing == null && mounted) {
+      final profiles = await container.posProfiles.listPointOfSaleProfiles(
+        includeArchived: true,
+      );
+      if (profiles is Success<List<PointOfSaleProfile>>) {
+        final created = profiles.value.where(
+          (p) => p.pointOfSale.name == createdName,
+        ).firstOrNull;
+        if (created != null && mounted) {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => TemplatesScreen(
+                posId: created.pointOfSale.id,
+                posName: created.pointOfSale.name,
+              ),
+            ),
+          );
+        }
+      }
+    }
   }
 
   void _posMenu(PointOfSale p) {
