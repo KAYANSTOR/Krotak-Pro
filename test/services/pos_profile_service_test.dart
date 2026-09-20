@@ -6,6 +6,7 @@ import 'package:net_app/core/result.dart';
 import 'package:net_app/data/database/app_database.dart';
 import 'package:net_app/data/database/drift_unit_of_work.dart';
 import 'package:net_app/data/repositories/local_repositories.dart';
+import 'package:net_app/domain/entities/message.dart';
 import 'package:net_app/domain/entities/pos_account.dart';
 import 'package:net_app/domain/entities/wallet.dart';
 import 'package:net_app/domain/services/local_customer_balance_service.dart';
