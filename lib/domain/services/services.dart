@@ -114,6 +114,8 @@ abstract interface class ReservedSaleService {
     required String cardId,
     required String reservationId,
     required String operationId,
+    Money? saleAmount,
+    bool allowNegativeBalance = false,
   });
 }
 
