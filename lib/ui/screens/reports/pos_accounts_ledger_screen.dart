@@ -22,11 +22,11 @@ import '../../widgets/net/net_surface_card.dart';
 /// - بحث باسم/جوال نقطة البيع
 /// - كشف حساب لكل نقطة بيع: المستحق الحالي + سقف الدين + آخر التسويات
 /// - «تسجيل تسوية مالية»: مبلغ + طريقة دفع + مرجع + ملاحظات → SettlementService
-/// - نقطة بيع جديدة / تعديل: جوال + اسم + سقف دين + نسبة (0% أو افتراضية)
-///   مع فحص «الرقم مسجل مسبقاً» وشكل الرقم «يبدأ بـ 7 ويتكون من 9 أرقام».
+/// - لا توجد هنا عمليات CRUD لنقطة البيع؛ الإدارة تتم حصراً من الإعدادات.
+/// - يتم تحويل المستخدم إلى شاشة إدارة نقطة البيع عند الحاجة.
 ///
-/// كل العمليات تمر عبر الخدمات الموجودة (posCatalog / posRegistry /
-/// settlementService / balanceService) — لا منطق جديد خارجها.
+/// القراءة الموحدة تمر عبر `posProfiles`، بينما التسويات المالية تمر عبر
+/// `settlementService`.
 class PosAccountsLedgerScreen extends StatefulWidget {
   const PosAccountsLedgerScreen({super.key});
 
@@ -184,6 +184,13 @@ class _PosAccountsLedgerScreenState extends State<PosAccountsLedgerScreen> {
             'حسابات نقاط البيع',
             style: TextStyle(fontFamily: NetTypography.family),
           ),
+          actions: [
+            IconButton(
+              tooltip: 'إدارة نقاط البيع',
+              onPressed: () => AppRoutes.openWalletsAndPos(context),
+              icon: const Icon(Icons.settings_outlined),
+            ),
+          ],
         ),
         body: _loading
             ? const AsyncLoadingView(skeleton: true, skeletonCount: 5)
