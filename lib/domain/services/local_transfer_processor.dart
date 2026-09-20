@@ -321,7 +321,7 @@ final class LocalTransferProcessor implements TransferProcessor {
         final credit = await balances.credit(
           customerId: resolution.customer!.id,
           amount: transfer.amount,
-          reference: transfer.reference.isEmpty ? null : transfer.reference,
+          reference: transfer.reference.isEmpty ? 'batch-credit:' + operationId : transfer.reference,
         );
         if (credit is Failure<Transaction>) return Failure<Transaction>(credit.error);
         final tx = (credit as Success<Transaction>).value;
@@ -1204,30 +1204,128 @@ final class _DeliveryState {
   }) async {
     final quantity = transfer.quantity.clamp(2, 20).toInt();
     final reservations = <({Card card, String reservationId})>[];
+    final freshReservations = <({Card card, String reservationId})>[];
     final now = clock.now();
 
-    Future<void> releaseAll() async {
-      for (final item in reservations) {
-        await inventoryService.releaseReservation(cardId: item.card.id, reservationId: item.reservationId);
+    // Progress audits make a partially completed multi-card order resumable.
+    // Existing committed items are reused; only missing indexes allocate new stock.
+    final committedByIndex = <int, ({String cardId, String reservationId})>{};
+    final progressLogs = await auditLogs.findByEntity('message', message.id);
+    if (progressLogs is Failure<List<AuditLog>>) {
+      return Failure<Transaction>(progressLogs.error);
+    }
+    for (final log in (progressLogs as Success<List<AuditLog>>).value) {
+      if (log.action != 'voucher_batch_item_committed') continue;
+      final payload = log.payloadJson ?? '';
+      try {
+        final decoded = jsonDecode(payload);
+        if (decoded is! Map) continue;
+        final row = Map<String, Object?>.from(decoded);
+        final rawIndex = row['index'];
+        final rawCardId = row['cardId'];
+        final rawReservationId = row['reservationId'];
+        if (rawIndex is num &&
+            rawCardId is String &&
+            rawReservationId is String) {
+          committedByIndex[rawIndex.toInt()] = (
+            cardId: rawCardId,
+            reservationId: rawReservationId,
+          );
+        }
+      } catch (_) {
+        // An individual progress record is ignored; a valid committed
+        // transaction is still protected by its stable sale reference.
+      }
+    }
+
+    Future<void> releaseFreshReservations() async {
+      for (final item in freshReservations) {
+        await inventoryService.releaseReservation(
+          cardId: item.card.id,
+          reservationId: item.reservationId,
+        );
       }
     }
 
     for (var i = 0; i < quantity; i++) {
-      final reservationId = 'transfer-reservation:${operationId}:${i}';
+      final previous = committedByIndex[i];
+      if (previous != null) {
+        final existingTx = await transactionRepo.findByReference(
+          'sale-op:' + operationId + ':' + i.toString(),
+        );
+        if (existingTx is Failure<Transaction?>) {
+          return Failure<Transaction>(existingTx.error);
+        }
+        if ((existingTx as Success<Transaction?>).value == null) {
+          const failure = AppFailure(
+            code: 'transfer_batch_progress_invalid',
+            message: 'A recorded POS/card batch item has no matching sale ledger record',
+          );
+          await _persistTerminalFailure(
+            messageId: message.id,
+            status: MessageProcessingStatus.failed,
+            action: 'transfer_batch_progress_invalid',
+            error: failure,
+            transfer: transfer,
+            deliveryPhone: destination,
+          );
+          return const Failure<Transaction>(failure);
+        }
+        final cardResult = await cards!.findById(previous.cardId);
+        if (cardResult is Failure<Card?>) {
+          return Failure<Transaction>(cardResult.error);
+        }
+        final card = (cardResult as Success<Card?>).value;
+        if (card == null) {
+          const failure = AppFailure(
+            code: 'transfer_batch_progress_card_missing',
+            message: 'A committed batch card could not be found',
+          );
+          await _persistTerminalFailure(
+            messageId: message.id,
+            status: MessageProcessingStatus.failed,
+            action: 'transfer_batch_progress_card_missing',
+            error: failure,
+            transfer: transfer,
+            deliveryPhone: destination,
+          );
+          return const Failure<Transaction>(failure);
+        }
+        reservations.add((
+          card: card,
+          reservationId: previous.reservationId,
+        ));
+        continue;
+      }
+
+      final reservationId = 'transfer-reservation:' + operationId + ':' + i.toString();
       final reserved = await inventoryService.reserveAvailableCard(
-        categoryId: category.id, reservationId: reservationId, now: now,
+        categoryId: category.id,
+        reservationId: reservationId,
+        now: now,
         expiresAt: now.add(reservationTtl),
       );
       if (reserved is Failure<Card>) {
-        await releaseAll();
+        await releaseFreshReservations();
         final failure = reserved.error.code == 'card_unavailable'
-            ? const AppFailure(code: 'out_of_stock', message: 'لا يوجد عدد كافٍ من الكروت المتاحة في الفئة')
+            ? const AppFailure(
+                code: 'out_of_stock',
+                message: 'لا يوجد عدد كافٍ من الكروت المتاحة في الفئة',
+              )
             : reserved.error;
-        await _persistTerminalFailure(messageId: message.id, status: MessageProcessingStatus.rejected,
-          action: 'transfer_batch_reservation_failed', error: failure, transfer: transfer, deliveryPhone: destination);
+        await _persistTerminalFailure(
+          messageId: message.id,
+          status: MessageProcessingStatus.rejected,
+          action: 'transfer_batch_reservation_failed',
+          error: failure,
+          transfer: transfer,
+          deliveryPhone: destination,
+        );
         return Failure<Transaction>(failure);
       }
-      reservations.add((card: (reserved as Success<Card>).value, reservationId: reservationId));
+      final item = (card: (reserved as Success<Card>).value, reservationId: reservationId);
+      reservations.add(item);
+      freshReservations.add(item);
     }
 
     if (!isPosOrder) {
@@ -1262,6 +1360,7 @@ final class _DeliveryState {
         allowNegativeBalance: isPosOrder,
       );
       if (completed is Failure<Sale>) {
+        await releaseFreshReservations();
         await _persistTerminalFailure(messageId: message.id, status: MessageProcessingStatus.failed,
           action: 'transfer_batch_sale_failed', error: completed.error, transfer: transfer, deliveryPhone: destination);
         return Failure<Transaction>(completed.error);
