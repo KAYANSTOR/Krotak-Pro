@@ -6,6 +6,7 @@ import '../../domain/services/local_message_retry_service.dart';
 import '../app_scope.dart';
 import '../theme/net_semantic_colors.dart';
 import '../widgets/async_views.dart';
+import '../widgets/net/net_app_bar_title.dart';
 
 /// الرسائل الفاشلة + Bulk Reset/Retry + تفاصيل رمز الرفض — 1.0.9.
 class FailedMessagesScreen extends StatefulWidget {
@@ -129,10 +130,12 @@ class _FailedMessagesScreenState extends State<FailedMessagesScreen> {
       textDirection: TextDirection.rtl,
       child: Scaffold(
         appBar: AppBar(
-          title: const Text(
-            'الرسائل التي تحتاج إعادة محاولة',
-            style: TextStyle(fontFamily: 'Tajawal'),
+          title: const NetAppBarTitle(
+            icon: Icons.replay_circle_filled_rounded,
+            title: 'إعادة المحاولة',
+            subtitle: 'الرسائل التي تحتاج إعادة إرسال',
           ),
+          centerTitle: false,
           actions: [
             if (_rows.isNotEmpty)
               TextButton.icon(

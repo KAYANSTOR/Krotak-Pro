@@ -2,20 +2,23 @@ import '../../core/clock.dart';
 import '../../core/id_generator.dart';
 import '../../core/result.dart';
 import '../entities/advance.dart';
+import '../entities/customer.dart';
 import '../entities/audit.dart';
 import '../entities/card.dart';
 import '../entities/message.dart';
+import '../entities/money.dart';
 import '../entities/setting.dart';
 import '../entities/transaction.dart';
 import '../repositories/repositories.dart';
 import '../repositories/unit_of_work.dart';
 import 'local_customer_identity_resolver.dart';
+import 'contact_directory.dart';
 import 'services.dart';
 
 /// Completes the real incoming-transfer business flow using the existing
 /// catalog, inventory, sale and native SMS boundaries.
 final class LocalTransferProcessor implements TransferProcessor {
-  const LocalTransferProcessor({
+  LocalTransferProcessor({
     required this.messages,
     required this.customers,
     required this.balances,
@@ -33,6 +36,7 @@ final class LocalTransferProcessor implements TransferProcessor {
     this.settings,
     this.advanceService,
     this.customerService,
+    this.contactDirectory,
     this.reservationTtl = const Duration(minutes: 5),
   });
 
@@ -53,7 +57,12 @@ final class LocalTransferProcessor implements TransferProcessor {
   final SettingsRepository? settings;
   final AdvanceService? advanceService;
   final CustomerService? customerService;
+  final ContactDirectory? contactDirectory;
   final Duration reservationTtl;
+
+  List<CardCategory>? _categoryCache;
+  DateTime? _categoryCacheAt;
+  static const Duration _categoryCacheTtl = Duration(seconds: 45);
 
   LocalCustomerIdentityResolver get _resolver =>
       identityResolver ?? LocalCustomerIdentityResolver(customers: customers);
@@ -110,14 +119,45 @@ final class LocalTransferProcessor implements TransferProcessor {
       );
     }
 
-    final resolutionResult = await _resolver.resolve(
+    var resolutionResult = await _resolver.resolve(
       identifierValue: transfer.customerIdentifier,
       identifierType: transfer.identifierType,
     );
     if (resolutionResult is Failure<CustomerIdentityResolution>) {
       return Failure<Transaction>(resolutionResult.error);
     }
-    final resolution = (resolutionResult as Success<CustomerIdentityResolution>).value;
+    var resolution = (resolutionResult as Success<CustomerIdentityResolution>).value;
+
+    // Auto-provision unknown phone senders from enabled-wallet transfers so
+    // card delivery proceeds without a pre-registered customer account.
+    if ((!resolution.isResolved || resolution.customer == null) &&
+        customerService != null &&
+        _canAutoProvision(transfer)) {
+      final provisioned = await _autoProvisionCustomer(transfer);
+      if (provisioned is Success<Customer>) {
+        resolutionResult = await _resolver.resolve(
+          identifierValue: transfer.customerIdentifier,
+          identifierType: transfer.identifierType,
+        );
+        if (resolutionResult is Failure<CustomerIdentityResolution>) {
+          return Failure<Transaction>(resolutionResult.error);
+        }
+        resolution =
+            (resolutionResult as Success<CustomerIdentityResolution>).value;
+        await auditLogs.append(
+          AuditLog(
+            id: ids.next('audit'),
+            entityType: 'message',
+            entityId: message.id,
+            action: 'ledger_account_auto_provisioned',
+            occurredAt: clock.now(),
+            payloadJson:
+                '{\"customerId\":\"${provisioned.value.id}\",\"identifier\":\"${transfer.customerIdentifier}\",\"identifierType\":\"${transfer.identifierType.name}\"}',
+          ),
+        );
+      }
+    }
+
     if (!resolution.isResolved || resolution.customer == null) {
       final failure = AppFailure(
         code: resolution.reasonCode ?? 'unresolved_identity',
@@ -132,6 +172,47 @@ final class LocalTransferProcessor implements TransferProcessor {
         deliveryPhone: resolution.deliveryPhone,
       );
       return Failure<Transaction>(failure);
+    }
+
+    // If account was provisional but the phone is now in contacts, promote
+    // to a full customer and adopt the contact display name.
+    final liveCustomer = resolution.customer;
+    if (liveCustomer != null &&
+        liveCustomer.status == CustomerStatus.provisional &&
+        customerService != null &&
+        contactDirectory != null) {
+      final match = await contactDirectory!.findByPhone(
+        transfer.customerIdentifier,
+      );
+      if (match != null && match.displayName.trim().isNotEmpty) {
+        final promoted = await customerService!.promoteToActive(liveCustomer.id);
+        if (promoted is Success<Customer>) {
+          final named = promoted.value.copyWith(
+            displayName: match.displayName.trim(),
+            updatedAt: clock.now(),
+          );
+          await customers.save(named);
+          resolutionResult = await _resolver.resolve(
+            identifierValue: transfer.customerIdentifier,
+            identifierType: transfer.identifierType,
+          );
+          if (resolutionResult is Success<CustomerIdentityResolution>) {
+            resolution =
+                (resolutionResult as Success<CustomerIdentityResolution>).value;
+          }
+          await auditLogs.append(
+            AuditLog(
+              id: ids.next('audit'),
+              entityType: 'customer',
+              entityId: named.id,
+              action: 'promoted_from_contacts',
+              occurredAt: clock.now(),
+              payloadJson:
+                  '{\"phone\":\"${transfer.customerIdentifier}\",\"displayName\":\"${match.displayName.trim()}\"}',
+            ),
+          );
+        }
+      }
     }
 
     final bindPhone =
@@ -165,7 +246,7 @@ final class LocalTransferProcessor implements TransferProcessor {
         final credit = await balances.credit(
           customerId: resolution.customer!.id,
           amount: transfer.amount,
-          reference: transfer.reference,
+          reference: transfer.reference.isEmpty ? null : transfer.reference,
         );
         if (credit is Failure<Transaction>) return Failure<Transaction>(credit.error);
         final tx = (credit as Success<Transaction>).value;
@@ -276,6 +357,11 @@ final class LocalTransferProcessor implements TransferProcessor {
       final settlement = await advanceEngine.applyPayment(
         customerId: customer.id,
         amount: transfer.amount,
+        // Salafni settlement requires a non-null reference; `_operationId`
+        // (below) supplies a stable per-message fallback pattern, but this
+        // call's own dedup-by-prefix scheme is unaffected either way — an
+        // empty reference here only ever causes a conservative rejection
+        // (`settlement_reference_conflict`), never a silent double-credit.
         reference: transfer.reference,
       );
       if (settlement is Failure<AdvancePaymentResult>) {
@@ -313,19 +399,11 @@ final class LocalTransferProcessor implements TransferProcessor {
       }
     }
 
-    final allCategories = await categoriesRepo.listAll();
-    if (allCategories is Failure<List<CardCategory>>) {
-      return Failure<Transaction>(allCategories.error);
+    final matchResult = await _matchActiveCategory(effectiveAmount);
+    if (matchResult is Failure<List<CardCategory>>) {
+      return Failure<Transaction>(matchResult.error);
     }
-    final matches = (allCategories as Success<List<CardCategory>>)
-        .value
-        .where(
-          (category) =>
-              category.isActive &&
-              category.faceValue.currencyCode == effectiveAmount.currencyCode &&
-              category.faceValue.minorUnits == effectiveAmount.minorUnits,
-        )
-        .toList(growable: false);
+    final matches = (matchResult as Success<List<CardCategory>>).value;
     if (matches.isEmpty) {
       final categoryOnly = await _processCategoryAmountsOnly();
       if (categoryOnly) {
@@ -406,7 +484,7 @@ final class LocalTransferProcessor implements TransferProcessor {
     final credit = await balances.credit(
       customerId: customer.id,
       amount: effectiveAmount,
-      reference: transfer.reference,
+      reference: transfer.reference.isEmpty ? null : transfer.reference,
     );
     if (credit is Failure<Transaction>) {
       await inventoryService.releaseReservation(
@@ -542,6 +620,77 @@ final class LocalTransferProcessor implements TransferProcessor {
 
     await messages.updateStatus(message.id, MessageProcessingStatus.processed);
     return Success<Transaction>(saleLedger);
+  }
+
+
+
+  Future<Result<List<CardCategory>>> _matchActiveCategory(Money amount) async {
+    final categoriesRepo = categories!;
+    final now = clock.now();
+    final stale = _categoryCache == null ||
+        _categoryCacheAt == null ||
+        now.difference(_categoryCacheAt!) > _categoryCacheTtl;
+    if (stale) {
+      final all = await categoriesRepo.listAll();
+      if (all is Failure<List<CardCategory>>) {
+        return Failure(all.error);
+      }
+      _categoryCache = (all as Success<List<CardCategory>>).value;
+      _categoryCacheAt = now;
+    }
+    final matches = _categoryCache!
+        .where(
+          (category) =>
+              category.isActive &&
+              category.faceValue.currencyCode == amount.currencyCode &&
+              category.faceValue.minorUnits == amount.minorUnits,
+        )
+        .toList(growable: false);
+    return Success(matches);
+  }
+
+  bool _canAutoProvision(ParsedTransfer transfer) {
+    if (transfer.identifierType != TransferIdentifierType.phone) return false;
+    final value = transfer.customerIdentifier.trim();
+    if (value.isEmpty) return false;
+    return value.length >= 7 && RegExp(r'^[0-9+\s-]+$').hasMatch(value);
+  }
+
+  Future<Result<Customer>> _autoProvisionCustomer(ParsedTransfer transfer) async {
+    final service = customerService;
+    if (service == null) {
+      return const Failure(
+        AppFailure(code: 'customer_service_unavailable', message: 'Customer service not wired'),
+      );
+    }
+    final phone = transfer.customerIdentifier.trim();
+    // Contacts decide identity: in phonebook => full customer with name;
+    // otherwise provisional ledger-only account.
+    var displayName = phone;
+    var status = CustomerStatus.provisional;
+    final match = await contactDirectory?.findByPhone(phone);
+    if (match != null && match.displayName.trim().isNotEmpty) {
+      displayName = match.displayName.trim();
+      status = CustomerStatus.active;
+    }
+    final created = await service.create(
+      displayName: displayName,
+      identifierType: CustomerIdentifierType.phoneNumber,
+      identifierValue: phone,
+      status: status,
+    );
+    if (created is Success<Customer>) return created;
+    if (created is Failure<Customer> &&
+        created.error.code == 'duplicate_identifier') {
+      final existing = await customers.findByIdentifier(phone);
+      if (existing is Success<Customer?> && existing.value != null) {
+        return Success(existing.value!);
+      }
+    }
+    return Failure(created is Failure<Customer> ? created.error : const AppFailure(
+      code: 'auto_provision_failed',
+      message: 'Could not auto-create customer from transfer phone',
+    ));
   }
 
   String _operationId(ParsedTransfer transfer) {

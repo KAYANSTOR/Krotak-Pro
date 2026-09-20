@@ -1,21 +1,15 @@
 import '../../core/clock.dart';
 import '../../core/result.dart';
+import '../../data/database/app_database.dart' hide IncomingMessage;
 import '../entities/message.dart';
 import '../repositories/repositories.dart';
 
-/// Phase 6 smart cleanup — retention policy from help-center screenshots.
-///
-/// | Kind | Keep |
-/// |------|------|
-/// | Rejected messages | 30 days |
-/// | Processed (completed) messages | 3 days |
-/// | Failed exhausted (failedMaxAttempts) | 30 days (same as rejected archive) |
-///
-/// **Never** deletes sales, transactions, cards, or customers.
+/// Smart retention purge + SQLite deep clean (VACUUM / ANALYZE).
 final class LocalMaintenanceService {
   const LocalMaintenanceService({
     required this.messages,
     required this.clock,
+    this.database,
     this.rejectedRetention = const Duration(days: 30),
     this.processedRetention = const Duration(days: 3),
     this.failedMaxRetention = const Duration(days: 30),
@@ -23,6 +17,7 @@ final class LocalMaintenanceService {
 
   final MessageRepository messages;
   final Clock clock;
+  final AppDatabase? database;
   final Duration rejectedRetention;
   final Duration processedRetention;
   final Duration failedMaxRetention;
@@ -87,6 +82,29 @@ final class LocalMaintenanceService {
       ),
     );
   }
+
+  /// Rebuilds SQLite indexes / statistics (VACUUM + ANALYZE + PRAGMA optimize).
+  Future<Result<DeepCleanReport>> runDeepClean() async {
+    final db = database;
+    if (db == null) {
+      return const Failure(
+        AppFailure(code: 'deep_clean_unavailable', message: 'Database not available'),
+      );
+    }
+    final sw = Stopwatch()..start();
+    try {
+      await db.customStatement('PRAGMA wal_checkpoint(TRUNCATE)');
+      await db.customStatement('VACUUM');
+      await db.customStatement('ANALYZE');
+      await db.customStatement('PRAGMA optimize');
+      sw.stop();
+      return Success(DeepCleanReport(durationMs: sw.elapsedMilliseconds));
+    } catch (e) {
+      return Failure(
+        AppFailure(code: 'deep_clean_failed', message: e.toString()),
+      );
+    }
+  }
 }
 
 final class MaintenanceReport {
@@ -101,7 +119,9 @@ final class MaintenanceReport {
   final int deletedProcessed;
   final int deletedFailedMax;
   final List<String> errors;
+}
 
-  int get totalDeleted =>
-      deletedRejected + deletedProcessed + deletedFailedMax;
+final class DeepCleanReport {
+  const DeepCleanReport({required this.durationMs});
+  final int durationMs;
 }

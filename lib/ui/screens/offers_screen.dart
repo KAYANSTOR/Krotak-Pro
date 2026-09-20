@@ -8,14 +8,14 @@ import '../theme/kayan_palette.dart';
 import '../theme/net_semantic_colors.dart';
 import '../theme/net_tokens.dart';
 import '../widgets/async_views.dart';
-import '../widgets/net/net_sheet.dart';
 import '../widgets/net/net_surface_card.dart';
 import '../widgets/net/net_tab_header.dart';
+import 'offers_wizard_sheet.dart';
 
 /// إدارة العروض والمكافآت — مطابق فيديو Z Net (نشطة / معطّلة + عرض جديد).
 ///
-/// المنطق كما هو (نفس الاستعلامات ونفس عمليات الإنشاء/التعديل/التفعيل/الحذف)،
-/// والتحديث البصري فقط: هوية لونية موحّدة + أوراق وحالات موحّدة.
+/// المنطق كما هو (نفس الاستعلامات ونفس عمليات الإنشاء/التعديل/التفعيل/الحذف).
+/// إنشاء/تعديل العرض عبر معالج 4 خطوات مطابق الفيديو.
 class OffersScreen extends StatefulWidget {
   const OffersScreen({super.key});
 
@@ -97,179 +97,11 @@ class _OffersScreenState extends State<OffersScreen>
       return;
     }
 
-    final titleCtrl = TextEditingController(text: existing?.title ?? '');
-    final thresholdCtrl = TextEditingController(
-      text: existing == null
-          ? ''
-          : (existing.thresholdMinorUnits / 100).toStringAsFixed(
-              existing.thresholdMinorUnits % 100 == 0 ? 0 : 2,
-            ),
+    final saved = await showOffersWizardSheet(
+      context: context,
+      categories: categories,
+      existing: existing,
     );
-    final notesCtrl = TextEditingController(text: existing?.notes ?? '');
-    var rewardId = categories.any((e) => e.id == existing?.rewardCategoryId)
-        ? existing!.rewardCategoryId
-        : categories.first.id;
-
-    final saved = await NetSheet.show<bool>(
-      context,
-      builder: (ctx) {
-        var busy = false;
-        String? status;
-        return StatefulBuilder(
-          builder: (ctx, setModal) {
-            return NetSheet(
-              title: existing == null ? 'عرض ترويجي جديد' : 'تعديل العرض',
-              subtitle: 'عند بلوغ العميل عتبة التراكم يُصرف كرت من فئة المكافأة.',
-              icon: Icons.local_offer_rounded,
-              body: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(
-                  NetSpacing.xl,
-                  NetSpacing.lg,
-                  NetSpacing.xl,
-                  NetSpacing.lg,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    TextField(
-                      controller: titleCtrl,
-                      decoration: const InputDecoration(
-                        labelText: 'عنوان الحملة',
-                        labelStyle: TextStyle(fontFamily: NetTypography.family),
-                        border: OutlineInputBorder(),
-                      ),
-                      style: const TextStyle(fontFamily: NetTypography.family),
-                    ),
-                    const SizedBox(height: NetSpacing.md),
-                    TextField(
-                      controller: thresholdCtrl,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                        labelText: 'عتبة التراكم (ر.ي)',
-                        hintText: 'مثال: 50000',
-                        labelStyle: TextStyle(fontFamily: NetTypography.family),
-                        border: OutlineInputBorder(),
-                      ),
-                      style: const TextStyle(fontFamily: NetTypography.family),
-                    ),
-                    const SizedBox(height: NetSpacing.md),
-                    DropdownButtonFormField<String>(
-                      value: rewardId,
-                      decoration: const InputDecoration(
-                        labelText: 'فئة المكافأة',
-                        labelStyle: TextStyle(fontFamily: NetTypography.family),
-                        border: OutlineInputBorder(),
-                      ),
-                      items: [
-                        for (final cat in categories)
-                          DropdownMenuItem(
-                            value: cat.id,
-                            child: Text(
-                              '${cat.name} · ${formatMoneyMinor(cat.faceValue.minorUnits)}',
-                              style: const TextStyle(fontFamily: NetTypography.family),
-                            ),
-                          ),
-                      ],
-                      onChanged: (v) {
-                        if (v != null) setModal(() => rewardId = v);
-                      },
-                    ),
-                    const SizedBox(height: NetSpacing.md),
-                    TextField(
-                      controller: notesCtrl,
-                      maxLines: 2,
-                      decoration: const InputDecoration(
-                        labelText: 'ملاحظات (اختياري)',
-                        labelStyle: TextStyle(fontFamily: NetTypography.family),
-                        border: OutlineInputBorder(),
-                      ),
-                      style: const TextStyle(fontFamily: NetTypography.family),
-                    ),
-                    if (status != null) ...[
-                      const SizedBox(height: NetSpacing.md),
-                      Row(
-                        children: [
-                          Icon(
-                            Icons.error_outline_rounded,
-                            size: NetSizes.iconSm,
-                            color: Theme.of(ctx).colorScheme.error,
-                          ),
-                          const SizedBox(width: NetSpacing.sm),
-                          Expanded(
-                            child: Text(
-                              status!,
-                              style: TextStyle(
-                                fontFamily: NetTypography.family,
-                                fontSize: 12.5,
-                                fontWeight: FontWeight.w700,
-                                color: Theme.of(ctx).colorScheme.error,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              footer: FilledButton(
-                onPressed: busy
-                    ? null
-                    : () async {
-                        setModal(() => busy = true);
-                        final major = num.tryParse(
-                          thresholdCtrl.text.trim().replaceAll(',', ''),
-                        );
-                        if (major == null || major <= 0) {
-                          setModal(() {
-                            busy = false;
-                            status = 'أدخل عتبة صحيحة';
-                          });
-                          return;
-                        }
-                        final r = existing == null
-                            ? await c.promotions.create(
-                                title: titleCtrl.text,
-                                thresholdMinorUnits: (major * 100).round(),
-                                rewardCategoryId: rewardId,
-                                notes: notesCtrl.text,
-                              )
-                            : await c.promotions.update(
-                                id: existing.id,
-                                title: titleCtrl.text,
-                                thresholdMinorUnits: (major * 100).round(),
-                                rewardCategoryId: rewardId,
-                                notes: notesCtrl.text,
-                              );
-                        if (!ctx.mounted) return;
-                        if (r is Success) {
-                          Navigator.pop(ctx, true);
-                        } else {
-                          setModal(() {
-                            busy = false;
-                            status = (r as Failure).error.message;
-                          });
-                        }
-                      },
-                child: busy
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
-                      )
-                    : const Text('حفظ العرض'),
-              ),
-            );
-          },
-        );
-      },
-    );
-    titleCtrl.dispose();
-    thresholdCtrl.dispose();
-    notesCtrl.dispose();
     if (saved == true) await _load();
   }
 
@@ -518,71 +350,36 @@ class _PromotionCard extends StatelessWidget {
                   if (v == 'toggle') onToggle();
                   if (v == 'delete') onDelete();
                 },
-                itemBuilder: (_) => [
-                  const PopupMenuItem(
-                    value: 'edit',
-                    child: Text('تعديل', style: TextStyle(fontFamily: NetTypography.family)),
-                  ),
+                itemBuilder: (ctx) => [
+                  const PopupMenuItem(value: 'edit', child: Text('تعديل')),
                   PopupMenuItem(
                     value: 'toggle',
-                    child: Text(
-                      isActive ? 'تعطيل' : 'تفعيل',
-                      style: const TextStyle(fontFamily: NetTypography.family),
-                    ),
+                    child: Text(isActive ? 'تعطيل' : 'تفعيل'),
                   ),
-                  PopupMenuItem(
-                    value: 'delete',
-                    child: Text(
-                      'حذف',
-                      style: TextStyle(
-                        fontFamily: NetTypography.family,
-                        color: net.error,
-                      ),
-                    ),
-                  ),
+                  const PopupMenuItem(value: 'delete', child: Text('حذف')),
                 ],
               ),
             ],
           ),
-          const SizedBox(height: NetSpacing.md),
-          Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: NetSpacing.md,
-              vertical: NetSpacing.sm,
-            ),
-            decoration: BoxDecoration(
-              color: palette.surfaceVariant,
-              borderRadius: NetRadii.smAll,
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.redeem_rounded, size: NetSizes.iconSm, color: palette.primary),
-                const SizedBox(width: NetSpacing.sm),
-                Expanded(
-                  child: Text(
-                    'المكافأة: $rewardName',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontFamily: NetTypography.family,
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w700,
-                      color: palette.textPrimary,
-                    ),
-                  ),
-                ),
-              ],
+          const SizedBox(height: NetSpacing.sm),
+          Text(
+            'مكافأة: $rewardName',
+            style: TextStyle(
+              fontFamily: NetTypography.family,
+              fontSize: 12.5,
+              color: palette.textSecondary,
             ),
           ),
-          if ((promotion.notes ?? '').trim().isNotEmpty) ...[
-            const SizedBox(height: NetSpacing.sm),
+          if (promotion.notes != null && promotion.notes!.trim().isNotEmpty) ...[
+            const SizedBox(height: NetSpacing.xs),
             Text(
-              promotion.notes!.trim(),
+              promotion.notes!,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 fontFamily: NetTypography.family,
                 fontSize: 12,
-                height: 1.4,
-                color: palette.textSecondary,
+                color: palette.textTertiary,
               ),
             ),
           ],

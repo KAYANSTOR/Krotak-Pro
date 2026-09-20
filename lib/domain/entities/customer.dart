@@ -1,4 +1,4 @@
-enum CustomerStatus { active, blacklisted, merged, archived }
+enum CustomerStatus { active, provisional, blacklisted, merged, archived }
 
 enum CustomerIdentifierType { phoneNumber, username, externalReference }
 

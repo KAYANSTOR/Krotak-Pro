@@ -179,6 +179,39 @@ final class InMemoryCardRepository implements CardRepository {
           .toList());
 
   @override
+  Future<Result<Card>> reserveFirstAvailable({
+    required String categoryId,
+    required String reservationId,
+    required DateTime reservedAt,
+    required DateTime expiresAt,
+  }) async {
+    await expireReservations(reservedAt);
+    final stock = _cards.values
+        .where((c) => c.categoryId == categoryId && c.status == CardStatus.available)
+        .toList();
+    if (stock.isEmpty) {
+      return const Failure(
+        AppFailure(code: 'card_unavailable', message: 'No available card in category'),
+      );
+    }
+    final selected = stock.first;
+    final reserved = Card(
+      id: selected.id,
+      categoryId: selected.categoryId,
+      serialNumber: selected.serialNumber,
+      secretCode: selected.secretCode,
+      status: CardStatus.reserved,
+      reservation: CardReservation(
+        reservationId: reservationId,
+        reservedAt: reservedAt,
+        expiresAt: expiresAt,
+      ),
+    );
+    _cards[selected.id] = reserved;
+    return Success(reserved);
+  }
+
+  @override
   Future<Result<List<Card>>> listByStatus(CardStatus status) async =>
       Success(_cards.values.where((c) => c.status == status).toList());
 

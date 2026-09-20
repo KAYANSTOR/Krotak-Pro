@@ -174,6 +174,20 @@ class MainActivity : FlutterActivity(), SmsListener {
                     result.success(granted)
                 }
                 "hasContactsPermission" -> result.success(hasContactsPermission())
+                "lookupContactByPhone" -> {
+                    val phone = call.argument<String>("phone")
+                    if (phone.isNullOrBlank()) {
+                        result.success(null)
+                    } else if (!hasContactsPermission()) {
+                        result.success(null)
+                    } else {
+                        try {
+                            result.success(lookupContactByPhone(phone))
+                        } catch (e: Exception) {
+                            result.error("contact_lookup_failed", e.message, null)
+                        }
+                    }
+                }
                 "pickContact" -> try {
                     val intent = Intent(Intent.ACTION_PICK, ContactsContract.Contacts.CONTENT_URI)
                     pendingContactResult = result
@@ -280,6 +294,53 @@ class MainActivity : FlutterActivity(), SmsListener {
             return
         }
         super.onActivityResult(requestCode, resultCode, data)
+    }
+
+    private fun lookupContactByPhone(rawPhone: String): Map<String, String>? {
+        val candidates = linkedSetOf<String>()
+        candidates.add(rawPhone.trim())
+        val digits = rawPhone.filter { it.isDigit() }
+        if (digits.isNotEmpty()) {
+            candidates.add(digits)
+            if (digits.startsWith("967") && digits.length >= 12) {
+                candidates.add(digits.substring(3))
+                candidates.add("0" + digits.substring(3))
+            }
+            if (digits.startsWith("0") && digits.length >= 8) {
+                candidates.add(digits.substring(1))
+            }
+            if (!digits.startsWith("0") && digits.length == 9) {
+                candidates.add("0$digits")
+                candidates.add("+967$digits")
+            }
+        }
+        for (candidate in candidates) {
+            val uri = Uri.withAppendedPath(
+                ContactsContract.PhoneLookup.CONTENT_FILTER_URI,
+                Uri.encode(candidate),
+            )
+            contentResolver.query(
+                uri,
+                arrayOf(
+                    ContactsContract.PhoneLookup.DISPLAY_NAME,
+                    ContactsContract.PhoneLookup.NUMBER,
+                ),
+                null,
+                null,
+                null,
+            )?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    val nameIdx = cursor.getColumnIndex(ContactsContract.PhoneLookup.DISPLAY_NAME)
+                    val numIdx = cursor.getColumnIndex(ContactsContract.PhoneLookup.NUMBER)
+                    val name = if (nameIdx >= 0) cursor.getString(nameIdx)?.trim().orEmpty() else ""
+                    val number = if (numIdx >= 0) cursor.getString(numIdx)?.trim().orEmpty() else candidate
+                    if (name.isNotEmpty()) {
+                        return mapOf("displayName" to name, "phone" to number)
+                    }
+                }
+            }
+        }
+        return null
     }
 
     /// يقرأ أول رقم هاتف من جهة الاتصال المختارة — أو null عند الإلغاء.

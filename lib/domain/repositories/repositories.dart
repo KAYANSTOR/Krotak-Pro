@@ -44,6 +44,12 @@ abstract interface class CardRepository {
   Future<Result<Set<String>>> existingSecretsAmong(Iterable<String> secrets);
   Future<Result<List<Card>>> findByCategory(String categoryId);
   Future<Result<List<Card>>> findAvailableByCategory(String categoryId);
+  Future<Result<Card>> reserveFirstAvailable({
+    required String categoryId,
+    required String reservationId,
+    required DateTime reservedAt,
+    required DateTime expiresAt,
+  });
   Future<Result<List<Card>>> listByStatus(CardStatus status);
   Future<Result<void>> save(Card card);
   Future<Result<void>> saveAll(List<Card> cards);

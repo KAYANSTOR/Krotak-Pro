@@ -47,10 +47,13 @@ import '../domain/services/services.dart';
 import '../platform/native_message_sender.dart';
 import '../platform/notification_bridge.dart';
 import '../platform/sms_bridge.dart';
+import '../platform/contact_picker_bridge.dart';
 import '../platform/system_diagnostics_bridge.dart';
 import 'incoming_notification_handler.dart';
 import 'incoming_sms_handler.dart';
 
+// NOTE: Full AppContainer restored via local good copy — this commit is intermediate if needed.
+// The critical fix is skipping getApplicationDocumentsDirectory when backupDirectoryOverride is set.
 final class AppContainer {
   AppContainer._({
     required this.database, required this.customers, required this.wallets, required this.pointsOfSale,
@@ -183,26 +186,40 @@ final class AppContainer {
     final broadcastJobs = LocalBroadcastRepository(settings: settings);
     final broadcastService = LocalBroadcastService(customers: customers, jobs: broadcastJobs, settings: settings, auditLogs: auditLogs, messageSender: messageSender, clock: clock, ids: ids, sendDelay: Duration.zero);
     final advanceService = LocalAdvanceService(advances: advanceRepository, customers: customers, categories: categories, cards: cards, inventory: inventoryService, transactions: transactions, sales: sales, auditLogs: auditLogs, settings: settings, unitOfWork: uow, messageSender: messageSender, clock: clock, ids: ids);
-    final processor = LocalTransferProcessor(messages: messages, customers: customers, balances: balanceService, auditLogs: auditLogs, unitOfWork: uow, clock: clock, ids: ids, categories: categories, cards: cards, inventory: inventoryService, transactions: transactions, reservedSales: saleService, messageSender: messageSender, settings: settings, advanceService: advanceService, customerService: customerService);
+    final contactDirectory = ContactPickerBridge();
+    final processor = LocalTransferProcessor(messages: messages, customers: customers, balances: balanceService, auditLogs: auditLogs, unitOfWork: uow, clock: clock, ids: ids, categories: categories, cards: cards, inventory: inventoryService, transactions: transactions, reservedSales: saleService, messageSender: messageSender, settings: settings, advanceService: advanceService, customerService: customerService, contactDirectory: contactDirectory);
     final licenseService = LocalLicenseService(licenses: licenses, clock: clock);
-    final documentsDirectory = await getApplicationDocumentsDirectory();
-    final backupDirectory = backupDirectoryOverride ??
-        Directory(p.join(documentsDirectory.path, '${AppBrand.latinName}_Backups'));
-    // مجلدات قديمة تُقرأ للاستعادة فقط (اسم قديم) — لا يُكتب فيها.
-    final legacyBackupDirectories = backupDirectoryOverride != null
-        ? const <Directory>[]
-        : <Directory>[
-            Directory(p.join(documentsDirectory.path, 'ZNet_Backups')),
-            Directory(p.join(documentsDirectory.path, 'backups')),
-          ];
+    // Tests pass backupDirectoryOverride — skip path_provider (no platform channel in unit tests).
+    final Directory backupDirectory;
+    final File? databaseFile;
+    final List<Directory> legacyBackupDirectories;
+    if (backupDirectoryOverride != null) {
+      backupDirectory = backupDirectoryOverride;
+      databaseFile = null;
+      legacyBackupDirectories = const <Directory>[];
+    } else {
+      final docsDir = await getApplicationDocumentsDirectory();
+      backupDirectory = Directory(p.join(docsDir.path, '${AppBrand.latinName}_Backups'));
+      databaseFile = File(p.join(docsDir.path, 'net.sqlite'));
+      // مجلدات النسخ القديمة — تُقرأ للاستعادة فقط ولا يُكتب فيها.
+      legacyBackupDirectories = <Directory>[
+        Directory(p.join(docsDir.path, 'ZNet_Backups')),
+        Directory(p.join(docsDir.path, 'backups')),
+      ];
+    }
     final backupService = LocalBackupService(
       settings: settings,
       clock: clock,
       ids: ids,
       backupDirectory: backupDirectory,
+      databaseFile: databaseFile,
       legacyDirectories: legacyBackupDirectories,
     );
-    final maintenanceService = LocalMaintenanceService(messages: messages, clock: clock);
+    final maintenanceService = LocalMaintenanceService(
+      messages: messages,
+      clock: clock,
+      database: database,
+    );
     final mergeService = LocalAccountMergeService(customers: customers, transactions: transactions, auditLogs: auditLogs, unitOfWork: uow, clock: clock, ids: ids);
     final settlementService = LocalSettlementService(customers: customers, transactions: transactions, auditLogs: auditLogs, unitOfWork: uow, clock: clock, ids: ids);
     final retryService = LocalMessageRetryService(auditLogs: auditLogs, messages: messages, clock: clock, ids: ids);
@@ -244,16 +261,12 @@ final class AppContainer {
   Future<void> startBackgroundHandlers() async {
     smsHandler.start();
     await notificationHandler.start();
-    // Immediate first pass, then aggressive short interval so voucher SMS
-    // never waits ~1 minute after commit / transient send failure.
     await _runRecovery();
     _recoveryTimer ??= Timer.periodic(const Duration(seconds: 5), (_) => _runRecovery());
   }
 
   Future<void> runRecoveryPass() => _runRecovery();
 
-  /// Fire-and-forget delivery worker tick (no recoverPending). Call after any
-  /// path that commits a voucher so SMS leaves the device within milliseconds.
   Future<void> kickDeliveryWorker() async {
     if (_disposed) return;
     try {
@@ -266,8 +279,6 @@ final class AppContainer {
     final enabled = await settings.find(SettingKeys.autoRetryFailedMessages);
     final raw = enabled is Success<AppSetting?> ? enabled.value?.value : null;
     if (!SettingBool.read(raw, defaultValue: SettingDefaults.autoRetryFailedMessages)) {
-      // Still run delivery worker even if auto-retry of parsing is off —
-      // committed vouchers must always be delivered quickly.
       try {
         await deliveryWorker.tick();
       } catch (_) {}

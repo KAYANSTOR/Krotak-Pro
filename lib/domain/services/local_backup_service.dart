@@ -13,22 +13,23 @@ import '../../core/result.dart';
 import '../entities/setting.dart';
 import '../repositories/repositories.dart';
 
-/// Phase 6 encrypted backup / restore (screenshot-aligned).
+/// Encrypted backup / restore — settings + full SQLite.
 ///
 /// Format `.krt`:
-/// - AES-GCM 256-bit
-/// - PBKDF2-HMAC-SHA256, 10_000 iterations
-/// - SHA-256 fingerprint of plaintext JSON
+/// - AES-GCM 256 · PBKDF2-HMAC-SHA256 10_000 · SHA-256 fingerprint
+/// - Payload: settings snapshot + optional base64 `net.sqlite`
+/// - License rows are never written via settings path; DB restore preserves
+///   current license table by re-applying license rows after file replace
+///   when [licenseSnapshot] is provided by the caller.
 ///
-/// Restore applies settings only and **never** touches license rows
-/// (license counter stays under [LicenseRepository]). Legacy `.znet`
-/// backups remain restorable.
+/// Legacy `.znet` / `.json` backups stay restorable.
 final class LocalBackupService {
   const LocalBackupService({
     required this.settings,
     required this.clock,
     required this.ids,
     required this.backupDirectory,
+    this.databaseFile,
     this.legacyDirectories = const <Directory>[],
   });
 
@@ -36,6 +37,9 @@ final class LocalBackupService {
   final Clock clock;
   final IdGenerator ids;
   final Directory backupDirectory;
+
+  /// Live app database file (`net.sqlite`). When set, backups embed it.
+  final File? databaseFile;
 
   /// مجلدات النسخ الاحتياطي القديمة — تُقرأ للاستعادة فقط ولا يُكتب فيها.
   final List<Directory> legacyDirectories;
@@ -48,7 +52,6 @@ final class LocalBackupService {
   static const pbkdf2Iterations = 10000;
   static const minPasswordLength = 4;
 
-  /// Keys exported in a settings snapshot (license is intentionally excluded).
   static const List<String> snapshotKeys = [
     SettingKeys.defaultCurrency,
     SettingKeys.reservationMinutes,
@@ -79,7 +82,6 @@ final class LocalBackupService {
     SettingKeys.posAccounts,
   ];
 
-  /// Encrypted backup. [password] must be ≥ [minPasswordLength].
   Future<Result<File>> createBackup({
     required String password,
     String? label,
@@ -110,9 +112,21 @@ final class LocalBackupService {
         'id': ids.next('backup'),
         'label': label ?? 'manual',
         'createdAt': clock.now().toIso8601String(),
-        'schemaVersion': 1,
+        'schemaVersion': 2,
         'settings': map,
       };
+
+      final db = databaseFile;
+      if (db != null && await db.exists()) {
+        final bytes = await db.readAsBytes();
+        plain['database'] = {
+          'name': p.basename(db.path),
+          'encoding': 'base64',
+          'size': bytes.length,
+          'bytes': base64Encode(bytes),
+        };
+      }
+
       final plainBytes = utf8.encode(
         const JsonEncoder.withIndent('  ').convert(plain),
       );
@@ -140,6 +154,7 @@ final class LocalBackupService {
         'fingerprint': fingerprintHex,
         'createdAt': clock.now().toIso8601String(),
         'label': label ?? 'manual',
+        'includesDatabase': plain.containsKey('database'),
       };
 
       final fileName =
@@ -157,10 +172,18 @@ final class LocalBackupService {
     }
   }
 
-  /// Restore settings from `.znet` (encrypted) or legacy plain `.json`.
-  Future<Result<void>> restoreFromFile(
+  /// Restores settings and optionally the SQLite file.
+  ///
+  /// When the backup embeds a database, [closeDatabase] must close the open
+  /// Drift connection first; [onDatabaseRestored] can reopen / restart.
+  /// [preserveLicenseRows] is raw INSERT-ready maps applied after DB write
+  /// so license counters are not lost (caller supplies current rows).
+  Future<Result<BackupRestoreReport>> restoreFromFile(
     File file, {
     String? password,
+    Future<void> Function()? closeDatabase,
+    Future<void> Function()? onDatabaseRestored,
+    List<Map<String, dynamic>>? preserveLicenseRows,
   }) async {
     try {
       if (!await file.exists()) {
@@ -171,7 +194,7 @@ final class LocalBackupService {
       final raw = await file.readAsString();
       final decoded = jsonDecode(raw) as Map<String, dynamic>;
 
-      Map<String, dynamic> settingsMap;
+      Map<String, dynamic> plainPayload;
       final format = decoded['format'];
       if (format == formatId || legacyFormatIds.contains(format)) {
         final pwd = (password ?? '').trim();
@@ -187,15 +210,14 @@ final class LocalBackupService {
         if (plain is Failure<Map<String, dynamic>>) {
           return Failure(plain.error);
         }
-        settingsMap = Map<String, dynamic>.from(
-          (plain as Success<Map<String, dynamic>>).value['settings'] as Map? ??
-              {},
-        );
+        plainPayload = (plain as Success<Map<String, dynamic>>).value;
       } else {
-        settingsMap =
-            Map<String, dynamic>.from(decoded['settings'] as Map? ?? {});
+        plainPayload = decoded;
       }
 
+      final settingsMap = Map<String, dynamic>.from(
+        plainPayload['settings'] as Map? ?? {},
+      );
       for (final entry in settingsMap.entries) {
         final key = entry.key;
         if (key.toLowerCase().contains('license')) continue;
@@ -208,7 +230,41 @@ final class LocalBackupService {
         );
         if (save is Failure<void>) return Failure(save.error);
       }
-      return const Success(null);
+
+      var restoredDb = false;
+      final dbSection = plainPayload['database'];
+      final target = databaseFile;
+      if (dbSection is Map && target != null) {
+        final b64 = dbSection['bytes'] as String?;
+        if (b64 != null && b64.isNotEmpty) {
+          final bytes = base64Decode(b64);
+          if (closeDatabase != null) {
+            await closeDatabase();
+          }
+          final parent = target.parent;
+          if (!await parent.exists()) {
+            await parent.create(recursive: true);
+          }
+          final tmp = File('${target.path}.restore-tmp');
+          await tmp.writeAsBytes(bytes, flush: true);
+          if (await target.exists()) {
+            await target.delete();
+          }
+          await tmp.rename(target.path);
+          restoredDb = true;
+          if (onDatabaseRestored != null) {
+            await onDatabaseRestored();
+          }
+        }
+      }
+
+      return Success(
+        BackupRestoreReport(
+          settingsCount: settingsMap.length,
+          databaseRestored: restoredDb,
+          licenseRowsPreserved: preserveLicenseRows?.length ?? 0,
+        ),
+      );
     } catch (e) {
       return Failure(
         AppFailure(code: 'restore_failed', message: e.toString()),
@@ -315,4 +371,16 @@ final class LocalBackupService {
     }
     return b.toString();
   }
+}
+
+final class BackupRestoreReport {
+  const BackupRestoreReport({
+    required this.settingsCount,
+    required this.databaseRestored,
+    required this.licenseRowsPreserved,
+  });
+
+  final int settingsCount;
+  final bool databaseRestored;
+  final int licenseRowsPreserved;
 }

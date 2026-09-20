@@ -8,6 +8,7 @@ import '../theme/net_semantic_colors.dart';
 import '../theme/net_tokens.dart';
 import '../widgets/async_views.dart';
 import '../widgets/net/net_surface_card.dart';
+import '../widgets/net/net_app_bar_title.dart';
 
 /// مركز فحص وتشخيص النظام — مطابق دليل 1.0.9 + ثيم Kayan التكيّفي.
 class SystemCheckScreen extends StatefulWidget {
@@ -92,7 +93,12 @@ class _SystemCheckScreenState extends State<SystemCheckScreen> {
       child: Scaffold(
         backgroundColor: palette.appBackground,
         appBar: AppBar(
-          title: const Text('فحص وتشخيص النظام'),
+          title: const NetAppBarTitle(
+            icon: Icons.health_and_safety_rounded,
+            title: 'فحص وتشخيص النظام',
+            subtitle: 'جاهزية الأذونات والتشغيل',
+          ),
+          centerTitle: false,
           actions: [
             IconButton(
               tooltip: 'إعادة الفحص',
