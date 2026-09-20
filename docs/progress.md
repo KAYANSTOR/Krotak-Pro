@@ -10,6 +10,11 @@ CI على main — analyze + test + Android debug APK build
 
 ## Post-V1
 
+### Phase 27 — مصدر واحد لملف نقطة البيع (2026-09-20) ✅ برمجيًا
+- خدمة `LocalPosProfileService`: تحقق + إنشاء + تعديل + زرع القوالب من مسار واحد.
+- ربط شاشتي المحافظ ودفتر نقاط البيع بالخدمة بدل تكرار المنطق في الواجهة.
+- تقرير: [phase-27-pos-single-source.md](phase-27-pos-single-source.md)
+
 ### Phase 17 — Promotion Reward Reversal (2026-09-16) ✅ في المستودع
 - عكس مكافأة العرض عند reverseSale.
 - تقرير: [phase-17-promotion-reward-reversal.md](phase-17-promotion-reward-reversal.md)
