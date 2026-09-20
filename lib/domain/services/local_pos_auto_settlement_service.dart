@@ -73,7 +73,8 @@ final class LocalPosAutoSettlementService {
     );
     if (credited is Failure<Transaction>) {
       await _notifyFailure(account, reason: credited.error.message);
-      return Failure<Transaction>(credited.error);
+      await messages.updateStatus(message.id, MessageProcessingStatus.failed);
+      return Failure(credited.error);
     }
     final tx = (credited as Success<Transaction>).value;
 
@@ -85,7 +86,7 @@ final class LocalPosAutoSettlementService {
     await auditLogs.append(
       AuditLog(
         id: ids.next('audit'),
-        entityType: 'pos_settlement',
+        entityType: 'pos_account',
         entityId: account.posId,
         action: 'settled',
         occurredAt: clock.now(),
@@ -100,11 +101,11 @@ final class LocalPosAutoSettlementService {
   }
 
   Future<bool> _enabled() async {
-    final setting = await settings.find(SettingKeys.posAutoSettlementEnabled);
+    final setting = await settings.find(SettingKeys.autoPosSettlementEnabled);
     if (setting is Failure<AppSetting?>) return true;
     return SettingBool.read(
       (setting as Success<AppSetting?>).value?.value,
-      defaultValue: SettingDefaults.posAutoSettlementEnabled,
+      defaultValue: SettingDefaults.autoPosSettlementEnabled,
     );
   }
 
@@ -121,15 +122,16 @@ final class LocalPosAutoSettlementService {
   Future<Result<PosAccount?>> _resolveAccount(ParsedTransfer transfer) async {
     final identifier = transfer.customerIdentifier.trim();
     if (identifier.isEmpty) return const Success(null);
-    final byId = await posRegistry.findByIdentifier(identifier);
-    if (byId is Failure<PosAccount?>) return byId;
-    final hit = (byId as Success<PosAccount?>).value;
-    if (hit != null && transfer.posId != null && transfer.posId!.isNotEmpty) {
-      if (hit.posId != transfer.posId) {
-        return const Success(null);
-      }
+
+    if (transfer.posId != null && transfer.posId!.trim().isNotEmpty) {
+      return posRegistry.findByPosId(transfer.posId!.trim());
     }
-    return Success(hit);
+
+    final byId = await posRegistry.findByPosId(identifier);
+    if (byId is Failure<PosAccount?>) return byId;
+    if ((byId as Success<PosAccount?>).value != null) return byId;
+
+    return posRegistry.findByIdentifier(identifier);
   }
 
   Future<int> _remainingDebt({
