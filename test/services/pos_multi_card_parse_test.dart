@@ -104,3 +104,25 @@ void main() {
     expect(parsed, isA<Failure<ParsedTransfer>>());
   });
 }
+
+
+  test('custom POS balance template is parsed as a balance request', () {
+    final parser = LocalMessageParser(
+      templates: [
+        TransferTemplate(
+          id: 'tpl-pos-custom-balance',
+          name: 'رصيدي',
+          pattern: 'رصيدي',
+          isActive: true,
+          posId: 'pos-1',
+          identifierKind: TemplateIdentifierKind.balanceRequestCode,
+          requireReference: false,
+        ),
+      ],
+    );
+    final parsed = parser.parse(_msg('رصيدي'));
+    expect(parsed, isA<Success<ParsedTransfer>>());
+    final value = (parsed as Success<ParsedTransfer>).value;
+    expect(value.amount.minorUnits, 0);
+    expect(value.reference, startsWith('balance-request:'));
+  });
