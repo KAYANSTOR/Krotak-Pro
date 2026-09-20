@@ -8,13 +8,13 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Apply engine hotpath slice 1
-        run: python3 tools/hotpath/apply_hotpath_slice1.py
+      - name: Apply engine hotpath slice 2
+        run: python3 tools/hotpath/apply_hotpath_slice2.py
       - name: Commit
         run: |
           git config user.name "KAYANSTOR"
           git config user.email "jarallhalkboudi@gmail.com"
           git add -A
           git diff --cached --quiet && echo No changes && exit 0
-          git commit -m "perf(engine): hotpath slice1 — provisional sellable + category cache"
+          git commit -m "perf(engine): hotpath slice2 — atomic reserveFirstAvailable"
           git push
