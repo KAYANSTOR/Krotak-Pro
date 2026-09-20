@@ -155,6 +155,21 @@ final class LocalPosProfileService {
     final savedAccount = await posRegistry.save(nextAccount);
     if (savedAccount is Failure<void>) return Failure(savedAccount.error);
 
+    // Idempotent: adds any catalog variants missing on older installs
+    // (e.g. multi-card {qty} / delivery {dest}) without duplicating rows.
+    final seeded = await DefaultPosTemplatesSeeder(templates: templates)
+        .seedForPos(posId: posId, posName: name.trim());
+    if (seeded is Failure<int>) return Failure(seeded.error);
+
     return Success(PosProfile(pointOfSale: pos, account: nextAccount));
+  }
+
+  /// Re-seed the full inbound catalog for an existing POS (safe to call anytime).
+  Future<Result<int>> ensureInboundTemplates({
+    required String posId,
+    required String posName,
+  }) {
+    return DefaultPosTemplatesSeeder(templates: templates)
+        .seedForPos(posId: posId, posName: posName);
   }
 }
