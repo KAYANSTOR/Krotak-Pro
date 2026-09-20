@@ -55,8 +55,8 @@ final class TransferTemplate {
   final String name;
 
   /// Human pattern using either style:
-  /// - `{amount}`, `{phone}`, `{account}`, `{ref}`
-  /// - `%amount`, `%phone`, `%account`, `%ref`
+  /// - `{amount}`, `{phone}`, `{account}`, `{ref}`, `{qty}`
+  /// - `%amount`, `%phone`, `%account`, `%ref`, `%qty`
   ///
   /// At least `{amount}`/`%amount` is required. Identifier placeholders are
   /// optional; when both phone and account appear, phone takes precedence for
@@ -164,6 +164,7 @@ final class ParsedTransfer {
     required this.reference,
     this.templateId,
     this.rawIdentifier,
+    this.quantity = 1,
   });
 
   final String messageId;
@@ -181,4 +182,8 @@ final class ParsedTransfer {
 
   /// Original captured token before phone/account normalization (diagnostics).
   final String? rawIdentifier;
+
+  /// Number of cards requested in one POS/SMS operation. Defaults to 1.
+  /// Capped by the parser (1..20). Wallet transfers stay at 1.
+  final int quantity;
 }
