@@ -642,8 +642,8 @@ final class LocalTransferProcessor implements TransferProcessor {
       return Failure<Transaction>(completed.error);
     }
 
-    if (isPosOrder && posAccount != null) {
-      final pos = posAccount;
+    if (isPosOrder) {
+      final pos = posAccount!;
       return _deliverPosOrder(
         transfer: transfer,
         message: message,
@@ -1464,8 +1464,8 @@ final class LocalTransferProcessor implements TransferProcessor {
       ));
     }
 
-    if (isPosOrder && posAccount != null) {
-      final pos = posAccount;
+    if (isPosOrder) {
+      final pos = posAccount!;
       return _deliverPosOrder(
         transfer: transfer,
         message: message,
