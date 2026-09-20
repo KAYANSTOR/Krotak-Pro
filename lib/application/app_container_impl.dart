@@ -33,6 +33,7 @@ import '../domain/services/pending_message_review_service.dart';
 import '../domain/services/local_settlement_service.dart';
 import '../domain/services/local_card_inventory_service.dart';
 import '../domain/services/local_catalog_services.dart';
+import '../domain/services/local_category_commission_store.dart';
 import '../domain/services/default_wallet_templates_seeder.dart';
 import '../domain/services/default_outbound_templates_seeder.dart';
 import '../domain/services/local_customer_balance_service.dart';
@@ -157,6 +158,7 @@ final class AppContainer {
     final walletCatalog = LocalWalletCatalogService(wallets: wallets, auditLogs: auditLogs, settings: settings, clock: clock, ids: ids);
     final posCatalog = LocalPointOfSaleCatalogService(pointsOfSale: pointsOfSale, auditLogs: auditLogs, clock: clock, ids: ids);
     final posRegistry = LocalPosAccountRegistry(settings: settings, clock: clock);
+    final categoryCommissionStore = LocalCategoryCommissionStore(settings: settings, clock: clock);
     final catalogService = LocalCardCatalogService(categories: categories, cards: cards, auditLogs: auditLogs, unitOfWork: uow, clock: clock, ids: ids);
     final inventoryService = LocalCardInventoryService(categories: categories, cards: cards, unitOfWork: uow);
     final promotions = LocalPromotionCatalog(settings: settings, clock: clock, ids: ids);
@@ -188,7 +190,7 @@ final class AppContainer {
     final broadcastService = LocalBroadcastService(customers: customers, jobs: broadcastJobs, settings: settings, auditLogs: auditLogs, messageSender: messageSender, clock: clock, ids: ids, transactions: transactions, posRegistry: posRegistry, sendDelay: Duration.zero);
     final advanceService = LocalAdvanceService(advances: advanceRepository, customers: customers, categories: categories, cards: cards, inventory: inventoryService, transactions: transactions, sales: sales, auditLogs: auditLogs, settings: settings, unitOfWork: uow, messageSender: messageSender, clock: clock, ids: ids);
     final contactDirectory = ContactPickerBridge();
-    final processor = LocalTransferProcessor(messages: messages, customers: customers, balances: balanceService, auditLogs: auditLogs, unitOfWork: uow, clock: clock, ids: ids, categories: categories, cards: cards, inventory: inventoryService, transactions: transactions, reservedSales: saleService, messageSender: messageSender, settings: settings, advanceService: advanceService, customerService: customerService, contactDirectory: contactDirectory);
+    final processor = LocalTransferProcessor(messages: messages, customers: customers, balances: balanceService, auditLogs: auditLogs, unitOfWork: uow, clock: clock, ids: ids, categories: categories, cards: cards, inventory: inventoryService, transactions: transactions, reservedSales: saleService, messageSender: messageSender, settings: settings, advanceService: advanceService, customerService: customerService, contactDirectory: contactDirectory, posRegistry: posRegistry, categoryCommissionStore: categoryCommissionStore);
     final licenseService = LocalLicenseService(licenses: licenses, clock: clock);
     // Tests pass backupDirectoryOverride — skip path_provider (no platform channel in unit tests).
     final Directory backupDirectory;
