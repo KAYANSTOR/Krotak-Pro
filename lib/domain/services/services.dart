@@ -5,6 +5,7 @@ import '../entities/card.dart';
 import '../entities/customer.dart';
 import '../entities/message.dart';
 import '../entities/payment_event.dart';
+import '../entities/pos_account.dart';
 import '../entities/pos_profile.dart';
 import '../entities/money.dart';
 import '../entities/transaction.dart';
