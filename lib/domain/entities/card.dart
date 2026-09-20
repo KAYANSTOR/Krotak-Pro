@@ -8,12 +8,26 @@ final class CardCategory {
     required this.name,
     required this.faceValue,
     required this.isActive,
+    this.commissionPercentBps = 0,
   });
 
   final String id;
   final String name;
   final Money faceValue;
   final bool isActive;
+
+  /// عمولة/خصم الجملة بالـ basis points (500 = 5.00%). 0 = بدون خصم.
+  final int commissionPercentBps;
+
+  CardCategory withCommission(int bps) {
+    return CardCategory(
+      id: id,
+      name: name,
+      faceValue: faceValue,
+      isActive: isActive,
+      commissionPercentBps: bps,
+    );
+  }
 }
 
 final class Card {
