@@ -81,6 +81,7 @@ final class PosOrderMessageRenderer {
         'category_name': categoryName,
         'phone': customerPhone,
         'customer_phone': customerPhone,
+        'CUSTOMER_PHONE': customerPhone,
         'QUANTITY': '$effectiveQty',
         'quantity': '$effectiveQty',
         'QUANTITY_TEXT': quantityText,
