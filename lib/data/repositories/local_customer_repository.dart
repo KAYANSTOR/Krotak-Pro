@@ -74,6 +74,80 @@ final class LocalCustomerRepository implements CustomerRepository {
   }
 
   @override
+  Future<Result<List<domain.CustomerPhoneSuggestion>>> suggestPhonesByPrefix(
+    String prefix, {
+    int limit = 8,
+  }) async {
+    try {
+      final digits = PhoneNormalizer.digitsOnly(prefix);
+      if (digits.isEmpty || limit <= 0) {
+        return const Success(<domain.CustomerPhoneSuggestion>[]);
+      }
+      var searchPrefix = digits;
+      if (searchPrefix.startsWith('00') && searchPrefix.length > 4) {
+        searchPrefix = searchPrefix.substring(2);
+      }
+      if (searchPrefix.startsWith('967') && searchPrefix.length >= 4) {
+        searchPrefix = searchPrefix.substring(3);
+      }
+      if (searchPrefix.startsWith('0') && searchPrefix.length >= 2) {
+        searchPrefix = searchPrefix.substring(1);
+      }
+      if (searchPrefix.isEmpty) {
+        return const Success(<domain.CustomerPhoneSuggestion>[]);
+      }
+
+      final allowed = [
+        domain.CustomerStatus.active.name,
+        domain.CustomerStatus.provisional.name,
+      ];
+      final query = database.select(database.customerIdentifiers).join([
+        innerJoin(
+          database.customers,
+          database.customers.id.equalsExp(
+            database.customerIdentifiers.customerId,
+          ),
+        ),
+      ])
+        ..where(
+          database.customerIdentifiers.type.equals(
+            domain.CustomerIdentifierType.phoneNumber.name,
+          ),
+        )
+        ..where(database.customerIdentifiers.value.like('$searchPrefix%'))
+        ..where(database.customers.status.isIn(allowed))
+        ..orderBy([
+          OrderingTerm(
+            expression: database.customers.updatedAt,
+            mode: OrderingMode.desc,
+          ),
+        ])
+        ..limit(limit);
+
+      final rows = await query.get();
+      final seen = <String>{};
+      final out = <domain.CustomerPhoneSuggestion>[];
+      for (final row in rows) {
+        final ident = row.readTable(database.customerIdentifiers);
+        final customer = row.readTable(database.customers);
+        if (!seen.add('${customer.id}:${ident.value}')) continue;
+        out.add(
+          domain.CustomerPhoneSuggestion(
+            customerId: customer.id,
+            phone: ident.value,
+            displayName: customer.displayName,
+            status: domain.CustomerStatus.values.byName(customer.status),
+            updatedAt: customer.updatedAt,
+          ),
+        );
+      }
+      return Success(out);
+    } catch (error) {
+      return Failure(_failure('customer_phone_suggest_failed', error));
+    }
+  }
+
+  @override
   Future<Result<List<domain.CustomerIdentifier>>> listIdentifiers(
     String customerId,
   ) async {
