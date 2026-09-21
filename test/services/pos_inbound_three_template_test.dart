@@ -103,6 +103,32 @@ void main() {
     expect(stock.amount.minorUnits, 10000);
     expect(stock.deliveryOverride, '779000111');
 
+    final reversed = parser.parse(
+      IncomingMessage(
+        id: 'm1-reversed',
+        sender: '779000111',
+        body: '100 كرت 10',
+        receivedAt: DateTime(2026, 9, 21),
+        status: MessageProcessingStatus.received,
+      ),
+    );
+    expect(reversed, isA<Success<ParsedTransfer>>());
+    final reversedValue = (reversed as Success<ParsedTransfer>).value;
+    expect(reversedValue.quantity, 10);
+    expect(reversedValue.amount.minorUnits, 10000);
+    expect(reversedValue.customerIdentifier, '779000111');
+
+    final arabicDigits = parser.parse(
+      IncomingMessage(
+        id: 'm1-ar',
+        sender: '779000111',
+        body: '١٠ كروت ١٠٠',
+        receivedAt: DateTime(2026, 9, 21),
+        status: MessageProcessingStatus.received,
+      ),
+    );
+    expect(arabicDigits, isA<Success<ParsedTransfer>>());
+
     final toCustomer = parser.parse(
       IncomingMessage(
         id: 'm2',
