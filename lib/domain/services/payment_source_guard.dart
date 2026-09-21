@@ -78,8 +78,10 @@ final class PaymentSourceGuard {
           message: 'Notification source is not configured',
         ));
       }
+      // Notification packages are explicit trusted sources in their own
+      // registry; sourceMode remains a UI/default preference and must not block
+      // a wallet that has a configured notification package.
       wallet = activeWallets.where((w) =>
-          w.sourceMode == WalletSourceMode.notification &&
           w.packageName != null &&
           w.packageName!.trim() == package).firstOrNull;
       if (wallet != null && notificationSources != null) {
