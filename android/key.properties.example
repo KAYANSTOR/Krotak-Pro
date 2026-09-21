@@ -1,0 +1,5 @@
+storeFile=keystore/upload.jks
+storeType=PKCS12
+keyAlias=REPLACE_ME
+storePassword=REPLACE_ME
+keyPassword=REPLACE_ME
