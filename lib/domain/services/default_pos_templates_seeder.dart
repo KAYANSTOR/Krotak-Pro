@@ -49,10 +49,6 @@ final class DefaultPosTemplatesSeeder {
       return Failure(existing.error);
     }
     final all = (existing as Success<List<TransferTemplate>>).value;
-    final existingIds = !overwriteExisting
-        ? {for (final t in all) t.id}
-        : const <String>{};
-
     var changed = 0;
 
     // Deactivate legacy default variants for this POS (add-missing / migrate).
@@ -94,7 +90,7 @@ final class DefaultPosTemplatesSeeder {
           id: id,
           name: spec.name,
           pattern: spec.pattern,
-          isActive: existingTemplate.isActive,
+          isActive: overwriteExisting ? true : existingTemplate.isActive,
           priority: spec.priority,
           walletId: existingTemplate.walletId,
           posId: posId,
