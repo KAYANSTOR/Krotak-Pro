@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../../domain/entities/setting.dart';
+import '../../domain/services/report_pdf_service.dart';
+import '../services/report_pdf_export.dart';
+
 import '../../core/result.dart';
 import '../../domain/services/ops_report_service.dart';
 import '../app_scope.dart';
@@ -67,6 +71,42 @@ class _ReportsScreenState extends State<ReportsScreen> {
     });
   }
 
+
+  Future<void> _exportOpsPdf() async {
+    final snap = _snap;
+    if (snap == null) return;
+    final c = AppScope.of(context);
+    final network = await c.settings.find(SettingKeys.networkName);
+    var name = 'Krotak Pro';
+    if (network is Success<AppSetting?>) {
+      final setting = network.value;
+      if (setting != null && setting.value.trim().isNotEmpty) {
+        name = setting.value.trim();
+      }
+    }
+    String money(int minor) => (minor / 100).toStringAsFixed(2);
+    final rows = [
+      PdfTableRow(['مبيعات اليوم (عدد)', snap.dailySalesCount.toString()]),
+      PdfTableRow(['مبيعات اليوم (ر.ي)', money(snap.dailySalesMinor)]),
+      PdfTableRow(['مبيعات الشهر (عدد)', snap.monthlySalesCount.toString()]),
+      PdfTableRow(['مبيعات الشهر (ر.ي)', money(snap.monthlySalesMinor)]),
+      PdfTableRow(['مرفوض', snap.rejectedCount.toString()]),
+      PdfTableRow(['مسار مفتوح', snap.pipelineOpenCount.toString()]),
+      PdfTableRow(['قيد الإرسال', snap.sendingCount.toString()]),
+      PdfTableRow(['فشل قابل لإعادة المحاولة', snap.failedRetryCount.toString()]),
+      PdfTableRow(['فشل نهائي', snap.failedMaxCount.toString()]),
+      PdfTableRow(['كروت متاحة', snap.availableCards.toString()]),
+      PdfTableRow(['عمليات مكتملة (حديثة)', snap.completedTxRecent.toString()]),
+    ];
+    final bytes = await (await ReportPdfService.instance()).buildOpsSnapshot(
+      networkName: name,
+      generatedAt: snap.asOf,
+      metricRows: rows,
+    );
+    if (!mounted) return;
+    await saveReportPdf(context: context, bytes: bytes, fileStem: 'ops_snapshot');
+  }
+
   void _open(Widget page) {
     Navigator.of(context).push(MaterialPageRoute(builder: (_) => page));
   }
@@ -95,9 +135,16 @@ class _ReportsScreenState extends State<ReportsScreen> {
             icon: Icons.insights_rounded,
             actions: [
               NetHeaderAction(
-                icon: Icons.refresh_rounded,
+                icon: Icons.picture_as_pdf_outlined,
+                tooltip: 'تصدير PDF',
+                onPressed: _snap == null ? null : _exportOpsPdf,
+              ),
+              IconButton(
+                icon: const Icon(Icons.refresh_rounded),
                 tooltip: 'تحديث',
-                onPressed: _load,
+                onPressed: () {
+                  _load();
+                },
               ),
             ],
           ),

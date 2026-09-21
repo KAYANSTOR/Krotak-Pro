@@ -109,6 +109,7 @@ final class _FakeCustomers implements CustomerRepository {
   @override Future<Result<void>> save(Customer customer) async { store[customer.id] = customer; return const Success(null); }
   @override Future<Result<void>> saveIdentifier(CustomerIdentifier identifier) async { byIdentifier[identifier.value] = identifier.customerId; return const Success(null); }
   @override Future<Result<List<Customer>>> search(String query) async => Success(store.values.toList());
+  @override Future<Result<List<CustomerPhoneSuggestion>>> suggestPhonesByPrefix(String prefix, {int limit = 8}) async => const Success([]);
   @override Future<Result<List<CustomerIdentifier>>> listIdentifiers(String customerId) async => const Success([]);
 }
 final class _FakeCustomerService implements CustomerService {
@@ -125,7 +126,13 @@ final class _FakeBalances implements CustomerBalanceService {
   int credits = 0;
   @override Future<Result<Money>> getBalance({required String customerId, required String currencyCode}) async => Success(Money(minorUnits: 0, currencyCode: currencyCode));
   @override Future<Result<Money>> getTotalOutstanding({required String currencyCode}) async => Success(Money(minorUnits: 0, currencyCode: currencyCode));
-  @override Future<Result<Transaction>> credit({required String customerId, required Money amount, String? reference}) async { credits++; return Success(Transaction(id: 'tx-$credits', customerId: customerId, type: TransactionType.deposit, status: TransactionStatus.completed, amount: amount, createdAt: DateTime.utc(2026, 9, 12), reference: reference)); }
+  @override Future<Result<Transaction>> credit({required String customerId, required Money amount, String? reference, String? reason}) async { credits++; return Success(Transaction(id: 'tx-$credits', customerId: customerId, type: TransactionType.deposit, status: TransactionStatus.completed, amount: amount, createdAt: DateTime.utc(2026, 9, 12), reference: reference)); }
+  @override
+  Future<Result<Transaction>> debit({required String customerId, required Money amount, String? reference, String? reason}) async =>
+      Success(Transaction(id: 'debit', customerId: customerId, type: TransactionType.withdrawal, status: TransactionStatus.completed, amount: amount, createdAt: DateTime.utc(2026, 1, 1), reference: reference));
+  @override
+  Future<Result<CustomerAccountSummary>> getAccountSummary({required String customerId, required String currencyCode}) async =>
+      Success(CustomerAccountSummary(balance: Money(minorUnits: 0, currencyCode: currencyCode), totalSalesMinor: 0, totalDepositsMinor: 0, totalWithdrawalsMinor: 0, totalSettlementsMinor: 0, openAdvancesCount: 0, openAdvancesMinor: 0, transactionCount: 0));
 }
 final class _FakeAudit implements AuditLogRepository {
   final logs = <AuditLog>[];

@@ -1,4 +1,8 @@
 import 'package:flutter/material.dart';
+
+import '../../../domain/entities/setting.dart';
+import '../../../domain/services/report_pdf_service.dart';
+import '../../services/report_pdf_export.dart';
 import 'package:flutter/services.dart';
 
 import '../../../core/result.dart';
@@ -188,6 +192,42 @@ class _PosAccountsLedgerScreenState extends State<PosAccountsLedgerScreen> {
     if (created == true) await _load();
   }
 
+
+  Future<void> _exportPdf() async {
+    final rows = _visible;
+    if (rows.isEmpty) return;
+    final c = AppScope.of(context);
+    final network = await c.settings.find(SettingKeys.networkName);
+    var name = 'Krotak Pro';
+    if (network is Success<AppSetting?>) {
+      final setting = network.value;
+      if (setting != null && setting.value.trim().isNotEmpty) {
+        name = setting.value.trim();
+      }
+    }
+    final pdfRows = <PdfTableRow>[
+      for (final r in rows)
+        PdfTableRow([
+          c.clock.now().toLocal().toString().split(' ').first,
+          'نقطة بيع',
+          r.pos.name,
+          (r.debtMinor / 100).toStringAsFixed(2),
+          r.account?.status.name ?? r.pos.status.name,
+        ]),
+    ];
+    final bytes = await (await ReportPdfService.instance()).buildLedgerStatement(
+      title: 'كشف حسابات نقاط البيع',
+      accountLabel: 'صافي المستحق: ${(_debtTotal / 100).toStringAsFixed(2)} ر.ي',
+      networkName: name,
+      generatedAt: c.clock.now(),
+      balanceLabel:
+          'المستحق ${_debtTotal / 100} · المدفوع مقدماً ${_prepaidTotal / 100} · ${rows.length} نقطة',
+      rows: pdfRows,
+    );
+    if (!mounted) return;
+    await saveReportPdf(context: context, bytes: bytes, fileStem: 'pos_accounts_ledger');
+  }
+
   @override
   Widget build(BuildContext context) {
     final palette = KayanPalette.of(context);
@@ -199,6 +239,14 @@ class _PosAccountsLedgerScreenState extends State<PosAccountsLedgerScreen> {
       child: Scaffold(
         backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         appBar: AppBar(
+          actions: [
+            IconButton(
+              tooltip: 'تصدير PDF',
+              onPressed: _rows.isEmpty ? null : _exportPdf,
+              icon: const Icon(Icons.picture_as_pdf_outlined),
+            ),
+          ],
+
           title: const Text(
             'حسابات نقاط البيع',
             style: TextStyle(fontFamily: NetTypography.family),

@@ -428,7 +428,7 @@ class _AddCardsSheetState extends State<_AddCardsSheet> {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
         // pdf مدعوم عبر CardImportFileReader، والامتدادات المجهولة تُقرأ كنص UTF-8.
-        allowedExtensions: const ['txt', 'csv', 'text', 'log', 'pdf'],
+        allowedExtensions: CardImportFileReader.allowedExtensions,
         withData: true,
         allowMultiple: false,
       );
@@ -456,6 +456,19 @@ class _AddCardsSheetState extends State<_AddCardsSheet> {
       // قراءة UTF-8 صحيحة (مع تجاوز BOM) بدل `String.fromCharCodes` الذي كان
       // يُفسد الأرقام العربية والرموز، واستخراج نص PDF المدعوم.
       final read = CardImportFileReader.read(fileName: file.name, bytes: bytes);
+      if (!read.isOk) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              read.errorMessage ??
+                  'يُسمح فقط بملفات PDF أو Excel (.xlsx) أو CSV',
+              style: const TextStyle(fontFamily: 'Tajawal'),
+            ),
+          ),
+        );
+        return;
+      }
       final content = read.text;
       if (content.trim().isEmpty) {
         if (!mounted) return;

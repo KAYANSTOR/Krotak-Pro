@@ -12,9 +12,10 @@ import '../phone_normalizer.dart';
 import '../repositories/repositories.dart';
 import '../repositories/unit_of_work.dart';
 import 'services.dart';
+import 'local_pos_account_registry.dart';
 
 final class LocalAdvanceService implements AdvanceService {
-  const LocalAdvanceService({required this.advances, required this.customers, required this.categories, required this.cards, required this.inventory, required this.transactions, required this.sales, required this.auditLogs, required this.settings, required this.unitOfWork, required this.messageSender, required this.clock, required this.ids});
+  const LocalAdvanceService({required this.advances, required this.customers, required this.categories, required this.cards, required this.inventory, required this.transactions, required this.sales, required this.auditLogs, required this.settings, required this.unitOfWork, required this.messageSender, required this.clock, required this.ids, this.posRegistry});
 
   static const activationKey = SettingKeys.salafniEnabled;
   static const acceptedTemplateKey = SettingKeys.salafniAcceptedTemplate;
@@ -37,6 +38,7 @@ final class LocalAdvanceService implements AdvanceService {
   final MessageSender messageSender;
   final Clock clock;
   final IdGenerator ids;
+  final LocalPosAccountRegistry? posRegistry;
 
   @override
   Future<Result<AdvanceIssue>> request({required String customerId, required String currencyCode, required String operationId}) async {
@@ -66,6 +68,19 @@ final class LocalAdvanceService implements AdvanceService {
     final customer = (customerResult as Success<Customer?>).value;
     if (customer == null) return _reject('customer_not_found', 'العميل غير موجود', customerId: customerId);
     if (customer.status != CustomerStatus.active) return _reject('customer_not_active', 'العميل غير نشط', customerId: customerId);
+
+    // سلفني للعملاء فقط — نقاط البيع لها نظام دين مستقل بسقف.
+    if (posRegistry != null) {
+      final posLink = await posRegistry!.findByCustomerId(customerId);
+      if (posLink is Failure) return Failure((posLink as Failure).error);
+      if ((posLink as Success).value != null) {
+        return _reject(
+          'salafni_pos_not_allowed',
+          'سلفني غير متاحة لنقاط البيع',
+          customerId: customerId,
+        );
+      }
+    }
 
     final open = await advances.findOpenByCustomer(customerId: customerId, currencyCode: currencyCode);
     if (open is Failure<Advance?>) return Failure(open.error);

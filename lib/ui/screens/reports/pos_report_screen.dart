@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../../../domain/services/report_pdf_service.dart';
+import '../../services/report_pdf_export.dart';
+
 import '../../../core/result.dart';
 import '../../../domain/entities/money.dart';
 import '../../../domain/entities/pos_account.dart';
@@ -182,6 +185,41 @@ class _PosReportScreenState extends State<PosReportScreen> {
         : 'عمولة الفئة الافتراضية';
   }
 
+
+  Future<void> _exportPdf() async {
+    if (_items.isEmpty) return;
+    final c = AppScope.of(context);
+    final network = await c.settings.find(SettingKeys.networkName);
+    var name = 'Krotak Pro';
+    if (network is Success<AppSetting?>) {
+      final setting = network.value;
+      if (setting != null && setting.value.trim().isNotEmpty) {
+        name = setting.value.trim();
+      }
+    }
+    final rows = <PdfTableRow>[
+      for (final r in _items)
+        PdfTableRow([
+          c.clock.now().toLocal().toString().split(' ').first,
+          'نقطة بيع',
+          r.pos.name,
+          (r.debtMinor / 100).toStringAsFixed(2),
+          r.pos.status.name,
+        ]),
+    ];
+    final debtTotal = _items.fold<int>(0, (a, e) => a + e.debtMinor);
+    final bytes = await (await ReportPdfService.instance()).buildLedgerStatement(
+      title: 'تقرير نقاط البيع',
+      accountLabel: 'مستحقات نقاط البيع من الدفتر',
+      networkName: name,
+      generatedAt: c.clock.now(),
+      balanceLabel: 'إجمالي الديون: ${(debtTotal / 100).toStringAsFixed(2)} ر.ي · ${_items.length} نقطة',
+      rows: rows,
+    );
+    if (!mounted) return;
+    await saveReportPdf(context: context, bytes: bytes, fileStem: 'pos_report');
+  }
+
   @override
   Widget build(BuildContext context) {
     return Directionality(
@@ -189,6 +227,14 @@ class _PosReportScreenState extends State<PosReportScreen> {
       child: Scaffold(
         backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         appBar: AppBar(
+          actions: [
+            IconButton(
+              tooltip: 'تصدير PDF',
+              onPressed: _items.isEmpty ? null : _exportPdf,
+              icon: const Icon(Icons.picture_as_pdf_outlined),
+            ),
+          ],
+
           title: const Text(
             'تقرير نقاط البيع',
             style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.bold),

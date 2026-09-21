@@ -278,16 +278,20 @@ class _WalletsScreenState extends State<WalletsScreen> {
     senderCtrl.dispose();
     pkgCtrl.dispose();
 
+    final c = AppScope.of(context);
     if (existing == null) {
-      final r = await AppScope.of(context).walletCatalog.saveWallet(
+      final r = await c.walletCatalog.saveWallet(
             name: name,
             senderId: sender.isEmpty ? null : sender,
             sourceMode: mode,
             packageName: mode == WalletSourceMode.notification && pkg.isNotEmpty ? pkg : null,
           );
-      if (r is Failure && mounted) _snack((r as Failure).error.message);
+      if (r is Failure && mounted) {
+        _snack((r as Failure).error.message);
+        return;
+      }
     } else {
-      final r = await AppScope.of(context).walletCatalog.updateWallet(
+      final r = await c.walletCatalog.updateWallet(
             id: existing.id,
             name: name,
             status: existing.status,
@@ -295,7 +299,30 @@ class _WalletsScreenState extends State<WalletsScreen> {
             sourceMode: mode,
             packageName: mode == WalletSourceMode.notification && pkg.isNotEmpty ? pkg : null,
           );
-      if (r is Failure && mounted) _snack((r as Failure).error.message);
+      if (r is Failure && mounted) {
+        _snack((r as Failure).error.message);
+        return;
+      }
+    }
+
+    // تفعيل مصدر الإشعار فعلياً عند اختيار وضع الإشعارات + package.
+    if (mode == WalletSourceMode.notification && pkg.isNotEmpty) {
+      final reg = await c.notificationSources.upsert(
+        displayName: name,
+        packageName: pkg,
+        enabled: true,
+      );
+      if (reg is Failure && mounted) {
+        _snack('حُفظت المحفظة لكن تعذّر تفعيل مصدر الإشعار: ${(reg as Failure).error.message}');
+      } else if (mounted) {
+        final granted = await c.notificationBridge.isAccessGranted();
+        if (!granted) {
+          _snack('فعّل إذن وصول الإشعارات لكروتك الآن');
+          await c.notificationBridge.openAccessSettings();
+        } else {
+          _snack('تم تفعيل قراءة إشعارات «$name»');
+        }
+      }
     }
     await _load();
   }

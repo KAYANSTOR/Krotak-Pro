@@ -74,6 +74,100 @@ final class LocalCustomerRepository implements CustomerRepository {
   }
 
   @override
+  Future<Result<List<domain.CustomerPhoneSuggestion>>> suggestPhonesByPrefix(
+    String prefix, {
+    int limit = 8,
+  }) async {
+    try {
+      final raw = prefix.trim();
+      if (raw.isEmpty || limit <= 0) {
+        return const Success(<domain.CustomerPhoneSuggestion>[]);
+      }
+
+      final digits = PhoneNormalizer.digitsOnly(raw);
+      if (digits.isEmpty) {
+        return const Success(<domain.CustomerPhoneSuggestion>[]);
+      }
+
+      final prefixes = <String>{
+        digits,
+        if (!digits.startsWith('0')) '0$digits',
+        if (!digits.startsWith('967')) '967$digits',
+      };
+
+      final orExpr = prefixes
+          .map((pref) => database.customerIdentifiers.value.like('$pref%'))
+          .reduce((a, b) => a | b);
+
+      final idRows = await (database.select(database.customerIdentifiers)
+            ..where(
+              (t) =>
+                  t.type.equals(domain.CustomerIdentifierType.phoneNumber.name) &
+                  orExpr,
+            )
+            ..limit(limit * 4))
+          .get();
+
+      if (idRows.isEmpty) {
+        return const Success(<domain.CustomerPhoneSuggestion>[]);
+      }
+
+      final customerIds = idRows.map((r) => r.customerId).toSet().toList();
+      final customers = await (database.select(database.customers)
+            ..where((t) => t.id.isIn(customerIds)))
+          .get();
+      final byId = {for (final c in customers) c.id: c};
+
+      const blocked = {'blacklisted', 'merged', 'archived'};
+
+      final suggestions = <domain.CustomerPhoneSuggestion>[];
+      final seenPhones = <String>{};
+
+      idRows.sort((a, b) {
+        final ca = byId[a.customerId];
+        final cb = byId[b.customerId];
+        final ta = ca?.updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final tb = cb?.updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final cmp = tb.compareTo(ta);
+        if (cmp != 0) return cmp;
+        if (a.isPrimary != b.isPrimary) return a.isPrimary ? -1 : 1;
+        return a.value.compareTo(b.value);
+      });
+
+      for (final row in idRows) {
+        final cust = byId[row.customerId];
+        if (cust == null) continue;
+        if (blocked.contains(cust.status)) continue;
+
+        final phone = PhoneNormalizer.canonicalize(row.value) ?? row.value;
+        if (phone.isEmpty || seenPhones.contains(phone)) continue;
+
+        final phoneDigits = PhoneNormalizer.digitsOnly(phone);
+        final matchesPrefix = phoneDigits.startsWith(digits) ||
+            row.value.startsWith(raw) ||
+            row.value.startsWith(digits);
+        if (!matchesPrefix) continue;
+
+        seenPhones.add(phone);
+        suggestions.add(
+          domain.CustomerPhoneSuggestion(
+            customerId: cust.id,
+            phone: phone,
+            displayName: cust.displayName,
+            status: domain.CustomerStatus.values.byName(cust.status),
+            updatedAt: cust.updatedAt,
+          ),
+        );
+        if (suggestions.length >= limit) break;
+      }
+
+      return Success(suggestions);
+    } catch (error) {
+      return Failure(_failure('customer_suggest_phones_failed', error));
+    }
+  }
+
+  @override
   Future<Result<List<domain.CustomerIdentifier>>> listIdentifiers(
     String customerId,
   ) async {

@@ -227,6 +227,11 @@ final class LocalMessageParser implements MessageParser {
     } else if (account != null && account.isNotEmpty) {
       identifier = account.trim();
       type = TransferIdentifierType.account;
+    } else if (isPos) {
+      final normalizedSender = _normalizePhone(sender);
+      if (normalizedSender == null) return null;
+      identifier = normalizedSender;
+      type = TransferIdentifierType.phone;
     } else {
       return null;
     }
@@ -241,6 +246,8 @@ final class LocalMessageParser implements MessageParser {
     if (destinationRaw != null && destinationRaw.isNotEmpty) {
       deliveryOverride = _normalizePhone(destinationRaw);
       if (deliveryOverride == null) return null;
+    } else if (isPos && phone == null && account == null) {
+      deliveryOverride = identifier;
     }
 
     return ParsedTransfer(
@@ -376,6 +383,8 @@ final class LocalMessageParser implements MessageParser {
         .replaceAll(RegExp(r'[\u0622\u0623\u0625\u0627\u0671]'), '\u0627')
         .replaceAll('\u0649', '\u064a')
         .replaceAll('\u0629', '\u0647')
+        // Unify card singular/plural so one POS pattern matches both.
+        .replaceAll('كروت', 'كرت')
         .replaceAll(RegExp(r'[ \t\u00a0]+'), ' ')
         .replaceAll(RegExp(r'\s*\n\s*'), ' ');
     return s.trim();
