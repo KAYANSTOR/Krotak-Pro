@@ -77,7 +77,22 @@ class MainActivity : FlutterActivity(), SmsListener {
                         } else {
                             @Suppress("DEPRECATION") SmsManager.getDefault()
                         }
-                        manager.sendTextMessage(to, null, body, null, null)
+                        // POS delivery messages can contain multiple cards and exceed
+                        // the single-SMS size limit (especially Arabic/UCS-2).
+                        // Split explicitly so Android sends all parts instead of failing
+                        // or truncating a long customer/confirmation message.
+                        val parts = manager.divideMessage(body)
+                        if (parts.size <= 1) {
+                            manager.sendTextMessage(to, null, body, null, null)
+                        } else {
+                            manager.sendMultipartTextMessage(
+                                to,
+                                null,
+                                parts,
+                                null,
+                                null,
+                            )
+                        }
                         result.success(true)
                     } catch (e: Exception) {
                         result.error("send_failed", e.message, null)

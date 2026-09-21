@@ -9,11 +9,12 @@ import '../repositories/repositories.dart';
 /// sender / registered identifier — never from the message body.
 ///
 /// 1. Cards to the POS itself: `{qty} كرت {amount}`
-/// 2. Cards to a POS customer: `{qty} كرت {amount} {dest}`
+/// 2. Cards to a POS customer: `{phone} {amount}` (optional trailing quantity).
 /// 3. Balance inquiry: `111`
 ///
-/// Custom templates the operator creates are left untouched. Seeding is
-/// **add-missing-only** unless [overwriteExisting] is true.
+/// Custom templates the operator creates are left untouched. A known migration
+/// repairs the previously shipped customer-delivery default while preserving
+/// the operator's enabled/disabled state.
 final class DefaultPosTemplatesSeeder {
   const DefaultPosTemplatesSeeder({required this.templates});
 
@@ -48,10 +49,6 @@ final class DefaultPosTemplatesSeeder {
       return Failure(existing.error);
     }
     final all = (existing as Success<List<TransferTemplate>>).value;
-    final existingIds = !overwriteExisting
-        ? {for (final t in all) t.id}
-        : const <String>{};
-
     var changed = 0;
 
     // Deactivate legacy default variants for this POS (add-missing / migrate).
@@ -81,7 +78,54 @@ final class DefaultPosTemplatesSeeder {
 
     for (final spec in _specs) {
       final id = 'tpl-pos-$posId-${spec.variant}';
-      if (existingIds.contains(id)) continue;
+      final existingTemplate = all.cast<TransferTemplate?>().firstWhere(
+            (t) => t?.id == id,
+            orElse: () => null,
+          );
+
+      // Only migrate the known broken built-in contract unless an explicit
+      // overwrite was requested. This preserves intentional operator changes.
+      final shouldRepair =
+          existingTemplate != null &&
+          (overwriteExisting || _needsKnownMigration(existingTemplate, spec));
+      if (existingTemplate != null && !shouldRepair) continue;
+
+      if (existingTemplate != null) {
+        final repaired = TransferTemplate(
+          id: id,
+          name: spec.name,
+          pattern: spec.pattern,
+          isActive: overwriteExisting ? true : existingTemplate.isActive,
+          priority: spec.priority,
+          walletId: existingTemplate.walletId,
+          posId: posId,
+          sampleBody: spec.sampleBody,
+          senderCode: existingTemplate.senderCode,
+          identifierKind: spec.identifierKind,
+          senderNameLabel: spec.senderNameLabel,
+          noteLabel: spec.noteLabel,
+          requireReference: spec.requireReference,
+        );
+        final same = existingTemplate.name == repaired.name &&
+            existingTemplate.pattern == repaired.pattern &&
+            existingTemplate.isActive == repaired.isActive &&
+            existingTemplate.priority == repaired.priority &&
+            existingTemplate.walletId == repaired.walletId &&
+            existingTemplate.posId == repaired.posId &&
+            existingTemplate.sampleBody == repaired.sampleBody &&
+            existingTemplate.senderCode == repaired.senderCode &&
+            existingTemplate.identifierKind == repaired.identifierKind &&
+            existingTemplate.senderNameLabel == repaired.senderNameLabel &&
+            existingTemplate.noteLabel == repaired.noteLabel &&
+            existingTemplate.requireReference == repaired.requireReference;
+        if (same) continue;
+
+        final save = await templates.save(repaired);
+        if (save is Failure<void>) return Failure(save.error);
+        changed++;
+        continue;
+      }
+
       final tpl = TransferTemplate(
         id: id,
         name: spec.name,
@@ -103,6 +147,11 @@ final class DefaultPosTemplatesSeeder {
     return Success(changed);
   }
 
+  static bool _needsKnownMigration(TransferTemplate existing, _TplSpec spec) {
+    return spec.variant == 'cards-to-pos-customer' &&
+        existing.pattern.trim() == '{qty} كرت {amount} {dest}';
+  }
+
   static const _specs = <_TplSpec>[
     // 1 — إرسال كروت إلى نقطة البيع (الهوية من المرسل)
     _TplSpec(
@@ -120,8 +169,8 @@ final class DefaultPosTemplatesSeeder {
       variant: 'cards-to-pos-customer',
       name: 'إرسال كروت إلى عميل نقطة البيع',
       priority: 2,
-      pattern: '{qty} كرت {amount} {dest}',
-      sampleBody: '1 كرت 100 777123456',
+      pattern: '{phone} {amount}',
+      sampleBody: '779776919 100',
       senderNameLabel: 'نقطة البيع',
       noteLabel: 'كروت لعميل نقطة البيع',
       requireReference: false,
