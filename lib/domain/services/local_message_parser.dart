@@ -208,6 +208,7 @@ final class LocalMessageParser implements MessageParser {
     if (minor == null || minor <= 0) return null;
 
     final phone = _group(match, 'phone');
+    final posSender = isPos ? _normalizePhone(sender) : null;
     final account = _group(match, 'account');
     final ref = _group(match, 'ref');
     final destinationRaw = _group(match, 'dest');
