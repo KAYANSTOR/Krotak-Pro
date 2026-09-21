@@ -77,6 +77,7 @@ final class LocalCustomerBalanceService implements CustomerBalanceService {
     required String customerId,
     required Money amount,
     String? reference,
+    String? reason,
   }) {
     if (amount.minorUnits <= 0) {
       return Future.value(
@@ -139,12 +140,100 @@ final class LocalCustomerBalanceService implements CustomerBalanceService {
           entityType: 'transaction',
           entityId: transaction.id,
           action: 'credited',
-          payloadJson: '{"customerId":"$customerId"}',
+          payloadJson: _payload(customerId: customerId, reason: reason, amount: amount),
           occurredAt: clock.now(),
         ),
       );
       if (audited is Failure<void>) return Failure(audited.error);
       return Success(transaction);
     });
+  }
+
+  @override
+  Future<Result<Transaction>> debit({
+    required String customerId,
+    required Money amount,
+    String? reference,
+    String? reason,
+  }) {
+    if (amount.minorUnits <= 0) {
+      return Future.value(
+        const Failure(
+          AppFailure(code: 'invalid_amount', message: 'Debit amount must be positive'),
+        ),
+      );
+    }
+
+    return unitOfWork.run(() async {
+      if (reference != null) {
+        final existing = await transactions.findByReference(reference);
+        if (existing is Failure<Transaction?>) return Failure(existing.error);
+        final current = (existing as Success<Transaction?>).value;
+        if (current != null) {
+          if (current.customerId == customerId &&
+              current.amount == amount &&
+              current.type == TransactionType.withdrawal) {
+            return Success(current);
+          }
+          return const Failure(
+            AppFailure(
+              code: 'duplicate_reference',
+              message: 'Reference already exists',
+            ),
+          );
+        }
+      }
+
+      final found = await customers.findById(customerId);
+      if (found is Failure<Customer?>) return Failure(found.error);
+      final customer = (found as Success<Customer?>).value;
+      if (customer == null) {
+        return const Failure(
+          AppFailure(code: 'customer_not_found', message: 'Customer was not found'),
+        );
+      }
+      if (customer.status != CustomerStatus.active) {
+        return const Failure(
+          AppFailure(
+            code: 'customer_not_active',
+            message: 'Only active customers can be debited',
+          ),
+        );
+      }
+
+      final transaction = Transaction(
+        id: ids.next('txn'),
+        type: TransactionType.withdrawal,
+        status: TransactionStatus.completed,
+        amount: amount,
+        createdAt: clock.now(),
+        customerId: customerId,
+        reference: reference,
+      );
+      final appended = await transactions.append(transaction);
+      if (appended is Failure<void>) return Failure(appended.error);
+
+      final audited = await auditLogs.append(
+        AuditLog(
+          id: ids.next('audit'),
+          entityType: 'transaction',
+          entityId: transaction.id,
+          action: 'debited',
+          payloadJson: _payload(customerId: customerId, reason: reason, amount: amount),
+          occurredAt: clock.now(),
+        ),
+      );
+      if (audited is Failure<void>) return Failure(audited.error);
+      return Success(transaction);
+    });
+  }
+
+  String _payload({
+    required String customerId,
+    required Money amount,
+    String? reason,
+  }) {
+    final safeReason = (reason ?? '').replaceAll('"', r'\"').trim();
+    return '{"customerId":"$customerId","minorUnits":${amount.minorUnits},"reason":"$safeReason"}';
   }
 }
