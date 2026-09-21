@@ -194,6 +194,19 @@ final class AppContainer {
       clock: clock,
     ).seedIfNeeded();
 
+    // Backfill the three built-in POS inbound templates for existing
+    // installations before constructing the parser. Creation/update already
+    // seeds them, but older POS accounts may predate the commercial catalog.
+    final existingPosAccounts = await posRegistry.listAll();
+    if (existingPosAccounts is Success<List<PosAccount>>) {
+      for (final posAccount in existingPosAccounts.value) {
+        await DefaultPosTemplatesSeeder(templates: transferTemplates).seedForPos(
+          posId: posAccount.posId,
+          posName: posAccount.name,
+        );
+      }
+    }
+
     final listed = await transferTemplates.listAll();
     final live = listed is Success<List<TransferTemplate>> ? listed.value : const <TransferTemplate>[];
     final parser = LocalMessageParser(templates: live.isNotEmpty ? live : templates);
