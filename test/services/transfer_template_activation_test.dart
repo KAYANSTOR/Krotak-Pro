@@ -31,44 +31,58 @@ void main() {
     service = LocalTransferTemplateActivationService(repo);
   });
 
-  test('activating one wallet template deactivates siblings', () async {
-    await repo.save(_tpl(id: 'a', active: true, walletId: 'w1'));
-    await repo.save(_tpl(id: 'b', active: true, walletId: 'w1'));
-    await repo.save(_tpl(id: 'c', active: true, walletId: 'w2'));
+  test('saving an active template keeps sibling templates active', () async {
+    await repo.save(_tpl(id: 'a', active: true, posId: 'pos-1'));
+    await repo.save(_tpl(id: 'b', active: true, posId: 'pos-1'));
+    await repo.save(_tpl(id: 'c', active: true, posId: 'pos-1'));
 
-    final r = await service.saveExclusive(
-      _tpl(id: 'a', active: true, walletId: 'w1'),
-    );
+    final r = await service.save(_tpl(id: 'a', active: true, posId: 'pos-1'));
     expect(r, isA<Success<void>>());
 
-    expect((await repo.findById('a') as Success).value!.isActive, isTrue);
-    expect((await repo.findById('b') as Success).value!.isActive, isFalse);
-    expect((await repo.findById('c') as Success).value!.isActive, isTrue);
+    // كانت المشكلة هنا: تفعيل قالب واحد كان يُوقف بقية قوالب نفس نقطة البيع.
+    for (final id in ['a', 'b', 'c']) {
+      expect((await repo.findById(id) as Success).value!.isActive, isTrue);
+    }
   });
 
-  test('activating a POS template does not touch wallet siblings', () async {
-    await repo.save(_tpl(id: 'p1', active: true, posId: 'pos-1', walletId: 'w1'));
-    await repo.save(_tpl(id: 'p2', active: true, posId: 'pos-1'));
+  test('setGroupActive activates or deactivates a whole source', () async {
+    await repo.save(_tpl(id: 'p1', active: true, posId: 'pos-1'));
+    await repo.save(_tpl(id: 'p2', active: false, posId: 'pos-1'));
     await repo.save(_tpl(id: 'w', active: true, walletId: 'w1'));
 
-    final r = await service.saveExclusive(
-      _tpl(id: 'p1', active: true, posId: 'pos-1', walletId: 'w1'),
-    );
-    expect(r, isA<Success<void>>());
-    expect((await repo.findById('p2') as Success).value!.isActive, isFalse);
+    final off = await service.setGroupActive(key: 'pos:pos-1', isActive: false);
+    expect(off, isA<Success<int>>());
+    expect((off as Success<int>).value, 1);
+    expect((await repo.findById('p1') as Success).value!.isActive, isFalse);
+
+    final on = await service.setGroupActive(key: 'pos:pos-1', isActive: true);
+    expect(on, isA<Success<int>>());
+    expect((on as Success<int>).value, 2);
+    expect((await repo.findById('p2') as Success).value!.isActive, isTrue);
+    // محفظة أخرى لا تتأثر.
     expect((await repo.findById('w') as Success).value!.isActive, isTrue);
   });
 
-  test('deactivating does not force another default', () async {
-    await repo.save(_tpl(id: 'a', active: true, walletId: 'w1'));
-    await repo.save(_tpl(id: 'b', active: false, walletId: 'w1'));
+  test('setGroupActive writes nothing when already in target state', () async {
+    await repo.save(_tpl(id: 'p1', active: true, posId: 'pos-1'));
 
-    final r = await service.saveExclusive(
-      _tpl(id: 'a', active: false, walletId: 'w1'),
-    );
-    expect(r, isA<Success<void>>());
-    expect((await repo.findById('a') as Success).value!.isActive, isFalse);
-    expect((await repo.findById('b') as Success).value!.isActive, isFalse);
+    final r = await service.setGroupActive(key: 'pos:pos-1', isActive: true);
+    expect(r, isA<Success<int>>());
+    expect((r as Success<int>).value, 0);
+    expect(repo.saveCount, 1);
+  });
+
+  test('groupCounts reports active versus total for one source', () async {
+    await repo.save(_tpl(id: 'p1', active: true, posId: 'pos-1'));
+    await repo.save(_tpl(id: 'p2', active: false, posId: 'pos-1'));
+    await repo.save(_tpl(id: 'p3', active: true, posId: 'pos-2'));
+    await repo.save(_tpl(id: 'w', active: false, walletId: 'w1'));
+
+    final r = await service.groupCounts('pos:pos-1');
+    expect(r, isA<Success<({int active, int total})>>());
+    final counts = (r as Success<({int active, int total})>).value;
+    expect(counts.active, 1);
+    expect(counts.total, 2);
   });
 
   test('groupKey prefers pos over wallet over sender', () {
@@ -99,6 +113,7 @@ void main() {
 
 final class _MemTemplates implements TransferTemplateRepository {
   final list = <TransferTemplate>[];
+  int saveCount = 0;
 
   @override
   Future<Result<List<TransferTemplate>>> listAll() async => Success(List.of(list));
@@ -117,6 +132,7 @@ final class _MemTemplates implements TransferTemplateRepository {
 
   @override
   Future<Result<void>> save(TransferTemplate template) async {
+    saveCount += 1;
     list.removeWhere((t) => t.id == template.id);
     list.add(template);
     return const Success(null);

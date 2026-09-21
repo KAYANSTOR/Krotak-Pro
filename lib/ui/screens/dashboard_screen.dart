@@ -315,8 +315,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _notifyMutation();
   }
 
-  Future<void> _openWalletsAndPos() async {
-    await AppRoutes.openWalletsAndPos(context);
+  /// نقطة البيع في الرئيسية تفتح شاشة نقاط البيع **مباشرة** (كانت تفتح إدارة
+  /// المحافظ ونقاط البيع في تبويب المحافظ).
+  Future<void> _openPos() async {
+    await AppRoutes.openPos(context);
     _notifyMutation();
   }
 
@@ -444,7 +446,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   label: 'نقاط البيع',
                   description: 'حسابات النقاط والقوالب',
                   icon: Icons.storefront_rounded,
-                  onTap: _openWalletsAndPos,
+                  onTap: _openPos,
                 ),
                 NetServiceBigTile(
                   label: 'بيع مباشر',

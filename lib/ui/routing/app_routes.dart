@@ -9,10 +9,11 @@ import '../screens/rejected_messages_screen.dart';
 import '../screens/reports/pos_accounts_ledger_screen.dart';
 import '../screens/reports/pos_report_screen.dart';
 import '../screens/reports/sales_period_report_screen.dart';
+import '../screens/pos_screen.dart';
 import '../screens/settings_screen.dart';
 import '../screens/system_check_screen.dart';
 import '../screens/transactions_log_screen.dart';
-import '../screens/wallets_pos_screen.dart';
+import '../screens/wallets_screen.dart';
 
 abstract final class AppRoutes {
   static Future<T?> push<T>(BuildContext context, Widget page) {
@@ -34,7 +35,12 @@ abstract final class AppRoutes {
   static Future<void> openCustomerDetail(BuildContext context, String customerId) => push(context, CustomerDetailScreen(customerId: customerId));
   static Future<void> openDirectSale(BuildContext context) => push(context, const DirectSaleScreen());
   static Future<void> openTransactionsLog(BuildContext context) => push(context, const TransactionsLogScreen());
-  static Future<void> openWalletsAndPos(BuildContext context) => push(context, const WalletsPosScreen());
+  static Future<void> openWallets(BuildContext context) =>
+      push(context, const WalletsScreen());
+
+  /// شاشة نقاط البيع المستقلة (منفصلة عن إدارة المحافظ).
+  static Future<void> openPos(BuildContext context) =>
+      push(context, const PosScreen());
   static Future<void> openSalesPeriodReport(
     BuildContext context, {
     SalesReportRange range = SalesReportRange.today,
