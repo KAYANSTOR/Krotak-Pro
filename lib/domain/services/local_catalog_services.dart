@@ -373,7 +373,7 @@ final class LocalWalletCatalogService implements WalletCatalogService {
       };
       for (final spec in _defaults) {
         final package = spec.packageName.trim();
-        if (package == null || package.isEmpty || byPackage.containsKey(package)) {
+        if (package.isEmpty || byPackage.containsKey(package)) {
           continue;
         }
         byPackage[package] = PaymentSource(
