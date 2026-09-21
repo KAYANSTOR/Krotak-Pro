@@ -8,7 +8,7 @@ plugins {
 }
 
 android {
-    namespace = "com.kayan.krotak_pro"
+    namespace = "com.kayan.net_app"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
