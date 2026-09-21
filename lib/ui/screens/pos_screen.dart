@@ -201,7 +201,7 @@ class _PosScreenState extends State<PosScreen> {
       _busy = {..._busy}..remove(pos.id);
       _templateCounts = counts;
     });
-    if (r is Failure) {
+    if (r is Failure<int>) {
       _snack(r.error.message);
       return;
     }

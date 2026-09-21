@@ -171,7 +171,7 @@ class _TemplatesScreenState extends State<TemplatesScreen> {
         .setGroupActive(key: key, isActive: isActive);
     if (!mounted) return;
     setState(() => _bulkBusy = false);
-    if (r is Failure) {
+    if (r is Failure<int>) {
       _snack(r.error.message);
       return;
     }
