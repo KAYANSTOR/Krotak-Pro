@@ -93,8 +93,6 @@ final class LocalMessageParser implements MessageParser {
     );
   }
 
-  /// POS balance request: template with [TemplateIdentifierKind.balanceRequestCode]
-  /// whose normalized pattern equals the normalized body (e.g. `111`, `رصيدي`).
   ParsedTransfer? _tryBalanceRequest(
     TransferTemplate template,
     String messageId,
@@ -124,12 +122,6 @@ final class LocalMessageParser implements MessageParser {
     );
   }
 
-  /// POS keyword instant-charge forms (not pattern-based):
-  /// - `شحن {phone} {amount}`
-  /// - `ارسل كرت {amount} الى {phone}`
-  ///
-  /// Ledger = message sender; delivery = phone in body.
-  /// Only active when the template is POS-scoped (`posId` set).
   ParsedTransfer? _tryInstantCharge(
     TransferTemplate template,
     String messageId,
@@ -213,8 +205,6 @@ final class LocalMessageParser implements MessageParser {
     final destinationRaw = _group(match, 'dest');
     final qtyRaw = _group(match, 'qty');
 
-    // Financial templates require a captured reference unless the template
-    // explicitly opts out (POS card-request templates).
     if (template.requireReference && (ref == null || ref.isEmpty)) return null;
 
     String? identifier;
@@ -227,6 +217,11 @@ final class LocalMessageParser implements MessageParser {
     } else if (account != null && account.isNotEmpty) {
       identifier = account.trim();
       type = TransferIdentifierType.account;
+    } else if (isPos) {
+      final senderPhone = _normalizePhone(sender) ?? sender.trim();
+      if (senderPhone.isEmpty) return null;
+      identifier = senderPhone;
+      type = TransferIdentifierType.phone;
     } else {
       return null;
     }
@@ -241,6 +236,8 @@ final class LocalMessageParser implements MessageParser {
     if (destinationRaw != null && destinationRaw.isNotEmpty) {
       deliveryOverride = _normalizePhone(destinationRaw);
       if (deliveryOverride == null) return null;
+    } else if (isPos && (phone == null || phone.isEmpty)) {
+      deliveryOverride = _normalizePhone(sender) ?? sender.trim();
     }
 
     return ParsedTransfer(
@@ -342,6 +339,10 @@ final class LocalMessageParser implements MessageParser {
                 unified[i + 1] == '\n')) {
           i++;
         }
+      } else if (unified.startsWith('كرت', i)) {
+        buf.write(r'(?:كرت|كروت)');
+        i += 'كرت'.length;
+        continue;
       } else if (_regexMeta.contains(ch)) {
         buf.write(r'\');
         buf.write(ch);
@@ -351,8 +352,6 @@ final class LocalMessageParser implements MessageParser {
       i++;
     }
 
-    // POS single-card patterns may accept an optional trailing quantity
-    // (`779776919 100 3`) when the pattern itself has no `{qty}`.
     if (allowImplicitPosQuantity && !unified.contains('{qty}')) {
       buf.write(r'(?:\s+(?<qty>\d{1,2}))?');
     }
@@ -364,8 +363,6 @@ final class LocalMessageParser implements MessageParser {
     );
   }
 
-  /// Collapse whitespace, strip bidi marks, unify Arabic letter variants, and
-  /// map Eastern digits — applied identically to pattern and body.
   String _normalizeBody(String input) {
     var s = _normalizeDigits(input.trim());
     s = s
