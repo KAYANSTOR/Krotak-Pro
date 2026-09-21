@@ -53,6 +53,15 @@ final class LocalPosBalanceRequestService {
       );
     }
 
+    final limitSetting = await settings.find(SettingKeys.posBalanceDailyLimit);
+    final dailyLimit = limitSetting is Success<AppSetting?>
+        ? SettingInt.read(
+            limitSetting.value?.value,
+            defaultValue: SettingDefaults.posBalanceDailyLimit,
+          )
+        : SettingDefaults.posBalanceDailyLimit;
+    final effectiveLimit = dailyLimit < 0 ? 0 : dailyLimit;
+
     final logs = await auditLogs.findByEntity('pos_balance_request', account.posId);
     if (logs is Failure) return Failure((logs as Failure).error);
     final today = clock.now();
@@ -60,7 +69,17 @@ final class LocalPosBalanceRequestService {
       final d = e.occurredAt;
       return d.year == today.year && d.month == today.month && d.day == today.day;
     }).length;
-    if (used >= defaultDailyLimit) {
+    if (used >= effectiveLimit) {
+      await auditLogs.append(
+        AuditLog(
+          id: ids.next('audit'),
+          entityType: 'pos_balance_request',
+          entityId: account.posId,
+          action: 'daily_limit_exceeded',
+          occurredAt: clock.now(),
+          payloadJson: '{"used":"$used","limit":"$effectiveLimit"}',
+        ),
+      );
       return const Failure(
         AppFailure(code: 'pos_balance_daily_limit', message: 'تم تجاوز الحد اليومي لطلبات الرصيد'),
       );
