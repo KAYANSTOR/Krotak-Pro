@@ -1,8 +1,8 @@
-import 'package:krotak_pro/core/result.dart';
-import 'package:krotak_pro/domain/entities/message.dart';
-import 'package:krotak_pro/domain/entities/wallet.dart';
-import 'package:krotak_pro/domain/repositories/repositories.dart';
-import 'package:krotak_pro/domain/services/payment_source_guard.dart';
+import 'package:net_app/core/result.dart';
+import 'package:net_app/domain/entities/message.dart';
+import 'package:net_app/domain/entities/wallet.dart';
+import 'package:net_app/domain/repositories/repositories.dart';
+import 'package:net_app/domain/services/payment_source_guard.dart';
 
 PaymentSourceGuard trustedPaymentSourceGuard() {
   final wallets = _FakeWallets([

@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:krotak_pro/domain/phone_normalizer.dart';
+import 'package:net_app/domain/phone_normalizer.dart';
 
 void main() {
   group('PhoneNormalizer.canonicalize', () {
