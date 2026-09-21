@@ -1384,7 +1384,7 @@ Production
 عند فتح بوابة V1 مستقبلًا:
 
 1. اقرأ هذه الوثيقة كاملة قبل أي تعديل.
-2. اقرأ docs/product-decisions.md وdocs/contracts.md وdocs/خطة-تحويل-منطق-NET-إلى-نظام-حقيقي.md.
+2. اقرأ docs/product-decisions.md وdocs/contracts.md وdocs/krotak-pro-real-system-plan.md.
 3. لا تنشئ Architecture موازية أو نظام Ledger منفصل عن Domain الحالي.
 4. لا تستخدم Mock/Fake كمنطق إنتاجي.
 5. لا تنشئ scripts لتنفيذ مهام/عمليات المنتج.
