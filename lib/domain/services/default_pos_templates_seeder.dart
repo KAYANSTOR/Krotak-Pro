@@ -12,9 +12,9 @@ import '../repositories/repositories.dart';
 /// 2. Cards to a POS customer: `{phone} {amount}` (optional trailing quantity).
 /// 3. Balance inquiry: `111`
 ///
-/// Custom templates the operator creates are left untouched. System defaults
-/// are also repaired in-place when their stable ids already exist, while the
-/// operator's enabled/disabled state is preserved.
+/// Custom templates the operator creates are left untouched. A known migration
+/// repairs the previously shipped customer-delivery default while preserving
+/// the operator's enabled/disabled state.
 final class DefaultPosTemplatesSeeder {
   const DefaultPosTemplatesSeeder({required this.templates});
 
@@ -140,6 +140,11 @@ final class DefaultPosTemplatesSeeder {
       changed++;
     }
     return Success(changed);
+  }
+
+  static bool _needsKnownMigration(TransferTemplate existing, _TplSpec spec) {
+    return spec.variant == 'cards-to-pos-customer' &&
+        existing.pattern.trim() == '{qty} كرت {amount} {dest}';
   }
 
   static const _specs = <_TplSpec>[
