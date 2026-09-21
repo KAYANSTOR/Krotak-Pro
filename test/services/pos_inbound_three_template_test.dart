@@ -77,7 +77,7 @@ void main() {
     );
     expect(repo.map['tpl-pos-pos-1-normal']!.isActive, isFalse);
     expect(repo.map['custom-pos-1']!.isActive, isTrue);
-    expect(repo.map['tpl-pos-pos-1-stock-to-pos']!.isActive, isTrue);
+    expect(repo.map['tpl-pos-pos-1-cards-to-pos']!.isActive, isTrue);
   });
 
   test('parses stock-to-POS and customer-delivery Arabic card phrases', () async {

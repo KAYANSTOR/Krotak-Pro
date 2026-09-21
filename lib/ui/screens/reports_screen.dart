@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../domain/entities/setting.dart';
-import '../domain/services/report_pdf_service.dart';
-import 'services/report_pdf_export.dart';
+import '../../domain/entities/setting.dart';
+import '../../domain/services/report_pdf_service.dart';
+import '../services/report_pdf_export.dart';
 
 import '../../core/result.dart';
 import '../../domain/services/ops_report_service.dart';
@@ -140,9 +140,11 @@ class _ReportsScreenState extends State<ReportsScreen> {
                 onPressed: _snap == null ? null : _exportOpsPdf,
               ),
               IconButton(
-                icon: Icons.refresh_rounded,
+                icon: const Icon(Icons.refresh_rounded),
                 tooltip: 'تحديث',
-                onPressed: _load,
+                onPressed: () {
+                  _load();
+                },
               ),
             ],
           ),

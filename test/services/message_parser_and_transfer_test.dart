@@ -569,6 +569,12 @@ final class _FakeCustomers implements CustomerRepository {
       const Success([]);
 
   @override
+  Future<Result<List<CustomerPhoneSuggestion>>> suggestPhonesByPrefix(
+    String prefix, {
+    int limit = 8,
+  }) async => const Success([]);
+
+  @override
   Future<Result<List<CustomerIdentifier>>> listIdentifiers(
     String customerId,
   ) async =>

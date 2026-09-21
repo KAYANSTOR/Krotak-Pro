@@ -139,7 +139,6 @@ void main() {
     expect(saved.commissionPercentBps, 750);
     expect(categories.map['cat-9']?.commissionPercentBps, 750);
   });
-}
 
   test('deleteCards tombstones sold cards instead of hard-deleting', () async {
     await seedCards(2);
@@ -189,3 +188,4 @@ void main() {
     expect(result, isA<Failure<int>>());
     expect((result as Failure<int>).error.code, 'card_reserved');
   });
+}

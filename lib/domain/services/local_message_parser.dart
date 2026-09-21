@@ -227,6 +227,11 @@ final class LocalMessageParser implements MessageParser {
     } else if (account != null && account.isNotEmpty) {
       identifier = account.trim();
       type = TransferIdentifierType.account;
+    } else if (isPos) {
+      final normalizedSender = _normalizePhone(sender);
+      if (normalizedSender == null) return null;
+      identifier = normalizedSender;
+      type = TransferIdentifierType.phone;
     } else {
       return null;
     }
@@ -241,6 +246,8 @@ final class LocalMessageParser implements MessageParser {
     if (destinationRaw != null && destinationRaw.isNotEmpty) {
       deliveryOverride = _normalizePhone(destinationRaw);
       if (deliveryOverride == null) return null;
+    } else if (isPos && phone == null && account == null) {
+      deliveryOverride = identifier;
     }
 
     return ParsedTransfer(

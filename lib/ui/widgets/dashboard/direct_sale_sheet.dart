@@ -308,7 +308,7 @@ class _DirectSaleSheetState extends State<DirectSaleSheet> {
                           keyboardType: TextInputType.phone,
                           textInputAction: TextInputAction.done,
                           inputFormatters: [
-                            const _WesternDigitsFormatter(),
+                            _WesternDigitsFormatter(),
                             FilteringTextInputFormatter.digitsOnly,
                             LengthLimitingTextInputFormatter(9),
                           ],

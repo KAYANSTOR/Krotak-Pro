@@ -2,6 +2,7 @@ import '../../core/result.dart';
 import '../entities/card.dart';
 import '../entities/customer.dart';
 import '../entities/transaction.dart';
+import '../entities/wallet.dart';
 import '../repositories/repositories.dart';
 
 final class SoldCardRecord {
