@@ -79,71 +79,91 @@ final class LocalCustomerRepository implements CustomerRepository {
     int limit = 8,
   }) async {
     try {
-      final digits = PhoneNormalizer.digitsOnly(prefix);
-      if (digits.isEmpty || limit <= 0) {
-        return const Success(<domain.CustomerPhoneSuggestion>[]);
-      }
-      var searchPrefix = digits;
-      if (searchPrefix.startsWith('00') && searchPrefix.length > 4) {
-        searchPrefix = searchPrefix.substring(2);
-      }
-      if (searchPrefix.startsWith('967') && searchPrefix.length >= 4) {
-        searchPrefix = searchPrefix.substring(3);
-      }
-      if (searchPrefix.startsWith('0') && searchPrefix.length >= 2) {
-        searchPrefix = searchPrefix.substring(1);
-      }
-      if (searchPrefix.isEmpty) {
+      final raw = prefix.trim();
+      if (raw.isEmpty || limit <= 0) {
         return const Success(<domain.CustomerPhoneSuggestion>[]);
       }
 
-      final allowed = [
-        domain.CustomerStatus.active.name,
-        domain.CustomerStatus.provisional.name,
-      ];
-      final query = database.select(database.customerIdentifiers).join([
-        innerJoin(
-          database.customers,
-          database.customers.id.equalsExp(
-            database.customerIdentifiers.customerId,
-          ),
-        ),
-      ])
-        ..where(
-          database.customerIdentifiers.type.equals(
-            domain.CustomerIdentifierType.phoneNumber.name,
-          ),
-        )
-        ..where(database.customerIdentifiers.value.like('$searchPrefix%'))
-        ..where(database.customers.status.isIn(allowed))
-        ..orderBy([
-          OrderingTerm(
-            expression: database.customers.updatedAt,
-            mode: OrderingMode.desc,
-          ),
-        ])
-        ..limit(limit);
+      final digits = PhoneNormalizer.digitsOnly(raw);
+      if (digits.isEmpty) {
+        return const Success(<domain.CustomerPhoneSuggestion>[]);
+      }
 
-      final rows = await query.get();
-      final seen = <String>{};
-      final out = <domain.CustomerPhoneSuggestion>[];
-      for (final row in rows) {
-        final ident = row.readTable(database.customerIdentifiers);
-        final customer = row.readTable(database.customers);
-        if (!seen.add('${customer.id}:${ident.value}')) continue;
-        out.add(
+      final prefixes = <String>{
+        digits,
+        if (!digits.startsWith('0')) '0$digits',
+        if (!digits.startsWith('967')) '967$digits',
+      };
+
+      final orExpr = prefixes
+          .map((pref) => database.customerIdentifiers.value.like('$pref%'))
+          .reduce((a, b) => a | b);
+
+      final idRows = await (database.select(database.customerIdentifiers)
+            ..where(
+              (t) =>
+                  t.type.equals(domain.CustomerIdentifierType.phoneNumber.name) &
+                  orExpr,
+            )
+            ..limit(limit * 4))
+          .get();
+
+      if (idRows.isEmpty) {
+        return const Success(<domain.CustomerPhoneSuggestion>[]);
+      }
+
+      final customerIds = idRows.map((r) => r.customerId).toSet().toList();
+      final customers = await (database.select(database.customers)
+            ..where((t) => t.id.isIn(customerIds)))
+          .get();
+      final byId = {for (final c in customers) c.id: c};
+
+      const blocked = {'blacklisted', 'merged', 'archived'};
+
+      final suggestions = <domain.CustomerPhoneSuggestion>[];
+      final seenPhones = <String>{};
+
+      idRows.sort((a, b) {
+        final ca = byId[a.customerId];
+        final cb = byId[b.customerId];
+        final ta = ca?.updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final tb = cb?.updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final cmp = tb.compareTo(ta);
+        if (cmp != 0) return cmp;
+        if (a.isPrimary != b.isPrimary) return a.isPrimary ? -1 : 1;
+        return a.value.compareTo(b.value);
+      });
+
+      for (final row in idRows) {
+        final cust = byId[row.customerId];
+        if (cust == null) continue;
+        if (blocked.contains(cust.status)) continue;
+
+        final phone = PhoneNormalizer.canonicalize(row.value) ?? row.value;
+        if (phone.isEmpty || seenPhones.contains(phone)) continue;
+
+        final phoneDigits = PhoneNormalizer.digitsOnly(phone);
+        final matchesPrefix = phoneDigits.startsWith(digits) ||
+            row.value.startsWith(raw) ||
+            row.value.startsWith(digits);
+        if (!matchesPrefix) continue;
+
+        seenPhones.add(phone);
+        suggestions.add(
           domain.CustomerPhoneSuggestion(
-            customerId: customer.id,
-            phone: ident.value,
-            displayName: customer.displayName,
-            status: domain.CustomerStatus.values.byName(customer.status),
-            updatedAt: customer.updatedAt,
+            customerId: cust.id,
+            phone: phone,
+            displayName: cust.displayName,
+            status: domain.CustomerStatus.values.byName(cust.status),
+            updatedAt: cust.updatedAt,
           ),
         );
+        if (suggestions.length >= limit) break;
       }
-      return Success(out);
+
+      return Success(suggestions);
     } catch (error) {
-      return Failure(_failure('customer_phone_suggest_failed', error));
+      return Failure(_failure('customer_suggest_phones_failed', error));
     }
   }
 

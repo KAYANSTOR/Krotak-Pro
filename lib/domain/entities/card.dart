@@ -46,23 +46,6 @@ final class Card {
   final String secretCode;
   final CardStatus status;
   final CardReservation reservation;
-
-  Card copyWith({
-    String? categoryId,
-    String? serialNumber,
-    String? secretCode,
-    CardStatus? status,
-    CardReservation? reservation,
-  }) {
-    return Card(
-      id: id,
-      categoryId: categoryId ?? this.categoryId,
-      serialNumber: serialNumber ?? this.serialNumber,
-      secretCode: secretCode ?? this.secretCode,
-      status: status ?? this.status,
-      reservation: reservation ?? this.reservation,
-    );
-  }
 }
 
 final class CardReservation {

@@ -140,3 +140,52 @@ void main() {
     expect(categories.map['cat-9']?.commissionPercentBps, 750);
   });
 }
+
+  test('deleteCards tombstones sold cards instead of hard-deleting', () async {
+    await seedCards(2);
+    final all = await stocked();
+    final soldCard = all.first;
+    await cards.save(
+      Card(
+        id: soldCard.id,
+        categoryId: soldCard.categoryId,
+        serialNumber: soldCard.serialNumber,
+        secretCode: soldCard.secretCode,
+        status: CardStatus.sold,
+      ),
+    );
+
+    final result = await catalog.deleteCards(cardIds: [soldCard.id]);
+    expect(result, isA<Success<int>>());
+    expect((result as Success<int>).value, 1);
+
+    final after = await cards.findById(soldCard.id);
+    final card = (after as Success<Card?>).value;
+    expect(card, isNotNull);
+    expect(card!.status, CardStatus.disabled);
+    expect(audit.logs.any((l) => l.action == 'cards_tombstoned'), isTrue);
+  });
+
+  test('deleteCards rejects reserved-only selection', () async {
+    await seedCards(1);
+    final all = await stocked();
+    final card = all.single;
+    await cards.save(
+      Card(
+        id: card.id,
+        categoryId: card.categoryId,
+        serialNumber: card.serialNumber,
+        secretCode: card.secretCode,
+        status: CardStatus.reserved,
+        reservation: CardReservation(
+          reservationId: 'r1',
+          reservedAt: DateTime.utc(2026, 9, 21),
+          expiresAt: DateTime.utc(2026, 9, 22),
+        ),
+      ),
+    );
+
+    final result = await catalog.deleteCards(cardIds: [card.id]);
+    expect(result, isA<Failure<int>>());
+    expect((result as Failure<int>).error.code, 'card_reserved');
+  });

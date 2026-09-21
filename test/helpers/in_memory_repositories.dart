@@ -106,8 +106,13 @@ final class InMemoryCustomerRepository implements CustomerRepository {
 
   @override
   Future<Result<Customer?>> findByIdentifier(String value) async {
+    final keys = PhoneNormalizer.lookupKeys(value).toSet();
     for (final id in _identifiers.values) {
-      if (id.value == value) return Success(_customers[id.customerId]);
+      final canonical = PhoneNormalizer.canonicalize(id.value);
+      if (keys.contains(id.value) ||
+          (canonical != null && keys.contains(canonical))) {
+        return Success(_customers[id.customerId]);
+      }
     }
     return const Success(null);
   }
@@ -125,36 +130,47 @@ final class InMemoryCustomerRepository implements CustomerRepository {
     String prefix, {
     int limit = 8,
   }) async {
-    final digits = prefix.replaceAll(RegExp(r'[^0-9٠-٩۰-۹]'), '');
-    final latin = digits
-        .replaceAllMapped(RegExp(r'[٠-٩]'), (m) {
-          return '${m[0]!.codeUnitAt(0) - 0x0660}';
-        })
-        .replaceAllMapped(RegExp(r'[۰-۹]'), (m) {
-          return '${m[0]!.codeUnitAt(0) - 0x06f0}';
-        });
-    if (latin.isEmpty || limit <= 0) {
+    final digits = PhoneNormalizer.digitsOnly(prefix.trim());
+    if (digits.isEmpty || limit <= 0) {
       return const Success(<CustomerPhoneSuggestion>[]);
     }
-    final allowed = {CustomerStatus.active, CustomerStatus.provisional};
-    final matches = <CustomerPhoneSuggestion>[];
-    for (final ident in _identifiers.values) {
-      if (ident.type != CustomerIdentifierType.phoneNumber) continue;
-      if (!ident.value.startsWith(latin)) continue;
-      final customer = _customers[ident.customerId];
-      if (customer == null || !allowed.contains(customer.status)) continue;
-      matches.add(
+    const blocked = {
+      CustomerStatus.blacklisted,
+      CustomerStatus.merged,
+      CustomerStatus.archived,
+    };
+    final out = <CustomerPhoneSuggestion>[];
+    final seen = <String>{};
+    final phoneIds = _identifiers.values
+        .where((i) => i.type == CustomerIdentifierType.phoneNumber)
+        .toList();
+    phoneIds.sort((a, b) {
+      final ca = _customers[a.customerId];
+      final cb = _customers[b.customerId];
+      final ta = ca?.updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+      final tb = cb?.updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+      return tb.compareTo(ta);
+    });
+    for (final id in phoneIds) {
+      final c = _customers[id.customerId];
+      if (c == null || blocked.contains(c.status)) continue;
+      final phone = PhoneNormalizer.canonicalize(id.value) ?? id.value;
+      final pd = PhoneNormalizer.digitsOnly(phone);
+      if (!pd.startsWith(digits) && !id.value.startsWith(digits)) continue;
+      if (seen.contains(phone)) continue;
+      seen.add(phone);
+      out.add(
         CustomerPhoneSuggestion(
-          customerId: customer.id,
-          phone: ident.value,
-          displayName: customer.displayName,
-          status: customer.status,
-          updatedAt: customer.updatedAt,
+          customerId: c.id,
+          phone: phone,
+          displayName: c.displayName,
+          status: c.status,
+          updatedAt: c.updatedAt,
         ),
       );
+      if (out.length >= limit) break;
     }
-    matches.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
-    return Success(matches.take(limit).toList(growable: false));
+    return Success(out);
   }
 
   @override
@@ -171,6 +187,297 @@ final class InMemoryCustomerRepository implements CustomerRepository {
   @override
   Future<Result<void>> saveIdentifier(CustomerIdentifier identifier) async {
     _identifiers[identifier.id] = identifier;
+    return const Success(null);
+  }
+}
+
+final class InMemoryCardRepository implements CardRepository {
+  final Map<String, Card> _cards = {};
+
+  @override
+  Future<Result<Card?>> findById(String id) async => Success(_cards[id]);
+
+  @override
+  Future<Result<Card?>> findBySerialNumber(String serialNumber) async {
+    for (final c in _cards.values) {
+      if (c.serialNumber == serialNumber) return Success(c);
+    }
+    return const Success(null);
+  }
+
+  @override
+  Future<Result<List<Card>>> listAll() async =>
+      Success(_cards.values.toList(growable: false));
+
+  @override
+  Future<Result<Set<String>>> existingSerialsAmong(Iterable<String> serials) async {
+    final set = serials.toSet();
+    return Success(_cards.values.map((c) => c.serialNumber).where(set.contains).toSet());
+  }
+
+  @override
+  Future<Result<Set<String>>> existingSecretsAmong(Iterable<String> secrets) async {
+    final set = secrets.toSet();
+    return Success(_cards.values.map((c) => c.secretCode).where(set.contains).toSet());
+  }
+
+  @override
+  Future<Result<List<Card>>> findByCategory(String categoryId) async =>
+      Success(_cards.values.where((c) => c.categoryId == categoryId).toList());
+
+  @override
+  Future<Result<List<Card>>> findAvailableByCategory(String categoryId) async =>
+      Success(_cards.values
+          .where((c) => c.categoryId == categoryId && c.status == CardStatus.available)
+          .toList());
+
+  @override
+  Future<Result<Card>> reserveFirstAvailable({
+    required String categoryId,
+    required String reservationId,
+    required DateTime reservedAt,
+    required DateTime expiresAt,
+  }) async {
+    await expireReservations(reservedAt);
+    final stock = _cards.values
+        .where((c) => c.categoryId == categoryId && c.status == CardStatus.available)
+        .toList();
+    if (stock.isEmpty) {
+      return const Failure(
+        AppFailure(code: 'card_unavailable', message: 'No available card in category'),
+      );
+    }
+    final selected = stock.first;
+    final reserved = Card(
+      id: selected.id,
+      categoryId: selected.categoryId,
+      serialNumber: selected.serialNumber,
+      secretCode: selected.secretCode,
+      status: CardStatus.reserved,
+      reservation: CardReservation(
+        reservationId: reservationId,
+        reservedAt: reservedAt,
+        expiresAt: expiresAt,
+      ),
+    );
+    _cards[selected.id] = reserved;
+    return Success(reserved);
+  }
+
+  @override
+  Future<Result<List<Card>>> listByStatus(CardStatus status) async =>
+      Success(_cards.values.where((c) => c.status == status).toList());
+
+  @override
+  Future<Result<void>> save(Card card) async {
+    _cards[card.id] = card;
+    return const Success(null);
+  }
+
+  @override
+  Future<Result<void>> saveAll(List<Card> cards) async {
+    for (final c in cards) {
+      _cards[c.id] = c;
+    }
+    return const Success(null);
+  }
+
+  @override
+  Future<Result<int>> expireReservations(DateTime now) async {
+    var n = 0;
+    for (final e in _cards.entries.toList()) {
+      final r = e.value.reservation;
+      if (r.isReserved && r.expiresAt != null && !r.expiresAt!.isAfter(now)) {
+        _cards[e.key] = Card(
+          id: e.value.id,
+          categoryId: e.value.categoryId,
+          serialNumber: e.value.serialNumber,
+          secretCode: e.value.secretCode,
+          status: CardStatus.available,
+        );
+        n++;
+      }
+    }
+    return Success(n);
+  }
+
+  @override
+  Future<Result<void>> reserve(String cardId, CardReservation reservation) async {
+    final c = _cards[cardId];
+    if (c == null) {
+      return const Failure(AppFailure(code: 'not_found', message: 'card not found'));
+    }
+    _cards[cardId] = Card(
+      id: c.id,
+      categoryId: c.categoryId,
+      serialNumber: c.serialNumber,
+      secretCode: c.secretCode,
+      status: CardStatus.reserved,
+      reservation: reservation,
+    );
+    return const Success(null);
+  }
+
+  @override
+  Future<Result<void>> releaseReservation(String cardId, String reservationId) async {
+    final c = _cards[cardId];
+    if (c == null) {
+      return const Failure(AppFailure(code: 'not_found', message: 'card not found'));
+    }
+    _cards[cardId] = Card(
+      id: c.id,
+      categoryId: c.categoryId,
+      serialNumber: c.serialNumber,
+      secretCode: c.secretCode,
+      status: CardStatus.available,
+    );
+    return const Success(null);
+  }
+
+  @override
+  Future<Result<void>> markSold(String cardId, String saleId) async {
+    final c = _cards[cardId];
+    if (c == null) {
+      return const Failure(AppFailure(code: 'not_found', message: 'card not found'));
+    }
+    _cards[cardId] = Card(
+      id: c.id,
+      categoryId: c.categoryId,
+      serialNumber: c.serialNumber,
+      secretCode: c.secretCode,
+      status: CardStatus.sold,
+    );
+    return const Success(null);
+  }
+
+  @override
+  Future<Result<void>> restoreAvailable(String cardId) async {
+    final c = _cards[cardId];
+    if (c == null) {
+      return const Failure(AppFailure(code: 'not_found', message: 'card not found'));
+    }
+    _cards[cardId] = Card(
+      id: c.id,
+      categoryId: c.categoryId,
+      serialNumber: c.serialNumber,
+      secretCode: c.secretCode,
+      status: CardStatus.available,
+    );
+    return const Success(null);
+  }
+  @override
+  Future<Result<int>> delete(String id) async {
+    final removed = _cards.remove(id);
+    return Success(removed == null ? 0 : 1);
+  }
+
+  @override
+  Future<Result<int>> deleteMany(List<String> ids) async {
+    var deleted = 0;
+    for (final id in ids.toSet()) {
+      if (_cards.remove(id) != null) deleted++;
+    }
+    return Success(deleted);
+  }
+}
+
+final class InMemoryTransactionRepository implements TransactionRepository {
+  final List<Transaction> _items = [];
+
+  @override
+  Future<Result<void>> append(Transaction transaction) async {
+    _items.add(transaction);
+    return const Success(null);
+  }
+
+  @override
+  Future<Result<List<Transaction>>> findByCustomer(String customerId) async =>
+      Success(_items.where((t) => t.customerId == customerId).toList());
+
+  @override
+  Future<Result<Transaction?>> findByReference(String reference) async {
+    for (final t in _items) {
+      if (t.reference == reference) return Success(t);
+    }
+    return const Success(null);
+  }
+
+  @override
+  Future<Result<List<Transaction>>> listRecent({int limit = 50}) async {
+    final list = List<Transaction>.from(_items)
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    return Success(list.take(limit).toList());
+  }
+
+  @override
+  Future<Result<List<Transaction>>> listCompleted({String? currencyCode}) async {
+    return Success(_items.where((t) {
+      if (t.status != TransactionStatus.completed) return false;
+      if (currencyCode != null && t.amount.currencyCode != currencyCode) return false;
+      return true;
+    }).toList());
+  }
+}
+
+final class InMemorySaleRepository implements SaleRepository {
+  final Map<String, Sale> _sales = {};
+
+  @override
+  Future<Result<void>> save(Sale sale) async {
+    _sales[sale.id] = sale;
+    return const Success(null);
+  }
+
+  @override
+  Future<Result<Sale?>> findById(String id) async => Success(_sales[id]);
+
+  @override
+  Future<Result<List<Sale>>> findByCustomer(String customerId) async =>
+      Success(_sales.values.where((s) => s.customerId == customerId).toList());
+
+  @override
+  Future<Result<List<Sale>>> listRecent({int limit = 50}) async {
+    final list = _sales.values.toList()
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    return Success(list.take(limit).toList());
+  }
+
+  @override
+  Future<Result<List<Sale>>> listCompletedBetween(DateTime from, DateTime to) async {
+    return Success(_sales.values.where((s) {
+      if (s.status != TransactionStatus.completed) return false;
+      return !s.createdAt.isBefore(from) && !s.createdAt.isAfter(to);
+    }).toList());
+  }
+}
+
+final class InMemoryTransferTemplateRepository implements TransferTemplateRepository {
+  final Map<String, TransferTemplate> _items = {};
+
+  @override
+  Future<Result<List<TransferTemplate>>> listAll() async =>
+      Success(_items.values.toList(growable: false));
+
+  @override
+  Future<Result<List<TransferTemplate>>> listByWallet(String? walletId) async {
+    return Success(
+      _items.values.where((t) => t.walletId == walletId).toList(growable: false),
+    );
+  }
+
+  @override
+  Future<Result<TransferTemplate?>> findById(String id) async =>
+      Success(_items[id]);
+
+  @override
+  Future<Result<void>> save(TransferTemplate template) async {
+    _items[template.id] = template;
+    return const Success(null);
+  }
+
+  @override
+  Future<Result<void>> delete(String id) async {
+    _items.remove(id);
     return const Success(null);
   }
 }

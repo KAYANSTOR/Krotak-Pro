@@ -95,4 +95,18 @@ void main() {
     expect(list, isNotEmpty);
     expect(list.first.phone, '777123456');
   });
+
+  test('suggestPhonesByPrefix matches eastern arabic digits prefix', () async {
+    await seed(id: 'c1', name: 'عربي', phone: '777123456');
+    final r = await repo.suggestPhonesByPrefix('٧٧٧');
+    final list = (r as Success<List<CustomerPhoneSuggestion>>).value;
+    expect(list, isNotEmpty);
+    expect(list.first.phone, '777123456');
+  });
+
+  test('PhoneNormalizer toWesternDigits converts eastern numerals', () {
+    expect(PhoneNormalizer.toWesternDigits('٧٧٧١٢٣٤٥٦'), '777123456');
+    expect(PhoneNormalizer.digitsOnly('٠٩٦٧٧٧٧'), '0967777');
+  });
+
 }

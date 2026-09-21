@@ -150,7 +150,7 @@ final class LocalCardCatalogService implements CardCatalogService {
     });
   }
 
-  @override
+    @override
   Future<Result<int>> deleteCards({required List<String> cardIds}) {
     final targets = cardIds.map((e) => e.trim()).where((e) => e.isNotEmpty).toSet().toList();
     if (targets.isEmpty) {
@@ -162,26 +162,92 @@ final class LocalCardCatalogService implements CardCatalogService {
     }
 
     return unitOfWork.run(() async {
-      final deleted = await cards.deleteMany(targets);
-      if (deleted is Failure<int>) return Failure(deleted.error);
-      final count = (deleted as Success<int>).value;
+      final hardIds = <String>[];
+      final tombstoneIds = <String>[];
+      var blockedReserved = false;
+
+      for (final id in targets) {
+        final found = await cards.findById(id);
+        if (found is Failure<Card?>) return Failure(found.error);
+        final card = (found as Success<Card?>).value;
+        if (card == null) continue;
+        switch (card.status) {
+          case CardStatus.reserved:
+            blockedReserved = true;
+          case CardStatus.sold:
+            tombstoneIds.add(id);
+          case CardStatus.available:
+          case CardStatus.disabled:
+          case CardStatus.expired:
+            hardIds.add(id);
+        }
+      }
+
+      if (blockedReserved && hardIds.isEmpty && tombstoneIds.isEmpty) {
+        return const Failure(
+          AppFailure(
+            code: 'card_reserved',
+            message: 'لا يمكن حذف كرت محجوز — ألغِ الحجز أولاً',
+          ),
+        );
+      }
+
+      var count = 0;
+
+      for (final id in tombstoneIds) {
+        final found = await cards.findById(id);
+        final card = (found as Success<Card?>).value;
+        if (card == null) continue;
+        final saved = await cards.save(
+          Card(
+            id: card.id,
+            categoryId: card.categoryId,
+            serialNumber: card.serialNumber,
+            secretCode: card.secretCode,
+            status: CardStatus.disabled,
+            reservation: const CardReservation.none(),
+          ),
+        );
+        if (saved is Failure<void>) return Failure(saved.error);
+        count++;
+      }
+      if (tombstoneIds.isNotEmpty) {
+        final audited = await auditLogs.append(
+          AuditLog(
+            id: ids.next('audit'),
+            entityType: 'card',
+            entityId: tombstoneIds.first,
+            action: 'cards_tombstoned',
+            payloadJson: '{"count":${tombstoneIds.length}}',
+            occurredAt: clock.now(),
+          ),
+        );
+        if (audited is Failure<void>) return Failure(audited.error);
+      }
+
+      if (hardIds.isNotEmpty) {
+        final deleted = await cards.deleteMany(hardIds);
+        if (deleted is Failure<int>) return Failure(deleted.error);
+        final hardCount = (deleted as Success<int>).value;
+        count += hardCount;
+        final audited = await auditLogs.append(
+          AuditLog(
+            id: ids.next('audit'),
+            entityType: 'card',
+            entityId: hardIds.first,
+            action: 'cards_deleted',
+            payloadJson: '{"count":$hardCount}',
+            occurredAt: clock.now(),
+          ),
+        );
+        if (audited is Failure<void>) return Failure(audited.error);
+      }
+
       if (count == 0) {
         return const Failure(
           AppFailure(code: 'card_not_found', message: 'لم يتم العثور على الكروت المحددة'),
         );
       }
-
-      final audited = await auditLogs.append(
-        AuditLog(
-          id: ids.next('audit'),
-          entityType: 'card',
-          entityId: targets.first,
-          action: 'cards_deleted',
-          payloadJson: '{\"count\":$count}',
-          occurredAt: clock.now(),
-        ),
-      );
-      if (audited is Failure<void>) return Failure(audited.error);
       return Success(count);
     });
   }
