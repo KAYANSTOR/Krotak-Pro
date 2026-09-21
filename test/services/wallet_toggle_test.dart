@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:net_app/core/clock.dart';
 import 'package:net_app/core/id_generator.dart';
@@ -155,5 +156,93 @@ void main() {
       ),
     );
     expect(blocked, isA<Failure>());
+  });
+  test('seeds the four built-in wallet notification packages', () async {
+    final wallets = _MemWallets();
+    final settings = _MemSettings();
+    final catalog = LocalWalletCatalogService(
+      wallets: wallets,
+      auditLogs: InMemoryAuditLogRepository(),
+      settings: settings,
+      clock: _Clock(),
+      ids: _Ids(),
+    );
+
+    final seeded = await catalog.ensureDefaultWallets();
+    expect(seeded, isA<Success<void>>());
+
+    final raw = settings.map[SettingKeys.notificationSources]?.value;
+    expect(raw, isNotNull);
+    final decoded = jsonDecode(raw!);
+    final packages = (decoded as List)
+        .whereType<Map>()
+        .map((row) => row['packageName']?.toString())
+        .whereType<String>()
+        .toSet();
+    expect(packages, {
+      'com.ahd.jaib',
+      'com.wecash.jawali',
+      'com.one.onecustomer',
+      'co.ysys.floosak',
+    });
+  });
+
+  test('notification package authorizes even when wallet primary mode is SMS', () async {
+    final wallets = _MemWallets();
+    final settings = _MemSettings();
+    final wallet = Wallet(
+      id: 'wallet-jawali',
+      name: 'جوالي',
+      status: WalletStatus.active,
+      createdAt: DateTime.utc(2026, 9, 17),
+      senderId: 'JAWALI',
+      sourceMode: WalletSourceMode.sms,
+      packageName: 'com.wecash.jawali',
+    );
+    await wallets.save(wallet);
+    final templates = _MemTemplates();
+    await templates.save(
+      TransferTemplate(
+        id: 'tpl-jawali',
+        name: 'جوالي إشعار',
+        pattern: 'test {amount} {phone}',
+        isActive: true,
+        walletId: wallet.id,
+      ),
+    );
+    await settings.save(
+      AppSetting(
+        key: SettingKeys.notificationSources,
+        value: jsonEncode([
+          {
+            'id': 'notification:com.wecash.jawali',
+            'displayName': 'جوالي',
+            'channel': 'notification',
+            'packageName': 'com.wecash.jawali',
+            'enabled': true,
+          },
+        ]),
+        updatedAt: DateTime.utc(2026, 9, 17),
+      ),
+    );
+
+    final guard = PaymentSourceGuard(
+      wallets: wallets,
+      templates: templates,
+      notificationSources: LocalPaymentSourceRegistry(
+        settings: settings,
+        clock: _Clock(),
+      ),
+    );
+    final result = await guard.authorize(
+      const PaymentEvent(
+        channel: PaymentChannel.notification,
+        sourceKey: 'notification:com.wecash.jawali',
+        body: 'test',
+        receivedAt: null,
+        packageName: 'com.wecash.jawali',
+      ),
+    );
+    expect(result, isA<Success<void>>());
   });
 }
