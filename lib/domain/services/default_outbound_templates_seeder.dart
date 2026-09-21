@@ -21,6 +21,13 @@ final class DefaultOutboundTemplatesSeeder {
   /// Bump when new catalog keys are added so existing installs backfill.
   static const seededKey = 'default_outbound_templates_seeded_v4';
 
+  /// Legacy bodies from released versions. We migrate only these exact system
+  /// defaults; custom operator templates are never overwritten.
+  static const _legacyPosCustomerTemplateWithoutCategory =
+      'شبكة {NETWORK_NAME}\\n{cards}';
+  static const _legacyPosCustomerTemplateWithValue =
+      'شبكة {NETWORK_NAME}\\nالفئة: {CARD_VALUE} {CURRENCY}\\n{cards}';
+
   /// Full catalog keyed by [SettingKeys] → default body.
   static Map<String, String> catalog() => <String, String>{
         SettingKeys.voucherDeliverySmsTemplate:
@@ -62,17 +69,42 @@ final class DefaultOutboundTemplatesSeeder {
     final defaults = catalog();
     for (final e in defaults.entries) {
       final existing = await settings.find(e.key);
-      final has = existing is Success<AppSetting?> &&
-          (existing.value?.value.trim().isNotEmpty ?? false);
-      if (has) continue;
-      await settings.save(
+      final value =
+          existing is Success<AppSetting?> ? existing.value?.value.trim() : null;
+
+      if (value != null && value.isNotEmpty) {
+        final migrated = _migrateKnownLegacy(e.key, value);
+        if (migrated != null && migrated != value) {
+          final saved = await settings.save(
+            AppSetting(key: e.key, value: migrated, updatedAt: clock.now()),
+          );
+          if (saved is Failure<void>) return Failure(saved.error);
+        }
+        continue;
+      }
+
+      final saved = await settings.save(
         AppSetting(key: e.key, value: e.value, updatedAt: clock.now()),
       );
+      if (saved is Failure<void>) return Failure(saved.error);
     }
 
-    await settings.save(
+    final seeded = await settings.save(
       AppSetting(key: seededKey, value: 'true', updatedAt: clock.now()),
     );
+    if (seeded is Failure<void>) return Failure(seeded.error);
+
     return const Success(null);
+  }
+
+  String? _migrateKnownLegacy(String key, String current) {
+    if (key != SettingKeys.posCustomerCardDeliveryTemplate) return null;
+
+    final normalized = current.replaceAll('\\r\\n', '\\n').trim();
+    if (normalized == _legacyPosCustomerTemplateWithoutCategory ||
+        normalized == _legacyPosCustomerTemplateWithValue) {
+      return SettingDefaults.posCustomerCardDeliveryTemplate;
+    }
+    return null;
   }
 }
