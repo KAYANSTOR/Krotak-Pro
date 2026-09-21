@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:net_app/domain/entities/card.dart';
-import 'package:net_app/domain/entities/money.dart';
+import 'package:krotak_pro/domain/entities/card.dart';
+import 'package:krotak_pro/domain/entities/money.dart';
 
 void main() {
   group('Money', () {
