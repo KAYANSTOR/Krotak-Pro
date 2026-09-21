@@ -103,6 +103,7 @@ abstract interface class MessageRepository {
   Future<Result<IncomingMessage?>> findByExternalReference(String reference);
   Future<Result<List<IncomingMessage>>> pendingProcessing();
   Future<Result<List<IncomingMessage>>> listByStatus(MessageProcessingStatus status);
+  Future<Result<int>> countByStatus(MessageProcessingStatus status);
   Future<Result<List<IncomingMessage>>> listRecent({int limit = 100});
   Future<Result<void>> updateStatus(String id, MessageProcessingStatus status);
   Future<Result<void>> delete(String id);
@@ -122,8 +123,8 @@ abstract interface class LicenseRepository {
 }
 
 abstract interface class SettingsRepository {
-  Future<Result<AppSetting?>> find(String key);
   Future<Result<void>> save(AppSetting setting);
+  Future<Result<AppSetting?>> find(String key);
 }
 
 abstract interface class AuditLogRepository {
