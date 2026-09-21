@@ -372,7 +372,7 @@ final class LocalWalletCatalogService implements WalletCatalogService {
             source.packageName!.trim(): source,
       };
       for (final spec in _defaults) {
-        final package = spec.packageName?.trim();
+        final package = spec.packageName.trim();
         if (package == null || package.isEmpty || byPackage.containsKey(package)) {
           continue;
         }
