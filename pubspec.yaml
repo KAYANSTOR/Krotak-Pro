@@ -1,5 +1,5 @@
-name: net_app
-description: NET offline-first commercial SMS voucher system (Flutter).
+name: krotak_pro
+description: Krotak Pro — نظام عربي لإدارة بيع كروت الإنترنت والتحويلات عبر SMS، يعمل محليًا أولاً (Flutter).
 publish_to: "none"
 version: 1.0.13+13
 
