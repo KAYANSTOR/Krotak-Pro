@@ -9,6 +9,7 @@ import 'package:net_app/domain/entities/setting.dart';
 import 'package:net_app/domain/entities/wallet.dart';
 import 'package:net_app/domain/repositories/repositories.dart';
 import 'package:net_app/domain/services/local_catalog_services.dart';
+import 'package:net_app/domain/services/local_payment_source_registry.dart';
 import 'package:net_app/domain/services/payment_source_guard.dart';
 
 import '../helpers/in_memory_repositories.dart';
@@ -239,7 +240,7 @@ void main() {
         channel: PaymentChannel.notification,
         sourceKey: 'notification:com.wecash.jawali',
         body: 'test',
-        receivedAt: null,
+        receivedAt: DateTime.utc(2026, 9, 17),
         packageName: 'com.wecash.jawali',
       ),
     );
