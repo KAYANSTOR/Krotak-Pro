@@ -565,6 +565,8 @@ SaleRepository.listCompletedBetween(dayStart|monthStart, now)
 | **Status** | Confirmed by product owner — POST-V1 / BLOCKED |
 | **Date** | 2026-09-21 |
 | **Plan** | docs/post-v1-platform-licensing-and-commission-plan.md |
+| **Admin Web Repository** | KAYANSTOR/Krotic-Admin-App |
+| **Admin Web URL** | https://github.com/KAYANSTOR/Krotic-Admin-App |
 
 ### القرار
 
@@ -594,6 +596,15 @@ SaleRepository.listCompletedBetween(dayStart|monthStart, now)
 - لا تُحفظ أسرار الإدارة داخل APK.
 - لا يجوز للعميل تعديل حالة الترخيص أو العمولة أو التسوية أو سجلات الإدارة من الواجهة العميلية.
 - أي قرار تجاري غير محسوم في الخطة يبقى غير محدد ولا يجوز للوكيل اختراعه.
+
+### لوحة الإدارة المرتبطة
+
+بدأ إنشاء لوحة التحكم الإدارية في مستودع مستقل:
+
+**KAYANSTOR/Krotic-Admin-App**  
+https://github.com/KAYANSTOR/Krotic-Admin-App
+
+وجود هذا المستودع لا يفتح تنفيذ منظومة الترخيص والعمولة؛ يظل **V1 Stable / Ready for Release** هو بوابة التنفيذ الإلزامية.
 
 ### المرجع الملزم
 
