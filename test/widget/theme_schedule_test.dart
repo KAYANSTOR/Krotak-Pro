@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:krotak_pro/ui/theme/net_theme_schedule.dart';
-import 'package:krotak_pro/ui/widgets/dashboard/theme_mode_sheet.dart';
+import 'package:net_app/ui/theme/net_theme_schedule.dart';
+import 'package:net_app/ui/widgets/dashboard/theme_mode_sheet.dart';
 
 void main() {
   group('NetThemeSchedule', () {
