@@ -1,7 +1,7 @@
 # Phase 0 — Baseline Freeze Report
 
 **Date:** 2026-09-17  
-**Repository:** KAYANSTOR/net-flutter  
+**Repository:** KAYANSTOR/Krotak-Pro  
 **Reference commit (main):** `95865c90fce7bea1dc926b36db08b77bd3066548`  
 **Working branch:** `plan/phase-0-1-contracts-foundation`
 
