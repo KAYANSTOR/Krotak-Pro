@@ -13,6 +13,7 @@ import '../entities/pos_account.dart';
 import '../entities/wallet.dart';
 import '../entities/setting.dart';
 import '../entities/transaction.dart';
+import '../rejection_codes.dart';
 import '../repositories/repositories.dart';
 import '../repositories/unit_of_work.dart';
 import 'local_customer_identity_resolver.dart';
@@ -22,6 +23,7 @@ import 'local_pos_account_registry.dart';
 import 'local_category_commission_store.dart';
 import 'pos_wholesale_pricing.dart';
 import 'pos_order_message_renderer.dart';
+import 'message_pipeline_trace.dart';
 
 /// Completes the real incoming-transfer business flow using the existing
 /// catalog, inventory, sale and native SMS boundaries.
@@ -77,6 +79,62 @@ final class LocalTransferProcessor implements TransferProcessor {
   List<CardCategory>? _categoryCache;
   DateTime? _categoryCacheAt;
   static const Duration _categoryCacheTtl = Duration(seconds: 45);
+
+
+  /// Enforces POS credit ceiling before any reservation/sale.
+  /// debt + charge must be <= creditLimit when the limit is set.
+  Future<Result<void>> _assertPosCreditLimit({
+    required PosAccount posAccount,
+    required int chargeMinorUnits,
+    required IncomingMessage message,
+    required ParsedTransfer transfer,
+    required String destination,
+  }) async {
+    final limit = posAccount.creditLimitMinorUnits;
+    // null = unlimited; 0 = no additional debt allowed
+    if (limit == null) return const Success(null);
+    if (chargeMinorUnits <= 0) return const Success(null);
+
+    final balanceResult = await balances.getBalance(
+      customerId: posAccount.customerId,
+      currencyCode: 'YER',
+    );
+    if (balanceResult is Failure<Money>) {
+      return Failure(balanceResult.error);
+    }
+    final balance = (balanceResult as Success<Money>).value;
+    // Debt is the absolute negative balance (customer owes the store).
+    final currentDebt = balance.minorUnits < 0 ? -balance.minorUnits : 0;
+    final projected = currentDebt + chargeMinorUnits;
+    if (projected <= limit) return const Success(null);
+
+    final remaining = (limit - currentDebt).clamp(0, limit);
+    final failure = AppFailure(
+      code: RejectionCodes.creditLimitExceeded,
+      message:
+          'تجاوز سقف دين نقطة البيع. المتبقي المسموح: ${(remaining / 100).toStringAsFixed(0)}',
+    );
+    await _persistTerminalFailure(
+      messageId: message.id,
+      status: MessageProcessingStatus.rejected,
+      action: 'pos_credit_limit_exceeded',
+      error: failure,
+      transfer: transfer,
+      deliveryPhone: destination,
+    );
+    await auditLogs.append(
+      AuditLog(
+        id: ids.next('audit'),
+        entityType: 'pos_account',
+        entityId: posAccount.posId,
+        action: 'credit_limit_exceeded',
+        occurredAt: clock.now(),
+        payloadJson:
+            '{"debt":$currentDebt,"charge":$chargeMinorUnits,"limit":$limit,"remaining":$remaining}',
+      ),
+    );
+    return Failure(failure);
+  }
 
   LocalCustomerIdentityResolver get _resolver =>
       identityResolver ?? LocalCustomerIdentityResolver(customers: customers);
@@ -557,6 +615,20 @@ final class LocalTransferProcessor implements TransferProcessor {
             mode: posAccount.percentageMode,
           )
         : effectiveCategory.faceValue;
+
+    if (isPosOrder) {
+      final limitCheck = await _assertPosCreditLimit(
+        posAccount: posAccount,
+        chargeMinorUnits: posCharge.minorUnits * transfer.quantity,
+        message: message,
+        transfer: transfer,
+        destination: destination,
+      );
+      if (limitCheck is Failure<void>) {
+        return Failure<Transaction>(limitCheck.error);
+      }
+    }
+
     if (transfer.quantity > 1) {
       return _processBatchSale(
         transfer: transfer, message: message, customer: customer, destination: destination,

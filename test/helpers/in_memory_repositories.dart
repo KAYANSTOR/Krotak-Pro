@@ -106,8 +106,13 @@ final class InMemoryCustomerRepository implements CustomerRepository {
 
   @override
   Future<Result<Customer?>> findByIdentifier(String value) async {
+    final keys = PhoneNormalizer.lookupKeys(value).toSet();
     for (final id in _identifiers.values) {
-      if (id.value == value) return Success(_customers[id.customerId]);
+      final canonical = PhoneNormalizer.canonicalize(id.value);
+      if (keys.contains(id.value) ||
+          (canonical != null && keys.contains(canonical))) {
+        return Success(_customers[id.customerId]);
+      }
     }
     return const Success(null);
   }
@@ -118,6 +123,54 @@ final class InMemoryCustomerRepository implements CustomerRepository {
     return Success(
       _customers.values.where((c) => c.displayName.toLowerCase().contains(q)).toList(),
     );
+  }
+
+  @override
+  Future<Result<List<CustomerPhoneSuggestion>>> suggestPhonesByPrefix(
+    String prefix, {
+    int limit = 8,
+  }) async {
+    final digits = PhoneNormalizer.digitsOnly(prefix.trim());
+    if (digits.isEmpty || limit <= 0) {
+      return const Success(<CustomerPhoneSuggestion>[]);
+    }
+    const blocked = {
+      CustomerStatus.blacklisted,
+      CustomerStatus.merged,
+      CustomerStatus.archived,
+    };
+    final out = <CustomerPhoneSuggestion>[];
+    final seen = <String>{};
+    final phoneIds = _identifiers.values
+        .where((i) => i.type == CustomerIdentifierType.phoneNumber)
+        .toList();
+    phoneIds.sort((a, b) {
+      final ca = _customers[a.customerId];
+      final cb = _customers[b.customerId];
+      final ta = ca?.updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+      final tb = cb?.updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+      return tb.compareTo(ta);
+    });
+    for (final id in phoneIds) {
+      final c = _customers[id.customerId];
+      if (c == null || blocked.contains(c.status)) continue;
+      final phone = PhoneNormalizer.canonicalize(id.value) ?? id.value;
+      final pd = PhoneNormalizer.digitsOnly(phone);
+      if (!pd.startsWith(digits) && !id.value.startsWith(digits)) continue;
+      if (seen.contains(phone)) continue;
+      seen.add(phone);
+      out.add(
+        CustomerPhoneSuggestion(
+          customerId: c.id,
+          phone: phone,
+          displayName: c.displayName,
+          status: c.status,
+          updatedAt: c.updatedAt,
+        ),
+      );
+      if (out.length >= limit) break;
+    }
+    return Success(out);
   }
 
   @override
@@ -395,5 +448,36 @@ final class InMemorySaleRepository implements SaleRepository {
       if (s.status != TransactionStatus.completed) return false;
       return !s.createdAt.isBefore(from) && !s.createdAt.isAfter(to);
     }).toList());
+  }
+}
+
+final class InMemoryTransferTemplateRepository implements TransferTemplateRepository {
+  final Map<String, TransferTemplate> _items = {};
+
+  @override
+  Future<Result<List<TransferTemplate>>> listAll() async =>
+      Success(_items.values.toList(growable: false));
+
+  @override
+  Future<Result<List<TransferTemplate>>> listByWallet(String? walletId) async {
+    return Success(
+      _items.values.where((t) => t.walletId == walletId).toList(growable: false),
+    );
+  }
+
+  @override
+  Future<Result<TransferTemplate?>> findById(String id) async =>
+      Success(_items[id]);
+
+  @override
+  Future<Result<void>> save(TransferTemplate template) async {
+    _items[template.id] = template;
+    return const Success(null);
+  }
+
+  @override
+  Future<Result<void>> delete(String id) async {
+    _items.remove(id);
+    return const Success(null);
   }
 }

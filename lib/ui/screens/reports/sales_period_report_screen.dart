@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../../../domain/entities/setting.dart';
+import '../../../domain/services/report_pdf_service.dart';
+import '../../services/report_pdf_export.dart';
+
 import '../../../core/result.dart';
 import '../../../domain/entities/customer.dart';
 import '../../../domain/entities/transaction.dart';
@@ -156,6 +160,47 @@ class _SalesPeriodReportScreenState extends State<SalesPeriodReportScreen> {
     );
   }
 
+
+  Future<void> _exportPdf() async {
+    if (_rows.isEmpty) return;
+    final c = AppScope.of(context);
+    final network = await c.settings.find(SettingKeys.networkName);
+    var name = 'Krotak Pro';
+    if (network is Success<AppSetting?>) {
+      final setting = network.value;
+      if (setting != null) {
+        final v = setting.value.trim();
+        if (v.isNotEmpty) name = v;
+      }
+    }
+
+    final (from, to) = _bounds();
+    String two(int n) => n.toString().padLeft(2, '0');
+    final period =
+        '${from.year}-${two(from.month)}-${two(from.day)} → ${to.year}-${two(to.month)}-${two(to.day)}';
+
+    final pdfRows = <PdfTableRow>[
+      for (final r in _rows)
+        PdfTableRow([
+          r.sale.createdAt.toLocal().toString().split('.').first,
+          r.customerName,
+          (r.sale.amount.minorUnits / 100).toStringAsFixed(2),
+          r.sale.id,
+        ]),
+    ];
+
+    final bytes = await (await ReportPdfService.instance()).buildSalesReport(
+      title: 'تقرير المبيعات',
+      periodLabel: period,
+      networkName: name,
+      generatedAt: c.clock.now(),
+      rows: pdfRows,
+      totalLabel: 'الإجمالي: ${(_totalMinor / 100).toStringAsFixed(2)} ر.ي · ${_rows.length} عملية',
+    );
+    if (!mounted) return;
+    await saveReportPdf(context: context, bytes: bytes, fileStem: 'sales_report');
+  }
+
   Widget _rangeChip({
     required BuildContext context,
     required String label,
@@ -214,7 +259,16 @@ class _SalesPeriodReportScreenState extends State<SalesPeriodReportScreen> {
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
-        appBar: AppBar(title: const Text('تقرير المبيعات التفصيلي')),
+        appBar: AppBar(
+          title: const Text('تقرير المبيعات التفصيلي'),
+          actions: [
+            IconButton(
+              tooltip: 'تصدير PDF',
+              onPressed: _rows.isEmpty ? null : _exportPdf,
+              icon: const Icon(Icons.picture_as_pdf_outlined),
+            ),
+          ],
+        ),
         body: Column(
           children: [
             Padding(

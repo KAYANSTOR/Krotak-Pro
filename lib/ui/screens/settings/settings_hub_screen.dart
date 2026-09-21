@@ -26,7 +26,6 @@ import 'renew_subscription_screen.dart';
 import 'outbound_message_templates_screen.dart';
 import 'sim_settings_screen.dart';
 import 'template_simulation_screen.dart';
-import 'templates_screen.dart';
 import 'wallet_notification_settings_screen.dart';
 
 /// مركز الإعدادات — مطابق حرفياً لإطارات فيديو Z Net
@@ -51,6 +50,7 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
   bool _autoPosSettlement = SettingDefaults.autoPosSettlementEnabled;
   bool _posBalanceRequests = SettingDefaults.posBalanceRequestsEnabled;
   int _lowStock = SettingDefaults.lowStockThreshold;
+  int _posBalanceLimit = SettingDefaults.posBalanceRequestDailyLimit;
 
   final _searchCtrl = TextEditingController();
   String _query = '';
@@ -60,9 +60,9 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
   static const _licenseKeywords = 'تجديد الاشتراك الترخيص رصيد الرسائل الباقة';
   static const _themeKeywords = 'الوضع الداكن المظهر الثيم ليلي فاتح';
   static const _messagesKeywords =
-      'الرسائل القوالب صيغ محاكاة القوالب قوالب التحويل قوالب رسائل العملاء العروض النظام نقاط البيع سلفني SMS';
+      'الرسائل القوالب صيغ محاكاة القوالب قوالب رسائل العملاء العروض النظام سلفني SMS الصادرة';
   static const _walletsKeywords =
-      'المحافظ نقاط البيع إشعارات المحافظ طلبات رصيد نقاط البيع ملخص العمليات اليومي التسوية التلقائية مصادر الإشعارات الحسابات سقف الدين';
+      'المحافظ نقاط البيع إشعارات المحافظ طلبات رصيد نقاط البيع حد يومي ملخص العمليات اليومي التسوية التلقائية مصادر الإشعارات الحسابات سقف الدين قوالب المحفظة';
   static const _maintenanceKeywords = 'تنظيف السجلات تصدير السجل الأرشفة نسخ احتياطي استعادة بيانات تنظيف عميق فهارس';
   static const _aboutKeywords =
       'عن التطبيق المبرمج الحقوق كيان سوفت إصدار كروتك ${AppBrand.latinName} الموقع';
@@ -193,6 +193,7 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
     final settle = await read(SettingKeys.autoPosSettlementEnabled);
     final posBalance = await read(SettingKeys.posBalanceRequestsEnabled);
     final low = await read(SettingKeys.lowStockThreshold);
+    final posLimit = await read(SettingKeys.posBalanceRequestDailyLimit);
     if (!mounted) return;
     setState(() {
       _loading = false;
@@ -206,6 +207,7 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
       _autoPosSettlement = SettingBool.read(settle, defaultValue: SettingDefaults.autoPosSettlementEnabled);
       _posBalanceRequests = SettingBool.read(posBalance, defaultValue: SettingDefaults.posBalanceRequestsEnabled);
       _lowStock = SettingInt.read(low, defaultValue: SettingDefaults.lowStockThreshold);
+      _posBalanceLimit = SettingInt.read(posLimit, defaultValue: SettingDefaults.posBalanceRequestDailyLimit);
       final t = (theme ?? SettingDefaults.themeMode).toLowerCase();
       _themeMode = NetThemeSchedule.parse(theme);
       _darkMode = t == 'dark';
@@ -216,6 +218,38 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
   Future<void> _saveBool(String key, bool value) async {
     final c = AppScope.of(context);
     await c.settings.save(AppSetting(key: key, value: value.toString(), updatedAt: c.clock.now()));
+  }
+
+  Future<void> _openPosBalanceLimit() async {
+    final controller = TextEditingController(text: _posBalanceLimit.toString());
+    final value = await showDialog<int>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('الحد اليومي لطلبات رصيد نقاط البيع'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          keyboardType: TextInputType.number,
+          decoration: const InputDecoration(labelText: 'عدد الطلبات لكل نقطة بيع'),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('إلغاء')),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, int.tryParse(controller.text.trim())),
+            child: const Text('حفظ'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (!mounted || value == null || value < 1) return;
+    final c = AppScope.of(context);
+    setState(() => _posBalanceLimit = value);
+    await c.settings.save(AppSetting(
+      key: SettingKeys.posBalanceRequestDailyLimit,
+      value: value.toString(),
+      updatedAt: c.clock.now(),
+    ));
   }
 
   Future<void> _openThemePicker() async {
@@ -297,7 +331,6 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
                                 SettingsGroupCard(children: [
                                   SettingsGroupNavRow(icon: Icons.message_outlined, title: 'قوالب الرسائل', subtitle: 'رسائل العملاء والعروض والنظام ونقاط البيع وسلفني — في شاشة واحدة بتبويبات', searchText: 'قوالب رسائل العملاء العروض النظام سلفني نقاط البيع', onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const OutboundMessageTemplatesScreen()))),
                                   SettingsGroupNavRow(icon: Icons.science_outlined, title: 'محاكاة القوالب', subtitle: 'اختبار مطابقة الرسائل الواردة قبل التشغيل', onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const TemplateSimulationScreen()))),
-                                  SettingsGroupNavRow(icon: Icons.rule_outlined, title: 'قوالب التحويل', subtitle: 'إدارة قوالب تحليل SMS', onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const TemplatesScreen()))),
                                   SettingsGroupSwitchRow(icon: Icons.card_giftcard_outlined, title: 'خدمة سلفني', subtitle: _salafni ? 'الميزة مفعلة — يتم استقبال ومعالجة طلبات سلفني آلياً للعملاء المؤهلين' : 'الميزة متوقفة — طلبات سلفني لا تُعالج', value: _salafni, onChanged: (v) async { setState(() => _salafni = v); await _saveBool(SettingKeys.salafniEnabled, v); }),
                                 ]),
                               if (_sectionVisible(_walletsKeywords)) const SettingsSectionHeader(title: 'المحافظ ونقاط البيع'),
@@ -307,6 +340,7 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
                                   SettingsGroupNavRow(icon: Icons.storefront_outlined, title: 'نقاط البيع', subtitle: 'حسابات النقاط وسقف الدين وقوالب رسائلها', searchText: 'نقاط البيع الحسابات القوالب الرصيد', onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PosScreen()))),
                                   SettingsGroupNavRow(icon: Icons.notifications_none_outlined, title: 'إشعارات المحافظ', subtitle: 'مصادر إشعارات التطبيقات ومنح إذن الوصول', searchText: 'إشعارات المحافظ مصادر الوصول', onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const WalletNotificationSettingsScreen()))),
                                   SettingsGroupSwitchRow(icon: Icons.account_balance_outlined, title: 'طلبات رصيد نقاط البيع', subtitle: _posBalanceRequests ? 'مفعّل — يتم الرد تلقائياً على طلب رصيد نقطة البيع برسالة تحتوي الرصيد والدين' : 'متوقف — طلبات رصيد نقاط البيع تُترك للمراجعة اليدوية', value: _posBalanceRequests, onChanged: (v) async { setState(() => _posBalanceRequests = v); await _saveBool(SettingKeys.posBalanceRequestsEnabled, v); }),
+                                  SettingsGroupNavRow(icon: Icons.pin_outlined, title: 'الحد اليومي لطلبات رصيد نقاط البيع', subtitle: 'الحد الحالي: '+_posBalanceLimit.toString()+' طلب يومياً لكل نقطة بيع', searchText: 'حد يومي طلبات رصيد نقاط البيع', onTap: _openPosBalanceLimit),
                                   SettingsGroupSwitchRow(icon: Icons.summarize_outlined, title: 'ملخص العمليات اليومي', subtitle: _dailySummary ? 'مفعّل — سيتم إرسال ملخص يومي الساعة 12 ليلاً لكل عملاء نقاط البيع' : 'متوقف — لن تُرسل ملخصات يومية لعملاء نقاط البيع', value: _dailySummary, onChanged: (v) async { setState(() => _dailySummary = v); await _saveBool(SettingKeys.dailyOpsSummaryAutoSend, v); }),
                                   SettingsGroupSwitchRow(icon: Icons.handshake_outlined, title: 'التسوية التلقائية', subtitle: _autoPosSettlement ? 'مفعّل — سيتم التسوية التلقائية لنقاط البيع عند استلام حوالة عبر المحافظ إلى النظام' : 'متوقف — تُسجَّل الحوالات دون تسوية تلقائية لحسابات نقاط البيع', value: _autoPosSettlement, onChanged: (v) async { setState(() => _autoPosSettlement = v); await _saveBool(SettingKeys.autoPosSettlementEnabled, v); }),
                                 ]),

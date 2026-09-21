@@ -7,6 +7,7 @@ import '../entities/message.dart';
 import '../repositories/repositories.dart';
 import 'local_message_retry_service.dart';
 import 'message_retry_policy.dart';
+import 'message_pipeline_trace.dart';
 import 'services.dart';
 
 /// Phase 4 delivery worker: resend voucher SMS for already-committed sales.
@@ -18,7 +19,7 @@ import 'services.dart';
 /// - Stuck `sending` / `pending` older than [MessageRetryPolicy.confirmPendingTimeout]
 ///   (15 minutes) are treated as due for another delivery attempt
 final class MessageDeliveryWorker {
-  const MessageDeliveryWorker({
+  MessageDeliveryWorker({
     required this.messages,
     required this.auditLogs,
     required this.cards,
@@ -27,6 +28,7 @@ final class MessageDeliveryWorker {
     required this.clock,
     required this.ids,
     this.policy = const MessageRetryPolicy(),
+    this.metrics,
   });
 
   final MessageRepository messages;
@@ -37,9 +39,20 @@ final class MessageDeliveryWorker {
   final Clock clock;
   final IdGenerator ids;
   final MessageRetryPolicy policy;
+  final MessagePipelineMetrics? metrics;
+
+  /// Per-tick audit cache to avoid N+1 findByEntity for the same message.
+  final Map<String, List<AuditLog>> _auditCache = {};
 
   /// Single worker tick. Safe to call on resume / periodic timer.
+  ///
+  /// Priority (plan §6):
+  /// 1. Financially committed vouchers awaiting SMS
+  /// 2. In-flight `sending` / confirm timeout
+  /// 3. Failed retries
+  /// 4. Other pending
   Future<Result<DeliveryWorkerReport>> tick() async {
+    _auditCache.clear();
     final candidates = await _candidateMessages();
     if (candidates is Failure<List<IncomingMessage>>) {
       return Failure(candidates.error);
@@ -110,10 +123,22 @@ final class MessageDeliveryWorker {
 
       final body =
           cardDeliverySmsBody(serialNumber: card.serialNumber, secretCode: card.secretCode);
+
+      final trace = MessagePipelineTrace(
+        messageId: message.id,
+        receivedAt: message.receivedAt,
+      )..markCommitted(voucher.committedAt)..markDispatchStarted(clock.now());
+      final metricsPort = metrics;
+
       final sent = await messageSender.send(
         destination: voucher.destination,
         body: body,
       );
+      trace.markSendResult(success: sent is Success<void>, at: clock.now());
+      if (metricsPort != null) {
+        // ignore: discarded_futures
+        metricsPort.persist(trace);
+      }
       if (sent is Failure<void>) {
         await auditLogs.append(
           AuditLog(
@@ -197,13 +222,42 @@ final class MessageDeliveryWorker {
     for (final m in (pending as Success<List<IncomingMessage>>).value) {
       map[m.id] = m;
     }
-    final list = map.values.toList()
-      ..sort((a, b) => a.receivedAt.compareTo(b.receivedAt));
+    final list = map.values.toList();
+    // Enrich with commit presence for priority (uses audit cache).
+    final hasCommit = <String, bool>{};
+    for (final m in list) {
+      final commit = await _findVoucherCommit(m.id);
+      hasCommit[m.id] =
+          commit is Success<_VoucherCommit?> && commit.value != null;
+    }
+    int rank(IncomingMessage m) {
+      final committed = hasCommit[m.id] == true;
+      if (committed) return 0;
+      if (m.status == MessageProcessingStatus.sending) return 1;
+      if (m.status == MessageProcessingStatus.failed) return 2;
+      return 3;
+    }
+    list.sort((a, b) {
+      final ra = rank(a);
+      final rb = rank(b);
+      if (ra != rb) return ra.compareTo(rb);
+      return a.receivedAt.compareTo(b.receivedAt);
+    });
     return Success(list);
   }
 
-  Future<Result<_VoucherCommit?>> _findVoucherCommit(String messageId) async {
+  Future<Result<List<AuditLog>>> _auditsFor(String messageId) async {
+    final cached = _auditCache[messageId];
+    if (cached != null) return Success(cached);
     final logs = await auditLogs.findByEntity('message', messageId);
+    if (logs is Failure<List<AuditLog>>) return Failure(logs.error);
+    final value = (logs as Success<List<AuditLog>>).value;
+    _auditCache[messageId] = value;
+    return Success(value);
+  }
+
+  Future<Result<_VoucherCommit?>> _findVoucherCommit(String messageId) async {
+    final logs = await _auditsFor(messageId);
     if (logs is Failure<List<AuditLog>>) return Failure(logs.error);
     final entries = (logs as Success<List<AuditLog>>)
         .value
@@ -242,7 +296,7 @@ final class MessageDeliveryWorker {
   }
 
   Future<Result<bool>> _hasSmsSuccess(String messageId) async {
-    final logs = await auditLogs.findByEntity('message', messageId);
+    final logs = await _auditsFor(messageId);
     if (logs is Failure<List<AuditLog>>) return Failure(logs.error);
     final ok = (logs as Success<List<AuditLog>>)
         .value

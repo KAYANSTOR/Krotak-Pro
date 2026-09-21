@@ -37,7 +37,37 @@ abstract interface class CustomerService {
 abstract interface class CustomerBalanceService {
   Future<Result<Money>> getBalance({required String customerId, required String currencyCode});
   Future<Result<Money>> getTotalOutstanding({required String currencyCode});
-  Future<Result<Transaction>> credit({required String customerId, required Money amount, String? reference});
+  Future<Result<Transaction>> credit({required String customerId, required Money amount, String? reference, String? reason});
+  /// خصم رصيد (withdrawal) — يزيد الدين أو يخفض الرصيد الدائن. Atomic + Audit.
+  Future<Result<Transaction>> debit({required String customerId, required Money amount, String? reference, String? reason});
+  /// ملخص دفتر العميل من الحركات المكتملة (بدون أرقام وهمية).
+  Future<Result<CustomerAccountSummary>> getAccountSummary({required String customerId, required String currencyCode});
+}
+
+/// ملخص محاسبي لملف العميل — مصدره الدفتر الحقيقي فقط.
+final class CustomerAccountSummary {
+  const CustomerAccountSummary({
+    required this.balance,
+    required this.totalSalesMinor,
+    required this.totalDepositsMinor,
+    required this.totalWithdrawalsMinor,
+    required this.totalSettlementsMinor,
+    required this.openAdvancesCount,
+    required this.openAdvancesMinor,
+    required this.transactionCount,
+  });
+
+  final Money balance;
+  final int totalSalesMinor;
+  final int totalDepositsMinor;
+  final int totalWithdrawalsMinor;
+  final int totalSettlementsMinor;
+  final int openAdvancesCount;
+  final int openAdvancesMinor;
+  final int transactionCount;
+
+  /// الدين الحالي إن كان الرصيد سالباً.
+  int get currentDebtMinor => balance.minorUnits < 0 ? -balance.minorUnits : 0;
 }
 
 abstract interface class CardCatalogService {

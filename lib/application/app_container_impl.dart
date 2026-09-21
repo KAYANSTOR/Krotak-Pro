@@ -21,6 +21,7 @@ import '../domain/services/local_backup_service.dart';
 import '../domain/services/local_maintenance_service.dart';
 import '../domain/services/local_message_recovery_service.dart';
 import '../domain/services/message_delivery_worker.dart';
+import '../domain/services/message_pipeline_trace.dart';
 import '../domain/services/pos_order_delivery_worker.dart';
 import '../domain/services/local_low_stock_alert_service.dart';
 import '../domain/services/local_message_retry_service.dart';
@@ -166,7 +167,8 @@ final class AppContainer {
     final auditLogs = LocalAuditLogRepository(database);
     final licenses = LocalLicenseRepository(database);
     final settings = LocalSettingsRepository(database);
-    final balanceService = LocalCustomerBalanceService(customers: customers, transactions: transactions, auditLogs: auditLogs, unitOfWork: uow, clock: clock, ids: ids);
+    final advanceRepository = LocalAdvanceRepository(transactions: transactions, sales: sales);
+    final balanceService = LocalCustomerBalanceService(customers: customers, transactions: transactions, auditLogs: auditLogs, unitOfWork: uow, clock: clock, ids: ids, advances: advanceRepository);
     final customerService = LocalCustomerService(customers: customers, auditLogs: auditLogs, unitOfWork: uow, clock: clock, ids: ids);
     final walletCatalog = LocalWalletCatalogService(wallets: wallets, auditLogs: auditLogs, settings: settings, clock: clock, ids: ids);
     final posCatalog = LocalPointOfSaleCatalogService(pointsOfSale: pointsOfSale, auditLogs: auditLogs, clock: clock, ids: ids);
@@ -198,10 +200,9 @@ final class AppContainer {
     final smsBridge = SmsBridge();
     final messageSender = NativeMessageSender(smsBridge);
     final saleService = LocalSaleService(customers: customers, categories: categories, cards: cards, sales: sales, transactions: transactions, balances: balanceService, inventory: inventoryService, auditLogs: auditLogs, unitOfWork: uow, clock: clock, ids: ids, messageSender: messageSender);
-    final advanceRepository = LocalAdvanceRepository(transactions: transactions, sales: sales);
-    final broadcastJobs = LocalBroadcastRepository(settings: settings);
+        final broadcastJobs = LocalBroadcastRepository(settings: settings);
     final broadcastService = LocalBroadcastService(customers: customers, jobs: broadcastJobs, settings: settings, auditLogs: auditLogs, messageSender: messageSender, clock: clock, ids: ids, transactions: transactions, posRegistry: posRegistry, sendDelay: Duration.zero);
-    final advanceService = LocalAdvanceService(advances: advanceRepository, customers: customers, categories: categories, cards: cards, inventory: inventoryService, transactions: transactions, sales: sales, auditLogs: auditLogs, settings: settings, unitOfWork: uow, messageSender: messageSender, clock: clock, ids: ids);
+    final advanceService = LocalAdvanceService(advances: advanceRepository, customers: customers, categories: categories, cards: cards, inventory: inventoryService, transactions: transactions, sales: sales, auditLogs: auditLogs, settings: settings, unitOfWork: uow, messageSender: messageSender, clock: clock, ids: ids, posRegistry: posRegistry);
     final contactDirectory = ContactPickerBridge();
     final processor = LocalTransferProcessor(messages: messages, customers: customers, balances: balanceService, auditLogs: auditLogs, unitOfWork: uow, clock: clock, ids: ids, categories: categories, cards: cards, inventory: inventoryService, transactions: transactions, reservedSales: saleService, messageSender: messageSender, settings: settings, advanceService: advanceService, customerService: customerService, contactDirectory: contactDirectory, posRegistry: posRegistry, categoryCommissionStore: categoryCommissionStore, sales: sales);
     final licenseService = LocalLicenseService(licenses: licenses, clock: clock);
@@ -269,10 +270,11 @@ final class AppContainer {
       clock: clock,
       ids: ids,
     );
-    final smsEngine = UnifiedPaymentEventEngine(messages: messages, parser: parser, processor: processor, ids: ids, settings: settings, sourceGuard: sourceGuard, posBalanceRequestService: posBalanceRequests);
-    final notificationEngine = UnifiedPaymentEventEngine(messages: messages, parser: parser, processor: processor, ids: ids, settings: settings, sourceGuard: sourceGuard, posBalanceRequestService: posBalanceRequests);
+    final pipelineMetrics = MessagePipelineMetrics(auditLogs: auditLogs, clock: clock, ids: ids);
+    final smsEngine = UnifiedPaymentEventEngine(messages: messages, parser: parser, processor: processor, ids: ids, settings: settings, sourceGuard: sourceGuard, posBalanceRequestService: posBalanceRequests, metrics: pipelineMetrics);
+    final notificationEngine = UnifiedPaymentEventEngine(messages: messages, parser: parser, processor: processor, ids: ids, settings: settings, sourceGuard: sourceGuard, posBalanceRequestService: posBalanceRequests, metrics: pipelineMetrics);
     final recoveryService = LocalMessageRecoveryService(messages: messages, parser: parser, processor: processor, sourceGuard: sourceGuard, retryService: retryService, settings: settings, auditLogs: auditLogs);
-    final deliveryWorker = MessageDeliveryWorker(messages: messages, auditLogs: auditLogs, cards: cards, messageSender: messageSender, retryService: retryService, clock: clock, ids: ids);
+    final deliveryWorker = MessageDeliveryWorker(messages: messages, auditLogs: auditLogs, cards: cards, messageSender: messageSender, retryService: retryService, clock: clock, ids: ids, metrics: pipelineMetrics);
     final posOrderDeliveryWorker = PosOrderDeliveryWorker(messages: messages, auditLogs: auditLogs, cards: cards, settings: settings, posRegistry: posRegistry, messageSender: messageSender, retryService: retryService, clock: clock, ids: ids);
     final pendingReview = PendingMessageReviewService(messages: messages, parser: parser, customers: customers, customerService: customerService, balances: balanceService, auditLogs: auditLogs, unitOfWork: uow, clock: clock, ids: ids, sourceGuard: sourceGuard);
     final smsHandler = IncomingSmsHandler(
@@ -309,7 +311,7 @@ final class AppContainer {
     smsHandler.start();
     await notificationHandler.start();
     await _runRecovery();
-    _recoveryTimer ??= Timer.periodic(const Duration(seconds: 5), (_) => _runRecovery());
+    _recoveryTimer ??= Timer.periodic(const Duration(seconds: 3), (_) => _runRecovery());
   }
 
   Future<void> runRecoveryPass() => _runRecovery();

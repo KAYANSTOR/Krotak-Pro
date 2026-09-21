@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../core/result.dart';
+import '../../../domain/phone_normalizer.dart';
 import '../../../domain/entities/customer.dart';
 import '../../../domain/entities/money.dart';
 import '../../../domain/entities/transaction.dart';
@@ -46,6 +49,12 @@ class _DirectSaleSheetState extends State<DirectSaleSheet> {
   /// نتيجة فحص النظام للرقم المُدخل: عميل موجود / غير معروف / لا شيء.
   String? _existingCustomerName;
 
+  /// اقتراحات أرقام العملاء أثناء الكتابة (من قاعدة البيانات الحقيقية فقط).
+  List<CustomerPhoneSuggestion> _phoneSuggestions = const [];
+  bool _suggesting = false;
+  int _suggestSeq = 0;
+  Timer? _suggestDebounce;
+
   @override
   void initState() {
     super.initState();
@@ -54,6 +63,7 @@ class _DirectSaleSheetState extends State<DirectSaleSheet> {
 
   @override
   void dispose() {
+    _suggestDebounce?.cancel();
     _phoneCtrl.removeListener(_onPhoneChanged);
     _phoneCtrl.dispose();
     _amountCtrl.dispose();
@@ -71,26 +81,79 @@ class _DirectSaleSheetState extends State<DirectSaleSheet> {
     return (major * 100).round();
   }
 
-  Future<void> _onPhoneChanged() async {
+  void _onPhoneChanged() {
     final phone = _phoneCtrl.text.trim();
-    if (!_phoneValid) {
-      if (_existingCustomerName != null) {
-        setState(() => _existingCustomerName = null);
+    if (phone.isEmpty) {
+      _suggestDebounce?.cancel();
+      if (_phoneSuggestions.isNotEmpty || _existingCustomerName != null || _suggesting) {
+        setState(() {
+          _phoneSuggestions = const [];
+          _existingCustomerName = null;
+          _suggesting = false;
+        });
       }
       return;
     }
-    // فحص عرضي فقط (قراءة) — لا يؤثر على مسار البيع إطلاقًا.
+    // Debounce 250ms — لا استعلام مكلف لكل حرف.
+    _suggestDebounce?.cancel();
+    _suggestDebounce = Timer(const Duration(milliseconds: 250), () {
+      unawaited(_runPhoneSuggestions());
+    });
+  }
+
+  Future<void> _runPhoneSuggestions() async {
+    final phone = _phoneCtrl.text.trim();
+    final seq = ++_suggestSeq;
+    if (phone.isEmpty) return;
+
+    if (mounted) setState(() => _suggesting = true);
     final c = AppScope.of(context);
-    final r = await c.customers.findByIdentifier(phone);
-    if (!mounted) return;
-    String? name;
-    if (r is Success<Customer?> && r.value != null) {
-      final customer = r.value!;
-      if (customer.status == CustomerStatus.active) {
-        name = customer.displayName;
+    final suggestResult =
+        await c.customers.suggestPhonesByPrefix(phone, limit: 8);
+    if (!mounted || seq != _suggestSeq) return;
+
+    List<CustomerPhoneSuggestion> suggestions = const [];
+    if (suggestResult is Success<List<CustomerPhoneSuggestion>>) {
+      suggestions = suggestResult.value;
+    }
+
+    String? existingName;
+    if (_phoneValid) {
+      final r = await c.customers.findByIdentifier(phone);
+      if (!mounted || seq != _suggestSeq) return;
+      if (r is Success<Customer?> && r.value != null) {
+        final customer = r.value!;
+        if (customer.status == CustomerStatus.active ||
+            customer.status == CustomerStatus.provisional) {
+          existingName = customer.displayName;
+          if (_nameCtrl.text.trim().isEmpty &&
+              customer.displayName.trim().isNotEmpty) {
+            _nameCtrl.text = customer.displayName;
+          }
+        }
       }
     }
-    setState(() => _existingCustomerName = name);
+
+    setState(() {
+      _phoneSuggestions = suggestions;
+      _existingCustomerName = existingName;
+      _suggesting = false;
+    });
+  }
+
+  void _applySuggestion(CustomerPhoneSuggestion s) {
+    _phoneCtrl.removeListener(_onPhoneChanged);
+    _phoneCtrl.text = s.phone;
+    _phoneCtrl.selection = TextSelection.collapsed(offset: s.phone.length);
+    if (s.displayName.trim().isNotEmpty) {
+      _nameCtrl.text = s.displayName;
+    }
+    _phoneCtrl.addListener(_onPhoneChanged);
+    setState(() {
+      _phoneSuggestions = const [];
+      _existingCustomerName = s.displayName;
+      _suggesting = false;
+    });
   }
 
   Future<void> _pickContact() async {
@@ -102,7 +165,7 @@ class _DirectSaleSheetState extends State<DirectSaleSheet> {
     if (phone == null || phone.isEmpty) return;
     _phoneCtrl.text = phone;
     _phoneCtrl.selection = TextSelection.collapsed(offset: phone.length);
-    await _onPhoneChanged();
+    await _runPhoneSuggestions();
   }
 
   Future<void> _confirm() async {
@@ -245,6 +308,7 @@ class _DirectSaleSheetState extends State<DirectSaleSheet> {
                           keyboardType: TextInputType.phone,
                           textInputAction: TextInputAction.done,
                           inputFormatters: [
+                            _WesternDigitsFormatter(),
                             FilteringTextInputFormatter.digitsOnly,
                             LengthLimitingTextInputFormatter(9),
                           ],
@@ -302,6 +366,109 @@ class _DirectSaleSheetState extends State<DirectSaleSheet> {
                   ),
                 ),
                 const SizedBox(height: NetSpacing.xs),
+
+                // ── اقتراحات أرقام العملاء (أثناء الكتابة) ──
+                if (_phoneSuggestions.isNotEmpty) ...[
+                  const SizedBox(height: NetSpacing.sm),
+                  Container(
+                    constraints: const BoxConstraints(maxHeight: 180),
+                    decoration: BoxDecoration(
+                      color: scheme.surfaceContainerHighest.withValues(alpha: 0.55),
+                      borderRadius: NetRadii.mdAll,
+                      border: Border.all(color: scheme.outlineVariant),
+                    ),
+                    child: ListView.separated(
+                      shrinkWrap: true,
+                      padding: const EdgeInsets.symmetric(vertical: NetSpacing.xs),
+                      itemCount: _phoneSuggestions.length,
+                      separatorBuilder: (_, __) => Divider(
+                        height: 1,
+                        color: scheme.outlineVariant.withValues(alpha: 0.5),
+                      ),
+                      itemBuilder: (context, index) {
+                        final s = _phoneSuggestions[index];
+                        return InkWell(
+                          onTap: () => _applySuggestion(s),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: NetSpacing.md,
+                              vertical: NetSpacing.sm,
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.person_search_rounded,
+                                  size: 18,
+                                  color: palette.primary,
+                                ),
+                                const SizedBox(width: NetSpacing.sm),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        s.phone,
+                                        style: TextStyle(
+                                          fontFamily: NetTypography.family,
+                                          fontSize: 14.5,
+                                          fontWeight: FontWeight.w800,
+                                          color: scheme.onSurface,
+                                        ),
+                                      ),
+                                      if (s.displayName.trim().isNotEmpty)
+                                        Text(
+                                          s.displayName,
+                                          style: TextStyle(
+                                            fontFamily: NetTypography.family,
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w600,
+                                            color: palette.textSecondary,
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                                if (s.status == CustomerStatus.provisional)
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 6,
+                                      vertical: 2,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: palette.iconBadgeBackground,
+                                      borderRadius: NetRadii.pillAll,
+                                    ),
+                                    child: Text(
+                                      'مؤقت',
+                                      style: TextStyle(
+                                        fontFamily: NetTypography.family,
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w700,
+                                        color: palette.primary,
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ] else if (_suggesting && _phoneCtrl.text.trim().isNotEmpty) ...[
+                  const SizedBox(height: NetSpacing.xs),
+                  Align(
+                    alignment: AlignmentDirectional.centerStart,
+                    child: Text(
+                      'جاري البحث عن أرقام…',
+                      style: TextStyle(
+                        fontFamily: NetTypography.family,
+                        fontSize: 11.5,
+                        color: palette.textTertiary,
+                      ),
+                    ),
+                  ),
+                ],
 
                 // ── كشف عميل موجود (عرض فقط) ──
                 Align(
@@ -583,6 +750,22 @@ class _DirectSaleSheetState extends State<DirectSaleSheet> {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// يحوّل الأرقام العربية/الفارسية إلى لاتينية أثناء الكتابة في حقل الجوال.
+final class _WesternDigitsFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    final western = PhoneNormalizer.toWesternDigits(newValue.text);
+    if (western == newValue.text) return newValue;
+    return TextEditingValue(
+      text: western,
+      selection: TextSelection.collapsed(offset: western.length),
     );
   }
 }

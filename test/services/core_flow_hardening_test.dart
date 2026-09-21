@@ -129,7 +129,48 @@ final class _FakeMessages implements MessageRepository {
 }
 final class _FakeParser implements MessageParser { const _FakeParser(this.transfer); final ParsedTransfer transfer; @override Result<ParsedTransfer> parse(IncomingMessage message) => Success(ParsedTransfer(messageId: message.id, amount: transfer.amount, customerIdentifier: transfer.customerIdentifier, identifierType: transfer.identifierType, reference: transfer.reference)); }
 final class _FakeProcessor implements TransferProcessor { int calls = 0; @override Future<Result<Transaction>> process(ParsedTransfer transfer) async { calls++; return Success(Transaction(id: 'tx-$calls', customerId: 'customer-1', type: TransactionType.deposit, status: TransactionStatus.completed, amount: transfer.amount, createdAt: DateTime.utc(2026, 9, 12), reference: transfer.reference)); } }
-final class _DbWritingBalance implements CustomerBalanceService { _DbWritingBalance(this.transactions); final LocalTransactionRepository transactions; @override Future<Result<Money>> getBalance({required String customerId, required String currencyCode}) async => Success(Money(minorUnits: 0, currencyCode: currencyCode)); @override Future<Result<Money>> getTotalOutstanding({required String currencyCode}) async => Success(Money(minorUnits: 0, currencyCode: currencyCode)); @override Future<Result<Transaction>> credit({required String customerId, required Money amount, String? reference}) async { final tx = Transaction(id: 'tx-mid-flow', customerId: customerId, type: TransactionType.deposit, status: TransactionStatus.completed, amount: amount, createdAt: DateTime.utc(2026, 9, 12), reference: reference); final appended = await transactions.append(tx); if (appended is Failure<void>) return Failure(appended.error); return Success(tx); } }
+final class _DbWritingBalance implements CustomerBalanceService {
+  _DbWritingBalance(this.transactions);
+  final LocalTransactionRepository transactions;
+
+  @override
+  Future<Result<Money>> getBalance({required String customerId, required String currencyCode}) async =>
+      Success(Money(minorUnits: 0, currencyCode: currencyCode));
+
+  @override
+  Future<Result<Money>> getTotalOutstanding({required String currencyCode}) async =>
+      Success(Money(minorUnits: 0, currencyCode: currencyCode));
+
+  @override
+  Future<Result<Transaction>> credit({
+    required String customerId,
+    required Money amount,
+    String? reference,
+    String? reason,
+  }) async {
+    final tx = Transaction(
+      id: 'tx-mid-flow',
+      customerId: customerId,
+      type: TransactionType.deposit,
+      status: TransactionStatus.completed,
+      amount: amount,
+      createdAt: DateTime.utc(2026, 9, 12),
+      reference: reference,
+    );
+    final appended = await transactions.append(tx);
+    if (appended is Failure<void>) return Failure(appended.error);
+    return Success(tx);
+  }
+
+  @override
+  Future<Result<Transaction>> debit({required String customerId, required Money amount, String? reference, String? reason}) async =>
+      Success(Transaction(id: 'debit', customerId: customerId, type: TransactionType.withdrawal, status: TransactionStatus.completed, amount: amount, createdAt: DateTime.utc(2026, 1, 1), reference: reference));
+
+  @override
+  Future<Result<CustomerAccountSummary>> getAccountSummary({required String customerId, required String currencyCode}) async =>
+      Success(CustomerAccountSummary(balance: Money(minorUnits: 0, currencyCode: currencyCode), totalSalesMinor: 0, totalDepositsMinor: 0, totalWithdrawalsMinor: 0, totalSettlementsMinor: 0, openAdvancesCount: 0, openAdvancesMinor: 0, transactionCount: 0));
+}
+
 final class _AcceptingAudit implements AuditLogRepository { @override Future<Result<void>> append(AuditLog log) async => const Success(null); @override Future<Result<List<AuditLog>>> findByEntity(String entityType, String entityId) async => const Success([]); }
 final class _FailingAudit implements AuditLogRepository { int attempts = 0; @override Future<Result<void>> append(AuditLog log) async { attempts++; return const Failure(AppFailure(code: 'audit_failed', message: 'audit failed')); } @override Future<Result<List<AuditLog>>> findByEntity(String entityType, String entityId) async => const Success([]); }
 final class _DriftUow implements UnitOfWork { const _DriftUow(this.database); final AppDatabase database; @override Future<Result<T>> run<T>(Future<Result<T>> Function() action) async { try { return await database.transaction(() async { final result = await action(); if (result is Failure<T>) throw _Rollback(result.error); return result; }); } on _Rollback catch (error) { return Failure(error.failure); } catch (error) { return Failure(AppFailure(code: 'transaction_failed', message: error.toString())); } } }

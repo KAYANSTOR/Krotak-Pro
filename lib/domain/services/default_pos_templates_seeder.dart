@@ -4,36 +4,40 @@ import '../repositories/repositories.dart';
 
 /// Seeds the built-in **inbound** parse templates for a single point-of-sale.
 ///
-/// Invoked by [LocalPosProfileService.create] right after a new POS is saved
-/// so the operator sees a full working catalog immediately (product video:
-/// «نقطة بيع جديدة» → قوالب نشطة تظهر مباشرة).
+/// Commercial catalog (Krotak Pro full-completion plan §3): **exactly three**
+/// default inbound POS templates. POS identity is always taken from the SMS
+/// sender / registered identifier — never from the message body.
 ///
-/// Unlike [DefaultWalletTemplatesSeeder] (global, gated by a settings flag),
-/// this seeder is keyed by `posId` — each POS gets its own copy. Stable ids
-/// `tpl-pos-{posId}-{variant}` make the operation idempotent: calling
-/// [seedForPos] again backfills any missing variants without duplicating rows
-/// and, by default, without touching the state or the text of existing rows.
+/// 1. Cards to the POS itself: `{qty} كرت {amount}`
+/// 2. Cards to a POS customer: `{qty} كرت {amount} {dest}`
+/// 3. Balance inquiry: `111`
 ///
-/// All variants are seeded **active**: one POS needs several patterns at once
-/// (single card, multi card, delivery destination, balance request) and
-/// [LocalMessageParser] picks the best match by ascending `priority`.
-///
-/// Catalog covers single-card, multi-card (`{qty}`), delivery override
-/// (`{dest}`), and balance-request — matching what [LocalMessageParser]
-/// already understands.
+/// Custom templates the operator creates are left untouched. Seeding is
+/// **add-missing-only** unless [overwriteExisting] is true.
 final class DefaultPosTemplatesSeeder {
   const DefaultPosTemplatesSeeder({required this.templates});
 
   final TransferTemplateRepository templates;
 
-  /// Number of built-in variants currently defined (for tests / UI hints).
+  /// Number of built-in variants (always 3 for the commercial catalog).
   static int get catalogSize => _specs.length;
 
-  /// يزرع كتالوج القوالب الكامل لنقطة بيع.
-  ///
-  /// [overwriteExisting] = false (الافتراضي) يجعل العملية **إضافة الناقص فقط**
-  /// فلا يُعاد تفعيل قالب أوقفه المشغّل عند كل تعديل لنقطة البيع، ولا يضيع أي
-  /// تعديل يدوي على النص. فعّل [overwriteExisting] عند بناء/إصلاح الكتالوج.
+  /// Legacy default variant ids that are no longer part of the commercial
+  /// catalog. Existing rows are **deactivated** (not deleted) so custom text
+  /// is preserved and audit history stays intact.
+  static const legacyDefaultVariants = <String>{
+    'multi',
+    'multi-reversed',
+    'multi-dest',
+    'multi-dest-reversed',
+    'dest',
+    'dest-reversed',
+    'normal',
+    'reversed',
+    'arabic-digits',
+    'arabic-digits-reversed',
+  };
+
   Future<Result<int>> seedForPos({
     required String posId,
     required String posName,
@@ -43,13 +47,38 @@ final class DefaultPosTemplatesSeeder {
     if (existing is Failure<List<TransferTemplate>>) {
       return Failure(existing.error);
     }
+    final all = (existing as Success<List<TransferTemplate>>).value;
     final existingIds = !overwriteExisting
-        ? {
-            for (final t in (existing as Success<List<TransferTemplate>>).value)
-              t.id,
-          }
+        ? {for (final t in all) t.id}
         : const <String>{};
-    var inserted = 0;
+
+    var changed = 0;
+
+    // Deactivate legacy default variants for this POS (add-missing / migrate).
+    for (final t in all) {
+      if (!t.id.startsWith('tpl-pos-$posId-')) continue;
+      final variant = t.id.substring('tpl-pos-$posId-'.length);
+      if (!legacyDefaultVariants.contains(variant)) continue;
+      if (!t.isActive) continue;
+      final deactivated = TransferTemplate(
+        id: t.id,
+        name: t.name,
+        pattern: t.pattern,
+        isActive: false,
+        priority: t.priority,
+        walletId: t.walletId,
+        posId: t.posId,
+        sampleBody: t.sampleBody,
+        identifierKind: t.identifierKind,
+        senderNameLabel: t.senderNameLabel,
+        noteLabel: t.noteLabel,
+        requireReference: t.requireReference,
+      );
+      final save = await templates.save(deactivated);
+      if (save is Failure<void>) return Failure(save.error);
+      changed++;
+    }
+
     for (final spec in _specs) {
       final id = 'tpl-pos-$posId-${spec.variant}';
       if (existingIds.contains(id)) continue;
@@ -58,141 +87,54 @@ final class DefaultPosTemplatesSeeder {
         name: spec.name,
         pattern: spec.pattern,
         isActive: true,
-        posId: posId,
         priority: spec.priority,
+        walletId: null,
+        posId: posId,
         sampleBody: spec.sampleBody,
-        senderCode: posName,
         identifierKind: spec.identifierKind,
         senderNameLabel: spec.senderNameLabel,
         noteLabel: spec.noteLabel,
         requireReference: spec.requireReference,
       );
-      final saved = await templates.save(tpl);
-      if (saved is Failure<void>) return Failure(saved.error);
-      inserted += 1;
+      final save = await templates.save(tpl);
+      if (save is Failure<void>) return Failure(save.error);
+      changed++;
     }
-    return Success(inserted);
+    return Success(changed);
   }
 
-  /// Full default inbound catalog.
-  ///
-  /// Priority is ascending in the parser (lower runs first). More-specific
-  /// patterns (`{qty}`, `{dest}`) therefore use lower numbers so they win
-  /// over the generic single-card patterns.
   static const _specs = <_TplSpec>[
-    // ── multi-card + optional delivery destination (most specific) ──
+    // 1 — إرسال كروت إلى نقطة البيع (الهوية من المرسل)
     _TplSpec(
-      variant: 'multi-qty-dest',
-      name: 'طلب عدة كروت مع رقم التسليم',
-      priority: 0,
-      pattern: '{phone} {amount} {qty} {dest}',
-      sampleBody: '779776919 100 3 733000111',
-      senderNameLabel: 'غير معروف',
-      noteLabel: 'طلب كروت متعدد + تسليم',
-      requireReference: false,
-    ),
-    _TplSpec(
-      variant: 'multi-qty-dest-reversed',
-      name: 'طلب عدة كروت مع رقم التسليم (معكوس)',
+      variant: 'cards-to-pos',
+      name: 'إرسال كروت إلى نقطة البيع',
       priority: 1,
-      pattern: '{amount} {phone} {qty} {dest}',
-      sampleBody: '100 779776919 3 733000111',
-      senderNameLabel: 'غير معروف',
-      noteLabel: 'طلب كروت متعدد + تسليم',
+      pattern: '{qty} كرت {amount}',
+      sampleBody: '10 كرت 100',
+      senderNameLabel: 'نقطة البيع',
+      noteLabel: 'كروت لنقطة البيع',
       requireReference: false,
     ),
+    // 2 — إرسال كروت إلى عميل نقطة البيع
     _TplSpec(
-      variant: 'multi-qty',
-      name: 'طلب عدة كروت لعميل',
+      variant: 'cards-to-pos-customer',
+      name: 'إرسال كروت إلى عميل نقطة البيع',
       priority: 2,
-      pattern: '{phone} {amount} {qty}',
-      sampleBody: '779776919 100 3',
-      senderNameLabel: 'غير معروف',
-      noteLabel: 'طلب كروت متعدد',
+      pattern: '{qty} كرت {amount} {dest}',
+      sampleBody: '1 كرت 100 777123456',
+      senderNameLabel: 'نقطة البيع',
+      noteLabel: 'كروت لعميل نقطة البيع',
       requireReference: false,
     ),
-    _TplSpec(
-      variant: 'multi-qty-reversed',
-      name: 'طلب عدة كروت لعميل (معكوس)',
-      priority: 3,
-      pattern: '{amount} {phone} {qty}',
-      sampleBody: '100 779776919 3',
-      senderNameLabel: 'غير معروف',
-      noteLabel: 'طلب كروت متعدد',
-      requireReference: false,
-    ),
-    _TplSpec(
-      variant: 'dest',
-      name: 'طلب كرت مع رقم التسليم',
-      priority: 4,
-      pattern: '{phone} {amount} {dest}',
-      sampleBody: '779776919 100 733000111',
-      senderNameLabel: 'غير معروف',
-      noteLabel: 'طلب كرت + تسليم',
-      requireReference: false,
-    ),
-    _TplSpec(
-      variant: 'dest-reversed',
-      name: 'طلب كرت مع رقم التسليم (معكوس)',
-      priority: 5,
-      pattern: '{amount} {phone} {dest}',
-      sampleBody: '100 779776919 733000111',
-      senderNameLabel: 'غير معروف',
-      noteLabel: 'طلب كرت + تسليم',
-      requireReference: false,
-    ),
-
-    // ── single-card (generic) ──
-    _TplSpec(
-      variant: 'normal',
-      name: 'طلب كرت لعميل',
-      priority: 10,
-      pattern: '{phone} {amount}',
-      sampleBody: '779776919 100',
-      senderNameLabel: 'غير معروف',
-      noteLabel: 'طلب كرت',
-      requireReference: false,
-    ),
-    _TplSpec(
-      variant: 'reversed',
-      name: 'طلب كرت لعميل (معكوس)',
-      priority: 11,
-      pattern: '{amount} {phone}',
-      sampleBody: '100 779776919',
-      senderNameLabel: 'غير معروف',
-      noteLabel: 'طلب كرت',
-      requireReference: false,
-    ),
-    _TplSpec(
-      variant: 'arabic-digits',
-      name: 'طلب كرت (أرقام عربية)',
-      priority: 12,
-      pattern: '{phone} {amount}',
-      sampleBody: '٧٧٩٧٧٦٩١٩ ١٠٠',
-      senderNameLabel: 'غير معروف',
-      noteLabel: 'طلب كرت',
-      requireReference: false,
-    ),
-    _TplSpec(
-      variant: 'arabic-digits-reversed',
-      name: 'طلب كرت (أرقام عربية معكوس)',
-      priority: 13,
-      pattern: '{amount} {phone}',
-      sampleBody: '١٠٠ ٧٧٩٧٧٦٩١٩',
-      senderNameLabel: 'غير معروف',
-      noteLabel: 'طلب كرت',
-      requireReference: false,
-    ),
-
-    // ── balance ──
+    // 3 — استعلام رصيد نقطة البيع
     _TplSpec(
       variant: 'balance-request',
-      name: 'طلب رصيد نقطة البيع',
+      name: 'استعلام رصيد نقطة البيع',
       priority: 20,
       pattern: '111',
       sampleBody: '111',
       identifierKind: TemplateIdentifierKind.balanceRequestCode,
-      senderNameLabel: 'غير معروف',
+      senderNameLabel: 'نقطة البيع',
       noteLabel: 'طلب رصيد',
       requireReference: false,
     ),
@@ -220,8 +162,5 @@ final class _TplSpec {
   final TemplateIdentifierKind identifierKind;
   final String? senderNameLabel;
   final String? noteLabel;
-
-  /// POS request formats carry no bank transaction reference — opt out of
-  /// the parser's default «reference required» safety check.
   final bool requireReference;
 }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../core/result.dart';
+import '../../../domain/entities/wallet.dart';
 import '../../../domain/entities/payment_event.dart';
 import '../../app_scope.dart';
 import '../../theme/kayan_palette.dart';
@@ -71,6 +72,37 @@ class _WalletNotificationSettingsScreenState extends State<WalletNotificationSet
     await _sync();
   }
 
+
+  /// يسجّل كل محفظة بوضع إشعار كمصدر مفعّل في السجل — الربط الفعلي مع المحرك.
+  Future<void> _syncFromWallets() async {
+    final c = AppScope.of(context);
+    final wallets = await c.walletCatalog.listEnriched();
+    if (wallets is Failure) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text((wallets as Failure).error.message, style: const TextStyle(fontFamily: 'Tajawal'))),
+        );
+      }
+      return;
+    }
+    var n = 0;
+    for (final w in (wallets as Success).value) {
+      final pkg = (w.packageName ?? '').trim();
+      if (w.sourceMode != WalletSourceMode.notification || pkg.isEmpty) continue;
+      final r = await c.notificationSources.upsert(
+        displayName: w.name,
+        packageName: pkg,
+        enabled: w.status == WalletStatus.active,
+      );
+      if (r is Success) n++;
+    }
+    await _sync();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('تمت مزامنة $n مصدر إشعار من المحافظ', style: const TextStyle(fontFamily: 'Tajawal'))),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final palette = KayanPalette.of(context);
@@ -78,7 +110,15 @@ class _WalletNotificationSettingsScreenState extends State<WalletNotificationSet
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
-        appBar: AppBar(title: const Text('إشعارات المحافظ')),
+        appBar: AppBar(
+          title: const Text('إشعارات المحافظ'),
+          actions: [
+            TextButton(
+              onPressed: _loading ? null : _syncFromWallets,
+              child: const Text('مزامنة المحافظ', style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w700)),
+            ),
+          ],
+        ),
         body: _loading
             ? const AsyncLoadingView(skeleton: true, skeletonCount: 3)
             : RefreshIndicator(
