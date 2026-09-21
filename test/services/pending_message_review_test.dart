@@ -125,7 +125,8 @@ final class _FakeBalances implements CustomerBalanceService {
   int credits = 0;
   @override Future<Result<Money>> getBalance({required String customerId, required String currencyCode}) async => Success(Money(minorUnits: 0, currencyCode: currencyCode));
   @override Future<Result<Money>> getTotalOutstanding({required String currencyCode}) async => Success(Money(minorUnits: 0, currencyCode: currencyCode));
-  @override Future<Result<Transaction>> credit({required String customerId, required Money amount, String? reference}) async { credits++; return Success(Transaction(id: 'tx-$credits', customerId: customerId, type: TransactionType.deposit, status: TransactionStatus.completed, amount: amount, createdAt: DateTime.utc(2026, 9, 12), reference: reference)); }
+  @override Future<Result<Transaction>> credit({required String customerId, required Money amount, String? reference, String? reason}) async { credits++; return Success(Transaction(id: 'tx-$credits', customerId: customerId, type: TransactionType.deposit, status: TransactionStatus.completed, amount: amount, createdAt: DateTime.utc(2026, 9, 12), reference: reference)); }
+  @override Future<Result<Transaction>> debit({required String customerId, required Money amount, String? reference, String? reason}) async => Success(Transaction(id: 'db-1', customerId: customerId, type: TransactionType.withdrawal, status: TransactionStatus.completed, amount: amount, createdAt: DateTime.utc(2026, 9, 12), reference: reference));
 }
 final class _FakeAudit implements AuditLogRepository {
   final logs = <AuditLog>[];
