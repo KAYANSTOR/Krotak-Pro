@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:krotak_pro/ui/screens/help_center_screen.dart';
-import 'package:krotak_pro/ui/widgets/async_views.dart';
+import 'package:net_app/ui/screens/help_center_screen.dart';
+import 'package:net_app/ui/widgets/async_views.dart';
 
 void main() {
   testWidgets('HelpCenterScreen renders current offline topics', (tester) async {
