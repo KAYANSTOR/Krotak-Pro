@@ -123,8 +123,8 @@ abstract interface class LicenseRepository {
 }
 
 abstract interface class SettingsRepository {
-  Future<Result<void>> save(AppSetting setting);
   Future<Result<AppSetting?>> find(String key);
+  Future<Result<void>> save(AppSetting setting);
 }
 
 abstract interface class AuditLogRepository {
