@@ -55,3 +55,24 @@ final class Customer {
     );
   }
 }
+
+/// نتيجة اقتراح رقم جوال من قاعدة العملاء الحقيقية (للبيع المباشر وغيره).
+/// لا تُنشئ عميلاً؛ للعرض والاختيار فقط.
+final class CustomerPhoneSuggestion {
+  const CustomerPhoneSuggestion({
+    required this.customerId,
+    required this.phone,
+    required this.displayName,
+    required this.status,
+    required this.updatedAt,
+  });
+
+  final String customerId;
+  final String phone;
+  final String displayName;
+  final CustomerStatus status;
+  final DateTime updatedAt;
+
+  bool get isSellable =>
+      status == CustomerStatus.active || status == CustomerStatus.provisional;
+}

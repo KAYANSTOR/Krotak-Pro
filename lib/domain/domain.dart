@@ -2,6 +2,7 @@ export 'entities/audit.dart';
 export 'entities/broadcast.dart';
 export 'entities/card.dart';
 export 'entities/customer.dart';
+export 'phone_normalizer.dart';
 export 'entities/license.dart';
 export 'entities/message.dart';
 export 'entities/payment_event.dart';
