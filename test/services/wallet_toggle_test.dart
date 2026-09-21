@@ -1,14 +1,14 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:net_app/core/clock.dart';
-import 'package:net_app/core/id_generator.dart';
-import 'package:net_app/core/result.dart';
-import 'package:net_app/domain/entities/message.dart';
-import 'package:net_app/domain/entities/payment_event.dart';
-import 'package:net_app/domain/entities/setting.dart';
-import 'package:net_app/domain/entities/wallet.dart';
-import 'package:net_app/domain/repositories/repositories.dart';
-import 'package:net_app/domain/services/local_catalog_services.dart';
-import 'package:net_app/domain/services/payment_source_guard.dart';
+import 'package:krotak_pro/core/clock.dart';
+import 'package:krotak_pro/core/id_generator.dart';
+import 'package:krotak_pro/core/result.dart';
+import 'package:krotak_pro/domain/entities/message.dart';
+import 'package:krotak_pro/domain/entities/payment_event.dart';
+import 'package:krotak_pro/domain/entities/setting.dart';
+import 'package:krotak_pro/domain/entities/wallet.dart';
+import 'package:krotak_pro/domain/repositories/repositories.dart';
+import 'package:krotak_pro/domain/services/local_catalog_services.dart';
+import 'package:krotak_pro/domain/services/payment_source_guard.dart';
 
 import '../helpers/in_memory_repositories.dart';
 
