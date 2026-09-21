@@ -12,8 +12,9 @@ import '../repositories/repositories.dart';
 /// 2. Cards to a POS customer: `{qty} كرت {amount} {dest}`
 /// 3. Balance inquiry: `111`
 ///
-/// Custom templates the operator creates are left untouched. Seeding is
-/// **add-missing-only** unless [overwriteExisting] is true.
+/// Custom templates the operator creates are left untouched. System defaults
+/// are also repaired in-place when their stable ids already exist, while the
+/// operator's enabled/disabled state is preserved.
 final class DefaultPosTemplatesSeeder {
   const DefaultPosTemplatesSeeder({required this.templates});
 
@@ -81,7 +82,49 @@ final class DefaultPosTemplatesSeeder {
 
     for (final spec in _specs) {
       final id = 'tpl-pos-$posId-${spec.variant}';
-      if (existingIds.contains(id)) continue;
+      final existingTemplate = all.cast<TransferTemplate?>().firstWhere(
+            (t) => t?.id == id,
+            orElse: () => null,
+          );
+
+      // Stable system ids are safe to repair: preserve the operator's active
+      // state, but restore the canonical parser contract after an app update.
+      if (existingTemplate != null) {
+        final repaired = TransferTemplate(
+          id: id,
+          name: spec.name,
+          pattern: spec.pattern,
+          isActive: existingTemplate.isActive,
+          priority: spec.priority,
+          walletId: existingTemplate.walletId,
+          posId: posId,
+          sampleBody: spec.sampleBody,
+          senderCode: existingTemplate.senderCode,
+          identifierKind: spec.identifierKind,
+          senderNameLabel: spec.senderNameLabel,
+          noteLabel: spec.noteLabel,
+          requireReference: spec.requireReference,
+        );
+        final same = existingTemplate.name == repaired.name &&
+            existingTemplate.pattern == repaired.pattern &&
+            existingTemplate.isActive == repaired.isActive &&
+            existingTemplate.priority == repaired.priority &&
+            existingTemplate.walletId == repaired.walletId &&
+            existingTemplate.posId == repaired.posId &&
+            existingTemplate.sampleBody == repaired.sampleBody &&
+            existingTemplate.senderCode == repaired.senderCode &&
+            existingTemplate.identifierKind == repaired.identifierKind &&
+            existingTemplate.senderNameLabel == repaired.senderNameLabel &&
+            existingTemplate.noteLabel == repaired.noteLabel &&
+            existingTemplate.requireReference == repaired.requireReference;
+        if (same) continue;
+
+        final save = await templates.save(repaired);
+        if (save is Failure<void>) return Failure(save.error);
+        changed++;
+        continue;
+      }
+
       final tpl = TransferTemplate(
         id: id,
         name: spec.name,
@@ -120,8 +163,8 @@ final class DefaultPosTemplatesSeeder {
       variant: 'cards-to-pos-customer',
       name: 'إرسال كروت إلى عميل نقطة البيع',
       priority: 2,
-      pattern: '{qty} كرت {amount} {dest}',
-      sampleBody: '1 كرت 100 777123456',
+      pattern: '{phone} {amount}',
+      sampleBody: '779776919 100',
       senderNameLabel: 'نقطة البيع',
       noteLabel: 'كروت لعميل نقطة البيع',
       requireReference: false,
