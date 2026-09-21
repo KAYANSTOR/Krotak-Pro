@@ -83,8 +83,13 @@ final class DefaultPosTemplatesSeeder {
             orElse: () => null,
           );
 
-      // Stable system ids are safe to repair: preserve the operator's active
-      // state, but restore the canonical parser contract after an app update.
+      // Only migrate the known broken built-in contract unless an explicit
+      // overwrite was requested. This preserves intentional operator changes.
+      final shouldRepair =
+          existingTemplate != null &&
+          (overwriteExisting || _needsKnownMigration(existingTemplate, spec));
+      if (existingTemplate != null && !shouldRepair) continue;
+
       if (existingTemplate != null) {
         final repaired = TransferTemplate(
           id: id,
