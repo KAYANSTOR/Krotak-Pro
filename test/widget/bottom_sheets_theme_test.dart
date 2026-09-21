@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:net_app/ui/theme/kayan_palette.dart';
-import 'package:net_app/ui/theme/kayan_theme.dart';
-import 'package:net_app/ui/widgets/dashboard/quick_actions_sheet.dart';
+import 'package:krotak_pro/ui/theme/kayan_palette.dart';
+import 'package:krotak_pro/ui/theme/kayan_theme.dart';
+import 'package:krotak_pro/ui/widgets/dashboard/quick_actions_sheet.dart';
 
 Widget _app({required ThemeMode mode, required Widget child}) {
   return MaterialApp(
