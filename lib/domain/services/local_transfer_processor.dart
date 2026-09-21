@@ -938,6 +938,57 @@ final class LocalTransferProcessor implements TransferProcessor {
     required MessageSender sender,
     required TransactionRepository transactionRepo,
   }) async {
+    // Durable commit marker is written BEFORE rendering/sending. The sale/card
+    // is already committed at this point, so every outbound failure (including
+    // a broken template) remains recoverable by PosOrderDeliveryWorker without
+    // allocating another card.
+    final commitPayload = jsonEncode({
+      'operationId': operationId,
+      'posId': posAccount.posId,
+      'posName': posAccount.name,
+      'customerDestination': customerDestination,
+      'posDestination': posDestination,
+      'categoryId': category.id,
+      'categoryName': category.name,
+      'faceValueMinor': category.faceValue.minorUnits,
+      'currencyCode': category.faceValue.currencyCode,
+      'unitChargeMinor': unitCharge.minorUnits,
+      'totalChargeMinor': unitCharge.minorUnits * items.length,
+      'quantity': items.length,
+      'items': [
+        for (final item in items)
+          {
+            'cardId': item.card.id,
+            'reservationId': item.reservationId,
+            'saleOperationId': item.saleOperationId,
+          },
+      ],
+    });
+
+    final commitAudit = await auditLogs.append(
+      AuditLog(
+        id: ids.next('audit'),
+        entityType: 'message',
+        entityId: message.id,
+        action: 'pos_order_committed',
+        occurredAt: clock.now(),
+        payloadJson: commitPayload,
+      ),
+    );
+    if (commitAudit is Failure<void>) {
+      await _persistTerminalFailure(
+        messageId: message.id,
+        status: MessageProcessingStatus.failed,
+        action: 'pos_order_commit_state_persist_failed',
+        error: commitAudit.error,
+        transfer: transfer,
+        deliveryPhone: customerDestination,
+      );
+      return Failure<Transaction>(commitAudit.error);
+    }
+
+    await messages.updateStatus(message.id, MessageProcessingStatus.sending);
+
     final settingsRepo = settings;
     if (settingsRepo == null) {
       const failure = AppFailure(
@@ -977,53 +1028,6 @@ final class LocalTransferProcessor implements TransferProcessor {
       return Failure<Transaction>(rendered.error);
     }
     final messagesBody = (rendered as Success<PosOrderMessages>).value;
-
-    final commitPayload = jsonEncode({
-      'operationId': operationId,
-      'posId': posAccount.posId,
-      'posName': posAccount.name,
-      'customerDestination': customerDestination,
-      'posDestination': posDestination,
-      'categoryId': category.id,
-      'categoryName': category.name,
-      'faceValueMinor': category.faceValue.minorUnits,
-      'currencyCode': category.faceValue.currencyCode,
-      'unitChargeMinor': unitCharge.minorUnits,
-      'totalChargeMinor': messagesBody.totalCharge.minorUnits,
-      'quantity': items.length,
-      'items': [
-        for (final item in items)
-          {
-            'cardId': item.card.id,
-            'reservationId': item.reservationId,
-            'saleOperationId': item.saleOperationId,
-          },
-      ],
-    });
-
-    final commitAudit = await auditLogs.append(
-      AuditLog(
-        id: ids.next('audit'),
-        entityType: 'message',
-        entityId: message.id,
-        action: 'pos_order_committed',
-        occurredAt: clock.now(),
-        payloadJson: commitPayload,
-      ),
-    );
-    if (commitAudit is Failure<void>) {
-      await _persistTerminalFailure(
-        messageId: message.id,
-        status: MessageProcessingStatus.failed,
-        action: 'pos_order_commit_state_persist_failed',
-        error: commitAudit.error,
-        transfer: transfer,
-        deliveryPhone: customerDestination,
-      );
-      return Failure<Transaction>(commitAudit.error);
-    }
-
-    await messages.updateStatus(message.id, MessageProcessingStatus.sending);
 
     final customerSent = await sender.send(
       destination: messagesBody.customerDestination,
