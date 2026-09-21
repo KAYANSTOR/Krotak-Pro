@@ -81,6 +81,10 @@ final class LocalMessageParser implements MessageParser {
           _tryInstantCharge(template, message.id, message.sender, body);
       if (instant != null) return Success(instant);
 
+      final posParsed =
+          _tryPosCardTemplateMatch(template, message.id, message.sender, body);
+      if (posParsed != null) return Success(posParsed);
+
       final parsed = _tryMatch(template, message.id, message.sender, body);
       if (parsed != null) return Success(parsed);
     }
@@ -187,6 +191,538 @@ final class LocalMessageParser implements MessageParser {
     );
   }
 
+  /// Matches the built-in POS card-order templates without forcing one
+  /// textual direction. Both normal and reversed numeric order are accepted:
+  /// 10 كرت 100 and 100 كرت 10.
+  ParsedTransfer? _tryPosCardTemplateMatch(
+    TransferTemplate template,
+    String messageId,
+    String sender,
+    String body,
+  ) {
+    final posId = template.posId?.trim();
+    if (posId == null || posId.isEmpty) return null;
+
+    final isToPos = template.id.endsWith('-cards-to-pos');
+    final isToCustomer = template.id.endsWith('-cards-to-pos-customer');
+    if (!isToPos && !isToCustomer) return null;
+
+    final match = isToCustomer
+        ? RegExp(r'^(\d+)\s+كرت\s+(\d+)\s+(\+?[\d]{7,15})
+    TransferTemplate template,
+    String messageId,
+    String sender,
+    String body,
+  ) {
+    final isPos = template.posId != null || !template.requireReference;
+    final regex = _patternToRegex(
+      template.pattern,
+      allowImplicitPosQuantity: isPos,
+    );
+    final match = regex.firstMatch(body);
+    if (match == null) return null;
+
+    final amountRaw = match.namedGroup('amount');
+    if (amountRaw == null || amountRaw.isEmpty) return null;
+
+    final minor = _parseAmountToMinor(amountRaw);
+    if (minor == null || minor <= 0) return null;
+
+    final phone = _group(match, 'phone');
+    final account = _group(match, 'account');
+    final ref = _group(match, 'ref');
+    final destinationRaw = _group(match, 'dest');
+    final qtyRaw = _group(match, 'qty');
+
+    // Financial templates require a captured reference unless the template
+    // explicitly opts out (POS card-request templates).
+    if (template.requireReference && (ref == null || ref.isEmpty)) return null;
+
+    String? identifier;
+    TransferIdentifierType type;
+    if (phone != null && phone.isNotEmpty) {
+      final normalizedPhone = _normalizePhone(phone);
+      if (normalizedPhone == null) return null;
+      identifier = normalizedPhone;
+      type = TransferIdentifierType.phone;
+    } else if (account != null && account.isNotEmpty) {
+      identifier = account.trim();
+      type = TransferIdentifierType.account;
+    } else if (isPos) {
+      final normalizedSender = _normalizePhone(sender);
+      if (normalizedSender == null) return null;
+      identifier = normalizedSender;
+      type = TransferIdentifierType.phone;
+    } else {
+      return null;
+    }
+
+    var quantity = 1;
+    if (qtyRaw != null && qtyRaw.isNotEmpty) {
+      quantity = int.tryParse(qtyRaw) ?? 0;
+    }
+    if (quantity < 1 || quantity > 20) return null;
+
+    String? deliveryOverride;
+    if (destinationRaw != null && destinationRaw.isNotEmpty) {
+      deliveryOverride = _normalizePhone(destinationRaw);
+      if (deliveryOverride == null) return null;
+    } else if (isPos && phone == null && account == null) {
+      deliveryOverride = identifier;
+    }
+
+    return ParsedTransfer(
+      messageId: messageId,
+      amount: Money(minorUnits: minor, currencyCode: defaultCurrencyCode),
+      customerIdentifier: identifier,
+      identifierType: type,
+      reference: ref ?? '',
+      templateId: template.id,
+      posId: template.posId,
+      rawIdentifier: phone ?? account,
+      quantity: quantity,
+      deliveryOverride: deliveryOverride,
+      instantCharge: false,
+    );
+  }
+
+  String? _group(RegExpMatch match, String name) {
+    try {
+      final v = match.namedGroup(name);
+      if (v == null || v.trim().isEmpty) return null;
+      return v.trim();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  String? _normalizePhone(String raw) {
+    final s = raw.trim();
+    if (s.startsWith('+')) {
+      final rest = s.substring(1).replaceAll(RegExp(r'\D'), '');
+      if (rest.length < 7 || rest.length > 15) return null;
+      return '+$rest';
+    }
+    final digits = s.replaceAll(RegExp(r'\D'), '');
+    if (digits.length < 7 || digits.length > 15) return null;
+    return digits;
+  }
+
+  RegExp _patternToRegex(
+    String pattern, {
+    bool allowImplicitPosQuantity = false,
+  }) {
+    final unified = _normalizeBody(pattern)
+        .replaceAll('%amount', '{amount}')
+        .replaceAll('%phone', '{phone}')
+        .replaceAll('%account', '{account}')
+        .replaceAll('%ref', '{ref}')
+        .replaceAll('%qty', '{qty}')
+        .replaceAll('%dest', '{dest}');
+
+    final buf = StringBuffer();
+    var i = 0;
+    while (i < unified.length) {
+      if (_flexibleSeparators.contains(unified[i])) {
+        buf.write(r'\s*');
+        buf.write(r'\');
+        buf.write(unified[i]);
+        buf.write(r'\s*');
+        i++;
+        continue;
+      }
+      if (unified.startsWith('{amount}', i)) {
+        buf.write(r'(?<amount>[\d]+(?:[.,]\d{1,2})?)');
+        i += '{amount}'.length;
+        continue;
+      }
+      if (unified.startsWith('{phone}', i)) {
+        buf.write(r'(?<phone>\+?[\d]{7,15})');
+        i += '{phone}'.length;
+        continue;
+      }
+      if (unified.startsWith('{account}', i)) {
+        buf.write(r'(?<account>.+?)');
+        i += '{account}'.length;
+        continue;
+      }
+      if (unified.startsWith('{ref}', i)) {
+        buf.write(r'(?<ref>\S{1,64})');
+        i += '{ref}'.length;
+        continue;
+      }
+      if (unified.startsWith('{qty}', i)) {
+        buf.write(r'(?<qty>\d{1,2})');
+        i += '{qty}'.length;
+        continue;
+      }
+      if (unified.startsWith('{dest}', i)) {
+        buf.write(r'(?<dest>\+?[\d]{7,15})');
+        i += '{dest}'.length;
+        continue;
+      }
+      final ch = unified[i];
+      if (ch == ' ' || ch == '\t' || ch == '\n') {
+        buf.write(r'\s*');
+        while (i + 1 < unified.length &&
+            (unified[i + 1] == ' ' ||
+                unified[i + 1] == '\t' ||
+                unified[i + 1] == '\n')) {
+          i++;
+        }
+      } else if (_regexMeta.contains(ch)) {
+        buf.write(r'\');
+        buf.write(ch);
+      } else {
+        buf.write(ch);
+      }
+      i++;
+    }
+
+    // POS single-card patterns may accept an optional trailing quantity
+    // (`779776919 100 3`) when the pattern itself has no `{qty}`.
+    if (allowImplicitPosQuantity && !unified.contains('{qty}')) {
+      buf.write(r'(?:\s+(?<qty>\d{1,2}))?');
+    }
+
+    return RegExp(
+      '^${buf.toString()}\$',
+      caseSensitive: false,
+      unicode: true,
+    );
+  }
+
+  /// Collapse whitespace, strip bidi marks, unify Arabic letter variants, and
+  /// map Eastern digits — applied identically to pattern and body.
+  String _normalizeBody(String input) {
+    var s = _normalizeDigits(input.trim());
+    s = s
+        .replaceAll(RegExp(r'[\u200e\u200f\u202a-\u202e\u2066-\u2069]'), '')
+        .replaceAll(RegExp(r'\u00a0'), ' ')
+        .replaceAll(RegExp(r'[\u064b-\u065f\u0670\u06d6-\u06ed]'), '')
+        .replaceAll('\u0640', '')
+        .replaceAll(RegExp(r'[\u0622\u0623\u0625\u0627\u0671]'), '\u0627')
+        .replaceAll('\u0649', '\u064a')
+        .replaceAll('\u0629', '\u0647')
+        // Unify card singular/plural so one POS pattern matches both.
+        .replaceAll('كروت', 'كرت')
+        .replaceAll(RegExp(r'[ \t\u00a0]+'), ' ')
+        .replaceAll(RegExp(r'\s*\n\s*'), ' ');
+    return s.trim();
+  }
+
+  static const _flexibleSeparators = <String>{':', '-', '/', ',', '.', '\u060c'};
+
+  String _normalizeDigits(String input) {
+    const eastern = '٠١٢٣٤٥٦٧٨٩';
+    const persian = '۰۱۲۳۴۵۶۷۸۹';
+    final out = StringBuffer();
+    for (final rune in input.runes) {
+      final ch = String.fromCharCode(rune);
+      final e = eastern.indexOf(ch);
+      if (e >= 0) {
+        out.write(e);
+        continue;
+      }
+      final p = persian.indexOf(ch);
+      if (p >= 0) {
+        out.write(p);
+        continue;
+      }
+      out.write(ch);
+    }
+    return out.toString();
+  }
+
+  int? _parseAmountToMinor(String raw) {
+    final normalized = raw.replaceAll(',', '.').trim();
+    final value = double.tryParse(normalized);
+    if (value == null) return null;
+    return (value * 100).round();
+  }
+}
+).firstMatch(body)
+        : RegExp(r'^(\d+)\s+كرت\s+(\d+)
+    TransferTemplate template,
+    String messageId,
+    String sender,
+    String body,
+  ) {
+    final isPos = template.posId != null || !template.requireReference;
+    final regex = _patternToRegex(
+      template.pattern,
+      allowImplicitPosQuantity: isPos,
+    );
+    final match = regex.firstMatch(body);
+    if (match == null) return null;
+
+    final amountRaw = match.namedGroup('amount');
+    if (amountRaw == null || amountRaw.isEmpty) return null;
+
+    final minor = _parseAmountToMinor(amountRaw);
+    if (minor == null || minor <= 0) return null;
+
+    final phone = _group(match, 'phone');
+    final account = _group(match, 'account');
+    final ref = _group(match, 'ref');
+    final destinationRaw = _group(match, 'dest');
+    final qtyRaw = _group(match, 'qty');
+
+    // Financial templates require a captured reference unless the template
+    // explicitly opts out (POS card-request templates).
+    if (template.requireReference && (ref == null || ref.isEmpty)) return null;
+
+    String? identifier;
+    TransferIdentifierType type;
+    if (phone != null && phone.isNotEmpty) {
+      final normalizedPhone = _normalizePhone(phone);
+      if (normalizedPhone == null) return null;
+      identifier = normalizedPhone;
+      type = TransferIdentifierType.phone;
+    } else if (account != null && account.isNotEmpty) {
+      identifier = account.trim();
+      type = TransferIdentifierType.account;
+    } else if (isPos) {
+      final normalizedSender = _normalizePhone(sender);
+      if (normalizedSender == null) return null;
+      identifier = normalizedSender;
+      type = TransferIdentifierType.phone;
+    } else {
+      return null;
+    }
+
+    var quantity = 1;
+    if (qtyRaw != null && qtyRaw.isNotEmpty) {
+      quantity = int.tryParse(qtyRaw) ?? 0;
+    }
+    if (quantity < 1 || quantity > 20) return null;
+
+    String? deliveryOverride;
+    if (destinationRaw != null && destinationRaw.isNotEmpty) {
+      deliveryOverride = _normalizePhone(destinationRaw);
+      if (deliveryOverride == null) return null;
+    } else if (isPos && phone == null && account == null) {
+      deliveryOverride = identifier;
+    }
+
+    return ParsedTransfer(
+      messageId: messageId,
+      amount: Money(minorUnits: minor, currencyCode: defaultCurrencyCode),
+      customerIdentifier: identifier,
+      identifierType: type,
+      reference: ref ?? '',
+      templateId: template.id,
+      posId: template.posId,
+      rawIdentifier: phone ?? account,
+      quantity: quantity,
+      deliveryOverride: deliveryOverride,
+      instantCharge: false,
+    );
+  }
+
+  String? _group(RegExpMatch match, String name) {
+    try {
+      final v = match.namedGroup(name);
+      if (v == null || v.trim().isEmpty) return null;
+      return v.trim();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  String? _normalizePhone(String raw) {
+    final s = raw.trim();
+    if (s.startsWith('+')) {
+      final rest = s.substring(1).replaceAll(RegExp(r'\D'), '');
+      if (rest.length < 7 || rest.length > 15) return null;
+      return '+$rest';
+    }
+    final digits = s.replaceAll(RegExp(r'\D'), '');
+    if (digits.length < 7 || digits.length > 15) return null;
+    return digits;
+  }
+
+  RegExp _patternToRegex(
+    String pattern, {
+    bool allowImplicitPosQuantity = false,
+  }) {
+    final unified = _normalizeBody(pattern)
+        .replaceAll('%amount', '{amount}')
+        .replaceAll('%phone', '{phone}')
+        .replaceAll('%account', '{account}')
+        .replaceAll('%ref', '{ref}')
+        .replaceAll('%qty', '{qty}')
+        .replaceAll('%dest', '{dest}');
+
+    final buf = StringBuffer();
+    var i = 0;
+    while (i < unified.length) {
+      if (_flexibleSeparators.contains(unified[i])) {
+        buf.write(r'\s*');
+        buf.write(r'\');
+        buf.write(unified[i]);
+        buf.write(r'\s*');
+        i++;
+        continue;
+      }
+      if (unified.startsWith('{amount}', i)) {
+        buf.write(r'(?<amount>[\d]+(?:[.,]\d{1,2})?)');
+        i += '{amount}'.length;
+        continue;
+      }
+      if (unified.startsWith('{phone}', i)) {
+        buf.write(r'(?<phone>\+?[\d]{7,15})');
+        i += '{phone}'.length;
+        continue;
+      }
+      if (unified.startsWith('{account}', i)) {
+        buf.write(r'(?<account>.+?)');
+        i += '{account}'.length;
+        continue;
+      }
+      if (unified.startsWith('{ref}', i)) {
+        buf.write(r'(?<ref>\S{1,64})');
+        i += '{ref}'.length;
+        continue;
+      }
+      if (unified.startsWith('{qty}', i)) {
+        buf.write(r'(?<qty>\d{1,2})');
+        i += '{qty}'.length;
+        continue;
+      }
+      if (unified.startsWith('{dest}', i)) {
+        buf.write(r'(?<dest>\+?[\d]{7,15})');
+        i += '{dest}'.length;
+        continue;
+      }
+      final ch = unified[i];
+      if (ch == ' ' || ch == '\t' || ch == '\n') {
+        buf.write(r'\s*');
+        while (i + 1 < unified.length &&
+            (unified[i + 1] == ' ' ||
+                unified[i + 1] == '\t' ||
+                unified[i + 1] == '\n')) {
+          i++;
+        }
+      } else if (_regexMeta.contains(ch)) {
+        buf.write(r'\');
+        buf.write(ch);
+      } else {
+        buf.write(ch);
+      }
+      i++;
+    }
+
+    // POS single-card patterns may accept an optional trailing quantity
+    // (`779776919 100 3`) when the pattern itself has no `{qty}`.
+    if (allowImplicitPosQuantity && !unified.contains('{qty}')) {
+      buf.write(r'(?:\s+(?<qty>\d{1,2}))?');
+    }
+
+    return RegExp(
+      '^${buf.toString()}\$',
+      caseSensitive: false,
+      unicode: true,
+    );
+  }
+
+  /// Collapse whitespace, strip bidi marks, unify Arabic letter variants, and
+  /// map Eastern digits — applied identically to pattern and body.
+  String _normalizeBody(String input) {
+    var s = _normalizeDigits(input.trim());
+    s = s
+        .replaceAll(RegExp(r'[\u200e\u200f\u202a-\u202e\u2066-\u2069]'), '')
+        .replaceAll(RegExp(r'\u00a0'), ' ')
+        .replaceAll(RegExp(r'[\u064b-\u065f\u0670\u06d6-\u06ed]'), '')
+        .replaceAll('\u0640', '')
+        .replaceAll(RegExp(r'[\u0622\u0623\u0625\u0627\u0671]'), '\u0627')
+        .replaceAll('\u0649', '\u064a')
+        .replaceAll('\u0629', '\u0647')
+        // Unify card singular/plural so one POS pattern matches both.
+        .replaceAll('كروت', 'كرت')
+        .replaceAll(RegExp(r'[ \t\u00a0]+'), ' ')
+        .replaceAll(RegExp(r'\s*\n\s*'), ' ');
+    return s.trim();
+  }
+
+  static const _flexibleSeparators = <String>{':', '-', '/', ',', '.', '\u060c'};
+
+  String _normalizeDigits(String input) {
+    const eastern = '٠١٢٣٤٥٦٧٨٩';
+    const persian = '۰۱۲۳۴۵۶۷۸۹';
+    final out = StringBuffer();
+    for (final rune in input.runes) {
+      final ch = String.fromCharCode(rune);
+      final e = eastern.indexOf(ch);
+      if (e >= 0) {
+        out.write(e);
+        continue;
+      }
+      final p = persian.indexOf(ch);
+      if (p >= 0) {
+        out.write(p);
+        continue;
+      }
+      out.write(ch);
+    }
+    return out.toString();
+  }
+
+  int? _parseAmountToMinor(String raw) {
+    final normalized = raw.replaceAll(',', '.').trim();
+    final value = double.tryParse(normalized);
+    if (value == null) return null;
+    return (value * 100).round();
+  }
+}
+).firstMatch(body);
+    if (match == null) return null;
+
+    final first = int.tryParse(match.group(1)!);
+    final second = int.tryParse(match.group(2)!);
+    if (first == null || second == null) return null;
+
+    final resolved = _resolvePosQuantityAndAmount(first, second);
+    if (resolved == null) return null;
+
+    final senderPhone = _normalizePhone(sender);
+    if (senderPhone == null) return null;
+
+    final deliveryOverride = isToCustomer
+        ? _normalizePhone(match.group(3)!)
+        : senderPhone;
+    if (deliveryOverride == null) return null;
+
+    return ParsedTransfer(
+      messageId: messageId,
+      amount: Money(
+        minorUnits: resolved.$2,
+        currencyCode: defaultCurrencyCode,
+      ),
+      customerIdentifier: senderPhone,
+      identifierType: TransferIdentifierType.phone,
+      reference: '',
+      templateId: template.id,
+      posId: posId,
+      rawIdentifier: senderPhone,
+      quantity: resolved.$1,
+      deliveryOverride: deliveryOverride,
+      instantCharge: false,
+    );
+  }
+
+  (int, int)? _resolvePosQuantityAndAmount(int first, int second) {
+    final firstLooksQty = first >= 1 && first <= 20;
+    final secondLooksQty = second >= 1 && second <= 20;
+
+    if (firstLooksQty && !secondLooksQty) {
+      return (first, _parseAmountToMinor(second.toString()) ?? 0);
+    }
+    if (!firstLooksQty && secondLooksQty) {
+      return (second, _parseAmountToMinor(first.toString()) ?? 0);
+    }
+    return null;
+  }
   ParsedTransfer? _tryMatch(
     TransferTemplate template,
     String messageId,
