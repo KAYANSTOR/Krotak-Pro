@@ -1,7 +1,7 @@
 # المرحلة 6A — تقرير ما قبل التنفيذ وما بعده: ذكاء رسائل التحويل
 
 **التاريخ:** 2026-09-11  
-**المستودع:** KAYANSTOR/net-flutter  
+**المستودع:** KAYANSTOR/Krotak-Pro  
 **الحالة:** منفَّذ بالكامل في Domain + Parser + Identity Resolver + TransferProcessor + Tests
 
 ## 1. الوضع قبل التنفيذ
