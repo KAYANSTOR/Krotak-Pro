@@ -11,7 +11,7 @@ jobs:
   analyze-test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: 3.47.4
@@ -30,11 +30,13 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: 3.47.4
           cache: true
+      - name: Install SQLite
+        run: sudo apt-get update && sudo apt-get install -y libsqlite3-dev
       - run: flutter pub get
       # Phase 7: commercial release APKs are signed only from GitHub Secrets.
       # No fallback to android/signing/*.b64. Missing secrets fail the job.
@@ -61,6 +63,13 @@ jobs:
             echo "storePassword=${APK_KEYSTORE_PASSWORD}"
             echo "keyPassword=${APK_KEY_PASSWORD}"
           } > android/key.properties
+      - name: Verify Flutter/Android toolchain
+        run: |
+          flutter --version
+          java -version
+          cd android
+          ./gradlew --version
+
       - name: Build release APK
         run: flutter build apk --release
       - name: Scrub signing material
@@ -68,14 +77,14 @@ jobs:
         run: |
           rm -f android/key.properties android/app/keystore/upload.jks
       - name: Upload APK artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: krotak-pro-release-apk
           path: build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
       - name: Publish GitHub Release
         if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: apk-${{ github.run_number }}
           name: Krotak Pro APK ${{ github.run_number }}
