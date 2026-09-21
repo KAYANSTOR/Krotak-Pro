@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'routing/app_routes.dart';
+import 'screens/broadcast_sheet.dart';
 import 'screens/customers_screen.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/inventory_screen.dart';
@@ -31,6 +32,9 @@ class _HomeShellState extends State<HomeShell> {
   /// without coupling the tabs together.
   final ValueNotifier<int> _dashboardRefresh = ValueNotifier<int>(0);
 
+  /// عدد الرسائل التي تحتاج تدخلاً — شارة حية على تبويب الرئيسية.
+  final ValueNotifier<int> _attention = ValueNotifier<int>(0);
+
   int _index = 0;
   bool _permissionsStarted = false;
   late final List<Widget?> _pages;
@@ -53,6 +57,7 @@ class _HomeShellState extends State<HomeShell> {
   @override
   void dispose() {
     _dashboardRefresh.dispose();
+    _attention.dispose();
     super.dispose();
   }
 
@@ -60,6 +65,9 @@ class _HomeShellState extends State<HomeShell> {
         onNavigateToTab: _goToId,
         refreshSignal: _dashboardRefresh,
         onMutated: () => _dashboardRefresh.value++,
+        onAttentionChanged: (count) {
+          if (_attention.value != count) _attention.value = count;
+        },
       );
 
   Widget _pageForIndex(int index) {
@@ -98,14 +106,24 @@ class _HomeShellState extends State<HomeShell> {
     if (mounted) _bumpRefresh();
   }
 
-  /// Center button of the bottom bar — إجراءان فقط كما هو مطلوب: البيع المباشر
-  /// وإضافة عميل (نفس معنى إنشاء حساب عميل الجديد).
+  /// Center button of the bottom bar — شبكة إجراءات سريعة تغطي مسارات العمل
+  /// اليومية (بيع مباشر، عميل، نقاط بيع، توليد كروت، رسالة جماعية، تقارير).
   void _openQuickActions() {
     QuickActionsSheet.show(
       context,
       onDirectSale: _openDirectSale,
       onAddCustomer: () async {
         await CustomerCreateSheet.show(context);
+        if (mounted) _bumpRefresh();
+      },
+      onPos: () async {
+        await AppRoutes.openPos(context);
+        if (mounted) _bumpRefresh();
+      },
+      onGenerateCards: () => _goToId('cards'),
+      onBroadcast: () => BroadcastSheet.show(context),
+      onTodayReports: () async {
+        await AppRoutes.openSalesPeriodReport(context);
         if (mounted) _bumpRefresh();
       },
     );
@@ -130,10 +148,14 @@ class _HomeShellState extends State<HomeShell> {
           children: children,
         ),
       ),
-      bottomNavigationBar: KayanBottomNav(
-        currentId: _currentId,
-        onSelect: _goToId,
-        onQuickActions: _openQuickActions,
+      bottomNavigationBar: ValueListenableBuilder<int>(
+        valueListenable: _attention,
+        builder: (_, attention, __) => KayanBottomNav(
+          currentId: _currentId,
+          onSelect: _goToId,
+          onQuickActions: _openQuickActions,
+          attentionCount: attention,
+        ),
       ),
     );
   }

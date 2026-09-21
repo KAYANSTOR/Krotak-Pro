@@ -28,13 +28,18 @@ final class DefaultWalletTemplatesSeeder {
 
   static const seededKey = 'default_wallet_templates_seeded_v2';
 
-  /// Idempotent: skips when [seededKey] is set, otherwise inserts missing
-  /// templates keyed by stable id `tpl-default-{senderId}-{variant}`.
+  /// Idempotent: skips the **insert** pass when [seededKey] is set, otherwise
+  /// inserts missing templates keyed by stable id `tpl-default-{senderId}-{variant}`.
+  ///
+  /// A cheap **repair** pass always runs afterwards: any built-in template that
+  /// carries a `senderCode` of a known wallet but no (or a stale) `walletId` is
+  /// re-linked. Without this the parser finds a template whose wallet does not
+  /// match the incoming sender, [PaymentSourceGuard] reports `no_source_template`
+  /// and the wallet's transfers are rejected even though they look configured.
   Future<Result<int>> seedIfNeeded() async {
     final flag = await settings.find(seededKey);
-    if (flag is Success<AppSetting?> && flag.value?.value == 'true') {
-      return const Success(0);
-    }
+    final alreadySeeded =
+        flag is Success<AppSetting?> && flag.value?.value == 'true';
 
     final walletList = await wallets.listAll();
     if (walletList is Failure<List<Wallet>>) {
@@ -55,37 +60,59 @@ final class DefaultWalletTemplatesSeeder {
     if (existing is Failure<List<TransferTemplate>>) {
       return Failure(existing.error);
     }
-    final byId = {
-      for (final t in (existing as Success<List<TransferTemplate>>).value) t.id: t,
+    final all = (existing as Success<List<TransferTemplate>>).value;
+    final byId = {for (final t in all) t.id: t};
+    final knownWalletIds = {
+      for (final w in (walletList as Success<List<Wallet>>).value) w.id,
     };
 
-    var inserted = 0;
-    for (final spec in _specs) {
-      final wallet = bySender[spec.senderCode.toUpperCase()];
-      final id =
-          'tpl-default-${spec.senderCode.toLowerCase().replaceAll(' ', '-')}-${spec.variant}';
-      if (byId.containsKey(id)) continue;
+    var changed = 0;
+    if (!alreadySeeded) {
+      for (final spec in _specs) {
+        final wallet = bySender[spec.senderCode.toUpperCase()];
+        final id =
+            'tpl-default-${spec.senderCode.toLowerCase().replaceAll(' ', '-')}-${spec.variant}';
+        if (byId.containsKey(id)) continue;
 
-      final tpl = TransferTemplate(
-        id: id,
-        name: spec.name,
-        pattern: spec.pattern,
-        isActive: true,
-        walletId: wallet?.id,
-        priority: spec.priority,
-        sampleBody: spec.sampleBody,
-        senderCode: spec.senderCode,
-        identifierKind: TemplateIdentifierKind.phone,
-      );
-      final saved = await templates.save(tpl);
-      if (saved is Failure<void>) return Failure(saved.error);
-      inserted += 1;
+        final tpl = TransferTemplate(
+          id: id,
+          name: spec.name,
+          pattern: spec.pattern,
+          isActive: true,
+          walletId: wallet?.id,
+          priority: spec.priority,
+          sampleBody: spec.sampleBody,
+          senderCode: spec.senderCode,
+          identifierKind: TemplateIdentifierKind.phone,
+        );
+        final saved = await templates.save(tpl);
+        if (saved is Failure<void>) return Failure(saved.error);
+        changed += 1;
+      }
     }
 
-    await settings.save(
-      AppSetting(key: seededKey, value: 'true', updatedAt: clock.now()),
-    );
-    return Success(inserted);
+    // إصلاح الربط: قالب بمرسل معروف لكنه بلا محفظة (أو محفظة محذوفة) = رسائل
+    // تلك المحفظة تُرفض بـ`no_source_template` رغم ظهور القالب.
+    for (final t in all) {
+      final code = t.senderCode?.trim().toUpperCase();
+      if (code == null || code.isEmpty) continue;
+      final wallet = bySender[code];
+      if (wallet == null) continue;
+      final current = t.walletId?.trim();
+      if (current != null && current.isNotEmpty && knownWalletIds.contains(current)) {
+        continue;
+      }
+      final saved = await templates.save(t.copyWith(walletId: wallet.id));
+      if (saved is Failure<void>) return Failure(saved.error);
+      changed += 1;
+    }
+
+    if (!alreadySeeded) {
+      await settings.save(
+        AppSetting(key: seededKey, value: 'true', updatedAt: clock.now()),
+      );
+    }
+    return Success(changed);
   }
 
   static const _specs = <_TplSpec>[

@@ -39,7 +39,11 @@ class DashboardScreen extends StatefulWidget {
     this.onNavigateToTab,
     this.refreshSignal,
     this.onMutated,
+    this.onAttentionChanged,
   });
+
+  /// عدد الرسائل التي تحتاج تدخلاً — يرفعه الشريط السفلي كشارة تنبيه حية.
+  final ValueChanged<int>? onAttentionChanged;
 
   final ValueChanged<String>? onNavigateToTab;
 
@@ -241,6 +245,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
           _error = 'تعذر تحميل بعض بيانات اللوحة';
         }
       });
+      // شارة التنبيه في الشريط السفلي: عدد الرسائل المعلّقة/المرفوضة.
+      widget.onAttentionChanged?.call(attentionCount);
     } catch (e) {
       if (!mounted) return;
       setState(() {

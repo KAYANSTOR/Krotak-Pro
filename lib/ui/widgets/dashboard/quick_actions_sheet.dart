@@ -5,22 +5,36 @@ import '../../theme/net_tokens.dart';
 
 /// ورقة الإجراءات السريعة — تُفتح من الزر الوسطي في الشريط السفلي.
 ///
-/// إجراءان فقط كما في التصميم المرجعي: البيع المباشر وإضافة عميل.
-/// لا تنفّذ شيئًا بنفسها: تستدعي الـcallbacks الممرّرة فقط.
+/// كانت إجراءين فقط (بيع مباشر/إضافة عميل) فأصبحت شبكة 2×3 تغطي أكثر المسارات
+/// استخدامًا في العمل اليومي: البيع، العميل، نقاط البيع، توليد الكروت، رسالة
+/// جماعية، وتقارير اليوم. لا تنفّذ شيئًا بنفسها: تستدعي الـcallbacks فقط، وأي
+/// callback غائب لا يُعرض كرته.
 class QuickActionsSheet extends StatelessWidget {
   const QuickActionsSheet({
     super.key,
     required this.onDirectSale,
     required this.onAddCustomer,
+    this.onPos,
+    this.onGenerateCards,
+    this.onBroadcast,
+    this.onTodayReports,
   });
 
   final VoidCallback onDirectSale;
   final VoidCallback onAddCustomer;
+  final VoidCallback? onPos;
+  final VoidCallback? onGenerateCards;
+  final VoidCallback? onBroadcast;
+  final VoidCallback? onTodayReports;
 
   static Future<void> show(
     BuildContext context, {
     required VoidCallback onDirectSale,
     required VoidCallback onAddCustomer,
+    VoidCallback? onPos,
+    VoidCallback? onGenerateCards,
+    VoidCallback? onBroadcast,
+    VoidCallback? onTodayReports,
   }) {
     return showModalBottomSheet<void>(
       context: context,
@@ -29,6 +43,10 @@ class QuickActionsSheet extends StatelessWidget {
       builder: (ctx) => QuickActionsSheet(
         onDirectSale: onDirectSale,
         onAddCustomer: onAddCustomer,
+        onPos: onPos,
+        onGenerateCards: onGenerateCards,
+        onBroadcast: onBroadcast,
+        onTodayReports: onTodayReports,
       ),
     );
   }
@@ -37,6 +55,49 @@ class QuickActionsSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = KayanPalette.of(context);
     final bottom = MediaQuery.paddingOf(context).bottom;
+
+    final actions = <_QuickAction>[
+      _QuickAction(
+        icon: Icons.point_of_sale_rounded,
+        label: 'بيع مباشر',
+        hint: 'بيع كرت فورًا',
+        onTap: onDirectSale,
+      ),
+      _QuickAction(
+        icon: Icons.person_add_alt_rounded,
+        label: 'إضافة عميل',
+        hint: 'حساب عميل جديد',
+        onTap: onAddCustomer,
+      ),
+      if (onPos != null)
+        _QuickAction(
+          icon: Icons.storefront_rounded,
+          label: 'نقاط البيع',
+          hint: 'الحسابات والقوالب',
+          onTap: onPos!,
+        ),
+      if (onGenerateCards != null)
+        _QuickAction(
+          icon: Icons.style_rounded,
+          label: 'توليد كروت',
+          hint: 'إضافة مخزون',
+          onTap: onGenerateCards!,
+        ),
+      if (onBroadcast != null)
+        _QuickAction(
+          icon: Icons.campaign_rounded,
+          label: 'رسالة جماعية',
+          hint: 'إلى مجموعة عملاء',
+          onTap: onBroadcast!,
+        ),
+      if (onTodayReports != null)
+        _QuickAction(
+          icon: Icons.insights_rounded,
+          label: 'تقارير اليوم',
+          hint: 'مبيعات وحوالات',
+          onTap: onTodayReports!,
+        ),
+    ];
 
     return Directionality(
       textDirection: TextDirection.rtl,
@@ -77,33 +138,37 @@ class QuickActionsSheet extends StatelessWidget {
               ),
             ),
             const SizedBox(height: NetSpacing.lg),
-            Row(
-              children: [
-                Expanded(
-                  child: _QuickActionCard(
-                    icon: Icons.point_of_sale_rounded,
-                    label: 'بيع مباشر',
-                    hint: 'بيع كرت فورًا',
-                    onTap: () {
-                      Navigator.of(context).pop();
-                      onDirectSale();
-                    },
-                  ),
+            for (var i = 0; i < actions.length; i += 2) ...[
+              if (i > 0) const SizedBox(height: NetSpacing.sm),
+              IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Expanded(
+                      child: _QuickActionCard(
+                        action: actions[i],
+                        onTap: () {
+                          Navigator.of(context).pop();
+                          actions[i].onTap();
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: NetSpacing.sm),
+                    Expanded(
+                      child: i + 1 < actions.length
+                          ? _QuickActionCard(
+                              action: actions[i + 1],
+                              onTap: () {
+                                Navigator.of(context).pop();
+                                actions[i + 1].onTap();
+                              },
+                            )
+                          : const SizedBox.shrink(),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: NetSpacing.sm),
-                Expanded(
-                  child: _QuickActionCard(
-                    icon: Icons.person_add_alt_rounded,
-                    label: 'إضافة عميل',
-                    hint: 'حساب عميل جديد',
-                    onTap: () {
-                      Navigator.of(context).pop();
-                      onAddCustomer();
-                    },
-                  ),
-                ),
-              ],
-            ),
+              ),
+            ],
           ],
         ),
       ),
@@ -111,8 +176,8 @@ class QuickActionsSheet extends StatelessWidget {
   }
 }
 
-class _QuickActionCard extends StatelessWidget {
-  const _QuickActionCard({
+class _QuickAction {
+  const _QuickAction({
     required this.icon,
     required this.label,
     required this.hint,
@@ -122,6 +187,13 @@ class _QuickActionCard extends StatelessWidget {
   final IconData icon;
   final String label;
   final String hint;
+  final VoidCallback onTap;
+}
+
+class _QuickActionCard extends StatelessWidget {
+  const _QuickActionCard({required this.action, required this.onTap});
+
+  final _QuickAction action;
   final VoidCallback onTap;
 
   @override
@@ -134,8 +206,12 @@ class _QuickActionCard extends StatelessWidget {
         onTap: onTap,
         borderRadius: NetRadii.mdAll,
         child: Padding(
-          padding: const EdgeInsets.all(NetSpacing.md),
+          padding: const EdgeInsets.symmetric(
+            horizontal: NetSpacing.md,
+            vertical: NetSpacing.md,
+          ),
           child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Container(
                 width: 46,
@@ -146,11 +222,11 @@ class _QuickActionCard extends StatelessWidget {
                   ),
                   borderRadius: NetRadii.smAll,
                 ),
-                child: Icon(icon, color: palette.primary),
+                child: Icon(action.icon, color: palette.primary),
               ),
               const SizedBox(height: NetSpacing.sm),
               Text(
-                label,
+                action.label,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
@@ -162,7 +238,7 @@ class _QuickActionCard extends StatelessWidget {
               ),
               const SizedBox(height: NetSpacing.xxs),
               Text(
-                hint,
+                action.hint,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
