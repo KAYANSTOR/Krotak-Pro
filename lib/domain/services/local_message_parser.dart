@@ -208,8 +208,7 @@ final class LocalMessageParser implements MessageParser {
     if (!isToPos && !isToCustomer) return null;
 
     final match = isToCustomer
-        ? RegExp(r'^(\d+)\s+كرت\s+(\d+)\s+(\+?[\d]{7,15})
-    TransferTemplate template,
+        ? RegExp(r'^(\d+)\s+كرت\s+(\d+)\s+(\+?[\d]{7,15})    TransferTemplate template,
     String messageId,
     String sender,
     String body,
@@ -442,8 +441,7 @@ final class LocalMessageParser implements MessageParser {
   }
 }
 ).firstMatch(body)
-        : RegExp(r'^(\d+)\s+كرت\s+(\d+)
-    TransferTemplate template,
+        : RegExp(r'^(\d+)\s+كرت\s+(\d+)    TransferTemplate template,
     String messageId,
     String sender,
     String body,
