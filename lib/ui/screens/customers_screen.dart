@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/result.dart';
@@ -19,7 +20,10 @@ import '../widgets/net/net_surface_card.dart';
 import '../widgets/net/net_tab_header.dart';
 import 'broadcast_sheet.dart';
 
-enum _AccountFilter { all, debtor, creditor, unlinked }
+enum _AccountFilter { all, debtor, creditor, zero, provisional, unlinked }
+
+/// ترتيب قائمة الحسابات — الأكثر انشغالاً بالرصيد أولاً هو الافتراضي.
+enum _AccountSort { balanceDesc, balanceAsc, name, newest }
 
 /// الحسابات والدفتر — مطابق لفيديو Z Net (فلاتر + بطاقات + رقم بديل).
 ///
@@ -41,6 +45,11 @@ class _CustomersScreenState extends State<CustomersScreen> {
   String? _error;
   List<_AccountRow> _allRows = const [];
   _AccountFilter _filter = _AccountFilter.all;
+  _AccountSort _sort = _AccountSort.balanceDesc;
+
+  /// نص البحث المكتوب الآن — يُصفّي الصفوف المحمّلة فوراً بلا استعلام جديد،
+  /// ثم يُرسل للبحث في قاعدة البيانات عند الإرسال (Enter/زر البحث).
+  String _query = '';
 
   @override
   void initState() {
@@ -62,16 +71,42 @@ class _CustomersScreenState extends State<CustomersScreen> {
   }
 
   List<_AccountRow> get _visible {
-    switch (_filter) {
-      case _AccountFilter.all:
-        return _allRows;
-      case _AccountFilter.debtor:
-        return _allRows.where((r) => (r.balance?.minorUnits ?? 0) < 0).toList();
-      case _AccountFilter.creditor:
-        return _allRows.where((r) => (r.balance?.minorUnits ?? 0) > 0).toList();
-      case _AccountFilter.unlinked:
-        return _allRows.where((r) => !r.hasPhone).toList();
-    }
+    final filtered = switch (_filter) {
+      _AccountFilter.all => List<_AccountRow>.of(_allRows),
+      _AccountFilter.debtor =>
+        _allRows.where((r) => (r.balance?.minorUnits ?? 0) < 0).toList(),
+      _AccountFilter.creditor =>
+        _allRows.where((r) => (r.balance?.minorUnits ?? 0) > 0).toList(),
+      _AccountFilter.unlinked => _allRows.where((r) => !r.hasPhone).toList(),
+      _AccountFilter.provisional => _allRows.where((r) => r.isProvisional).toList(),
+      _AccountFilter.zero =>
+        _allRows.where((r) => (r.balance?.minorUnits ?? 0) == 0).toList(),
+    };
+
+    final query = _query.trim().toLowerCase();
+    final matched = query.isEmpty
+        ? filtered
+        : filtered
+            .where((r) =>
+                r.customer.displayName.toLowerCase().contains(query) ||
+                (r.phone ?? '').toLowerCase().contains(query) ||
+                (r.altId ?? '').toLowerCase().contains(query))
+            .toList();
+
+    final Comparator<_AccountRow> comparator = switch (_sort) {
+      _AccountSort.balanceDesc => (a, b) => (b.balance?.minorUnits ?? 0)
+          .abs()
+          .compareTo((a.balance?.minorUnits ?? 0).abs()),
+      _AccountSort.balanceAsc => (a, b) => (a.balance?.minorUnits ?? 0)
+          .abs()
+          .compareTo((b.balance?.minorUnits ?? 0).abs()),
+      _AccountSort.name => (a, b) =>
+          a.customer.displayName.compareTo(b.customer.displayName),
+      _AccountSort.newest => (a, b) => b.customer.createdAt
+          .compareTo(a.customer.createdAt),
+    };
+    matched.sort(comparator);
+    return matched;
   }
 
   Future<void> _load([String query = '']) async {
@@ -94,52 +129,19 @@ class _CustomersScreenState extends State<CustomersScreen> {
         .where((e) => e.status != CustomerStatus.merged)
         .toList(growable: false);
 
+    // قراءة متوازية على دفعات: كان كشف كل حساب (رصيد + هويات) تسلسلياً
+    // فيستغرق ثواني مع مئات الحسابات — الآن كل دفعة من 20 حساباً معاً.
     final rows = <_AccountRow>[];
-    for (final customer in customers) {
-      Money? balance;
-      final bal = await c.balanceService.getBalance(
-        customerId: customer.id,
-        currencyCode: 'YER',
+    const batchSize = 20;
+    for (var start = 0; start < customers.length; start += batchSize) {
+      final end = (start + batchSize) > customers.length
+          ? customers.length
+          : start + batchSize;
+      final batch = await Future.wait(
+        customers.sublist(start, end).map(_rowFor),
       );
-      if (bal is Success<Money>) balance = bal.value;
-
-      String? phone;
-      String? altId;
-      String? altLabel;
-      final ids = await c.customers.listIdentifiers(customer.id);
-      if (ids is Success<List<CustomerIdentifier>>) {
-        final list = ids.value;
-        final phones =
-            list.where((i) => i.type == CustomerIdentifierType.phoneNumber).toList();
-        if (phones.isNotEmpty) {
-          phone = phones.firstWhere((i) => i.isPrimary, orElse: () => phones.first).value;
-        }
-        final external = list
-            .where((i) => i.type == CustomerIdentifierType.externalReference)
-            .toList();
-        if (external.isNotEmpty) {
-          altId = external.first.value;
-          altLabel = 'الرقم البديل';
-        } else if (phone == null) {
-          final other = list.where((i) => i.type != CustomerIdentifierType.phoneNumber);
-          if (other.isNotEmpty) {
-            altId = other.first.value;
-            altLabel = other.first.type == CustomerIdentifierType.username
-                ? 'اسم المرسل'
-                : 'الرقم البديل';
-          }
-        }
-      }
-
-      rows.add(
-        _AccountRow(
-          customer: customer,
-          balance: balance,
-          phone: phone,
-          altId: altId,
-          altLabel: altLabel,
-        ),
-      );
+      if (!mounted) return;
+      rows.addAll(batch);
     }
 
     if (!mounted) return;
@@ -149,21 +151,83 @@ class _CustomersScreenState extends State<CustomersScreen> {
     });
   }
 
+  /// صف حساب واحد: الرصيد + رقم الجوال + المعرّف البديل (يُستدعى بالتوازي).
+  Future<_AccountRow> _rowFor(Customer customer) async {
+    final c = AppScope.of(context);
+    Money? balance;
+    final bal = await c.balanceService.getBalance(
+      customerId: customer.id,
+      currencyCode: 'YER',
+    );
+    if (bal is Success<Money>) balance = bal.value;
+
+    String? phone;
+    String? altId;
+    String? altLabel;
+    final ids = await c.customers.listIdentifiers(customer.id);
+    if (ids is Success<List<CustomerIdentifier>>) {
+      final list = ids.value;
+      final phones =
+          list.where((i) => i.type == CustomerIdentifierType.phoneNumber).toList();
+      if (phones.isNotEmpty) {
+        phone = phones.firstWhere((i) => i.isPrimary, orElse: () => phones.first).value;
+      }
+      final external = list
+          .where((i) => i.type == CustomerIdentifierType.externalReference)
+          .toList();
+      if (external.isNotEmpty) {
+        altId = external.first.value;
+        altLabel = 'الرقم البديل';
+      } else if (phone == null) {
+        final other = list.where((i) => i.type != CustomerIdentifierType.phoneNumber);
+        if (other.isNotEmpty) {
+          altId = other.first.value;
+          altLabel = other.first.type == CustomerIdentifierType.username
+              ? 'اسم المرسل'
+              : 'الرقم البديل';
+        }
+      }
+    }
+
+    return _AccountRow(
+      customer: customer,
+      balance: balance,
+      phone: phone,
+      altId: altId,
+      altLabel: altLabel,
+    );
+  }
+
+  /// ورقة سريعة لكل حساب: فتح، نسخ الرقم، أو بث رسالة.
+  Future<void> _accountActions(_AccountRow row) async {
+    await NetSheet.show<void>(
+      context,
+      builder: (_) => _AccountActionsSheet(
+        row: row,
+        onOpen: () => AppRoutes.openCustomerDetail(context, row.customer.id)
+            .then((_) => _load(_searchCtrl.text)),
+        onCopy: (phone) async {
+          await Clipboard.setData(ClipboardData(text: phone));
+          if (mounted) _snack('تم نسخ الرقم');
+        },
+        onBroadcast: () => BroadcastSheet.show(context),
+      ),
+    );
+  }
+
+  void _snack(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message, style: const TextStyle(fontFamily: NetTypography.family)),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
   Future<void> _showCreateSheet() async {
     final created = await CustomerCreateSheet.show(context);
     if (created != null) await _load(_searchCtrl.text);
-  }
-
-  void _showAlertsInfo() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          'تنبيهات الحسابات مرتبطة بتنبيه الرسائل المعلّقة',
-          style: TextStyle(fontFamily: NetTypography.family),
-        ),
-        duration: Duration(seconds: 2),
-      ),
-    );
   }
 
   /// مؤشرات + رسم بياني أفقي لأعلى الأرصدة (عرض فقط، من الصفوف المحمّلة).
@@ -222,10 +286,32 @@ class _CustomersScreenState extends State<CustomersScreen> {
               tooltip: 'إرسال رسالة للعملاء',
               onPressed: () => BroadcastSheet.show(context),
             ),
-            NetHeaderAction(
-              icon: Icons.volume_up_outlined,
-              tooltip: 'تنبيهات الحسابات',
-              onPressed: _showAlertsInfo,
+            PopupMenuButton<_AccountSort>(
+              tooltip: 'ترتيب القائمة',
+              icon: Icon(Icons.sort_rounded, color: palette.textSecondary),
+              onSelected: (value) => setState(() => _sort = value),
+              itemBuilder: (_) => const [
+                PopupMenuItem(
+                  value: _AccountSort.balanceDesc,
+                  child: Text('الأعلى رصيداً أولاً',
+                      style: TextStyle(fontFamily: NetTypography.family)),
+                ),
+                PopupMenuItem(
+                  value: _AccountSort.balanceAsc,
+                  child: Text('الأقل رصيداً أولاً',
+                      style: TextStyle(fontFamily: NetTypography.family)),
+                ),
+                PopupMenuItem(
+                  value: _AccountSort.name,
+                  child: Text('الاسم (أبجدي)',
+                      style: TextStyle(fontFamily: NetTypography.family)),
+                ),
+                PopupMenuItem(
+                  value: _AccountSort.newest,
+                  child: Text('الأحدث إنشاءً',
+                      style: TextStyle(fontFamily: NetTypography.family)),
+                ),
+              ],
             ),
           ],
         ),
@@ -314,9 +400,13 @@ class _CustomersScreenState extends State<CustomersScreen> {
           ),
           child: TextField(
             controller: _searchCtrl,
-            onSubmitted: _load,
+            textInputAction: TextInputAction.search,
+            onSubmitted: (value) => _load(value),
+            // تصفية فورية على الصفوف المحمّلة — وبحث في قاعدة البيانات عند
+            // الإرسال أو بعد حذف كل النص (لإرجاع الحسابات غير المحمّلة).
             onChanged: (v) {
-              if (v.isEmpty) _load();
+              setState(() => _query = v);
+              if (v.trim().isEmpty) _load();
             },
             decoration: InputDecoration(
               hintText: 'ابحث بالاسم أو رقم الجوال (GSM)...',
@@ -333,6 +423,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
                       icon: const Icon(Icons.close_rounded, size: 18),
                       onPressed: () {
                         _searchCtrl.clear();
+                        setState(() => _query = '');
                         _load();
                       },
                     ),
@@ -372,6 +463,11 @@ class _CustomersScreenState extends State<CustomersScreen> {
               _chip('الكل (${_allRows.length})', _AccountFilter.all),
               _chip('مدين', _AccountFilter.debtor),
               _chip('دائن', _AccountFilter.creditor),
+              _chip('رصيد صفر', _AccountFilter.zero),
+              _chip(
+                'دفتر مؤقت (${_allRows.where((r) => r.isProvisional).length})',
+                _AccountFilter.provisional,
+              ),
               _chip(
                 'غير مربوط (${_allRows.where((r) => !r.hasPhone).length})',
                 _AccountFilter.unlinked,
@@ -422,7 +518,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
                               return _AccountCard(
                                 row: row,
                                 onTap: open,
-                                onLongPress: open,
+                                onLongPress: () => _accountActions(row),
                               );
                             },
                           ),
@@ -818,6 +914,114 @@ class _AccountCard extends StatelessWidget {
           ],
         ],
       ),
+    );
+  }
+}
+
+/// ورقة إجراءات حساب واحد — تُفتح بالضغط المطوّل على بطاقة الحساب.
+class _AccountActionsSheet extends StatelessWidget {
+  const _AccountActionsSheet({
+    required this.row,
+    required this.onOpen,
+    required this.onCopy,
+    required this.onBroadcast,
+  });
+
+  final _AccountRow row;
+  final VoidCallback onOpen;
+  final ValueChanged<String> onCopy;
+  final VoidCallback onBroadcast;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = KayanPalette.of(context);
+    final net = context.netColors;
+    final phone = row.phone;
+    final balance = row.balance;
+    final zero = (balance?.minorUnits ?? 0) == 0;
+
+    return NetSheet(
+      title: row.customer.displayName,
+      subtitle: phone ?? row.altId ?? 'بدون رقم مسجّل',
+      icon: Icons.person_rounded,
+      children: [
+        ListTile(
+          leading: Icon(Icons.receipt_long_outlined, color: palette.primary),
+          title: const Text(
+            'فتح كشف الحساب',
+            style: TextStyle(
+              fontFamily: NetTypography.family,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          onTap: () {
+            Navigator.pop(context);
+            onOpen();
+          },
+        ),
+        if (phone != null)
+          ListTile(
+            leading: Icon(Icons.copy_rounded, color: palette.primary),
+            title: const Text(
+              'نسخ رقم الجوال',
+              style: TextStyle(
+                fontFamily: NetTypography.family,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            subtitle: Text(
+              phone,
+              style: const TextStyle(fontFamily: NetTypography.family),
+            ),
+            onTap: () {
+              Navigator.pop(context);
+              onCopy(phone);
+            },
+          ),
+        ListTile(
+          leading: Icon(Icons.campaign_outlined, color: palette.primary),
+          title: const Text(
+            'إرسال رسالة جماعية',
+            style: TextStyle(
+              fontFamily: NetTypography.family,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          onTap: () {
+            Navigator.pop(context);
+            onBroadcast();
+          },
+        ),
+        if (!zero)
+          Padding(
+            padding: NetSpacing.cardTight,
+            child: Row(
+              children: [
+                Icon(
+                  balance!.minorUnits < 0
+                      ? Icons.south_west_rounded
+                      : Icons.north_east_rounded,
+                  size: NetSizes.iconSm,
+                  color: balance.minorUnits < 0 ? net.error : net.success,
+                ),
+                const SizedBox(width: NetSpacing.xs),
+                Expanded(
+                  child: Text(
+                    balance.minorUnits < 0
+                        ? 'على الحساب دين: ${formatMoneyMinor(balance.minorUnits.abs())}'
+                        : 'رصيد دائن: ${formatMoneyMinor(balance.minorUnits)}',
+                    style: TextStyle(
+                      fontFamily: NetTypography.family,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: balance.minorUnits < 0 ? net.error : net.success,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
     );
   }
 }

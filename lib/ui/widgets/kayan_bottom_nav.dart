@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../theme/kayan_palette.dart';
+import '../theme/net_semantic_colors.dart';
 import '../theme/net_tokens.dart';
 
 /// شريط تنقل سفلي بشكل التطبيق المرجعي: أربعة عناصر مسطّحة وزر وسطي بارز
@@ -15,6 +16,7 @@ class KayanBottomNav extends StatelessWidget {
     required this.onSelect,
     this.onQuickActions,
     this.quickActionsLabel = 'الإجراءات',
+    this.attentionCount = 0,
   });
 
   final String currentId;
@@ -23,6 +25,9 @@ class KayanBottomNav extends StatelessWidget {
   /// Opens the quick-actions sheet; when null the center button is hidden.
   final VoidCallback? onQuickActions;
   final String quickActionsLabel;
+
+  /// عدد الرسائل التي تحتاج تدخلاً — شارة على تبويب الرئيسية.
+  final int attentionCount;
 
   /// Visible bar items. العروض يبقى شاشة كاملة ويُفتح من لوحة التحكم
   /// أو من ورقة الإجراءات السريعة.
@@ -66,6 +71,7 @@ class KayanBottomNav extends StatelessWidget {
                           icon: item.icon,
                           activeIcon: item.activeIcon,
                           active: currentId == item.id,
+                          badgeCount: item.id == 'dashboard' ? attentionCount : 0,
                           onTap: () => onSelect(item.id),
                         ),
                       ),
@@ -79,6 +85,7 @@ class KayanBottomNav extends StatelessWidget {
                           icon: item.icon,
                           activeIcon: item.activeIcon,
                           active: currentId == item.id,
+                          badgeCount: 0,
                           onTap: () => onSelect(item.id),
                         ),
                       ),
@@ -164,6 +171,7 @@ class _NavItem extends StatelessWidget {
     required this.activeIcon,
     required this.active,
     required this.onTap,
+    this.badgeCount = 0,
   });
 
   final String label;
@@ -171,6 +179,9 @@ class _NavItem extends StatelessWidget {
   final IconData activeIcon;
   final bool active;
   final VoidCallback onTap;
+
+  /// شارة عدد (0 = بلا شارة).
+  final int badgeCount;
 
   @override
   Widget build(BuildContext context) {
@@ -191,15 +202,61 @@ class _NavItem extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           mainAxisSize: MainAxisSize.min,
           children: [
-            AnimatedSwitcher(
-              duration: duration,
-              switchInCurve: NetMotion.standard,
-              child: Icon(
-                active ? activeIcon : icon,
-                key: ValueKey(active),
-                size: 23,
-                color: color,
-              ),
+            Stack(
+              clipBehavior: Clip.none,
+              alignment: Alignment.center,
+              children: [
+                AnimatedContainer(
+                  duration: duration,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: NetSpacing.md,
+                    vertical: 3,
+                  ),
+                  decoration: BoxDecoration(
+                    color: active
+                        ? palette.primary.withValues(
+                            alpha: palette.isDark ? 0.22 : 0.10,
+                          )
+                        : Colors.transparent,
+                    borderRadius: NetRadii.pillAll,
+                  ),
+                  child: AnimatedSwitcher(
+                    duration: duration,
+                    switchInCurve: NetMotion.standard,
+                    child: Icon(
+                      active ? activeIcon : icon,
+                      key: ValueKey(active),
+                      size: 23,
+                      color: color,
+                    ),
+                  ),
+                ),
+                if (badgeCount > 0)
+                  Positioned(
+                    top: -4,
+                    left: -6,
+                    child: Container(
+                      constraints: const BoxConstraints(minWidth: 18),
+                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                      decoration: BoxDecoration(
+                        color: context.netColors.error,
+                        borderRadius: NetRadii.pillAll,
+                        border: Border.all(color: palette.surface, width: 1.4),
+                      ),
+                      child: Text(
+                        badgeCount > 99 ? '99+' : '$badgeCount',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontFamily: NetTypography.family,
+                          fontSize: 10,
+                          height: 1.25,
+                          fontWeight: FontWeight.w800,
+                          color: palette.onPrimary,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
             ),
             const SizedBox(height: NetSpacing.xs),
             Text(
