@@ -8,7 +8,7 @@ plugins {
 }
 
 android {
-    namespace = "com.kayan.net_app"
+    namespace = "com.kayan.krotak_pro"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -18,7 +18,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.kayan.net_app"
+        applicationId = "com.kayan.krotak_pro"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
