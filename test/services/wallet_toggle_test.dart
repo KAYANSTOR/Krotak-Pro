@@ -236,7 +236,7 @@ void main() {
       ),
     );
     final result = await guard.authorize(
-      const PaymentEvent(
+      PaymentEvent(
         channel: PaymentChannel.notification,
         sourceKey: 'notification:com.wecash.jawali',
         body: 'test',
