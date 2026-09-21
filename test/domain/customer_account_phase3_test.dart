@@ -11,7 +11,7 @@ import '../helpers/in_memory_repositories.dart';
 
 final class _MemUow implements UnitOfWork {
   @override
-  Future<T> run<T>(Future<T> Function() action) => action();
+  Future<Result<T>> run<T>(Future<Result<T>> Function() action) => action();
 }
 
 final class _FixedClock implements Clock {

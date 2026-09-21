@@ -616,7 +616,7 @@ final class LocalTransferProcessor implements TransferProcessor {
           )
         : effectiveCategory.faceValue;
 
-    if (isPosOrder && posAccount != null) {
+    if (isPosOrder) {
       final limitCheck = await _assertPosCreditLimit(
         posAccount: posAccount,
         chargeMinorUnits: posCharge.minorUnits * transfer.quantity,

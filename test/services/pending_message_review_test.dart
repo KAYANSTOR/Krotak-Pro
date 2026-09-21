@@ -109,6 +109,7 @@ final class _FakeCustomers implements CustomerRepository {
   @override Future<Result<void>> save(Customer customer) async { store[customer.id] = customer; return const Success(null); }
   @override Future<Result<void>> saveIdentifier(CustomerIdentifier identifier) async { byIdentifier[identifier.value] = identifier.customerId; return const Success(null); }
   @override Future<Result<List<Customer>>> search(String query) async => Success(store.values.toList());
+  @override Future<Result<List<CustomerPhoneSuggestion>>> suggestPhonesByPrefix(String prefix, {int limit = 8}) async => const Success([]);
   @override Future<Result<List<CustomerIdentifier>>> listIdentifiers(String customerId) async => const Success([]);
 }
 final class _FakeCustomerService implements CustomerService {
@@ -132,7 +133,6 @@ final class _FakeBalances implements CustomerBalanceService {
   @override
   Future<Result<CustomerAccountSummary>> getAccountSummary({required String customerId, required String currencyCode}) async =>
       Success(CustomerAccountSummary(balance: Money(minorUnits: 0, currencyCode: currencyCode), totalSalesMinor: 0, totalDepositsMinor: 0, totalWithdrawalsMinor: 0, totalSettlementsMinor: 0, openAdvancesCount: 0, openAdvancesMinor: 0, transactionCount: 0));
-}
 }
 final class _FakeAudit implements AuditLogRepository {
   final logs = <AuditLog>[];

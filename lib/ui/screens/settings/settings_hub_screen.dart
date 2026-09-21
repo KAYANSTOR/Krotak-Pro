@@ -220,6 +220,38 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
     await c.settings.save(AppSetting(key: key, value: value.toString(), updatedAt: c.clock.now()));
   }
 
+  Future<void> _openPosBalanceLimit() async {
+    final controller = TextEditingController(text: _posBalanceLimit.toString());
+    final value = await showDialog<int>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('الحد اليومي لطلبات رصيد نقاط البيع'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          keyboardType: TextInputType.number,
+          decoration: const InputDecoration(labelText: 'عدد الطلبات لكل نقطة بيع'),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('إلغاء')),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, int.tryParse(controller.text.trim())),
+            child: const Text('حفظ'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (!mounted || value == null || value < 1) return;
+    final c = AppScope.of(context);
+    setState(() => _posBalanceLimit = value);
+    await c.settings.save(AppSetting(
+      key: SettingKeys.posBalanceRequestDailyLimit,
+      value: value.toString(),
+      updatedAt: c.clock.now(),
+    ));
+  }
+
   Future<void> _openThemePicker() async {
     final picked = await ThemeModeSheet.show(context, _themeMode);
     if (!mounted || picked == null || picked == _themeMode) return;

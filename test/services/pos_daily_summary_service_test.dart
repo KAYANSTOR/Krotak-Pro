@@ -235,15 +235,13 @@ final class _Balances implements CustomerBalanceService {
           reference: reference,
         ),
       );
-}
-
-
   @override
   Future<Result<Transaction>> debit({required String customerId, required Money amount, String? reference, String? reason}) async =>
       Success(Transaction(id: 'debit', customerId: customerId, type: TransactionType.withdrawal, status: TransactionStatus.completed, amount: amount, createdAt: DateTime.utc(2026, 1, 1), reference: reference));
   @override
   Future<Result<CustomerAccountSummary>> getAccountSummary({required String customerId, required String currencyCode}) async =>
       Success(CustomerAccountSummary(balance: Money(minorUnits: 0, currencyCode: currencyCode), totalSalesMinor: 0, totalDepositsMinor: 0, totalWithdrawalsMinor: 0, totalSettlementsMinor: 0, openAdvancesCount: 0, openAdvancesMinor: 0, transactionCount: 0));
+}
 
 final class _Sender implements MessageSender {
   int calls = 0;
