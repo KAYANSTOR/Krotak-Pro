@@ -172,6 +172,13 @@ final class _FakeMessages implements MessageRepository {
       Success(store.values.where((m) => m.status == status).toList());
 
   @override
+
+  Future<Result<int>> countByStatus(MessageProcessingStatus status) async =>
+
+      Success(store.values.where((m) => m.status == status).length);
+
+
+  @override
   Future<Result<List<IncomingMessage>>> listRecent({int limit = 100}) async =>
       Success(store.values.take(limit).toList());
 
