@@ -366,6 +366,32 @@ final class LocalCardRepository implements CardRepository {
     }
   }
 
+  @override
+  Future<Result<int>> delete(String id) async {
+    try {
+      final deleted = await (database.delete(database.cards)
+            ..where((table) => table.id.equals(id)))
+          .go();
+      return Success(deleted);
+    } catch (error) {
+      return Failure(_failure('card_delete_failed', error));
+    }
+  }
+
+  @override
+  Future<Result<int>> deleteMany(List<String> ids) async {
+    final targets = ids.map((e) => e.trim()).where((e) => e.isNotEmpty).toSet().toList();
+    if (targets.isEmpty) return const Success(0);
+    try {
+      final deleted = await (database.delete(database.cards)
+            ..where((table) => table.id.isIn(targets)))
+          .go();
+      return Success(deleted);
+    } catch (error) {
+      return Failure(_failure('card_delete_many_failed', error));
+    }
+  }
+
   domain.Card _toCard(Card row) {
     final reservation = row.reservationId == null
         ? const domain.CardReservation.none()

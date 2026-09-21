@@ -176,9 +176,23 @@ class _CustomerCreateSheetState extends State<CustomerCreateSheet> {
     );
     if (!mounted) return;
     if (created is Failure<Customer>) {
+      final failure = created as Failure<Customer>;
+      var message = failure.error.message;
+      // رفض غامض سابقاً: الرقم قد يملكه حساب موجود أصلاً (نقطة البيع مثلاً تنشئ
+      // حساب عميل بنفس رقمها). نوضّح صاحب الرقم بدل ترك المستخدم بلا مخرج.
+      if (failure.error.code == 'duplicate_identifier' && primaryValue.isNotEmpty) {
+        final owner = await c.customers.findByIdentifier(primaryValue);
+        if (!mounted) return;
+        final existing = owner is Success<Customer?> ? owner.value : null;
+        if (existing != null) {
+          message = 'رقم الجوال مسجّل لحساب موجود: «' +
+              existing.displayName +
+              '» — استخدم رقماً مختلفاً، أو افتح الحساب من قائمة العملاء.';
+        }
+      }
       setState(() {
         _busy = false;
-        _status = (created as Failure).error.message;
+        _status = message;
       });
       return;
     }

@@ -312,6 +312,20 @@ final class InMemoryCardRepository implements CardRepository {
     );
     return const Success(null);
   }
+  @override
+  Future<Result<int>> delete(String id) async {
+    final removed = _cards.remove(id);
+    return Success(removed == null ? 0 : 1);
+  }
+
+  @override
+  Future<Result<int>> deleteMany(List<String> ids) async {
+    var deleted = 0;
+    for (final id in ids.toSet()) {
+      if (_cards.remove(id) != null) deleted++;
+    }
+    return Success(deleted);
+  }
 }
 
 final class InMemoryTransactionRepository implements TransactionRepository {

@@ -1,12 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- خلفية الأيقونة: سماء صخرية عميقة (Deep Slate) تتدرّج إلى لون الهوية الأساسي
-     (Teal) — يمنح الأيقونة عمقًا وفخامة دون كسر هوية NET. -->
+<!-- خلفية أيقونة كروتك المتكيّفة: ليل عميق (Midnight) يتدرّج إلى الزمردي (Emerald)
+     بنفس قيم `tools/generate_launcher_icons.py` حتى تتطابق الأيقونة المتكيّفة
+     مع أيقونة الأجهزة الأقدم (mipmap PNG). -->
 <shape xmlns:android="http://schemas.android.com/apk/res/android"
     android:shape="rectangle">
     <gradient
         android:type="linear"
         android:angle="135"
-        android:startColor="#08202B"
-        android:centerColor="#0F766E"
-        android:endColor="#14B8A6" />
+        android:startColor="#04121C"
+        android:centerColor="#0A4C55"
+        android:endColor="#0F9C8A" />
 </shape>

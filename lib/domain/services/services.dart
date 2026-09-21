@@ -43,6 +43,11 @@ abstract interface class CustomerBalanceService {
 abstract interface class CardCatalogService {
   Future<Result<CardCategory>> saveCategory(CardCategory category);
   Future<Result<int>> importCards({required String categoryId, required List<CardImportDraft> drafts});
+
+  /// يحذف كروتاً محددة نهائياً من المخزون ويرجع عدد الكروت المحذوفة.
+  ///
+  /// الحذف يخص المخزون فقط، ولا يحذف أي عملية مالية أو سجل مرتبط بالكرت.
+  Future<Result<int>> deleteCards({required List<String> cardIds});
 }
 
 abstract interface class WalletCatalogService {
@@ -125,6 +130,17 @@ abstract interface class MessageParser {
 
 abstract interface class MessageSender {
   Future<Result<void>> send({required String destination, required String body});
+}
+
+/// إشعار أندرويد حي (مستمر) لتنبيه انخفاض مخزون الكروت.
+///
+/// منفصل عن [MessageSender]: هذا إشعار نظام محلي على جهاز المشغّل، لا رسالة SMS.
+abstract interface class StockAlertNotifier {
+  /// ينشر أو يُحدّث التنبيه الحي (مستمر ولا يُغلق من المستخدم).
+  Future<void> show({required String title, required String body});
+
+  /// يلغي التنبيه — يُستدعى فقط عند إعادة تعبئة المخزون فوق العتبة.
+  Future<void> clear();
 }
 
 abstract interface class TransferProcessor {

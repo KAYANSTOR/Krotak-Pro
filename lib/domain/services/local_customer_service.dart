@@ -35,14 +35,14 @@ final class LocalCustomerService implements CustomerService {
     if (name.isEmpty) {
       return Future.value(
         const Failure(
-          AppFailure(code: 'invalid_display_name', message: 'Display name is required'),
+          AppFailure(code: 'invalid_display_name', message: 'اسم العميل مطلوب'),
         ),
       );
     }
     if (value.isEmpty) {
       return Future.value(
         const Failure(
-          AppFailure(code: 'invalid_identifier', message: 'Identifier is required'),
+          AppFailure(code: 'invalid_identifier', message: 'المعرّف مطلوب (رقم جوال أو اسم مرسل)'),
         ),
       );
     }
@@ -57,7 +57,7 @@ final class LocalCustomerService implements CustomerService {
         const Failure(
           AppFailure(
             code: 'invalid_phone_identifier',
-            message: 'Phone identifier is not a valid number',
+            message: 'رقم الجوال غير صالح',
           ),
         ),
       );
@@ -68,7 +68,7 @@ final class LocalCustomerService implements CustomerService {
       if (existing is Failure<Customer?>) return Failure(existing.error);
       if ((existing as Success<Customer?>).value != null) {
         return const Failure(
-          AppFailure(code: 'duplicate_identifier', message: 'Identifier already exists'),
+          AppFailure(code: 'duplicate_identifier', message: 'هذا الرقم مسجّل لحساب موجود بالفعل — افتح الحساب الموجود أو استخدم رقماً مختلفاً'),
         );
       }
 
@@ -155,12 +155,12 @@ final class LocalCustomerService implements CustomerService {
       final customer = (found as Success<Customer?>).value;
       if (customer == null) {
         return const Failure(
-          AppFailure(code: 'customer_not_found', message: 'Customer was not found'),
+          AppFailure(code: 'customer_not_found', message: 'الحساب غير موجود'),
         );
       }
       if (customer.status == CustomerStatus.merged) {
         return const Failure(
-          AppFailure(code: 'customer_merged', message: 'Merged customers cannot be blacklisted'),
+          AppFailure(code: 'customer_merged', message: 'لا يمكن حظر حساب مدموج'),
         );
       }
 
@@ -192,7 +192,7 @@ final class LocalCustomerService implements CustomerService {
     if (trimmed.isEmpty) {
       return Future.value(
         const Failure(
-          AppFailure(code: 'invalid_identifier', message: 'Identifier is required'),
+          AppFailure(code: 'invalid_identifier', message: 'المعرّف مطلوب (رقم جوال أو اسم مرسل)'),
         ),
       );
     }
@@ -202,7 +202,7 @@ final class LocalCustomerService implements CustomerService {
         const Failure(
           AppFailure(
             code: 'invalid_phone_identifier',
-            message: 'Phone identifier is not a valid number',
+            message: 'رقم الجوال غير صالح',
           ),
         ),
       );
@@ -220,7 +220,7 @@ final class LocalCustomerService implements CustomerService {
         return const Failure(
           AppFailure(
             code: 'customer_not_found',
-            message: 'Customer was not found',
+            message: 'الحساب غير موجود',
           ),
         );
       }
@@ -228,7 +228,7 @@ final class LocalCustomerService implements CustomerService {
         return const Failure(
           AppFailure(
             code: 'customer_not_active',
-            message: 'Identifiers can only be added to active customers',
+            message: 'لا يمكن إضافة معرّفات إلا لحساب نشط',
           ),
         );
       }
@@ -237,7 +237,7 @@ final class LocalCustomerService implements CustomerService {
       if (duplicate is Failure<Customer?>) return Failure(duplicate.error);
       if ((duplicate as Success<Customer?>).value != null) {
         return const Failure(
-          AppFailure(code: 'duplicate_identifier', message: 'Identifier already exists'),
+          AppFailure(code: 'duplicate_identifier', message: 'هذا الرقم مسجّل لحساب موجود بالفعل — افتح الحساب الموجود أو استخدم رقماً مختلفاً'),
         );
       }
 

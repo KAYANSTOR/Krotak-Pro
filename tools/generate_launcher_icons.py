@@ -1,12 +1,25 @@
 #!/usr/bin/env python3
-"""يولّد أيقونة التطبيق (mipmap PNG) بدون أي مكتبات خارجية.
+"""يولّد أيقونة تطبيق «كروتك» بكل الصيغ المطلوبة بدون مكتبات خارجية.
 
-السبب: بيئة البناء لا تحتوي Pillow أو ImageMagick، بينما Android يحتاج ملفات
-PNG للأجهزة الأقدم من API 26 (الأجهزة الأحدث تستخدم الأيقونة المتكيّفة في
-`mipmap-anydpi-v26` + `drawable/ic_launcher_*.xml`).
+السبب: بيئة البناء لا تحتوي Pillow أو ImageMagick، بينما Android يحتاج:
 
-نفس تصميم الأيقونة المتكيّفة بالضبط: خلفية Deep Slate → Teal، بطاقة لؤلؤية،
-حرف N بلون الهوية بقُطر ذهبي واحد، وثلاث عُقد شبكة صغيرة.
+1. `mipmap-<density>/ic_launcher.png` — أيقونة كاملة (خلفية + رسم) للأجهزة
+   الأقدم من API 26، مقصوصة بحواف دائرية.
+2. `drawable-<density>/ic_launcher_art.png` — الرسم فقط بخلفية شفافة، وهو
+   الطبقة الأمامية للأيقونة المتكيّفة (`ic_launcher_foreground.xml`) وأيقونة
+   الثيم (`ic_launcher_monochrome.xml`). يجب توفيره لكل الكثافات وإلا كبّر
+   Android نسخة mdpi وأصبحت ضبابية على الأجهزة الحديثة.
+3. `drawable-<density>/ic_launcher_mono_art.png` — أيقونة الثيم (Android 13+):
+   حدود البطاقة الأمامية + حرف K فقط، بلون أبيض وشفافية، فيلوّنها النظام.
+4. `drawable-<density>/ic_notif_large.png` — أيقونة كبيرة لإشعار المخزون الحي
+   (لا يمكن استخدام `@mipmap/ic_launcher` لأنه أيقونة متكيّفة XML لا تُفكّ كصورة).
+5. `assets/icon/app_icon.png` — الأيقونة الكاملة داخل شاشة «عن التطبيق».
+
+التصميم الجديد (بديل كامل للتصميم السابق «N»):
+سماء ليلية عميقة تتدرّج إلى زمردي، بطاقتان متراكبتان (بطاقة خلفية بلون
+الهوية + بطاقة أمامية لؤلؤية)، وبداخلها مونوغرام «K» بخطّين: عمود وقاعدة
+بلون الهوية الداكن، وضلع صاعد ذهبي — يجمع هوية الكروت والإشارة/الشبكة في
+رمز واحد مقروء حتى في أصغر حجم (48px).
 
 الاستخدام:  python3 tools/generate_launcher_icons.py
 """
@@ -17,40 +30,44 @@ import struct
 import zlib
 
 # ---------------------------------------------------------------------------
-# لوحة الألوان (نفس قيم الهوية المستخدمة في الثيم والأيقونة المتكيّفة)
+# لوحة الألوان (هوية كروتك: ليل عميق → زمردي + ذهبي)
 # ---------------------------------------------------------------------------
 BG_STOPS = [
-    (0.00, (0x08, 0x20, 0x2B)),  # Deep Slate
-    (0.55, (0x0F, 0x76, 0x6E)),  # Teal (هوية)
-    (1.00, (0x14, 0xB8, 0xA6)),  # Teal فاتح
+    (0.00, (0x04, 0x12, 0x1C)),  # Midnight
+    (0.55, (0x0A, 0x4C, 0x55)),  # Deep teal
+    (1.00, (0x0F, 0x9C, 0x8A)),  # Emerald (هوية)
 ]
-GOLD = (0xE0, 0xA8, 0x2E)
-TEAL = (0x0F, 0x76, 0x6E)
-PEARL = (255, 255, 255)
-SHADOW = (0x04, 0x14, 0x1A)
+GLOW = (0xE8, 0xFF, 0xFA)          # وهج علوي خفيف
+GOLD = (0xD9, 0xA2, 0x27)          # ذهبي الهوية
+TEAL_DEEP = (0x0B, 0x54, 0x50)     # خط المونوغرام
+BACK_CARD = (0x0B, 0x6E, 0x68)     # البطاقة الخلفية
+PEARL = (255, 255, 255)            # البطاقة الأمامية
 
-# المرجع: viewport 108×108 كما في ic_launcher_foreground.xml
+# المرجع: viewport 108×108 (نفس نظام الأيقونة المتكيّفة في Android).
 VIEWPORT = 108.0
-CARD = (26.0, 26.0, 82.0, 82.0)          # x0, y0, x1, y1
-CARD_RADIUS = 14.0
-CARD_INSET = 31.0                         # الإطار الداخلي الرقيق
-LEFT_STEM = (41.0, 40.0, 48.2, 68.0)
-RIGHT_STEM = (59.8, 40.0, 67.0, 68.0)
-DIAGONAL = [(41.0, 40.0), (48.2, 40.0), (67.0, 68.0), (59.8, 68.0)]
-NODES = [
-    (72.0, 42.0, 3.4, GOLD, 1.0),
-    (77.0, 54.0, 2.6, TEAL, 0.85),
-    (73.0, 65.0, 2.3, TEAL, 0.7),
-]
-CONNECTORS = [
-    ((72.4, 45.2), (76.6, 51.4)),
-    ((76.6, 56.6), (73.2, 62.4)),
-]
-CONNECTOR_WIDTH = 1.5
-INNER_RING_WIDTH = 1.1
-OUTER_RADIUS_RATIO = 0.20  # استدارة الأيقونة الكاملة على الأجهزة القديمة
 
-SUPERSAMPLE = 3  # 3×3 عيّنات لكل بكسل لمكافحة التسنّن
+# البطاقة الخلفية (متراكبة أعلى-يسار)
+BACK = (26.0, 26.0, 68.0, 68.0)
+BACK_RADIUS = 11.0
+# البطاقة الأمامية (لؤلؤية، أسفل-يمين)
+FRONT = (40.0, 40.0, 82.0, 82.0)
+FRONT_RADIUS = 13.0
+FRONT_INSET = 5.5                  # إطار داخلي رقيق بلون الهوية
+FRONT_INSET_WIDTH = 1.2
+
+# مونوغرام K — ثلاث ضلعات سميكة بأطراف دائرية
+K_STEM = ((54.0, 48.0), (54.0, 74.0))
+K_LOWER_ARM = ((57.5, 59.5), (67.0, 74.0))
+K_UPPER_ARM = ((54.0, 61.0), (66.5, 47.5))
+K_WIDTH = 7.4
+
+# وهج علوي (إضاءة ناعمة تكسر التدرّج الخطي)
+GLOW_CENTER = (34.0, 30.0)
+GLOW_RADIUS = 52.0
+GLOW_ALPHA = 0.13
+
+OUTER_RADIUS_RATIO = 0.22          # استدارة الأيقونة الكاملة للأجهزة القديمة
+SUPERSAMPLE = 3                    # 3×3 عيّنة لكل بكسل لمكافحة التسنّن
 
 
 # ---------------------------------------------------------------------------
@@ -63,28 +80,6 @@ def rounded_rect_contains(px, py, x0, y0, x1, y1, r):
     cy = min(max(py, y0 + r), y1 - r)
     dx, dy = px - cx, py - cy
     return dx * dx + dy * dy <= r * r
-
-
-def circle_contains(px, py, cx, cy, r):
-    dx, dy = px - cx, py - cy
-    return dx * dx + dy * dy <= r * r
-
-
-def convex_polygon_contains(px, py, points):
-    sign = 0
-    n = len(points)
-    for i in range(n):
-        ax, ay = points[i]
-        bx, by = points[(i + 1) % n]
-        cross = (bx - ax) * (py - ay) - (by - ay) * (px - ax)
-        if cross == 0:
-            continue
-        current = 1 if cross > 0 else -1
-        if sign == 0:
-            sign = current
-        elif sign != current:
-            return False
-    return True
 
 
 def point_segment_distance(px, py, ax, ay, bx, by):
@@ -104,17 +99,12 @@ def gradient_color(t):
         t1, c1 = BG_STOPS[i + 1]
         if t <= t1:
             local = 0.0 if t1 == t0 else (t - t0) / (t1 - t0)
-            return tuple(
-                int(round(c0[k] + (c1[k] - c0[k]) * local)) for k in range(3)
-            )
+            return tuple(int(round(c0[k] + (c1[k] - c0[k]) * local)) for k in range(3))
     return BG_STOPS[-1][1]
 
 
-# ---------------------------------------------------------------------------
-# الرسم
-# ---------------------------------------------------------------------------
 def blend(dst, src, alpha):
-    """src/dst = (r, g, b); alpha معامل التغطية؛ dst هو البكسل الحالي المتراكم."""
+    """src/dst = (r, g, b); alpha معامل التغطية."""
     inv = 1.0 - alpha
     return (
         src[0] * alpha + dst[0] * inv,
@@ -123,29 +113,36 @@ def blend(dst, src, alpha):
     )
 
 
-def render(size):
-    """يرجع بايتات RGBA للصورة بحجم size×size."""
+# ---------------------------------------------------------------------------
+# الرسم
+# ---------------------------------------------------------------------------
+def render(size, with_background):
+    """يرجع بايتات RGBA بحجم size×size.
+
+    with_background=True  → الأيقونة الكاملة (خلفية + رسم + قص دائري).
+    with_background=False → الرسم فقط بخلفية شفافة (الطبقة الأمامية المتكيّفة).
+    """
     k = size / VIEWPORT
     radius = OUTER_RADIUS_RATIO * size
+
+    back = tuple(v * k for v in BACK)
+    back_radius = BACK_RADIUS * k
+    front = tuple(v * k for v in FRONT)
+    front_radius = FRONT_RADIUS * k
+    inset = FRONT_INSET * k
+    inset_w = FRONT_INSET_WIDTH * k
+
+    stem = tuple((p[0] * k, p[1] * k) for p in K_STEM)
+    lower_arm = tuple((p[0] * k, p[1] * k) for p in K_LOWER_ARM)
+    upper_arm = tuple((p[0] * k, p[1] * k) for p in K_UPPER_ARM)
+    k_half = K_WIDTH * k / 2.0
+
+    glow_cx, glow_cy = GLOW_CENTER[0] * k, GLOW_CENTER[1] * k
+    glow_r = GLOW_RADIUS * k
+
     samples = SUPERSAMPLE * SUPERSAMPLE
     step = 1.0 / SUPERSAMPLE
     offset = step / 2.0
-
-    card = tuple(v * k for v in CARD)
-    card_radius = CARD_RADIUS * k
-    inset = CARD_INSET * k
-    shadow_shift = 4.0 * k
-    ring_w = INNER_RING_WIDTH * k
-    conn_w = CONNECTOR_WIDTH * k
-    diagonal = [(x * k, y * k) for x, y in DIAGONAL]
-    stems = [
-        tuple(v * k for v in LEFT_STEM),
-        tuple(v * k for v in RIGHT_STEM),
-    ]
-    nodes = [(x * k, y * k, r * k, color, a) for x, y, r, color, a in NODES]
-    connectors = [
-        ((a[0] * k, a[1] * k), (b[0] * k, b[1] * k)) for a, b in CONNECTORS
-    ]
 
     rows = []
     for py in range(size):
@@ -158,76 +155,73 @@ def render(size):
                 for sx in range(SUPERSAMPLE):
                     x = px + offset + sx * step
 
-                    if not rounded_rect_contains(
+                    # القص الخارجي للأيقونة الكاملة فقط.
+                    if with_background and not rounded_rect_contains(
                         x, y, 0.0, 0.0, size - 1.0, size - 1.0, radius
                     ):
                         continue
 
-                    # 1) الخلفية المتدرّجة
-                    diag_t = (x + y) / (2.0 * (size - 1.0)) if size > 1 else 0.0
-                    color = gradient_color(diag_t)
+                    color = (0.0, 0.0, 0.0)
+                    hit = with_background
+                    if with_background:
+                        diag_t = (x + y) / (2.0 * (size - 1.0)) if size > 1 else 0.0
+                        color = tuple(float(c) for c in gradient_color(diag_t))
+                        # وهج علوي ناعم.
+                        d = math.hypot(x - glow_cx, y - glow_cy)
+                        if d < glow_r:
+                            color = blend(color, GLOW, GLOW_ALPHA * (1.0 - d / glow_r) ** 2)
 
-                    # 2) ظل البطاقة (قبل البطاقة، مُزاح للأسفل)
+                    # 1) البطاقة الخلفية بلون الهوية.
                     if rounded_rect_contains(
-                        x,
-                        y,
-                        card[0],
-                        card[1] + shadow_shift,
-                        card[2],
-                        card[3] + shadow_shift,
-                        card_radius,
+                        x, y, back[0], back[1], back[2], back[3], back_radius
                     ):
-                        color = blend(color, SHADOW, 0.28)
+                        color = blend(color, BACK_CARD, 0.95)
+                        hit = True
 
-                    # 3) البطاقة اللؤلؤية
+                    # 2) البطاقة الأمامية اللؤلؤية.
                     if rounded_rect_contains(
-                        x, y, card[0], card[1], card[2], card[3], card_radius
+                        x, y, front[0], front[1], front[2], front[3], front_radius
                     ):
-                        color = blend(color, PEARL, 0.97)
+                        color = blend(color, PEARL, 0.98)
+                        hit = True
 
-                        # 4) الإطار الداخلي الرقيق
-                        inner_outside = not rounded_rect_contains(
+                        # 3) إطار داخلي رقيق بلون الهوية.
+                        inside_inner = rounded_rect_contains(
                             x,
                             y,
-                            card[0] + inset,
-                            card[1] + inset,
-                            card[2] - inset,
-                            card[3] - inset,
-                            max(card_radius - inset, 0.0),
+                            front[0] + inset,
+                            front[1] + inset,
+                            front[2] - inset,
+                            front[3] - inset,
+                            max(front_radius - inset, 0.0),
                         )
-                        ring_center = rounded_rect_contains(
+                        inside_ring = rounded_rect_contains(
                             x,
                             y,
-                            card[0] + inset - ring_w,
-                            card[1] + inset - ring_w,
-                            card[2] - inset + ring_w,
-                            card[3] - inset + ring_w,
-                            max(card_radius - inset + ring_w, 0.0),
+                            front[0] + inset - inset_w,
+                            front[1] + inset - inset_w,
+                            front[2] - inset + inset_w,
+                            front[3] - inset + inset_w,
+                            max(front_radius - inset + inset_w, 0.0),
                         )
-                        if inner_outside and ring_center:
-                            color = blend(color, TEAL, 0.16 / 0.97)
+                        if inside_ring and not inside_inner:
+                            color = blend(color, TEAL_DEEP, 0.18 / 0.98)
 
-                        # 5) ساقا حرف N
-                        for s in stems:
-                            if rounded_rect_contains(x, y, s[0], s[1], s[2], s[3], 0.0):
-                                color = blend(color, TEAL, 1.0)
-
-                        # 6) القُطر الذهبي
-                        if convex_polygon_contains(x, y, diagonal):
+                        # 4) مونوغرام K — عمود وقاعدة بلون الهوية، ضلع ذهبي.
+                        if point_segment_distance(x, y, *stem[0], *stem[1]) <= k_half:
+                            color = blend(color, TEAL_DEEP, 1.0)
+                        if point_segment_distance(x, y, *lower_arm[0], *lower_arm[1]) <= k_half:
+                            color = blend(color, TEAL_DEEP, 1.0)
+                        if point_segment_distance(x, y, *upper_arm[0], *upper_arm[1]) <= k_half:
                             color = blend(color, GOLD, 1.0)
-
-                        # 7) وصلات وعُقد الشبكة
-                        for (ax, ay), (bx, by) in connectors:
-                            if point_segment_distance(x, y, ax, ay, bx, by) <= conn_w / 2.0:
-                                color = blend(color, GOLD, 0.7)
-                        for nx, ny, nr, ncolor, nalpha in nodes:
-                            if circle_contains(x, y, nx, ny, nr):
-                                color = blend(color, ncolor, nalpha)
 
                     rgba[0] += color[0]
                     rgba[1] += color[1]
                     rgba[2] += color[2]
-                    rgba[3] += 255.0
+                    # التغطية تُحسب فقط للعيّنات التي رسمت شيئاً، وإلا أصبحت
+                    # الطبقة الشفافة (الأيقونة المتكيّفة) معتمة بالكامل.
+                    if hit:
+                        rgba[3] += 255.0
 
             covered = rgba[3] / samples
             if covered <= 0.0:
@@ -243,6 +237,61 @@ def render(size):
                     alpha,
                 )
             )
+        rows.append(bytes(row))
+    return b"".join(rows)
+
+
+def render_monochrome(size):
+    """أيقونة الثيم: حدود البطاقة + حرف K فقط بلون أبيض وخلفية شفافة.
+
+    لا تُرسم خلفية ولا بطاقة ممتلئة، لأن النظام يستبدل اللون بالكامل: أي شكل
+    ممتلئ سيظهر كتلة واحدة ويُخفي الحرف.
+    """
+    k = size / VIEWPORT
+    front = tuple(v * k for v in FRONT)
+    front_radius = FRONT_RADIUS * k
+    border = 3.2 * k
+    outer = (
+        front[0] - border,
+        front[1] - border,
+        front[2] + border,
+        front[3] + border,
+    )
+    stem = tuple((p[0] * k, p[1] * k) for p in K_STEM)
+    lower_arm = tuple((p[0] * k, p[1] * k) for p in K_LOWER_ARM)
+    upper_arm = tuple((p[0] * k, p[1] * k) for p in K_UPPER_ARM)
+    k_half = K_WIDTH * k / 2.0
+
+    samples = SUPERSAMPLE * SUPERSAMPLE
+    step = 1.0 / SUPERSAMPLE
+    offset = step / 2.0
+
+    rows = []
+    for py in range(size):
+        row = bytearray()
+        row.append(0)
+        for px in range(size):
+            hits = 0
+            for sy in range(SUPERSAMPLE):
+                y = py + offset + sy * step
+                for sx in range(SUPERSAMPLE):
+                    x = px + offset + sx * step
+                    on_border = rounded_rect_contains(
+                        x, y, outer[0], outer[1], outer[2], outer[3], front_radius + border
+                    ) and not rounded_rect_contains(
+                        x, y, front[0], front[1], front[2], front[3], front_radius
+                    )
+                    on_k = (
+                        point_segment_distance(x, y, *stem[0], *stem[1]) <= k_half
+                        or point_segment_distance(x, y, *lower_arm[0], *lower_arm[1])
+                        <= k_half
+                        or point_segment_distance(x, y, *upper_arm[0], *upper_arm[1])
+                        <= k_half
+                    )
+                    if on_border or on_k:
+                        hits += 1
+            alpha = int(round(hits * 255 / samples))
+            row.extend((255, 255, 255, alpha) if alpha > 0 else (0, 0, 0, 0))
         rows.append(bytes(row))
     return b"".join(rows)
 
@@ -267,25 +316,50 @@ def write_png(path, size, raw):
         handle.write(png)
 
 
+# كثافة → (حجم أيقونة الـmipmap بوحدة dp 48، حجم 108dp للرسم المتكيّف)
 DENSITIES = {
-    "mdpi": 48,
-    "hdpi": 72,
-    "xhdpi": 96,
-    "xxhdpi": 144,
-    "xxxhdpi": 192,
+    "mdpi": (48, 108),
+    "hdpi": (72, 162),
+    "xhdpi": (96, 216),
+    "xxhdpi": (144, 324),
+    "xxxhdpi": (192, 432),
 }
+
+APP_ICON_SIZE = 192
+NOTIF_LARGE_DP = 96          # الأيقونة الكبيرة في الإشعار (96dp)
 
 
 def main():
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    for density, size in DENSITIES.items():
-        target = os.path.join(
-            root, "android", "app", "src", "main", "res", f"mipmap-{density}"
-        )
-        os.makedirs(target, exist_ok=True)
-        path = os.path.join(target, "ic_launcher.png")
-        write_png(path, size, render(size))
-        print(f"wrote {path} ({size}x{size})")
+    res = os.path.join(root, "android", "app", "src", "main", "res")
+
+    for density, (launcher_size, art_size) in DENSITIES.items():
+        mipmap_dir = os.path.join(res, f"mipmap-{density}")
+        os.makedirs(mipmap_dir, exist_ok=True)
+        launcher_path = os.path.join(mipmap_dir, "ic_launcher.png")
+        write_png(launcher_path, launcher_size, render(launcher_size, True))
+        print(f"wrote {launcher_path} ({launcher_size}x{launcher_size})")
+
+        drawable_dir = os.path.join(res, f"drawable-{density}")
+        os.makedirs(drawable_dir, exist_ok=True)
+        art_path = os.path.join(drawable_dir, "ic_launcher_art.png")
+        write_png(art_path, art_size, render(art_size, False))
+        print(f"wrote {art_path} ({art_size}x{art_size})")
+
+        mono_path = os.path.join(drawable_dir, "ic_launcher_mono_art.png")
+        write_png(mono_path, art_size, render_monochrome(art_size))
+        print(f"wrote {mono_path} ({art_size}x{art_size})")
+
+        notif_size = int(round(NOTIF_LARGE_DP * launcher_size / 48))
+        notif_path = os.path.join(drawable_dir, "ic_notif_large.png")
+        write_png(notif_path, notif_size, render(notif_size, True))
+        print(f"wrote {notif_path} ({notif_size}x{notif_size})")
+
+    icon_dir = os.path.join(root, "assets", "icon")
+    os.makedirs(icon_dir, exist_ok=True)
+    app_icon_path = os.path.join(icon_dir, "app_icon.png")
+    write_png(app_icon_path, APP_ICON_SIZE, render(APP_ICON_SIZE, True))
+    print(f"wrote {app_icon_path} ({APP_ICON_SIZE}x{APP_ICON_SIZE})")
 
 
 if __name__ == "__main__":

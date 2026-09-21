@@ -21,6 +21,7 @@ void main() {
   late LocalPointOfSaleRepository posRepo;
   late LocalTransferTemplateRepository templates;
   late LocalCustomerService customerService;
+  late LocalCustomerRepository customers;
 
   setUp(() {
     database = AppDatabase(NativeDatabase.memory());
@@ -28,7 +29,7 @@ void main() {
     templates = LocalTransferTemplateRepository(database);
     final audit = LocalAuditLogRepository(database);
     final settings = LocalSettingsRepository(database);
-    final customers = LocalCustomerRepository(database);
+    customers = LocalCustomerRepository(database);
     final clock = FixedClock(DateTime(2026, 9, 20));
     final ids = SequentialIdGenerator();
     final catalog = LocalPointOfSaleCatalogService(
@@ -84,15 +85,43 @@ void main() {
     expect((second as Failure<PosProfile>).error.message, contains('بنفس الاسم'));
   });
 
-  test('rejects phone already used by a customer', () async {
-    await customerService.create(
+  test('links a new POS to an existing customer account instead of rejecting', () async {
+    final existing = await customerService.create(
       displayName: 'عميل قائم',
       identifierType: CustomerIdentifierType.phoneNumber,
       identifierValue: '779111222',
     );
+    final customerId = (existing as Success<Customer>).value.id;
+
     final created = await profiles.create(name: 'نقطة', phone: '779111222');
-    expect(created, isA<Failure<PosProfile>>());
-    expect((created as Failure<PosProfile>).error.message, contains('عميل'));
+
+    expect(created, isA<Success<PosProfile>>());
+    final profile = (created as Success<PosProfile>).value;
+    // نفس حساب الدفتر — لا يُنشأ حساب ثانٍ بنفس الرقم.
+    expect(profile.account.customerId, customerId);
+    final all = await customers.search('');
+    expect((all as Success<List<Customer>>).value.length, 1);
+  });
+
+  test('update still refuses moving a POS onto another customer phone', () async {
+    await customerService.create(
+      displayName: 'عميل آخر',
+      identifierType: CustomerIdentifierType.phoneNumber,
+      identifierValue: '779777888',
+    );
+    final created = await profiles.create(name: 'نقطة تعديل', phone: '779123123');
+    final profile = (created as Success<PosProfile>).value;
+
+    final updated = await profiles.update(
+      posId: profile.pointOfSale.id,
+      status: PointOfSaleStatus.active,
+      name: 'نقطة تعديل',
+      phone: '779777888',
+      existingAccount: profile.account,
+    );
+
+    expect(updated, isA<Failure<PosProfile>>());
+    expect((updated as Failure<PosProfile>).error.message, contains('عميل'));
   });
 
   test('rejects phone already bound to another POS', () async {

@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -7,7 +8,9 @@ import 'package:flutter/services.dart';
 import '../../core/result.dart';
 import '../../domain/entities/card.dart' as domain;
 import '../../domain/entities/money.dart';
+import '../../domain/services/card_import_file_reader.dart';
 import '../../domain/services/card_import_parser.dart';
+import '../../domain/services/card_import_preview.dart';
 import '../../domain/services/services.dart';
 import '../app_scope.dart';
 import '../labels/net_labels.dart';
@@ -41,6 +44,10 @@ class _InventoryScreenState extends State<InventoryScreen> {
   domain.CardStatus? _statusFilter;
   bool _revealSecrets = false;
   final _searchCtrl = TextEditingController();
+
+  /// وضع التحديد المتعدد — يُفعَّل بالضغط المطوّل على أي كرت.
+  bool _selectionMode = false;
+  final Set<String> _selectedIds = <String>{};
 
   @override
   void initState() {
@@ -77,6 +84,9 @@ class _InventoryScreenState extends State<InventoryScreen> {
       _categories = (cats as Success<List<domain.CardCategory>>).value;
       _cards = (cards as Success<List<domain.Card>>).value;
     });
+    // الاستيراد والحذف يغيّران المخزون: نُزامن إشعار أندرويد الحي فوراً (يظهر عند
+    // الهبوط تحت العتبة، ويُلغى فقط بعد إعادة التعبئة فوقها).
+    await c.lowStockAlerts.syncDeviceAlert();
   }
 
   List<domain.Card> get _filtered {
@@ -164,7 +174,74 @@ class _InventoryScreenState extends State<InventoryScreen> {
       _categoryFilter = null;
       _statusFilter = null;
       _searchCtrl.clear();
+      _selectionMode = false;
+      _selectedIds.clear();
     });
+  }
+
+  void _enterSelection(String cardId) {
+    setState(() {
+      _selectionMode = true;
+      _selectedIds.add(cardId);
+    });
+  }
+
+  void _toggleSelection(String cardId) {
+    setState(() {
+      if (!_selectedIds.remove(cardId)) _selectedIds.add(cardId);
+      if (_selectedIds.isEmpty) _selectionMode = false;
+    });
+  }
+
+  void _exitSelection() {
+    setState(() {
+      _selectionMode = false;
+      _selectedIds.clear();
+    });
+  }
+
+  void _selectAllVisible() {
+    setState(() {
+      _selectionMode = true;
+      _selectedIds.addAll(_filtered.map((e) => e.id));
+    });
+  }
+
+  /// حذف كرت واحد أو عدة كروت — لا يتم أي حذف قبل تأكيد صريح من المستخدم.
+  Future<void> _deleteCards(List<String> ids) async {
+    final targets = _cards.where((e) => ids.contains(e.id)).toList(growable: false);
+    if (targets.isEmpty) return;
+    final confirmed = await showDeleteCardsConfirm(
+      context: context,
+      cards: targets,
+      categoryNameOf: _categoryName,
+    );
+    if (!confirmed || !mounted) return;
+    final c = AppScope.of(context);
+    final r = await c.catalogService.deleteCards(cardIds: ids);
+    if (!mounted) return;
+    if (r is Failure) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            (r as Failure<dynamic>).error.message,
+            style: const TextStyle(fontFamily: NetTypography.family),
+          ),
+        ),
+      );
+      return;
+    }
+    final deleted = (r as Success<int>).value;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'تم حذف $deleted كرت من المخزون',
+          style: const TextStyle(fontFamily: NetTypography.family),
+        ),
+      ),
+    );
+    _exitSelection();
+    await _load();
   }
 
   Future<void> _openOverflowMenu() async {
@@ -224,60 +301,123 @@ class _InventoryScreenState extends State<InventoryScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        NetTabHeader(
-          title: 'إدارة الكروت',
-          subtitle: 'المخزون والحالات والفئات · ' + _cards.length.toString() + ' كرت',
-          icon: Icons.style_rounded,
-          actions: [
-            NetHeaderAction(
-              icon: Icons.add_rounded,
-              tooltip: 'استيراد كروت',
-              onPressed: _openAddCards,
-            ),
-            NetHeaderAction(
-              icon: Icons.more_horiz_rounded,
-              tooltip: 'خيارات',
-              onPressed: _openOverflowMenu,
-            ),
-          ],
-        ),
-        // مطابقة الفيديو: أزرار ظاهرة «الفئات» + «استيراد من ملف»
-        Padding(
-          padding: const EdgeInsets.fromLTRB(NetSpacing.lg, 0, NetSpacing.lg, NetSpacing.sm),
-          child: Row(
-            children: [
-              Expanded(
-                child: FilledButton.icon(
-                  onPressed: _openCategories,
-                  icon: const Icon(Icons.category_rounded, size: 20),
-                  label: const Text(
-                    'الفئات',
-                    style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w800),
-                  ),
-                  style: FilledButton.styleFrom(
-                    minimumSize: const Size.fromHeight(48),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                ),
+        if (_selectionMode)
+          NetTabHeader(
+            title: 'تم تحديد ' + _selectedIds.length.toString(),
+            subtitle: 'اضغط أي كرت لإضافته أو إزالته من التحديد · حذف الكروت لا يمس السجلات المالية',
+            icon: Icons.checklist_rounded,
+            actions: [
+              NetHeaderAction(
+                icon: Icons.delete_outline_rounded,
+                tooltip: 'حذف المحدد',
+                color: net.rejected,
+                onPressed: _selectedIds.isEmpty
+                    ? null
+                    : () => _deleteCards(_selectedIds.toList()),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: FilledButton.icon(
-                  onPressed: _openAddCards,
-                  icon: const Icon(Icons.cloud_upload_rounded, size: 20),
-                  label: const Text(
-                    'استيراد من ملف',
-                    style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w800),
-                  ),
-                  style: FilledButton.styleFrom(
-                    minimumSize: const Size.fromHeight(48),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                ),
+              NetHeaderAction(
+                icon: Icons.close_rounded,
+                tooltip: 'إلغاء التحديد',
+                onPressed: _exitSelection,
+              ),
+            ],
+          )
+        else
+          NetTabHeader(
+            title: 'إدارة الكروت',
+            subtitle: 'المخزون والحالات والفئات · ' + _cards.length.toString() + ' كرت',
+            icon: Icons.style_rounded,
+            actions: [
+              NetHeaderAction(
+                icon: Icons.add_rounded,
+                tooltip: 'استيراد كروت',
+                onPressed: _openAddCards,
+              ),
+              NetHeaderAction(
+                icon: Icons.more_horiz_rounded,
+                tooltip: 'خيارات',
+                onPressed: _openOverflowMenu,
               ),
             ],
           ),
-        ),
+        // مطابقة الفيديو: أزرار ظاهرة «الفئات» + «استيراد من ملف»
+        if (!_selectionMode)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(NetSpacing.lg, 0, NetSpacing.lg, NetSpacing.sm),
+            child: Row(
+              children: [
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: _openCategories,
+                    icon: const Icon(Icons.category_rounded, size: 20),
+                    label: const Text(
+                      'الفئات',
+                      style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w800),
+                    ),
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size.fromHeight(48),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: _openAddCards,
+                    icon: const Icon(Icons.cloud_upload_rounded, size: 20),
+                    label: const Text(
+                      'استيراد من ملف',
+                      style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w800),
+                    ),
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size.fromHeight(48),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        if (_selectionMode)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(NetSpacing.lg, 0, NetSpacing.lg, NetSpacing.sm),
+            child: Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _selectAllVisible,
+                    icon: const Icon(Icons.done_all_rounded, size: 20),
+                    label: const Text(
+                      'تحديد كل المعروض',
+                      style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w800),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: const Size.fromHeight(48),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: _selectedIds.isEmpty
+                        ? null
+                        : () => _deleteCards(_selectedIds.toList()),
+                    icon: const Icon(Icons.delete_outline_rounded, size: 20),
+                    label: const Text(
+                      'حذف المحدد',
+                      style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w800),
+                    ),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: net.rejected,
+                      minimumSize: const Size.fromHeight(48),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
         Padding(
           padding: NetSpacing.pageH,
           child: NetSurfaceCard(
@@ -419,6 +559,11 @@ class _InventoryScreenState extends State<InventoryScreen> {
                         card: card,
                         categoryName: _categoryName(card.categoryId),
                         revealSecret: _revealSecrets,
+                        selectionMode: _selectionMode,
+                        selected: _selectedIds.contains(card.id),
+                        onTap: _selectionMode ? () => _toggleSelection(card.id) : null,
+                        onLongPress: () => _enterSelection(card.id),
+                        onDelete: () => _deleteCards([card.id]),
                       );
                     },
                   ),
@@ -480,11 +625,25 @@ class _CardRow extends StatelessWidget {
     required this.card,
     required this.categoryName,
     required this.revealSecret,
+    this.selectionMode = false,
+    this.selected = false,
+    this.onTap,
+    this.onLongPress,
+    this.onDelete,
   });
 
   final domain.Card card;
   final String categoryName;
   final bool revealSecret;
+
+  /// وضع التحديد المتعدد: يُستبدل شعار الحالة بمربع تحديد.
+  final bool selectionMode;
+  final bool selected;
+  final VoidCallback? onTap;
+  final VoidCallback? onLongPress;
+
+  /// حذف هذا الكرت وحده (يفتح تأكيد الحذف).
+  final VoidCallback? onDelete;
 
   static IconData _statusIcon(domain.CardStatus status) => switch (status) {
         domain.CardStatus.available => Icons.check_circle_outline_rounded,
@@ -508,17 +667,39 @@ class _CardRow extends StatelessWidget {
     return NetSurfaceCard(
       margin: NetSpacing.pageH,
       padding: const EdgeInsets.all(NetSpacing.md),
+      onTap: onTap,
+      onLongPress: onLongPress,
+      borderColor: selected ? palette.primary : null,
       child: Row(
         children: [
-          Container(
-            width: NetSizes.badge,
-            height: NetSizes.badge,
-            decoration: BoxDecoration(
-              color: statusBg,
-              borderRadius: NetRadii.smAll,
+          if (selectionMode)
+            Container(
+              width: NetSizes.badge,
+              height: NetSizes.badge,
+              decoration: BoxDecoration(
+                color: selected ? palette.primary : palette.surfaceVariant,
+                borderRadius: NetRadii.smAll,
+                border: Border.all(
+                  color: selected ? palette.primary : palette.border,
+                  width: 1.4,
+                ),
+              ),
+              child: Icon(
+                selected ? Icons.check_rounded : Icons.circle_outlined,
+                size: 20,
+                color: selected ? Colors.white : palette.textTertiary,
+              ),
+            )
+          else
+            Container(
+              width: NetSizes.badge,
+              height: NetSizes.badge,
+              decoration: BoxDecoration(
+                color: statusBg,
+                borderRadius: NetRadii.smAll,
+              ),
+              child: Icon(_statusIcon(card.status), size: 20, color: statusColor),
             ),
-            child: Icon(_statusIcon(card.status), size: 20, color: statusColor),
-          ),
           const SizedBox(width: NetSpacing.md),
           Expanded(
             child: Column(
@@ -595,6 +776,12 @@ class _CardRow extends StatelessWidget {
               ],
             ),
           ),
+          if (!selectionMode && onDelete != null)
+            IconButton(
+              tooltip: 'حذف الكرت',
+              icon: Icon(Icons.delete_outline_rounded, size: 20, color: net.rejected),
+              onPressed: onDelete,
+            ),
         ],
       ),
     );

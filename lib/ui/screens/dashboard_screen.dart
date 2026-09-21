@@ -129,16 +129,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
           await c.settings.find(SettingKeys.smsAutoProcessingEnabled);
       final catOnlySetting =
           await c.settings.find(SettingKeys.processCategoryAmountsOnly);
-      final thresholdSetting =
-          await c.settings.find(SettingKeys.lowStockThreshold);
-      final thresholdRaw = thresholdSetting is Success<AppSetting?>
-          ? thresholdSetting.value?.value
-          : null;
-      final threshold = SettingInt.read(
-        thresholdRaw,
-        defaultValue: SettingDefaults.lowStockThreshold,
-      );
-
       final healthResult = await c.systemHealth.check();
 
       // شريط الاشتراك (عرض فقط) — من الترخيص الفعلي إن وُجد.
@@ -156,18 +146,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
         }
       }
 
-      final categories = await c.categories.listAll();
-      final low = <({String name, int available})>[];
-      if (categories is Success<List<domain.CardCategory>>) {
-        for (final cat in categories.value.where((e) => e.isActive)) {
-          final avail = await c.cards.findAvailableByCategory(cat.id);
-          final count =
-              avail is Success<List<domain.Card>> ? avail.value.length : 0;
-          if (count < threshold) {
-            low.add((name: cat.name, available: count));
-          }
-        }
-      }
+      // مصدر واحد لتنبيه المخزون: نفس الخدمة تحسب الفئات الناقصة وتزامن إشعار
+      // أندرويد الحي (يظهر عند النقص ويُلغى فقط بعد إعادة التعبئة فوق العتبة).
+      final lowStockAlerts = await c.lowStockAlerts.syncDeviceAlert();
+      final low = <({String name, int available})>[
+        for (final alert in lowStockAlerts)
+          (name: alert.categoryName, available: alert.available),
+      ];
 
       var attentionCount = 0;
       var rejectedCount = 0;
