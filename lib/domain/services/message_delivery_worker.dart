@@ -8,6 +8,7 @@ import '../repositories/repositories.dart';
 import 'local_message_retry_service.dart';
 import 'message_retry_policy.dart';
 import 'message_pipeline_trace.dart';
+import 'outbound_template_gate.dart';
 import 'services.dart';
 
 /// Phase 4 delivery worker: resend voucher SMS for already-committed sales.
@@ -29,6 +30,7 @@ final class MessageDeliveryWorker {
     required this.ids,
     this.policy = const MessageRetryPolicy(),
     this.metrics,
+    this.settings,
   });
 
   final MessageRepository messages;
@@ -40,6 +42,7 @@ final class MessageDeliveryWorker {
   final IdGenerator ids;
   final MessageRetryPolicy policy;
   final MessagePipelineMetrics? metrics;
+  final SettingsRepository? settings;
 
   /// Per-tick audit cache to avoid N+1 findByEntity for the same message.
   final Map<String, List<AuditLog>> _auditCache = {};
@@ -121,8 +124,32 @@ final class MessageDeliveryWorker {
         continue;
       }
 
-      final body =
-          cardDeliverySmsBody(serialNumber: card.serialNumber, secretCode: card.secretCode);
+      String? body;
+      final settingsRepo = settings;
+      if (settingsRepo != null) {
+        body = await OutboundTemplateGate(settingsRepo).voucherBody(
+          serialNumber: card.serialNumber,
+          secretCode: card.secretCode,
+        );
+      } else {
+        body = cardDeliverySmsBody(
+          serialNumber: card.serialNumber,
+          secretCode: card.secretCode,
+        );
+      }
+      if (body == null || body.trim().isEmpty) {
+        await auditLogs.append(
+          AuditLog(
+            id: ids.next('audit'),
+            entityType: 'message',
+            entityId: message.id,
+            action: 'sms_skipped_template_disabled',
+            occurredAt: clock.now(),
+            payloadJson: '{"template":"voucher_delivery_sms_template"}',
+          ),
+        );
+        continue;
+      }
 
       final trace = MessagePipelineTrace(
         messageId: message.id,

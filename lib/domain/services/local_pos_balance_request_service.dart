@@ -5,6 +5,7 @@ import '../entities/audit.dart';
 import '../entities/message.dart';
 import '../entities/setting.dart';
 import '../repositories/repositories.dart';
+import 'outbound_template_gate.dart';
 import 'local_pos_account_registry.dart';
 import 'services.dart';
 
@@ -86,14 +87,30 @@ final class LocalPosBalanceRequestService {
     final debtMinor = balance.minorUnits < 0 ? -balance.minorUnits : 0;
     final debtText = (debtMinor / 100).toStringAsFixed(2);
 
-    final setting = await settings.find(SettingKeys.posBalanceResponseTemplate);
-    final template = setting is Success<AppSetting?> && setting.value != null
-        ? setting.value!.value
-        : SettingDefaults.posBalanceResponseTemplate;
-    final body = template
-        .replaceAll('{pos}', account.name)
-        .replaceAll('{balance}', balanceText)
-        .replaceAll('{debt}', debtText);
+    final rendered = await OutboundTemplateGate(settings).render(
+      key: SettingKeys.posBalanceResponseTemplate,
+      fallback: SettingDefaults.posBalanceResponseTemplate,
+      values: {
+        'pos': account.name,
+        'balance': balanceText,
+        'debt': debtText,
+      },
+    );
+    if (rendered is Failure<String?>) return Failure(rendered.error);
+    final body = (rendered as Success<String?>).value;
+    if (body == null || body.trim().isEmpty) {
+      await auditLogs.append(
+        AuditLog(
+          id: ids.next('audit'),
+          entityType: 'pos_balance_request',
+          entityId: account.posId,
+          action: 'sms_skipped_template_disabled',
+          occurredAt: clock.now(),
+          payloadJson: '{"template":"${SettingKeys.posBalanceResponseTemplate}"}',
+        ),
+      );
+      return const Success(null);
+    }
 
     final destination = account.notifyPhone ?? message.sender;
     final sent = await messageSender.send(destination: destination, body: body);

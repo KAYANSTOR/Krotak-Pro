@@ -17,6 +17,8 @@ abstract final class SettingKeys {
   static const themeMode = 'theme_mode';
   static const lastRejectedMessagesViewedAt = 'last_rejected_messages_viewed_at';
   static const notificationSources = 'notification_sources';
+  /// مفاتيح قوالب الرسائل الصادرة المتوقفة (JSON array of key names).
+  static const outboundTemplatesDisabled = 'outbound_templates_disabled';
   static const blockedPhones = 'blocked_phones';
   static const autoRetryFailedMessages = 'auto_retry_failed_messages';
   static const retryMaxAttempts = 'retry_max_attempts';
