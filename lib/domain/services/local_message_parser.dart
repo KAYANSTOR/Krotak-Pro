@@ -220,7 +220,11 @@ final class LocalMessageParser implements MessageParser {
 
     String? identifier;
     TransferIdentifierType type;
-    if (phone != null && phone.isNotEmpty) {
+    if (isPos) {
+      if (posSender == null) return null;
+      identifier = posSender;
+      type = TransferIdentifierType.phone;
+    } else if (phone != null && phone.isNotEmpty) {
       final normalizedPhone = _normalizePhone(phone);
       if (normalizedPhone == null) return null;
       identifier = normalizedPhone;
@@ -228,11 +232,6 @@ final class LocalMessageParser implements MessageParser {
     } else if (account != null && account.isNotEmpty) {
       identifier = account.trim();
       type = TransferIdentifierType.account;
-    } else if (isPos) {
-      final normalizedSender = _normalizePhone(sender);
-      if (normalizedSender == null) return null;
-      identifier = normalizedSender;
-      type = TransferIdentifierType.phone;
     } else {
       return null;
     }
@@ -247,7 +246,10 @@ final class LocalMessageParser implements MessageParser {
     if (destinationRaw != null && destinationRaw.isNotEmpty) {
       deliveryOverride = _normalizePhone(destinationRaw);
       if (deliveryOverride == null) return null;
-    } else if (isPos && phone == null && account == null) {
+    } else if (isPos && phone != null && phone.isNotEmpty) {
+      deliveryOverride = _normalizePhone(phone);
+      if (deliveryOverride == null) return null;
+    } else if (isPos) {
       deliveryOverride = identifier;
     }
 
@@ -259,7 +261,7 @@ final class LocalMessageParser implements MessageParser {
       reference: ref ?? '',
       templateId: template.id,
       posId: template.posId,
-      rawIdentifier: phone ?? account,
+      rawIdentifier: isPos ? (posSender ?? phone ?? account) : (phone ?? account),
       quantity: quantity,
       deliveryOverride: deliveryOverride,
       instantCharge: false,
