@@ -701,6 +701,62 @@ Android App
 
 # 18. لوحة التحكم Web Admin
 
+## 18.1 المستودع الفعلي للوحة الإدارة
+
+بدأ تطوير لوحة التحكم الإدارية الخاصة بالمنظومة في مستودع مستقل مرتبط بهذا المشروع:
+
+**KAYANSTOR/Krotic-Admin-App**
+
+الرابط الرسمي:
+https://github.com/KAYANSTOR/Krotic-Admin-App
+
+### العلاقة بين المستودعين
+
+~~~text
+KAYANSTOR/net-flutter
+        │
+        │ Android App
+        │
+        ▼
+   Firebase Control Plane
+        ▲
+        │
+        │ Admin / Management
+        │
+KAYANSTOR/Krotic-Admin-App
+~~~
+
+المستودع الإداري **ليس بديلًا عن مستودع التطبيق**، بل هو واجهة الإدارة المركزية التي ستتصل مستقبلًا بنفس منظومة Firebase المعتمدة.
+
+### الوضع الحالي
+
+- تم إنشاء مستودع لوحة الإدارة.
+- اللوحة موجودة كمشروع مستقل.
+- إعداد Firebase النهائي للإنتاج لم يُعتبر مفتوحًا لمجرد وجود المستودع.
+- وجود المستودع لا يلغي **HARD GATE** ولا يسمح ببدء تنفيذ منظومة الترخيص والعمولة داخل تطبيق Android.
+- أي تكامل إنتاجي بين اللوحة والتطبيق وFirebase يبقى مؤجلًا حتى اعتماد V1 Stable.
+
+### متطلبات التكامل المستقبلية
+
+عند فتح L2/L7 يجب التعامل مع:
+
+- هوية المشرفين وصلاحياتهم.
+- Firebase Authentication.
+- Firestore.
+- Cloud Functions/backend للعمليات الحساسة.
+- Audit Log.
+- إدارة المشتركين.
+- إدارة التجارب.
+- إدارة التراخيص.
+- إدارة نسب العمولة.
+- الكشوف الشهرية.
+- التسويات.
+- الإشعارات عبر FCM.
+- Remote actions.
+- منع كشف أسرار Firebase/Admin في الواجهة أو المتصفح.
+
+**ممنوع على أي وكيل اعتبار المستودع الإداري الحالي دليلًا على اكتمال أي مرحلة من مراحل L2-L12.**
+
 ## الصفحة الرئيسية
 
 مؤشرات:
@@ -1139,6 +1195,10 @@ ACTIVE
 
 ## L7 — Admin Web Dashboard
 
+**المستودع المستهدف للوحة الإدارة:** KAYANSTOR/Krotic-Admin-App
+
+**الرابط:** https://github.com/KAYANSTOR/Krotic-Admin-App
+
 - subscribers.
 - subscriber profile.
 - commissions.
@@ -1285,6 +1345,8 @@ Production
 - [ ] اختبارات E2E ناجحة في staging.
 - [ ] Pilot ناجح.
 - [ ] اعتماد Production.
+- [ ] لوحة الإدارة مستقرة ومتصلة ببيئة الإنتاج وفق الصلاحيات المعتمدة.
+- [ ] التكامل بين KAYANSTOR/net-flutter وKAYANSTOR/Krotic-Admin-App موثق ومختبر.
 
 ---
 
@@ -1352,6 +1414,20 @@ Production
 
 ---
 
+## المستودعات المرتبطة
+
+### تطبيق Android
+**KAYANSTOR/net-flutter**  
+https://github.com/KAYANSTOR/net-flutter
+
+### لوحة التحكم Web Admin
+**KAYANSTOR/Krotic-Admin-App**  
+https://github.com/KAYANSTOR/Krotic-Admin-App
+
+> المستودعان جزء من المنظومة المستقبلية، لكن وجود أو تطوير لوحة الإدارة لا يفتح تنفيذ منظومة الترخيص والعمولة قبل V1 Stable.
+
+---
+
 ## الحالة النهائية لهذه الوثيقة
 
 ~~~text
@@ -1360,6 +1436,7 @@ IMPLEMENTATION  = BLOCKED
 PRIORITY        = AFTER V1
 TRIGGER         = V1 Stable + Ready for Release
 NEXT AUTHORIZED = L2 only after Gate
+ADMIN REPO      = KAYANSTOR/Krotic-Admin-App
 ~~~
 
 **لا يوجد في هذه الوثيقة أي إذن لبدء تنفيذ الخطة الآن.**
