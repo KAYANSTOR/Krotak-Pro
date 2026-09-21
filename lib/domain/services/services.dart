@@ -37,7 +37,18 @@ abstract interface class CustomerService {
 abstract interface class CustomerBalanceService {
   Future<Result<Money>> getBalance({required String customerId, required String currencyCode});
   Future<Result<Money>> getTotalOutstanding({required String currencyCode});
-  Future<Result<Transaction>> credit({required String customerId, required Money amount, String? reference});
+  Future<Result<Transaction>> credit({
+    required String customerId,
+    required Money amount,
+    String? reference,
+    String? reason,
+  });
+  Future<Result<Transaction>> debit({
+    required String customerId,
+    required Money amount,
+    String? reference,
+    String? reason,
+  });
 }
 
 abstract interface class CardCatalogService {
