@@ -9,7 +9,7 @@ import '../repositories/repositories.dart';
 /// sender / registered identifier — never from the message body.
 ///
 /// 1. Cards to the POS itself: `{qty} كرت {amount}`
-/// 2. Cards to a POS customer: `{qty} كرت {amount} {dest}`
+/// 2. Cards to a POS customer: `{phone} {amount}` (optional trailing quantity).
 /// 3. Balance inquiry: `111`
 ///
 /// Custom templates the operator creates are left untouched. System defaults
