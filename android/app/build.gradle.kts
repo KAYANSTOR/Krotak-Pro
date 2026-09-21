@@ -18,7 +18,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.kayan.krotak_pro"
+        applicationId = "com.kayan.net_app"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
