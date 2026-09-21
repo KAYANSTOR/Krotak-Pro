@@ -36,34 +36,39 @@ jobs:
           flutter-version: 3.47.4
           cache: true
       - run: flutter pub get
-      # Signature stays stable across builds so a new APK installs directly on
-      # top of the installed app (no "App not installed / package conflicts").
-      # The key is the SAME committed key used locally (android/signing/*.b64),
-      # so a CI APK also installs over a locally built APK. Set the
-      # APK_KEYSTORE_B64 secret to rotate to a private key at any time.
-      - name: Prepare stable upload keystore
+      - name: Prepare release keystore from GitHub Secrets
+        env:
+          APK_KEYSTORE_B64: ${{ secrets.APK_KEYSTORE_B64 }}
+          APK_KEYSTORE_PASSWORD: ${{ secrets.APK_KEYSTORE_PASSWORD }}
+          APK_KEY_PASSWORD: ${{ secrets.APK_KEY_PASSWORD }}
+          APK_KEY_ALIAS: ${{ secrets.APK_KEY_ALIAS }}
         run: |
-          mkdir -p android/app/keystore
-          if [ -n "${{ secrets.APK_KEYSTORE_B64 }}" ]; then
-            printf '%s' "${{ secrets.APK_KEYSTORE_B64 }}" | base64 -d \
-              > android/app/keystore/net-upload.jks
-          else
-            base64 -d android/signing/net-upload.jks.b64 \
-              > android/app/keystore/net-upload.jks
+          set -euo pipefail
+          if [ -z "${APK_KEYSTORE_B64}" ] || [ -z "${APK_KEYSTORE_PASSWORD}" ] || [ -z "${APK_KEY_PASSWORD}" ] || [ -z "${APK_KEY_ALIAS}" ]; then
+            echo "Missing required GitHub Actions secrets for release signing."
+            echo "Required: APK_KEYSTORE_B64 APK_KEYSTORE_PASSWORD APK_KEY_PASSWORD APK_KEY_ALIAS"
+            echo "Do not fall back to a keystore committed in the repository."
+            exit 1
           fi
+          mkdir -p android/app/keystore
+          printf '%s' "${APK_KEYSTORE_B64}" | base64 -d > android/app/keystore/upload.jks
           {
-            echo "storeFile=keystore/net-upload.jks"
+            echo "storeFile=keystore/upload.jks"
             echo "storeType=PKCS12"
-            echo "keyAlias=net-upload"
-            echo "storePassword=netupload2026"
-            echo "keyPassword=netupload2026"
+            echo "keyAlias=${APK_KEY_ALIAS}"
+            echo "storePassword=${APK_KEYSTORE_PASSWORD}"
+            echo "keyPassword=${APK_KEY_PASSWORD}"
           } > android/key.properties
       - name: Build release APK
         run: flutter build apk --release
+      - name: Scrub signing material
+        if: always()
+        run: |
+          rm -f android/app/keystore/upload.jks android/key.properties
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: net-flutter-release-apk
+          name: krotak-pro-release-apk
           path: build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
       - name: Publish GitHub Release
@@ -71,8 +76,8 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: apk-${{ github.run_number }}
-          name: Net Flutter APK ${{ github.run_number }}
-          body: "Release APK from CI run ${{ github.run_number }}"
+          name: Krotak Pro APK ${{ github.run_number }}
+          body: "Release APK from CI run ${{ github.run_number }} (Secrets-only signing)"
           files: build/app/outputs/flutter-apk/app-release.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
