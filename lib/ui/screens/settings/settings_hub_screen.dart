@@ -13,8 +13,9 @@ import '../../widgets/dashboard/theme_mode_sheet.dart';
 import '../../widgets/net/net_surface_card.dart';
 import '../../widgets/settings/settings_cards.dart';
 import '../../widgets/settings/settings_section_header.dart';
+import '../pos_screen.dart';
 import '../system_check_screen.dart';
-import '../wallets_pos_screen.dart';
+import '../wallets_screen.dart';
 import 'backup_restore_screen.dart';
 import 'clean_logs_screen.dart';
 import 'deep_clean_screen.dart';
@@ -61,7 +62,7 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
   static const _messagesKeywords =
       'الرسائل القوالب صيغ محاكاة القوالب قوالب التحويل قوالب رسائل العملاء العروض النظام نقاط البيع سلفني SMS';
   static const _walletsKeywords =
-      'المحافظ نقاط البيع إشعارات المحافظ طلبات رصيد نقاط البيع ملخص العمليات اليومي التسوية التلقائية مصادر الإشعارات';
+      'المحافظ نقاط البيع إشعارات المحافظ طلبات رصيد نقاط البيع ملخص العمليات اليومي التسوية التلقائية مصادر الإشعارات الحسابات سقف الدين';
   static const _maintenanceKeywords = 'تنظيف السجلات تصدير السجل الأرشفة نسخ احتياطي استعادة بيانات تنظيف عميق فهارس';
   static const _aboutKeywords =
       'عن التطبيق المبرمج الحقوق كيان سوفت إصدار كروتك ${AppBrand.latinName} الموقع';
@@ -302,7 +303,8 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
                               if (_sectionVisible(_walletsKeywords)) const SettingsSectionHeader(title: 'المحافظ ونقاط البيع'),
                               if (_sectionVisible(_walletsKeywords))
                                 SettingsGroupCard(children: [
-                                  SettingsGroupNavRow(icon: Icons.account_balance_wallet_outlined, title: 'إدارة المحافظ ونقاط البيع', subtitle: 'تفعيل وإعداد المصادر', onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const WalletsPosScreen()))),
+                                  SettingsGroupNavRow(icon: Icons.account_balance_wallet_outlined, title: 'إدارة المحافظ', subtitle: 'إضافة وتفعيل المحافظ وطريقة قراءة الدفع', searchText: 'المحافظ جيب جوالي ون كاش فلوسك', onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const WalletsScreen()))),
+                                  SettingsGroupNavRow(icon: Icons.storefront_outlined, title: 'نقاط البيع', subtitle: 'حسابات النقاط وسقف الدين وقوالب رسائلها', searchText: 'نقاط البيع الحسابات القوالب الرصيد', onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PosScreen()))),
                                   SettingsGroupNavRow(icon: Icons.notifications_none_outlined, title: 'إشعارات المحافظ', subtitle: 'مصادر إشعارات التطبيقات ومنح إذن الوصول', searchText: 'إشعارات المحافظ مصادر الوصول', onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const WalletNotificationSettingsScreen()))),
                                   SettingsGroupSwitchRow(icon: Icons.account_balance_outlined, title: 'طلبات رصيد نقاط البيع', subtitle: _posBalanceRequests ? 'مفعّل — يتم الرد تلقائياً على طلب رصيد نقطة البيع برسالة تحتوي الرصيد والدين' : 'متوقف — طلبات رصيد نقاط البيع تُترك للمراجعة اليدوية', value: _posBalanceRequests, onChanged: (v) async { setState(() => _posBalanceRequests = v); await _saveBool(SettingKeys.posBalanceRequestsEnabled, v); }),
                                   SettingsGroupSwitchRow(icon: Icons.summarize_outlined, title: 'ملخص العمليات اليومي', subtitle: _dailySummary ? 'مفعّل — سيتم إرسال ملخص يومي الساعة 12 ليلاً لكل عملاء نقاط البيع' : 'متوقف — لن تُرسل ملخصات يومية لعملاء نقاط البيع', value: _dailySummary, onChanged: (v) async { setState(() => _dailySummary = v); await _saveBool(SettingKeys.dailyOpsSummaryAutoSend, v); }),

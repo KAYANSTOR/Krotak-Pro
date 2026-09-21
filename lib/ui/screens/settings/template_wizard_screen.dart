@@ -309,7 +309,10 @@ class _TemplateWizardScreenState extends State<TemplateWizardScreen> {
       // نمط يلتقط {ref} صراحة يستفيد من حماية "عدم التكرار" الافتراضية.
       requireReference: _patternHasRef(_patternCtrl.text),
     );
-    final r = await LocalTransferTemplateActivationService(c.transferTemplates).saveExclusive(template);
+    // حفظ مباشر: القالب الجديد يُضاف إلى جانب القوالب النشطة الأخرى لنفس
+    // المصدر — كلها تعمل معاً ويختار [LocalMessageParser] الأنسب بالأولوية.
+    final r = await LocalTransferTemplateActivationService(c.transferTemplates)
+        .save(template);
     if (!mounted) return;
     setState(() => _saving = false);
     if (r is Failure) {

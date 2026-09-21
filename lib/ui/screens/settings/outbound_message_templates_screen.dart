@@ -49,6 +49,10 @@ class _OutboundMessageTemplatesScreenState
   bool _loading = true;
   final Map<String, String> _values = {};
 
+  /// بحث موحّد في **كل** التبويبات (اسم القالب أو نصه) — القوالب صارت 18.
+  final _searchCtrl = TextEditingController();
+  String _query = '';
+
   /// القوالب المخصّصة التي أنشأها المشغّل — مفهرسة برقم التبويب.
   final Map<int, List<_Tpl>> _custom = <int, List<_Tpl>>{};
 
@@ -107,6 +111,7 @@ class _OutboundMessageTemplatesScreenState
       _Tpl(SettingKeys.posSettlementUnknownTemplate, 'تسوية غير مؤكدة', SettingDefaults.posSettlementUnknownTemplate, const ['pos']),
       _Tpl(SettingKeys.posRequestRejectedTemplate, 'إشعار رفض طلب نقطة البيع', SettingDefaults.posRequestRejectedTemplate, const ['pos', 'reason']),
       _Tpl(SettingKeys.posCustomerSmsTailTemplate, 'إضافة اسم نقطة البيع في الرسائل', SettingDefaults.posCustomerSmsTailTemplate, const ['pos', 'pos_name', 'CURRENCY']),
+      _Tpl(SettingKeys.posInstantChargeConfirmTemplate, 'تأكيد إرسال شحن فوري', SettingDefaults.posInstantChargeConfirmTemplate, const ['amount', 'phone', 'CARD_VALUE', 'CURRENCY']),
     ]),
     _TabDef('سلفني', [
       _Tpl(SettingKeys.salafniAcceptedTemplate, 'قبول سلفني', LocalAdvanceService.defaultAccepted, const ['amount', 'serial', 'code']),
@@ -120,14 +125,46 @@ class _OutboundMessageTemplatesScreenState
     super.initState();
     final i = widget.initialTab.clamp(0, _tabsData.length - 1);
     _tabs = TabController(length: _tabsData.length, vsync: this, initialIndex: i);
+    _searchCtrl.addListener(() => setState(() => _query = _searchCtrl.text.trim()));
     WidgetsBinding.instance.addPostFrameCallback((_) => _load());
   }
 
   @override
   void dispose() {
     _tabs.dispose();
+    _searchCtrl.dispose();
     super.dispose();
   }
+
+  /// المتغيرات المكتوبة `{name}` في نص القالب ولم تُعرّف له — تكشف خطأ إملائياً
+  /// يصل للعميل حرفياً (مثل `{serial_number}`) بدل قيمته.
+  List<String> _unknownVars(_Tpl t, String body) {
+    final known = t.vars.toSet();
+    final found = <String>{};
+    for (final match in RegExp(r'\{([A-Za-z_][A-Za-z0-9_]*)\}').allMatches(body)) {
+      final name = match.group(1)!;
+      if (!known.contains(name)) found.add(name);
+    }
+    final list = found.toList()..sort();
+    return list;
+  }
+
+  /// نتائج البحث عبر التبويبات: (القالب، رقم التبويب، عدد المتغيرات المجهولة).
+  List<({_Tpl tpl, int tab, List<String> unknown})> get _hits {
+    final q = _query.toLowerCase();
+    final out = <({_Tpl tpl, int tab, List<String> unknown})>[];
+    for (var i = 0; i < _tabsData.length; i++) {
+      for (final t in _tabItems(i)) {
+        final body = _values[t.keyName] ?? t.fallback;
+        if (t.title.toLowerCase().contains(q) || body.toLowerCase().contains(q)) {
+          out.add((tpl: t, tab: i, unknown: _unknownVars(t, body)));
+        }
+      }
+    }
+    return out;
+  }
+
+  int _tabCount(int index) => _tabItems(index).length;
 
   Future<void> _load() async {
     setState(() => _loading = true);
@@ -339,6 +376,14 @@ class _OutboundMessageTemplatesScreenState
                     const SizedBox(height: 12),
                     TextField(controller: bodyCtrl, minLines: 4, maxLines: 8, onChanged: (_) => setLocal(() {}), style: const TextStyle(fontFamily: 'Tajawal', height: 1.4), decoration: InputDecoration(labelText: 'نص رسالة الـ SMS', labelStyle: const TextStyle(fontFamily: 'Tajawal'), prefixIcon: const Icon(Icons.sms_outlined), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)), alignLabelWithHint: true)),
                     const SizedBox(height: 12),
+                    if (item != null && _unknownVars(item, bodyCtrl.text).isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Text(
+                          'تنبيه: المتغيرات التالية غير معروفة وستُرسل كما هي: '+_unknownVars(item, bodyCtrl.text).map((v) => '{$v}').join('، '),
+                          style: const TextStyle(fontFamily: 'Tajawal', fontSize: 12, color: Color(0xFFDC2626), height: 1.4),
+                        ),
+                      ),
                     const Text('أزرار المساعدة للمتغيرات (اضغط لإدراجها في مكان مؤشر الكتابة):', style: TextStyle(fontFamily: 'Tajawal', fontSize: 13)),
                     const SizedBox(height: 8),
                     Wrap(spacing: 8, runSpacing: 8, children: [
@@ -421,9 +466,53 @@ class _OutboundMessageTemplatesScreenState
     ]))));
   }
 
+  /// نتائج البحث عبر كل التبويبات، مع اسم التبويب فوق كل نتيجة.
+  Widget _searchResults() {
+    final hits = _hits;
+    if (hits.isEmpty) {
+      return ListView(
+        padding: const EdgeInsets.fromLTRB(16, 24, 16, 96),
+        children: [
+          AsyncEmptyView(
+            message: 'لا نتائج للبحث «$_query»',
+            icon: Icons.search_off_rounded,
+            actionLabel: 'مسح البحث',
+            onAction: () => _searchCtrl.clear(),
+          ),
+        ],
+      );
+    }
+    return ListView.builder(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
+      itemCount: hits.length,
+      itemBuilder: (_, i) {
+        final hit = hits[i];
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(4, 0, 4, 6),
+              child: Text(
+                _tabsData[hit.tab].label,
+                style: TextStyle(
+                  fontFamily: 'Tajawal',
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+            _card(hit.tpl),
+          ],
+        );
+      },
+    );
+  }
+
   Widget _card(_Tpl t) {
     final palette = KayanPalette.of(context);
     final body = _values[t.keyName] ?? t.fallback;
+    final unknown = _unknownVars(t, body);
     // «افتراضي» يعني أن نص قالب النظام لم يُعدّل بعد — القوالب المخصّصة تُعرض مخصّصة دائماً.
     final isDefaultBody = !t.isCustom && body.trim() == t.fallback.trim();
     return Padding(padding: const EdgeInsets.only(bottom: 12), child: Material(color: Theme.of(context).colorScheme.surface, borderRadius: BorderRadius.circular(16), child: InkWell(borderRadius: BorderRadius.circular(16), onTap: () => _edit(t), child: Container(
@@ -451,6 +540,32 @@ class _OutboundMessageTemplatesScreenState
           ),
           const SizedBox(width: 6),
           Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3), decoration: BoxDecoration(color: const Color(0xFF10B981).withValues(alpha: 0.12), borderRadius: BorderRadius.circular(8)), child: const Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.check_circle, size: 14, color: Color(0xFF10B981)), SizedBox(width: 4), Text('نشط', style: TextStyle(fontFamily: 'Tajawal', fontSize: 11, color: Color(0xFF10B981), fontWeight: FontWeight.w700))])),
+          if (unknown.isNotEmpty) ...[
+            const SizedBox(width: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: const Color(0xFFDC2626).withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.error_outline, size: 13, color: Color(0xFFDC2626)),
+                  const SizedBox(width: 4),
+                  Text(
+                    'متغير غير معروف',
+                    style: const TextStyle(
+                      fontFamily: 'Tajawal',
+                      fontSize: 11,
+                      color: Color(0xFFDC2626),
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
           const Spacer(),
           Flexible(child: Text(t.title, textAlign: TextAlign.end, style: const TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w800, fontSize: 15))),
         ]),
@@ -473,18 +588,60 @@ class _OutboundMessageTemplatesScreenState
         foregroundColor: Theme.of(context).colorScheme.onSurface,
         elevation: 0,
         actions: [IconButton(tooltip: 'إصلاح القوالب', onPressed: _repair, icon: const Icon(Icons.build_circle_outlined))],
-        bottom: TabBar(controller: _tabs, isScrollable: true, labelStyle: const TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w700), unselectedLabelStyle: const TextStyle(fontFamily: 'Tajawal'), tabs: [for (final t in _tabsData) Tab(text: t.label)]),
+        bottom: TabBar(
+          controller: _tabs,
+          isScrollable: true,
+          labelStyle: const TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w700),
+          unselectedLabelStyle: const TextStyle(fontFamily: 'Tajawal'),
+          tabs: [
+            for (var i = 0; i < _tabsData.length; i++)
+              Tab(text: '${_tabsData[i].label} (${_tabCount(i)})'),
+          ],
+        ),
       ),
       floatingActionButton: FloatingActionButton.extended(onPressed: () => _edit(null), backgroundColor: const Color(0xFFC026A3), icon: const Icon(Icons.add, color: Colors.white), label: const Text('قالب جديد', style: TextStyle(fontFamily: 'Tajawal', color: Colors.white, fontWeight: FontWeight.w700))),
       body: _loading
           ? const AsyncLoadingView(message: 'جاري تحميل القوالب…')
-          : TabBarView(controller: _tabs, children: [
-              for (final tab in _tabsData)
-                Builder(builder: (_) {
-                  final items = _tabItems(_tabsData.indexOf(tab));
-                  return ListView.builder(padding: const EdgeInsets.fromLTRB(16, 12, 16, 96), itemCount: items.length, itemBuilder: (_, i) => _card(items[i]));
-                }),
-            ]),
+          : Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+                  child: TextField(
+                    controller: _searchCtrl,
+                    style: const TextStyle(fontFamily: 'Tajawal'),
+                    decoration: InputDecoration(
+                      hintText: 'ابحث في كل القوالب (الاسم أو النص)…',
+                      hintStyle: const TextStyle(fontFamily: 'Tajawal'),
+                      prefixIcon: const Icon(Icons.search),
+                      suffixIcon: _query.isEmpty
+                          ? null
+                          : IconButton(
+                              tooltip: 'مسح البحث',
+                              icon: const Icon(Icons.close),
+                              onPressed: () => _searchCtrl.clear(),
+                            ),
+                      filled: true,
+                      fillColor: Theme.of(context).colorScheme.surface,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: _query.isEmpty
+                      ? TabBarView(controller: _tabs, children: [
+                          for (final tab in _tabsData)
+                            Builder(builder: (_) {
+                              final items = _tabItems(_tabsData.indexOf(tab));
+                              return ListView.builder(padding: const EdgeInsets.fromLTRB(16, 12, 16, 96), itemCount: items.length, itemBuilder: (_, i) => _card(items[i]));
+                            }),
+                        ])
+                      : _searchResults(),
+                ),
+              ],
+            ),
     ));
   }
 }

@@ -7,6 +7,7 @@ import 'package:net_app/data/database/app_database.dart' hide Customer, PointOfS
 import 'package:net_app/data/database/drift_unit_of_work.dart';
 import 'package:net_app/data/repositories/local_repositories.dart';
 import 'package:net_app/domain/entities/customer.dart';
+import 'package:net_app/domain/entities/message.dart';
 import 'package:net_app/domain/entities/pos_account.dart';
 import 'package:net_app/domain/entities/wallet.dart';
 import 'package:net_app/domain/services/local_catalog_services.dart';
@@ -148,5 +149,37 @@ void main() {
     expect(next.pointOfSale.id, profile.pointOfSale.id);
     expect(next.pointOfSale.name, 'جديد');
     expect(next.account.percentageMode, PosPercentageMode.zero);
+  });
+
+  test('backfill adds missing templates without re-activating a disabled one', () async {
+    final created = await profiles.create(name: 'نقطة قديمة', phone: '779555444');
+    final profile = (created as Success<PosProfile>).value;
+    final listed = await templates.listAll();
+    final forPos = (listed as Success<List<TransferTemplate>>)
+        .value
+        .where((t) => t.posId == profile.pointOfSale.id)
+        .toList();
+    expect(forPos.length, DefaultPosTemplatesSeeder.catalogSize);
+
+    // إصدار قديم: قالب أوقفه المشغّل + قالب ناقص من الكتالوج.
+    final disabled = forPos.first;
+    await templates.save(disabled.copyWith(isActive: false));
+    await templates.delete(forPos.last.id);
+
+    final back = await profiles.ensureInboundTemplates(
+      posId: profile.pointOfSale.id,
+      posName: 'نقطة قديمة',
+    );
+    expect(back, isA<Success<int>>());
+    // يُضاف الناقص فقط: 1 في هذا السيناريو.
+    expect((back as Success<int>).value, 1);
+
+    final after = await templates.listAll();
+    final afterPos = (after as Success<List<TransferTemplate>>)
+        .value
+        .where((t) => t.posId == profile.pointOfSale.id)
+        .toList();
+    expect(afterPos.length, DefaultPosTemplatesSeeder.catalogSize);
+    expect(afterPos.firstWhere((t) => t.id == disabled.id).isActive, isFalse);
   });
 }

@@ -10,9 +10,13 @@ import '../repositories/repositories.dart';
 ///
 /// Unlike [DefaultWalletTemplatesSeeder] (global, gated by a settings flag),
 /// this seeder is keyed by `posId` — each POS gets its own copy. Stable ids
-/// `tpl-pos-{posId}-{variant}` + repository upsert make the operation
-/// idempotent: calling [seedForPos] again backfills any missing variants
-/// without duplicating rows.
+/// `tpl-pos-{posId}-{variant}` make the operation idempotent: calling
+/// [seedForPos] again backfills any missing variants without duplicating rows
+/// and, by default, without touching the state or the text of existing rows.
+///
+/// All variants are seeded **active**: one POS needs several patterns at once
+/// (single card, multi card, delivery destination, balance request) and
+/// [LocalMessageParser] picks the best match by ascending `priority`.
 ///
 /// Catalog covers single-card, multi-card (`{qty}`), delivery override
 /// (`{dest}`), and balance-request — matching what [LocalMessageParser]
@@ -25,13 +29,30 @@ final class DefaultPosTemplatesSeeder {
   /// Number of built-in variants currently defined (for tests / UI hints).
   static int get catalogSize => _specs.length;
 
+  /// يزرع كتالوج القوالب الكامل لنقطة بيع.
+  ///
+  /// [overwriteExisting] = false (الافتراضي) يجعل العملية **إضافة الناقص فقط**
+  /// فلا يُعاد تفعيل قالب أوقفه المشغّل عند كل تعديل لنقطة البيع، ولا يضيع أي
+  /// تعديل يدوي على النص. فعّل [overwriteExisting] عند بناء/إصلاح الكتالوج.
   Future<Result<int>> seedForPos({
     required String posId,
     required String posName,
+    bool overwriteExisting = false,
   }) async {
+    final existing = await templates.listAll();
+    if (existing is Failure<List<TransferTemplate>>) {
+      return Failure(existing.error);
+    }
+    final existingIds = !overwriteExisting
+        ? {
+            for (final t in (existing as Success<List<TransferTemplate>>).value)
+              t.id,
+          }
+        : const <String>{};
     var inserted = 0;
     for (final spec in _specs) {
       final id = 'tpl-pos-$posId-${spec.variant}';
+      if (existingIds.contains(id)) continue;
       final tpl = TransferTemplate(
         id: id,
         name: spec.name,
