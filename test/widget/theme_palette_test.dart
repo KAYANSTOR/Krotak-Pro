@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:net_app/ui/theme/kayan_palette.dart';
-import 'package:net_app/ui/theme/kayan_theme.dart';
-import 'package:net_app/ui/widgets/kayan_bottom_nav.dart';
-import 'package:net_app/ui/widgets/settings/settings_cards.dart';
+import 'package:krotak_pro/ui/theme/kayan_palette.dart';
+import 'package:krotak_pro/ui/theme/kayan_theme.dart';
+import 'package:krotak_pro/ui/widgets/kayan_bottom_nav.dart';
+import 'package:krotak_pro/ui/widgets/settings/settings_cards.dart';
 
 Widget _app({required ThemeMode mode, required Widget child}) {
   return MaterialApp(
