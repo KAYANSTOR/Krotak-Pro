@@ -1,81 +1,66 @@
-import 'entities/advance.dart';
-import 'entities/money.dart';
 import 'entities/transaction.dart';
+import 'entities/money.dart';
 import 'ledger.dart';
 
-/// ملخص دفتر حقيقي لملف العميل — بدون أرقام ثابتة.
+/// ملخص دفتر العميل من الحركات الحقيقية فقط — بدون أرقام ثابتة.
 final class CustomerAccountSummary {
   const CustomerAccountSummary({
     required this.balance,
-    required this.totalDebt,
-    required this.totalPayments,
-    required this.totalSales,
-    required this.openAdvances,
-    required this.openAdvanceCount,
+    required this.totalDebtMinor,
+    required this.totalPaymentsMinor,
+    required this.totalSalesMinor,
+    required this.openAdvancesMinor,
+    required this.currencyCode,
   });
 
   final Money balance;
-  final Money totalDebt;
-  final Money totalPayments;
-  final Money totalSales;
-  final Money openAdvances;
-  final int openAdvanceCount;
+  final int totalDebtMinor;
+  final int totalPaymentsMinor;
+  final int totalSalesMinor;
+  final int openAdvancesMinor;
+  final String currencyCode;
 
   static CustomerAccountSummary fromLedger({
     required List<Transaction> transactions,
-    required List<Advance> advances,
     required String currencyCode,
+    int openAdvancesMinor = 0,
   }) {
     final completed = transactions
-        .where((tx) => tx.status == TransactionStatus.completed)
-        .toList(growable: false);
-
-    final balance = sumCompletedLedger(
-      transactions: completed,
-      currencyCode: currencyCode,
-    );
-
-    var debt = 0;
+        .where((t) => t.status == TransactionStatus.completed)
+        .where((t) => t.amount.currencyCode == currencyCode)
+        .toList();
     var payments = 0;
     var sales = 0;
-    for (final tx in completed) {
-      if (tx.amount.currencyCode != currencyCode) {
-        throw const MixedCurrencyLedger();
-      }
-      switch (tx.type) {
-        case TransactionType.sale:
-        case TransactionType.advance:
-        case TransactionType.withdrawal:
-          debt += tx.amount.minorUnits;
+    var debtish = 0;
+    for (final t in completed) {
+      final units = t.amount.minorUnits;
+      switch (t.type) {
         case TransactionType.deposit:
         case TransactionType.reward:
-          payments += tx.amount.minorUnits;
+          payments += units;
+        case TransactionType.sale:
+          sales += units;
+          if (ledgerDirection(t.type) < 0) debtish += units;
+        case TransactionType.advance:
+          if (ledgerDirection(t.type) < 0) debtish += units;
+        case TransactionType.withdrawal:
         case TransactionType.settlement:
-          payments += tx.amount.minorUnits;
         case TransactionType.reversal:
           break;
       }
-      if (tx.type == TransactionType.sale) {
-        sales += tx.amount.minorUnits;
-      }
     }
-
-    var openAdvanceMinor = 0;
-    var openCount = 0;
-    for (final advance in advances) {
-      if (advance.status != AdvanceStatus.open) continue;
-      if (advance.outstanding.currencyCode != currencyCode) continue;
-      openAdvanceMinor += advance.outstanding.minorUnits;
-      openCount += 1;
-    }
-
+    final balance = sumCompletedLedger(
+      transactions: transactions,
+      currencyCode: currencyCode,
+    );
+    final debt = balance.minorUnits < 0 ? -balance.minorUnits : 0;
     return CustomerAccountSummary(
       balance: balance,
-      totalDebt: Money(minorUnits: debt, currencyCode: currencyCode),
-      totalPayments: Money(minorUnits: payments, currencyCode: currencyCode),
-      totalSales: Money(minorUnits: sales, currencyCode: currencyCode),
-      openAdvances: Money(minorUnits: openAdvanceMinor, currencyCode: currencyCode),
-      openAdvanceCount: openCount,
+      totalDebtMinor: debt,
+      totalPaymentsMinor: payments,
+      totalSalesMinor: sales,
+      openAdvancesMinor: openAdvancesMinor,
+      currencyCode: currencyCode,
     );
   }
 }
