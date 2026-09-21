@@ -4,11 +4,11 @@ import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:net_app/application/app_container.dart';
-import 'package:net_app/data/database/app_database.dart' hide Customer, Card, Sale, TransferTemplate;
-import 'package:net_app/domain/entities/message.dart';
-import 'package:net_app/main.dart';
-import 'package:net_app/ui/home_shell.dart';
+import 'package:krotak_pro/application/app_container.dart';
+import 'package:krotak_pro/data/database/app_database.dart' hide Customer, Card, Sale, TransferTemplate;
+import 'package:krotak_pro/domain/entities/message.dart';
+import 'package:krotak_pro/main.dart';
+import 'package:krotak_pro/ui/home_shell.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
