@@ -227,8 +227,11 @@ final class LocalPromotionFulfillmentService {
       'code': card.secretCode,
       'amount': (amountMinor / 100).toStringAsFixed(2),
     });
-    final sent = if (body.trim().isNotEmpty) {
-      await sender.send(destination: destination, body: body);
+    final Result<void> sent;
+    if (body.trim().isEmpty) {
+      sent = const Success<void>(null);
+    } else {
+      sent = await sender.send(destination: destination, body: body);
     }
     await auditLogs.append(
       AuditLog(
