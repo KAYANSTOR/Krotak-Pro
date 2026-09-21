@@ -13,8 +13,10 @@ import '../repositories/repositories.dart';
 /// 3. Balance inquiry: `111`
 ///
 /// Custom templates the operator creates are left untouched. A known migration
-/// repairs the previously shipped customer-delivery default while preserving
-/// the operator's enabled/disabled state.
+/// repairs the previously shipped customer-delivery default and re-enables that
+/// built-in row when it is still carrying the old broken default contract.
+/// This targets only the exact legacy built-in pattern; manually customized
+/// templates remain untouched.
 final class DefaultPosTemplatesSeeder {
   const DefaultPosTemplatesSeeder({required this.templates});
 
@@ -95,7 +97,12 @@ final class DefaultPosTemplatesSeeder {
           id: id,
           name: spec.name,
           pattern: spec.pattern,
-          isActive: overwriteExisting ? true : existingTemplate.isActive,
+          isActive: overwriteExisting ||
+                  (spec.variant == 'cards-to-pos-customer' &&
+                      existingTemplate.pattern.trim() ==
+                          '{qty} كرت {amount} {dest}')
+              ? true
+              : existingTemplate.isActive,
           priority: spec.priority,
           walletId: existingTemplate.walletId,
           posId: posId,
