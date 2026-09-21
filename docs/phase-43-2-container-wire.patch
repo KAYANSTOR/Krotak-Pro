@@ -1,0 +1,22 @@
+--- a/lib/application/app_container_impl.dart
++++ b/lib/application/app_container_impl.dart
+@@ -14,6 +14,7 @@
+ import '../domain/entities/message.dart';
+ import '../domain/entities/setting.dart';
+ import '../domain/services/local_account_merge_service.dart';
++import '../domain/services/outgoing_dispatch_queue.dart';
+ import '../data/repositories/local_broadcast_repository.dart';
+ import '../domain/services/local_advance_service.dart';
+ import '../domain/services/local_broadcast_service.dart';
+@@ -196,7 +197,12 @@
+     final live = listed is Success<List<TransferTemplate>> ? listed.value : const <TransferTemplate>[];
+     final parser = LocalMessageParser(templates: live.isNotEmpty ? live : templates);
+     final smsBridge = SmsBridge();
+-    final messageSender = NativeMessageSender(smsBridge);
++    final messageSender = OutgoingDispatchQueue(
++      inner: NativeMessageSender(smsBridge),
++      clock: clock,
++      ids: ids,
++      auditLogs: auditLogs,
++    );
+     final saleService = LocalSaleService(customers: customers, categories: categories, cards: cards, sales: sales, transactions: transactions, balances: balanceService, inventory: inventoryService, auditLogs: auditLogs, unitOfWork: uow, clock: clock, ids: ids, messageSender: messageSender);
