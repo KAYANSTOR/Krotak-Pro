@@ -167,7 +167,12 @@ final class LocalAdvanceService implements AdvanceService {
         'code': selectedCard.secretCode,
       },
     );
-    final send = if (body.trim().isNotEmpty) { await messageSender.send(destination: destination, body: body); }
+    final Result<void> send;
+    if (body.trim().isEmpty) {
+      send = const Success<void>(null);
+    } else {
+      send = await messageSender.send(destination: destination, body: body);
+    }
     if (send is Failure<void>) {
       await auditLogs.append(AuditLog(
         id: ids.next('audit'),
@@ -245,7 +250,17 @@ final class LocalAdvanceService implements AdvanceService {
       await auditLogs.append(AuditLog(id: ids.next('audit'), entityType: 'advance', entityId: advance.id, action: nowRemaining <= 0 ? 'settled' : 'partially_settled', occurredAt: clock.now(), payloadJson: '{"paymentReference":"${_escape(reference)}","applied":$pay,"remaining":$nowRemaining}'));
       final destination = await _deliveryPhone(customerId);
       if (destination.isNotEmpty) {
-        final settledBody = await _render(settledTemplateKey, defaultSettled, {'amount': _money(Money(minorUnits: pay, currencyCode: amount.currencyCode)), 'remaining': _money(Money(minorUnits: nowRemaining, currencyCode: amount.currencyCode))}); if (settledBody.trim().isNotEmpty) { await messageSender.send(destination: destination, body: settledBody); }
+        final settledBody = await _render(
+          settledTemplateKey,
+          defaultSettled,
+          {
+            'amount': _money(Money(minorUnits: pay, currencyCode: amount.currencyCode)),
+            'remaining': _money(Money(minorUnits: nowRemaining, currencyCode: amount.currencyCode)),
+          },
+        );
+        if (settledBody.trim().isNotEmpty) {
+          await messageSender.send(destination: destination, body: settledBody);
+        }
       }
     }
     return Success(AdvancePaymentResult(applied: Money(minorUnits: applied, currencyCode: amount.currencyCode), remaining: Money(minorUnits: remaining, currencyCode: amount.currencyCode), settlementTransaction: lastSettlement));
