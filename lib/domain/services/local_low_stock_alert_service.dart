@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import '../../core/app_brand.dart';
 import '../../core/clock.dart';
 import '../../core/result.dart';
 import '../entities/card.dart';
@@ -26,6 +27,7 @@ final class LocalLowStockAlertService {
     required this.cards,
     required this.clock,
     this.messageSender,
+    this.notifier,
   });
 
   final SettingsRepository settings;
@@ -34,8 +36,14 @@ final class LocalLowStockAlertService {
   final Clock clock;
   final MessageSender? messageSender;
 
+  /// ناشر إشعار أندرويد الحي — null في الاختبارات وبيئات غير أندرويد.
+  final StockAlertNotifier? notifier;
+
   static const defaultCustomerTemplate =
       'عذراً، كروت فئة {category} غير متوفرة حالياً (المتبقي: {count}). يرجى التواصل مع الإدارة.';
+
+  /// عنوان الإشعار الحي على الجهاز (مثال: «كروتك — تنبيه المخزون»).
+  static String get deviceAlertTitle => '${AppBrand.name} — تنبيه المخزون';
 
   Future<int> threshold() async {
     final raw = await settings.find(SettingKeys.lowStockThreshold);
@@ -57,7 +65,8 @@ final class LocalLowStockAlertService {
       final available = await cards.findAvailableByCategory(category.id);
       if (available is Failure<List<Card>>) continue;
       final count = (available as Success<List<Card>>).value.length;
-      if (count <= limit) {
+      // «يقل عن العتبة» كما هو موصوف في إعدادات التنبيه وفي لوحة التحكم.
+      if (count < limit) {
         alerts.add(
           LowStockAlert(
             categoryId: category.id,
@@ -67,7 +76,38 @@ final class LocalLowStockAlertService {
         );
       }
     }
+    // الأكثر نقصاً أولاً ليكون نص الإشعار ثابتاً ومقروءاً.
+    alerts.sort((a, b) {
+      final byCount = a.available.compareTo(b.available);
+      if (byCount != 0) return byCount;
+      return a.categoryName.compareTo(b.categoryName);
+    });
     await _writeStored(alerts);
+    return alerts;
+  }
+
+  /// نص الإشعار الحي: قائمة الفئات التي بلغت العتبة أو أقل.
+  String renderDeviceBody(List<LowStockAlert> alerts) {
+    final parts = alerts
+        .map((a) => 'كرت ${a.categoryName} (${a.available})')
+        .join('، ');
+    return 'تنبيه: الكروت التالية أوشكت على النفاد: $parts';
+  }
+
+  /// يزامن إشعار أندرويد الحي مع المخزون الفعلي ويرجع التنبيهات النشطة.
+  ///
+  /// يظهر الإشعار عند وجود فئة تحت العتبة، ويُلغى **فقط** عند إعادة التعبئة
+  /// فوقها — لذلك يُستدعى من كل مسار يُغيّر المخزون (استيراد/حذف كروت، فتح
+  /// التطبيق أو العودة إليه).
+  Future<List<LowStockAlert>> syncDeviceAlert() async {
+    final alerts = await refreshFromInventory();
+    final target = notifier;
+    if (target == null) return alerts;
+    if (alerts.isEmpty) {
+      await target.clear();
+      return alerts;
+    }
+    await target.show(title: deviceAlertTitle, body: renderDeviceBody(alerts));
     return alerts;
   }
 

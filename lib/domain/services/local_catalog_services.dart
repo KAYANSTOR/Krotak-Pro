@@ -50,6 +50,9 @@ final class LocalCardCatalogService implements CardCatalogService {
       name: name,
       faceValue: category.faceValue,
       isActive: category.isActive,
+      // نسبة العمولة تُخزَّن في الإعدادات (LocalCategoryCommissionStore)،
+      // لكن يجب ألا تُسقطها إعادة الحفظ وإلا فقد المستخدم نسبته عند التعديل.
+      commissionPercentBps: category.commissionPercentBps,
     );
 
     return unitOfWork.run(() async {
@@ -144,6 +147,42 @@ final class LocalCardCatalogService implements CardCatalogService {
       );
       if (audited is Failure<void>) return Failure(audited.error);
       return Success(imported);
+    });
+  }
+
+  @override
+  Future<Result<int>> deleteCards({required List<String> cardIds}) {
+    final targets = cardIds.map((e) => e.trim()).where((e) => e.isNotEmpty).toSet().toList();
+    if (targets.isEmpty) {
+      return Future.value(
+        const Failure(
+          AppFailure(code: 'no_cards_selected', message: 'لم يتم تحديد أي كرت للحذف'),
+        ),
+      );
+    }
+
+    return unitOfWork.run(() async {
+      final deleted = await cards.deleteMany(targets);
+      if (deleted is Failure<int>) return Failure(deleted.error);
+      final count = (deleted as Success<int>).value;
+      if (count == 0) {
+        return const Failure(
+          AppFailure(code: 'card_not_found', message: 'لم يتم العثور على الكروت المحددة'),
+        );
+      }
+
+      final audited = await auditLogs.append(
+        AuditLog(
+          id: ids.next('audit'),
+          entityType: 'card',
+          entityId: targets.first,
+          action: 'cards_deleted',
+          payloadJson: '{\"count\":$count}',
+          occurredAt: clock.now(),
+        ),
+      );
+      if (audited is Failure<void>) return Failure(audited.error);
+      return Success(count);
     });
   }
 }

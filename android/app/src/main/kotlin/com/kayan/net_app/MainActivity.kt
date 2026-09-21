@@ -12,6 +12,7 @@ import android.provider.Settings
 import android.telephony.SmsManager
 import android.telephony.SubscriptionManager
 import androidx.core.app.ActivityCompat
+import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -24,6 +25,7 @@ class MainActivity : FlutterActivity(), SmsListener {
     private val notificationMethodChannelName = "com.kayan.net/notifications"
     private val notificationEventChannelName = "com.kayan.net/notifications_stream"
     private val diagnosticsChannelName = "com.kayan.net/diagnostics"
+    private val alertsChannelName = "com.kayan.net/alerts"
     private var eventSink: EventChannel.EventSink? = null
     private var pendingContactResult: MethodChannel.Result? = null
 
@@ -142,6 +144,30 @@ class MainActivity : FlutterActivity(), SmsListener {
             },
         )
 
+        // إشعار المخزون الحي: النص يأتي من طبقة المجال (المخزون الفعلي) وينشر
+        // إشعاراً مستمراً لا يُغلق إلا بعد إعادة التعبئة فوق العتبة.
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, alertsChannelName).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "showStockAlert" -> {
+                    val title = call.argument<String>("title")
+                    val body = call.argument<String>("body")
+                    if (title.isNullOrBlank() || body.isNullOrBlank()) {
+                        result.error("invalid_args", "title and body are required", null)
+                        return@setMethodCallHandler
+                    }
+                    StockAlertNotification.show(applicationContext, title, body)
+                    result.success(true)
+                }
+                "clearStockAlert" -> {
+                    StockAlertNotification.clear(applicationContext)
+                    result.success(true)
+                }
+                "hasNotificationPermission" -> result.success(areNotificationsAllowed())
+                "requestNotificationPermission" -> result.success(requestPostNotificationsPermission())
+                else -> result.notImplemented()
+            }
+        }
+
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, diagnosticsChannelName).setMethodCallHandler { call, result ->
             when (call.method) {
                 "probe" -> result.success(probeCapabilities())
@@ -237,6 +263,16 @@ class MainActivity : FlutterActivity(), SmsListener {
             "model" to Build.MODEL,
             "sdk" to Build.VERSION.SDK_INT,
         )
+    }
+
+    /** إشعارات التطبيق مسموحة (الإذن + مفتاح النظام في الإعدادات). */
+    private fun areNotificationsAllowed(): Boolean {
+        val runtimeGranted = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+            ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.POST_NOTIFICATIONS,
+            ) == PackageManager.PERMISSION_GRANTED
+        return runtimeGranted && NotificationManagerCompat.from(this).areNotificationsEnabled()
     }
 
     private fun isIgnoringBatteryOptimizations(): Boolean {

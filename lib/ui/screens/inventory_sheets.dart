@@ -1,5 +1,351 @@
 part of 'inventory_screen.dart';
 
+/// تأكيد حذف كرت واحد أو عدة كروت من المخزون.
+///
+/// يعرض الكروت المحددة مع فئتها وحالتها، ويحذّر صراحةً عند تضمين كروت محجوزة
+/// أو مباعة (الحذف مخزوني فقط ولا يلغي العملية المالية المرتبطة).
+/// لا يرجع `true` إلا بضغط المستخدم على «حذف نهائي».
+Future<bool> showDeleteCardsConfirm({
+  required BuildContext context,
+  required List<domain.Card> cards,
+  required String Function(String categoryId) categoryNameOf,
+}) async {
+  if (cards.isEmpty) return false;
+
+  final reserved = cards.where((e) => e.status == domain.CardStatus.reserved).length;
+  final sold = cards.where((e) => e.status == domain.CardStatus.sold).length;
+  final available = cards.where((e) => e.status == domain.CardStatus.available).length;
+  const previewLimit = 6;
+  final preview = cards.take(previewLimit).toList(growable: false);
+  final remaining = cards.length - preview.length;
+
+  final result = await NetSheet.show<bool>(
+    context,
+    builder: (ctx) {
+      final palette = KayanPalette.of(ctx);
+      final net = ctx.netColors;
+      return NetSheet(
+        title: cards.length == 1
+            ? 'حذف الكرت'
+            : 'حذف ' + cards.length.toString() + ' كروت',
+        subtitle: 'الحذف يزيل الكروت من المخزون نهائياً ولا يمكن التراجع عنه',
+        icon: Icons.delete_forever_rounded,
+        children: [
+          Wrap(
+            spacing: NetSpacing.sm,
+            runSpacing: NetSpacing.sm,
+            children: [
+              if (available > 0)
+                _DeleteChip(
+                  color: net.available,
+                  label: 'متاح ' + available.toString(),
+                ),
+              if (reserved > 0)
+                _DeleteChip(
+                  color: net.reserved,
+                  label: 'محجوز ' + reserved.toString(),
+                ),
+              if (sold > 0)
+                _DeleteChip(color: net.sold, label: 'مباع ' + sold.toString()),
+            ],
+          ),
+          const SizedBox(height: NetSpacing.md),
+          Container(
+            decoration: BoxDecoration(
+              color: palette.surfaceVariant.withValues(alpha: 0.35),
+              borderRadius: NetRadii.smAll,
+              border: Border.all(color: palette.border),
+            ),
+            padding: const EdgeInsets.symmetric(
+              horizontal: NetSpacing.md,
+              vertical: NetSpacing.sm,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (final card in preview)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 3),
+                    child: Row(
+                      children: [
+                        Icon(Icons.style_rounded, size: 14, color: palette.textTertiary),
+                        const SizedBox(width: NetSpacing.sm),
+                        Expanded(
+                          child: Text(
+                            card.serialNumber,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontFamily: NetTypography.family,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              color: palette.textPrimary,
+                            ),
+                          ),
+                        ),
+                        Flexible(
+                          child: Text(
+                            categoryNameOf(card.categoryId) +
+                                ' · ' +
+                                cardStatusLabel(card.status),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.left,
+                            style: TextStyle(
+                              fontFamily: NetTypography.family,
+                              fontSize: 11.5,
+                              color: palette.textSecondary,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                if (remaining > 0)
+                  Padding(
+                    padding: const EdgeInsets.only(top: NetSpacing.xs),
+                    child: Text(
+                      'و' + remaining.toString() + ' كرت آخر',
+                      style: TextStyle(
+                        fontFamily: NetTypography.family,
+                        fontSize: 11.5,
+                        color: palette.textSecondary,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          if (reserved > 0 || sold > 0) ...[
+            const SizedBox(height: NetSpacing.md),
+            Container(
+              decoration: BoxDecoration(
+                color: net.warningContainer,
+                borderRadius: NetRadii.smAll,
+              ),
+              padding: const EdgeInsets.all(NetSpacing.md),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.warning_amber_rounded, size: 18, color: net.warning),
+                  const SizedBox(width: NetSpacing.sm),
+                  Expanded(
+                    child: Text(
+                      'التحذير: بين الكروت المحددة كروت محجوزة أو مباعة. حذفها يزيلها من المخزون فقط '
+                      'ولا يلغي العملية المالية أو رسالة العميل المرتبطة بها، لذلك راجع السجلات قبل الحذف.',
+                      style: TextStyle(
+                        fontFamily: NetTypography.family,
+                        fontSize: 12,
+                        height: 1.5,
+                        color: palette.textPrimary,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+          const SizedBox(height: NetSpacing.xl),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size.fromHeight(48),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  child: const Text(
+                    'إلغاء',
+                    style: TextStyle(fontFamily: NetTypography.family, fontWeight: FontWeight.w800),
+                  ),
+                ),
+              ),
+              const SizedBox(width: NetSpacing.md),
+              Expanded(
+                child: FilledButton.icon(
+                  onPressed: () => Navigator.pop(ctx, true),
+                  icon: const Icon(Icons.delete_forever_rounded, size: 20),
+                  label: const Text(
+                    'حذف نهائي',
+                    style: TextStyle(fontFamily: NetTypography.family, fontWeight: FontWeight.w800),
+                  ),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: net.rejected,
+                    minimumSize: const Size.fromHeight(48),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      );
+    },
+  );
+  return result ?? false;
+}
+
+/// ملخّص تحليل ملف/نص الاستيراد: الصالح، والمكرر في المخزون، والأسطر المرفوضة.
+class _ImportPreviewCard extends StatelessWidget {
+  const _ImportPreviewCard({required this.preview});
+
+  final CardImportPreview preview;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = KayanPalette.of(context);
+    final net = context.netColors;
+    final ok = preview.canImport;
+    final shownErrors = preview.parseErrors.take(4).toList(growable: false);
+    return Container(
+      margin: const EdgeInsets.only(top: NetSpacing.md),
+      padding: const EdgeInsets.all(NetSpacing.md),
+      decoration: BoxDecoration(
+        color: ok ? net.successContainer : net.warningContainer,
+        borderRadius: NetRadii.smAll,
+        border: Border.all(color: palette.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Icon(
+                ok ? Icons.check_circle_outline_rounded : Icons.error_outline_rounded,
+                size: 18,
+                color: ok ? net.success : net.warning,
+              ),
+              const SizedBox(width: NetSpacing.sm),
+              Expanded(
+                child: Text(
+                  preview.fileName == null
+                      ? 'ملخص التحليل'
+                      : 'ملخص التحليل · ' + preview.fileName!,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontFamily: NetTypography.family,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                    color: palette.textPrimary,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: NetSpacing.sm),
+          _previewLine(context, 'جاهز للاستيراد', preview.acceptedCount, net.success),
+          if (preview.stockDuplicateCount > 0)
+            _previewLine(
+              context,
+              'موجود مسبقاً في المخزون (سيُتخطى)',
+              preview.stockDuplicateCount,
+              net.warning,
+            ),
+          if (preview.parseErrors.isNotEmpty)
+            _previewLine(
+              context,
+              'سطر مرفوض (صيغة غير صحيحة)',
+              preview.parseErrors.length,
+              net.rejected,
+            ),
+          if (shownErrors.isNotEmpty) ...[
+            const SizedBox(height: NetSpacing.sm),
+            for (final error in shownErrors)
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Text(
+                  '• ' + error,
+                  style: TextStyle(
+                    fontFamily: NetTypography.family,
+                    fontSize: 11,
+                    color: palette.textSecondary,
+                  ),
+                ),
+              ),
+            if (preview.parseErrors.length > shownErrors.length)
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Text(
+                  'و' + (preview.parseErrors.length - shownErrors.length).toString() + ' سطر آخر...',
+                  style: TextStyle(
+                    fontFamily: NetTypography.family,
+                    fontSize: 11,
+                    color: palette.textSecondary,
+                  ),
+                ),
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _previewLine(BuildContext context, String label, int value, Color color) {
+    final palette = KayanPalette.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(top: 3),
+      child: Row(
+        children: [
+          Container(
+            width: 8,
+            height: 8,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: NetSpacing.sm),
+          Expanded(
+            child: Text(
+              label,
+              style: TextStyle(
+                fontFamily: NetTypography.family,
+                fontSize: 12,
+                color: palette.textSecondary,
+              ),
+            ),
+          ),
+          Text(
+            value.toString(),
+            style: TextStyle(
+              fontFamily: NetTypography.family,
+              fontSize: 12.5,
+              fontWeight: FontWeight.w800,
+              color: palette.textPrimary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DeleteChip extends StatelessWidget {
+  const _DeleteChip({required this.color, required this.label});
+
+  final Color color;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: NetSpacing.sm, vertical: NetSpacing.xs),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.14),
+        borderRadius: NetRadii.pillAll,
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontFamily: NetTypography.family,
+          fontSize: 11.5,
+          fontWeight: FontWeight.w800,
+          color: color,
+        ),
+      ),
+    );
+  }
+}
+
 class _AddCardsSheet extends StatefulWidget {
   const _AddCardsSheet({required this.categories, required this.initialCategoryId, required this.onDone});
   final List<domain.CardCategory> categories;
@@ -17,6 +363,51 @@ class _AddCardsSheetState extends State<_AddCardsSheet> {
   int _tab = 0;
   CardImportFormat _format = CardImportFormat.serialAndPin;
   bool _busy = false;
+  bool _analyzing = false;
+
+  /// نتيجة تحليل آخر نص/ملف — تُحفظ مع مصدرها لتفادي قراءة المخزون عند كل حرف.
+  CardImportPreview? _preview;
+  String _analyzedSource = '';
+  CardImportFormat? _analyzedFormat;
+  String? _fileName;
+
+  /// يحلل النص الحالي: يفصل السطور الصالحة عن المرفوضة وعن المكرر في المخزون.
+  ///
+  /// يُعيد النتيجة المخزنة إن كان النص والنوع لم يتغيرا، وإلا يقرأ المخزون مرة.
+  Future<CardImportPreview?> _analyze({bool force = false}) async {
+    final raw = _batchCtrl.text;
+    if (raw.trim().isEmpty) {
+      if (mounted) setState(() => _preview = null);
+      return null;
+    }
+    final cached = _preview;
+    if (!force && cached != null && _analyzedSource == raw && _analyzedFormat == _format) {
+      return cached;
+    }
+
+    setState(() => _analyzing = true);
+    final parsed = CardImportParser.parse(raw, format: _format);
+    final c = AppScope.of(context);
+    final existing = await c.cards.existingSerialsAmong(
+      parsed.drafts.map((d) => d.serialNumber),
+    );
+    if (!mounted) return null;
+    final stockDuplicates =
+        existing is Success<Set<String>> ? existing.value : const <String>{};
+    final preview = CardImportPreview(
+      drafts: parsed.drafts,
+      parseErrors: parsed.errors,
+      stockDuplicateSerials: stockDuplicates,
+      fileName: _fileName,
+    );
+    setState(() {
+      _analyzing = false;
+      _preview = preview;
+      _analyzedSource = raw;
+      _analyzedFormat = _format;
+    });
+    return preview;
+  }
 
   @override
   void initState() {
@@ -36,19 +427,20 @@ class _AddCardsSheetState extends State<_AddCardsSheet> {
     try {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
-        allowedExtensions: const ['txt', 'csv', 'text', 'log'],
+        // pdf مدعوم عبر CardImportFileReader، والامتدادات المجهولة تُقرأ كنص UTF-8.
+        allowedExtensions: const ['txt', 'csv', 'text', 'log', 'pdf'],
         withData: true,
         allowMultiple: false,
       );
       if (result == null || result.files.isEmpty) return;
       final file = result.files.single;
-      String? content;
-      if (file.bytes != null && file.bytes!.isNotEmpty) {
-        content = String.fromCharCodes(file.bytes!);
-      } else if (file.path != null && file.path!.isNotEmpty) {
-        content = await File(file.path!).readAsString();
+      Uint8List? bytes = file.bytes;
+      if ((bytes == null || bytes.isEmpty) &&
+          file.path != null &&
+          file.path!.isNotEmpty) {
+        bytes = await File(file.path!).readAsBytes();
       }
-      if (content == null || content.trim().isEmpty) {
+      if (bytes == null || bytes.isEmpty) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -60,15 +452,43 @@ class _AddCardsSheetState extends State<_AddCardsSheet> {
         );
         return;
       }
+
+      // قراءة UTF-8 صحيحة (مع تجاوز BOM) بدل `String.fromCharCodes` الذي كان
+      // يُفسد الأرقام العربية والرموز، واستخراج نص PDF المدعوم.
+      final read = CardImportFileReader.read(fileName: file.name, bytes: bytes);
+      final content = read.text;
+      if (content.trim().isEmpty) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'لم يُعثر على بيانات كروت في الملف (' + file.name + ')',
+              style: const TextStyle(fontFamily: 'Tajawal'),
+            ),
+          ),
+        );
+        return;
+      }
       setState(() {
-        _batchCtrl.text = content!;
+        _batchCtrl.text = content;
+        _fileName = file.name;
         _tab = 1;
+        _preview = null;
       });
-      if (!mounted) return;
+      final preview = await _analyze(force: true);
+      if (!mounted || preview == null) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'تم تحميل الملف (' + content.split(RegExp(r'\r?\n')).where((l) => l.trim().isNotEmpty).length.toString() + ' سطر)',
+            'تم تحميل الملف: ' +
+                preview.acceptedCount.toString() +
+                ' كرت صالح' +
+                (preview.stockDuplicateCount > 0
+                    ? ' · ' + preview.stockDuplicateCount.toString() + ' مكرر في المخزون'
+                    : '') +
+                (preview.parseErrors.isNotEmpty
+                    ? ' · ' + preview.parseErrors.length.toString() + ' سطر مرفوض'
+                    : ''),
             style: const TextStyle(fontFamily: 'Tajawal'),
           ),
         ),
@@ -116,14 +536,26 @@ class _AddCardsSheetState extends State<_AddCardsSheet> {
   }
 
   Future<void> _saveBatch() async {
-    final parsed = CardImportParser.parse(_batchCtrl.text, format: _format);
-    if (!parsed.hasDrafts) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(parsed.hasErrors ? parsed.errors.first : 'لا توجد أسطر صالحة', style: const TextStyle(fontFamily: 'Tajawal'))));
+    final preview = await _analyze();
+    if (!mounted) return;
+    if (preview == null || !preview.canImport) {
+      final msg = preview == null
+          ? 'لا توجد أسطر صالحة في النص أو الملف'
+          : (preview.parseErrors.isNotEmpty
+              ? preview.parseErrors.first
+              : 'كل الأرقام في الملف موجودة مسبقاً في المخزون');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(msg, style: const TextStyle(fontFamily: 'Tajawal'))),
+      );
       return;
     }
     setState(() => _busy = true);
     final c = AppScope.of(context);
-    final r = await c.catalogService.importCards(categoryId: _categoryId, drafts: parsed.drafts);
+    // يُمرَّر المقبول فقط: المكرر في المخزون كان يُفشل الدفعة كاملة قبل ذلك.
+    final r = await c.catalogService.importCards(
+      categoryId: _categoryId,
+      drafts: preview.acceptedDrafts,
+    );
     if (!mounted) return;
     setState(() => _busy = false);
     if (r is Failure) {
@@ -131,8 +563,13 @@ class _AddCardsSheetState extends State<_AddCardsSheet> {
       return;
     }
     final n = (r as Success<int>).value;
-    final msg = parsed.hasErrors ? 'تم استيراد ' + n.toString() + ' كرت — ' + parsed.errors.length.toString() + ' سطر مرفوض' : 'تم استيراد ' + n.toString() + ' كرت';
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg, style: const TextStyle(fontFamily: 'Tajawal'))));
+    final skipped = preview.stockDuplicateCount > 0
+        ? ' — تم تخطي ' + preview.stockDuplicateCount.toString() + ' مكرر'
+        : '';
+    final rejected = preview.parseErrors.isNotEmpty
+        ? ' — ' + preview.parseErrors.length.toString() + ' سطر مرفوض'
+        : '';
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('تم استيراد ' + n.toString() + ' كرت' + skipped + rejected, style: const TextStyle(fontFamily: 'Tajawal'))));
     await widget.onDone();
     if (mounted) Navigator.pop(context);
   }
@@ -186,7 +623,11 @@ class _AddCardsSheetState extends State<_AddCardsSheet> {
                     ),
                   ],
                   selected: {_format},
-                  onSelectionChanged: (s) => setState(() => _format = s.first),
+                  onSelectionChanged: (s) => setState(() {
+                    _format = s.first;
+                    // النوع يغيّر طريقة التحليل، فيُعاد التحليل بنوع جديد.
+                    _preview = null;
+                  }),
                 ),
                 const SizedBox(height: 12),
                 if (_tab == 0) ...[
@@ -200,6 +641,13 @@ class _AddCardsSheetState extends State<_AddCardsSheet> {
                     controller: _batchCtrl,
                     minLines: 6,
                     maxLines: 12,
+                    onChanged: (_) => setState(() {
+                      // أي تعديل يدوي يبطل التحليل السابق حتى لا تُستورد قائمة قديمة.
+                      if (_preview != null || _analyzing) {
+                        _preview = null;
+                        _analyzing = false;
+                      }
+                    }),
                     decoration: InputDecoration(
                       labelText: _format == CardImportFormat.serialOnly
                           ? 'الصق أرقام الكروت (سطر لكل كرت)'
@@ -220,14 +668,37 @@ class _AddCardsSheetState extends State<_AddCardsSheet> {
                     style: TextStyle(fontFamily: 'Tajawal', fontSize: 11, color: KayanPalette.of(context).textSecondary),
                   ),
                   const SizedBox(height: 10),
-                  OutlinedButton.icon(
-                    onPressed: _busy ? null : _pickFile,
-                    icon: const Icon(Icons.folder_open_outlined),
-                    label: const Text(
-                      'اختيار ملف',
-                      style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w700),
-                    ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: _busy || _analyzing ? null : () => _analyze(force: true),
+                          icon: const Icon(Icons.fact_check_outlined, size: 18),
+                          label: const Text(
+                            'تحليل',
+                            style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w700),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: _busy ? null : _pickFile,
+                          icon: const Icon(Icons.folder_open_outlined, size: 18),
+                          label: const Text(
+                            'اختيار ملف',
+                            style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w700),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
+                  if (_analyzing)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 10),
+                      child: LinearProgressIndicator(minHeight: 3),
+                    ),
+                  if (!_analyzing && _preview != null) _ImportPreviewCard(preview: _preview!),
                 ],
                 const SizedBox(height: 16),
                 FilledButton(

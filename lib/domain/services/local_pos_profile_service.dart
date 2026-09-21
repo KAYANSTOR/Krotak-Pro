@@ -34,11 +34,24 @@ final class LocalPosProfileService {
   final CustomerService customerService;
   final TransferTemplateRepository templates;
 
+  /// عميل قائم مسجّل بنفس رقم الجوال الذي ستستخدمه نقطة البيع.
+  ///
+  /// نقطة البيع مرتبطة بضرورة بحساب عميل في الدفتر (`PosAccount.customerId`)
+  /// ولا يوجد دفتر مالي مستقل لنقاط البيع، لذلك إن كان الرقم مسجّلاً لعميل قائم
+  /// فالخيار الصحيح هو إعادة استخدام نفس الحساب (ربط) بدل إنشاء حساب ثانٍ بنفس
+  /// الرقم — وهو ما كان يُرفض سابقاً فيسدّ الطريق على المستخدم.
+  Future<Result<Customer?>> linkableCustomer(String phone) async {
+    final trimmed = phone.trim();
+    if (trimmed.isEmpty) return const Success(null);
+    return customers.findByIdentifier(trimmed);
+  }
+
   Future<String?> validate({
     required String name,
     required String phone,
     String? existingPosId,
     String? existingCustomerId,
+    bool allowExistingCustomer = false,
   }) async {
     final trimmedName = name.trim();
     final trimmedPhone = phone.trim();
@@ -61,11 +74,16 @@ final class LocalPosProfileService {
       return 'الرقم مرتبط بنقطة بيع أخرى: ${foundPos.name}';
     }
 
-    final customer = await customers.findByIdentifier(trimmedPhone);
-    if (customer is Failure<Customer?>) return customer.error.message;
-    final foundCustomer = (customer as Success<Customer?>).value;
-    if (foundCustomer != null && foundCustomer.id != (existingCustomerId ?? '')) {
-      return 'الرقم مسجّل لحساب عميل آخر — استخدم رقماً مختلفاً لنقطة البيع';
+    // إنشاء نقطة بيع جديدة يسمح بإعادة استخدام حساب عميل قائم يحمل نفس الرقم
+    // (بعد تأكيد صريح من المستخدم في الواجهة). التعديل يبقى مقيّداً حتى لا
+    // تُعاد توجيه حسابات نقطة بيع قائمة إلى حساب عميل آخر.
+    if (!allowExistingCustomer) {
+      final customer = await customers.findByIdentifier(trimmedPhone);
+      if (customer is Failure<Customer?>) return customer.error.message;
+      final foundCustomer = (customer as Success<Customer?>).value;
+      if (foundCustomer != null && foundCustomer.id != (existingCustomerId ?? '')) {
+        return 'الرقم مسجّل لحساب عميل آخر — استخدم رقماً مختلفاً لنقطة البيع';
+      }
     }
     return null;
   }
@@ -76,21 +94,37 @@ final class LocalPosProfileService {
     PosPercentageMode percentageMode = PosPercentageMode.defaultCategory,
     int? creditLimitMinorUnits,
   }) async {
-    final problem = await validate(name: name, phone: phone);
+    final problem = await validate(
+      name: name,
+      phone: phone,
+      allowExistingCustomer: true,
+    );
     if (problem != null) {
       return Failure(AppFailure(code: 'pos_profile_invalid', message: problem));
     }
 
     final storedPhone = PhoneNormalizer.forStorage(phone.trim(), asPhone: true);
-    final customerResult = await customerService.create(
-      displayName: name.trim(),
-      identifierType: CustomerIdentifierType.phoneNumber,
-      identifierValue: storedPhone,
-    );
-    if (customerResult is Failure<Customer>) {
-      return Failure(customerResult.error);
+    // حساب العميل خلف نقطة البيع: يُعاد استخدامه إن كان الرقم مسجّلاً مسبقاً،
+    // وإلا يُنشأ حساب جديد. (إنشاء حساب ثانٍ بنفس الرقم مستحيل لأن هوية الرقم
+    // فريدة في الدفتر.)
+    final linkable = await linkableCustomer(phone);
+    if (linkable is Failure<Customer?>) return Failure(linkable.error);
+    final existingCustomer = (linkable as Success<Customer?>).value;
+
+    final Customer customer;
+    if (existingCustomer != null) {
+      customer = existingCustomer;
+    } else {
+      final customerResult = await customerService.create(
+        displayName: name.trim(),
+        identifierType: CustomerIdentifierType.phoneNumber,
+        identifierValue: storedPhone,
+      );
+      if (customerResult is Failure<Customer>) {
+        return Failure(customerResult.error);
+      }
+      customer = (customerResult as Success<Customer>).value;
     }
-    final customer = (customerResult as Success<Customer>).value;
 
     final posResult = await posCatalog.savePointOfSale(name: name.trim());
     if (posResult is Failure<PointOfSale>) return Failure(posResult.error);

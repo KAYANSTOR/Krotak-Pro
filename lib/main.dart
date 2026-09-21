@@ -120,6 +120,9 @@ class _NetAppState extends State<NetApp> with WidgetsBindingObserver {
     if (state == AppLifecycleState.resumed) {
       // Phase 5: faster delivery recovery when returning to the app (and after boot open).
       unawaited(widget.container.runRecoveryPass());
+      // إشعار المخزون الحي: يزامن مع المخزون الفعلي عند كل عودة للتطبيق حتى لا
+      // يبقى تنبيه قديم بعد إعادة التعبئة، ويظهر مباشرة بعد إعادة تشغيل الهاتف.
+      unawaited(widget.container.lowStockAlerts.syncDeviceAlert());
     }
   }
 

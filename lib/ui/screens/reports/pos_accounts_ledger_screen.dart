@@ -7,6 +7,7 @@ import '../../../domain/entities/money.dart';
 import '../../../domain/entities/pos_account.dart';
 import '../../../domain/entities/transaction.dart';
 import '../../../domain/entities/wallet.dart';
+import '../../../domain/services/default_pos_templates_seeder.dart';
 import '../../app_scope.dart';
 import '../../theme/kayan_palette.dart';
 import '../../theme/net_semantic_colors.dart';
@@ -15,6 +16,7 @@ import '../../widgets/async_views.dart';
 import '../../widgets/net/net_initial_avatar.dart';
 import '../../widgets/net/net_sheet.dart';
 import '../../widgets/net/net_surface_card.dart';
+import '../../widgets/pos/pos_customer_link_dialog.dart';
 
 /// حسابات نقاط البيع — مطابقة فيديو المنتج (t74s → t172s):
 ///
@@ -1115,6 +1117,21 @@ class _PosFormSheetState extends State<_PosFormSheet> {
     final existingCustomer =
         (existingById as Success<Customer?>).value;
 
+    // منع مشاركة الرقم بين نقطتين: التعرف على مصدر الرسالة يصبح غامضاً عندها.
+    final owner = await c.posRegistry.findByIdentifier(phone);
+    if (!mounted) return;
+    if (owner is Success<PosAccount?>) {
+      final found = owner.value;
+      final currentPosId = _isEdit ? widget.existing!.pos.id : null;
+      if (found != null && found.posId != currentPosId) {
+        setState(() {
+          _busy = false;
+          _status = 'الرقم مرتبط بنقطة بيع أخرى: ' + found.name;
+        });
+        return;
+      }
+    }
+
     if (_isEdit) {
       final row = widget.existing!;
       final acc = row.account!;
@@ -1154,27 +1171,40 @@ class _PosFormSheetState extends State<_PosFormSheet> {
       return;
     }
 
-    // إنشاء جديد
+    // إنشاء جديد — نقطة البيع لا تملك دفتراً مالياً مستقلاً، بل تُربط بحساب
+    // عميل في الدفتر. فإن كان الرقم مسجّلاً لعميل قائم يُعاد استخدام نفس الحساب
+    // بعد تأكيد صريح بدل رفض الإنشاء نهائياً.
+    final Customer customer;
     if (existingCustomer != null) {
-      setState(() {
-        _busy = false;
-        _status = 'رقم الجوال "$phone" مسجل مسبقاً';
-      });
-      return;
+      final confirmed = await confirmLinkPosToCustomer(
+        context: context,
+        customerName: existingCustomer.displayName,
+        phone: phone,
+      );
+      if (!mounted) return;
+      if (!confirmed) {
+        setState(() {
+          _busy = false;
+          _status = 'لم يتم الإنشاء — الرقم مسجّل كعميل قائم';
+        });
+        return;
+      }
+      customer = existingCustomer;
+    } else {
+      final create = await c.customerService.create(
+        displayName: name,
+        identifierType: CustomerIdentifierType.phoneNumber,
+        identifierValue: phone,
+      );
+      if (create is Failure<Customer>) {
+        setState(() {
+          _busy = false;
+          _status = (create as Failure).error.message;
+        });
+        return;
+      }
+      customer = (create as Success<Customer>).value;
     }
-    final create = await c.customerService.create(
-      displayName: name,
-      identifierType: CustomerIdentifierType.phoneNumber,
-      identifierValue: phone,
-    );
-    if (create is Failure<Customer>) {
-      setState(() {
-        _busy = false;
-        _status = (create as Failure).error.message;
-      });
-      return;
-    }
-    final customer = (create as Success<Customer>).value;
     final pos = await c.posCatalog.savePointOfSale(name: name);
     if (pos is Failure<PointOfSale>) {
       setState(() {
@@ -1183,9 +1213,10 @@ class _PosFormSheetState extends State<_PosFormSheet> {
       });
       return;
     }
-    await c.posRegistry.save(
+    final posId = (pos as Success<PointOfSale>).value.id;
+    final savedAccount = await c.posRegistry.save(
       PosAccount(
-        posId: (pos as Success<PointOfSale>).value.id,
+        posId: posId,
         customerId: customer.id,
         name: name,
         identifiers: [phone],
@@ -1193,6 +1224,18 @@ class _PosFormSheetState extends State<_PosFormSheet> {
         percentageMode: _mode,
       ),
     );
+    if (savedAccount is Failure) {
+      setState(() {
+        _busy = false;
+        _status = 'تعذر ربط حساب نقطة البيع';
+      });
+      return;
+    }
+    // قوالب الاستقبال إلزامية: بدون قوالب نشطة مرتبطة بنقطة البيع يرفض
+    // PaymentSourceGuard أي رسالة قادمة من هذا الرقم.
+    await DefaultPosTemplatesSeeder(templates: c.transferTemplates)
+        .seedForPos(posId: posId, posName: name);
+    await c.reloadTemplates();
     if (!mounted) return;
     Navigator.of(context).pop(true);
   }

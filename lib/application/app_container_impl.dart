@@ -22,6 +22,7 @@ import '../domain/services/local_maintenance_service.dart';
 import '../domain/services/local_message_recovery_service.dart';
 import '../domain/services/message_delivery_worker.dart';
 import '../domain/services/pos_order_delivery_worker.dart';
+import '../domain/services/local_low_stock_alert_service.dart';
 import '../domain/services/local_message_retry_service.dart';
 import '../domain/services/local_promotion_catalog.dart';
 import '../domain/services/local_promotion_progress_service.dart';
@@ -50,6 +51,7 @@ import '../domain/services/unified_payment_event_engine.dart';
 import '../domain/services/services.dart';
 import '../platform/native_message_sender.dart';
 import '../platform/notification_bridge.dart';
+import '../platform/stock_alert_bridge.dart';
 import '../platform/sms_bridge.dart';
 import '../platform/contact_picker_bridge.dart';
 import '../platform/system_diagnostics_bridge.dart';
@@ -66,7 +68,7 @@ final class AppContainer {
     required this.inventoryService, required this.saleService, required this.advanceService, required this.broadcastService,
     required this.promotions, required this.promotionProgress, required this.systemHealth, required this.voucherOps,
     required this.pendingAlarm, required LocalMessageParser messageParser, required this.transferProcessor,
-    required this.licenseService, required this.backupService, required this.maintenanceService, required this.dailyPosSummary, required this.mergeService, required this.settlementService,
+    required this.licenseService, required this.backupService, required this.maintenanceService, required this.lowStockAlerts, required this.stockAlertNotifier, required this.dailyPosSummary, required this.mergeService, required this.settlementService,
     required this.recoveryService, required this.deliveryWorker, required this.posOrderDeliveryWorker, required this.retryService, required this.pendingReview, required this.smsBridge,
     required this.smsHandler, required this.notificationBridge, required this.notificationSources,
     required this.notificationHandler, required this.clock, required this.ids, required this.themeModeNotifier,
@@ -107,6 +109,8 @@ final class AppContainer {
   final LocalLicenseService licenseService;
   final LocalBackupService backupService;
   final LocalMaintenanceService maintenanceService;
+  final LocalLowStockAlertService lowStockAlerts;
+  final NativeStockAlertNotifier stockAlertNotifier;
   final LocalPosDailySummaryService dailyPosSummary;
   final LocalAccountMergeService mergeService;
   final LocalSettlementService settlementService;
@@ -127,6 +131,8 @@ final class AppContainer {
   bool _recoveryBusy = false;
   bool _dailySummaryBusy = false;
   bool _disposed = false;
+  DateTime? _lastStockSyncAt;
+  static const Duration _stockSyncInterval = Duration(seconds: 30);
 
   Future<Result<void>> reloadTemplates() async {
     final listed = await transferTemplates.listAll();
@@ -224,6 +230,16 @@ final class AppContainer {
       clock: clock,
       database: database,
     );
+    // إشعار المخزون الحي على الجهاز: يظهر عند انخفاض أي فئة تحت العتبة ويبقى
+    // حتى إعادة تعبئتها (الإلغاء من نفس الخدمة عند ارتفاع المخزون).
+    final stockAlertNotifier = NativeStockAlertNotifier();
+    final lowStockAlerts = LocalLowStockAlertService(
+      settings: settings,
+      categories: categories,
+      cards: cards,
+      clock: clock,
+      notifier: stockAlertNotifier,
+    );
     final mergeService = LocalAccountMergeService(customers: customers, transactions: transactions, auditLogs: auditLogs, unitOfWork: uow, clock: clock, ids: ids);
     final settlementService = LocalSettlementService(customers: customers, transactions: transactions, auditLogs: auditLogs, unitOfWork: uow, clock: clock, ids: ids);
     final retryService = LocalMessageRetryService(auditLogs: auditLogs, messages: messages, clock: clock, ids: ids);
@@ -274,7 +290,7 @@ final class AppContainer {
       }
     }
 
-    return AppContainer._(database: database, customers: customers, wallets: wallets, pointsOfSale: pointsOfSale, categories: categories, cards: cards, messages: messages, transferTemplates: transferTemplates, transactions: transactions, sales: sales, auditLogs: auditLogs, licenses: licenses, settings: settings, unitOfWork: uow, customerService: customerService, balanceService: balanceService, catalogService: catalogService, walletCatalog: walletCatalog, posCatalog: posCatalog, posRegistry: posRegistry, inventoryService: inventoryService, saleService: saleService, advanceService: advanceService, broadcastService: broadcastService, promotions: promotions, promotionProgress: promotionProgress, systemHealth: systemHealth, voucherOps: voucherOps, pendingAlarm: pendingAlarm, messageParser: parser, transferProcessor: processor, licenseService: licenseService, backupService: backupService, maintenanceService: maintenanceService, dailyPosSummary: dailyPosSummary, mergeService: mergeService, settlementService: settlementService, recoveryService: recoveryService, deliveryWorker: deliveryWorker, posOrderDeliveryWorker: posOrderDeliveryWorker, retryService: retryService, pendingReview: pendingReview, smsBridge: smsBridge, smsHandler: smsHandler, notificationBridge: notificationBridge, notificationSources: notificationSources, notificationHandler: notificationHandler, clock: clock, ids: ids, themeModeNotifier: ValueNotifier<ThemeMode>(theme));
+    return AppContainer._(database: database, customers: customers, wallets: wallets, pointsOfSale: pointsOfSale, categories: categories, cards: cards, messages: messages, transferTemplates: transferTemplates, transactions: transactions, sales: sales, auditLogs: auditLogs, licenses: licenses, settings: settings, unitOfWork: uow, customerService: customerService, balanceService: balanceService, catalogService: catalogService, walletCatalog: walletCatalog, posCatalog: posCatalog, posRegistry: posRegistry, inventoryService: inventoryService, saleService: saleService, advanceService: advanceService, broadcastService: broadcastService, promotions: promotions, promotionProgress: promotionProgress, systemHealth: systemHealth, voucherOps: voucherOps, pendingAlarm: pendingAlarm, messageParser: parser, transferProcessor: processor, licenseService: licenseService, backupService: backupService, maintenanceService: maintenanceService, lowStockAlerts: lowStockAlerts, stockAlertNotifier: stockAlertNotifier, dailyPosSummary: dailyPosSummary, mergeService: mergeService, settlementService: settlementService, recoveryService: recoveryService, deliveryWorker: deliveryWorker, posOrderDeliveryWorker: posOrderDeliveryWorker, retryService: retryService, pendingReview: pendingReview, smsBridge: smsBridge, smsHandler: smsHandler, notificationBridge: notificationBridge, notificationSources: notificationSources, notificationHandler: notificationHandler, clock: clock, ids: ids, themeModeNotifier: ValueNotifier<ThemeMode>(theme));
   }
 
   Future<void> startBackgroundHandlers() async {
@@ -296,6 +312,10 @@ final class AppContainer {
 
   Future<void> _runRecovery() async {
     if (_recoveryBusy || _disposed) return;
+    // مزامنة إشعار المخزون الحي مع المخزون الفعلي (مُقيَّدة زمنياً). تُشغَّل حتى
+    // أثناء عمل التطبيق في الخلفية، فتنقص الفئة من بيع عبر SMS فيظهر التنبيه،
+    // ولا يُلغى إلا بعد إعادة التعبئة فوق العتبة.
+    await _runStockAlertSync();
     final enabled = await settings.find(SettingKeys.autoRetryFailedMessages);
     final raw = enabled is Success<AppSetting?> ? enabled.value?.value : null;
     if (!SettingBool.read(raw, defaultValue: SettingDefaults.autoRetryFailedMessages)) {
@@ -317,6 +337,20 @@ final class AppContainer {
     }
   }
 
+  /// مزامنة تنبيه المخزون كل فترة قصيرة بدل كل دورة استرداد (5 ثوان).
+  Future<void> _runStockAlertSync() async {
+    if (_disposed) return;
+    final now = clock.now();
+    final last = _lastStockSyncAt;
+    if (last != null && now.difference(last) < _stockSyncInterval) return;
+    _lastStockSyncAt = now;
+    try {
+      await lowStockAlerts.syncDeviceAlert();
+    } catch (_) {
+      // مزامنة التنبيه لا يجوز أن تُسقط دورة الاسترداد أو معالجة الرسائل.
+    }
+  }
+
   Future<void> _runDailyPosSummary() async {
     if (_disposed || _dailySummaryBusy) return;
     _dailySummaryBusy = true;
@@ -332,6 +366,8 @@ final class AppContainer {
   Future<void> dispose() async {
     if (_disposed) return;
     _disposed = true;
+    // لا نُلغي إشعار المخزون هنا: الإشعار الحي مملوك لنظام أندرويد ويبقى ظاهراً
+    // للمستخدم حتى تُعبَّأ الفئات فعلياً — انظر [LocalLowStockAlertService].
     _recoveryTimer?.cancel();
     _recoveryTimer = null;
     pendingAlarm.dispose();

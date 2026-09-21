@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Krotak themed-icon artwork. Android applies the launcher tint. -->
+<!-- Krotak themed-icon artwork: بطاقة الأمام + حرف K بلون أبيض وشفافية فقط،
+     ليستبدله Android بلون الثيم. يُولَّد بواسطة
+     `tools/generate_launcher_icons.py` لكل كثافات الشاشة. -->
 <bitmap xmlns:android="http://schemas.android.com/apk/res/android"
-    android:src="@drawable/ic_launcher_art"
+    android:src="@drawable/ic_launcher_mono_art"
     android:gravity="center" />

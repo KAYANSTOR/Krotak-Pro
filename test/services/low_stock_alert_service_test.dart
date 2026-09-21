@@ -94,6 +94,49 @@ void main() {
       expect(sender.bodies.single, contains('الإدارة'));
     });
 
+    test('syncDeviceAlert publishes the live alert and clears it after refill', () async {
+      final notifier = _MemNotifier();
+      final synced = LocalLowStockAlertService(
+        settings: settings,
+        categories: categories,
+        cards: cards,
+        clock: clock,
+        notifier: notifier,
+      );
+      await categories.save(_cat());
+
+      await synced.syncDeviceAlert();
+      expect(notifier.shows, 1);
+      expect(notifier.clears, 0);
+      expect(notifier.lastTitle, contains('تنبيه المخزون'));
+      expect(notifier.lastBody, contains('كرت 100 (0)'));
+
+      // تعبئة جزئية (ما دون العتبة): يبقى الإشعار ويُحدَّث نصه بالعدد الجديد.
+      await cards.save(
+        const Card(
+          id: 'c1',
+          categoryId: 'cat-1',
+          serialNumber: '111',
+          secretCode: 'aaa',
+          status: CardStatus.available,
+        ),
+      );
+      await synced.syncDeviceAlert();
+      expect(notifier.shows, 2);
+      expect(notifier.clears, 0);
+      expect(notifier.lastBody, contains('كرت 100 (1)'));
+
+      await settings.save(
+        AppSetting(
+          key: SettingKeys.lowStockThreshold,
+          value: '1',
+          updatedAt: clock.now(),
+        ),
+      );
+      await synced.syncDeviceAlert();
+      expect(notifier.clears, 1);
+    });
+
     test('renderCustomerMessage substitutes placeholders', () {
       final text = service.renderCustomerMessage(
         categoryName: '200',
@@ -143,6 +186,25 @@ final class _MemCategories implements CardCategoryRepository {
   Future<Result<void>> save(CardCategory category) async {
     map[category.id] = category;
     return const Success(null);
+  }
+}
+
+final class _MemNotifier implements StockAlertNotifier {
+  int shows = 0;
+  int clears = 0;
+  String lastTitle = '';
+  String lastBody = '';
+
+  @override
+  Future<void> show({required String title, required String body}) async {
+    shows++;
+    lastTitle = title;
+    lastBody = body;
+  }
+
+  @override
+  Future<void> clear() async {
+    clears++;
   }
 }
 

@@ -12,6 +12,7 @@ class NetSurfaceCard extends StatelessWidget {
     super.key,
     required this.child,
     this.onTap,
+    this.onLongPress,
     this.padding = NetSpacing.card,
     this.margin,
     this.radius = NetRadii.md,
@@ -24,6 +25,7 @@ class NetSurfaceCard extends StatelessWidget {
 
   final Widget child;
   final VoidCallback? onTap;
+  final VoidCallback? onLongPress;
   final EdgeInsetsGeometry padding;
   final EdgeInsetsGeometry? margin;
   final double radius;
@@ -58,10 +60,11 @@ class NetSurfaceCard extends StatelessWidget {
             borderRadius: borderRadius,
             side: BorderSide(color: borderColor ?? palette.border),
           ),
-          child: onTap == null
+          child: (onTap == null && onLongPress == null)
               ? Padding(padding: padding, child: child)
               : InkWell(
                   onTap: onTap,
+                  onLongPress: onLongPress,
                   child: Padding(padding: padding, child: child),
                 ),
         ),

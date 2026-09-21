@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../../core/result.dart';
 import '../../domain/entities/card.dart' as domain;
 import '../../domain/entities/money.dart';
+import '../../domain/services/local_category_commission_store.dart';
 import '../app_scope.dart';
 import '../theme/kayan_palette.dart';
 import '../theme/net_semantic_colors.dart';
@@ -44,6 +45,43 @@ class _CategoriesSheet extends StatefulWidget {
 }
 
 class _CategoriesSheetState extends State<_CategoriesSheet> {
+  /// نِسَب العمولة بالـ basis points لكل فئة (500 = 5%).
+  ///
+  /// تُخزَّن في الإعدادات (LocalCategoryCommissionStore) لا في جدول الفئات،
+  /// لذلك تُقرأ عند فتح الورقة وتُحدَّث بعد كل حفظ أو تعديل.
+  final Map<String, int> _commissionBps = <String, int>{};
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadCommissions());
+  }
+
+  Future<void> _loadCommissions() async {
+    final c = AppScope.of(context);
+    final store = LocalCategoryCommissionStore(settings: c.settings, clock: c.clock);
+    final next = <String, int>{};
+    for (final cat in widget.categories) {
+      final r = await store.bpsFor(cat.id);
+      if (r is Success<int>) next[cat.id] = r.value;
+    }
+    if (!mounted) return;
+    setState(() {
+      _commissionBps
+        ..clear()
+        ..addAll(next);
+    });
+  }
+
+  static String _commissionLabel(int bps) {
+    if (bps <= 0) return 'بدون عمولة';
+    final percent = bps / 100.0;
+    final text = percent == percent.roundToDouble()
+        ? percent.toInt().toString()
+        : percent.toStringAsFixed(2);
+    return 'عمولة ' + text + '%';
+  }
+
   Map<String, List<int>> _counts() {
     final map = <String, List<int>>{};
     for (final cat in widget.categories) {
@@ -143,7 +181,7 @@ class _CategoriesSheetState extends State<_CategoriesSheet> {
                                               ),
                                             ]),
                                             const SizedBox(height: 4),
-                                            Text(valueLabel + ' ر.ي · متاح ' + c[0].toString() + ' · محجوز ' + c[1].toString() + ' · مباع ' + c[2].toString(), style: TextStyle(fontFamily: 'Tajawal', fontSize: 12, color: palette.textSecondary)),
+                                            Text(valueLabel + ' ر.ي · ' + _commissionLabel(_commissionBps[cat.id] ?? cat.commissionPercentBps) + ' · متاح ' + c[0].toString() + ' · محجوز ' + c[1].toString() + ' · مباع ' + c[2].toString(), style: TextStyle(fontFamily: 'Tajawal', fontSize: 12, color: palette.textSecondary)),
                                           ],
                                         ),
                                       ),
@@ -176,8 +214,17 @@ class _CategoriesSheetState extends State<_CategoriesSheet> {
 
   Future<void> _toggleCategory(domain.CardCategory cat) async {
     final c = AppScope.of(context);
+    // تفعيل/إيقاف الفئة يجب أن يحافظ على نسبة العمولة المحفوظة.
+    final stored = await LocalCategoryCommissionStore(settings: c.settings, clock: c.clock).bpsFor(cat.id);
+    final bps = stored is Success<int> ? stored.value : cat.commissionPercentBps;
     final r = await c.catalogService.saveCategory(
-      domain.CardCategory(id: cat.id, name: cat.name, faceValue: cat.faceValue, isActive: !cat.isActive),
+      domain.CardCategory(
+        id: cat.id,
+        name: cat.name,
+        faceValue: cat.faceValue,
+        isActive: !cat.isActive,
+        commissionPercentBps: bps,
+      ),
     );
     if (!mounted) return;
     if (r is Failure) {
@@ -185,6 +232,7 @@ class _CategoriesSheetState extends State<_CategoriesSheet> {
       return;
     }
     await widget.onChanged();
+    await _loadCommissions();
     if (mounted) setState(() {});
   }
 
@@ -194,6 +242,14 @@ class _CategoriesSheetState extends State<_CategoriesSheet> {
         ? ''
         : (existing.faceValue.minorUnits / 100.0).toStringAsFixed(existing.faceValue.minorUnits % 100 == 0 ? 0 : 2);
     final valueCtrl = TextEditingController(text: major);
+    final existingBps = existing == null
+        ? 0
+        : (_commissionBps[existing.id] ?? existing.commissionPercentBps);
+    final commissionCtrl = TextEditingController(
+      text: existingBps <= 0
+          ? ''
+          : (existingBps / 100.0).toStringAsFixed(existingBps % 100 == 0 ? 0 : 2),
+    );
     var active = existing?.isActive ?? true;
     String? localError;
 
@@ -205,30 +261,46 @@ class _CategoriesSheetState extends State<_CategoriesSheet> {
         child: StatefulBuilder(
           builder: (ctx, setLocal) => AlertDialog(
             title: Text(existing == null ? 'فئة جديدة' : 'تعديل الفئة', style: const TextStyle(fontFamily: 'Tajawal')),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'اسم الفئة (مثال: كرت 100)', border: OutlineInputBorder()), style: const TextStyle(fontFamily: 'Tajawal')),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: valueCtrl,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
-                  decoration: const InputDecoration(labelText: 'القيمة الاسمية (ر.ي)', border: OutlineInputBorder()),
-                  style: const TextStyle(fontFamily: 'Tajawal'),
-                ),
-                const SizedBox(height: 8),
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('فئة نشطة', style: TextStyle(fontFamily: 'Tajawal')),
-                  value: active,
-                  onChanged: (v) => setLocal(() => active = v),
-                ),
-                if (localError != null) ...[
-                  const SizedBox(height: 6),
-                  Text(localError!, style: TextStyle(fontFamily: 'Tajawal', color: context.netColors.rejected, fontSize: 13)),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'اسم الفئة (مثال: كرت 100)', border: OutlineInputBorder()), style: const TextStyle(fontFamily: 'Tajawal')),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: valueCtrl,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
+                    decoration: const InputDecoration(labelText: 'القيمة الاسمية (ر.ي)', border: OutlineInputBorder()),
+                    style: const TextStyle(fontFamily: 'Tajawal'),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: commissionCtrl,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
+                    decoration: const InputDecoration(
+                      labelText: 'نسبة العمولة % (اختياري)',
+                      hintText: '0',
+                      helperText: 'تُخصم من القيمة الاسمية عند بيع الكرت لنقطة بيع. اتركها 0 لبيع بالسعر الكامل.',
+                      helperMaxLines: 3,
+                      border: OutlineInputBorder(),
+                    ),
+                    style: const TextStyle(fontFamily: 'Tajawal'),
+                  ),
+                  const SizedBox(height: 8),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('فئة نشطة', style: TextStyle(fontFamily: 'Tajawal')),
+                    value: active,
+                    onChanged: (v) => setLocal(() => active = v),
+                  ),
+                  if (localError != null) ...[
+                    const SizedBox(height: 6),
+                    Text(localError!, style: TextStyle(fontFamily: 'Tajawal', color: context.netColors.rejected, fontSize: 13)),
+                  ],
                 ],
-              ],
+              ),
             ),
             actions: [
               TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء', style: TextStyle(fontFamily: 'Tajawal'))),
@@ -244,6 +316,13 @@ class _CategoriesSheetState extends State<_CategoriesSheet> {
                     setLocal(() => localError = 'أدخل قيمة اسمية صحيحة أكبر من صفر');
                     return;
                   }
+                  final rawPercent = commissionCtrl.text.trim().replaceAll(',', '.');
+                  final percent = rawPercent.isEmpty ? 0.0 : double.tryParse(rawPercent);
+                  if (percent == null || percent < 0 || percent > 100) {
+                    setLocal(() => localError = 'نسبة العمولة يجب أن تكون بين 0 و 100');
+                    return;
+                  }
+                  final bps = (percent * 100).round();
                   final c = AppScope.of(context);
                   final r = await c.catalogService.saveCategory(
                     domain.CardCategory(
@@ -251,10 +330,22 @@ class _CategoriesSheetState extends State<_CategoriesSheet> {
                       name: name,
                       faceValue: Money(minorUnits: (maj * 100).round(), currencyCode: existing?.faceValue.currencyCode ?? 'YER'),
                       isActive: active,
+                      commissionPercentBps: bps,
                     ),
                   );
                   if (r is Failure) {
                     setLocal(() => localError = (r as Failure<dynamic>).error.message);
+                    return;
+                  }
+                  // الفئة الجديدة يستنتج لها المعرّف داخل الخدمة، لذا تُحفظ النسبة
+                  // بعد الحفظ باستخدام المعرّف الناتج.
+                  final savedId = (r as Success<domain.CardCategory>).value.id;
+                  final commission = await LocalCategoryCommissionStore(
+                    settings: c.settings,
+                    clock: c.clock,
+                  ).save(categoryId: savedId, commissionPercentBps: bps);
+                  if (commission is Failure) {
+                    setLocal(() => localError = (commission as Failure<dynamic>).error.message);
                     return;
                   }
                   if (ctx.mounted) Navigator.pop(ctx);
@@ -268,6 +359,8 @@ class _CategoriesSheetState extends State<_CategoriesSheet> {
     );
     nameCtrl.dispose();
     valueCtrl.dispose();
+    commissionCtrl.dispose();
     await widget.onChanged();
+    await _loadCommissions();
   }
 }

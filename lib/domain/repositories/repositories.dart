@@ -58,6 +58,12 @@ abstract interface class CardRepository {
   Future<Result<void>> releaseReservation(String cardId, String reservationId);
   Future<Result<void>> markSold(String cardId, String saleId);
   Future<Result<void>> restoreAvailable(String cardId);
+
+  /// يحذف كرتاً واحداً نهائياً ويرجع عدد الصفوف المحذوفة (0 إذا لم يوجد).
+  Future<Result<int>> delete(String id);
+
+  /// يحذف مجموعة كروت ويرجع عدد الصفوف المحذوفة فعلياً.
+  Future<Result<int>> deleteMany(List<String> ids);
 }
 
 abstract interface class TransactionRepository {

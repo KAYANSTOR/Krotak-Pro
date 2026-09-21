@@ -48,6 +48,10 @@ class BootReceiver : BroadcastReceiver() {
         } catch (e: Exception) {
             // Some OEMs block background activity starts until autostart is allowed.
             Log.w(TAG, "auto-start MainActivity blocked: ${e.message}")
+            // التطبيق لم يبدأ فلا يمكن مزامنة التنبيه من طبقة المجال — نُعيد نشر
+            // آخر تنبيه مخزون محفوظ حتى لا يختفي من المستخدم بعد إعادة التشغيل.
+            // يُصحَّح تلقائياً أول مرة يُفتح فيها التطبيق.
+            StockAlertNotification.repostIfActive(context)
         }
     }
 

@@ -11,6 +11,7 @@ import '../theme/kayan_colors.dart';
 import '../theme/kayan_palette.dart';
 import '../theme/net_semantic_colors.dart';
 import '../widgets/async_views.dart';
+import '../widgets/pos/pos_customer_link_dialog.dart';
 import 'settings/templates_screen.dart';
 
 /// إدارة المحافظ ونقاط البيع — مطابقة فيديو المنتج + مفتاح تفعيل فعّال.
@@ -453,7 +454,11 @@ class _WalletsPosScreenState extends State<WalletsPosScreen>
   }
 
   /// تحقق قبل الحفظ: الاسم والرقم مطلوبان، والاسم غير مكرر، والرقم غير مرتبط
-  /// بنقطة بيع أخرى ولا بحساب عميل قائم (فصل حسابات النقاط عن العملاء).
+  /// بنقطة بيع أخرى.
+  ///
+  /// كون الرقم مسجّلاً لعميل قائم لم يعد سبباً للرفض: نقطة البيع لا تملك دفتراً
+  /// مالياً مستقلاً، فيُربط الحساب نفسه بعد تأكيد صريح من المستخدم
+  /// (`confirmLinkPosToCustomer`) بدل إغلاق الباب أمامه.
   Future<String?> _posFormProblem({
     required PointOfSale? existing,
     required String? existingCustomerId,
@@ -473,14 +478,6 @@ class _WalletsPosScreenState extends State<WalletsPosScreen>
       final found = owner.value;
       if (found != null && found.posId != (existing?.id ?? '')) {
         return 'الرقم مرتبط بنقطة بيع أخرى: ${found.name}';
-      }
-    }
-    final customer = await c.customers.findByIdentifier(phone);
-    if (customer is Success<Customer?>) {
-      final found = customer.value;
-      final ownCustomerId = existingCustomerId ?? '';
-      if (found != null && found.id != ownCustomerId) {
-        return 'الرقم مسجّل لحساب عميل آخر — استخدم رقماً مختلفاً لنقطة البيع';
       }
     }
     return null;
@@ -759,16 +756,38 @@ class _WalletsPosScreenState extends State<WalletsPosScreen>
     final c = AppScope.of(context);
 
     if (existing == null) {
-      final customerResult = await c.customerService.create(
-        displayName: name,
-        identifierType: CustomerIdentifierType.phoneNumber,
-        identifierValue: phone,
-      );
-      if (customerResult is Failure) {
-        if (mounted) _snack((customerResult as Failure).error.message);
-        return;
+      // حساب الدفتر خلف نقطة البيع: يُعاد استخدامه إن كان الرقم مسجّلاً لعميل
+      // قائم (بعد تأكيد صريح)، وإلا يُنشأ حساب جديد. إنشاء حساب ثانٍ بنفس الرقم
+      // مستحيل لأن هوية الرقم فريدة في الدفتر.
+      final found = await c.customers.findByIdentifier(phone);
+      if (!mounted) return;
+      final existingCustomer =
+          found is Success<Customer?> ? found.value : null;
+      final Customer customer;
+      if (existingCustomer != null) {
+        final confirmed = await confirmLinkPosToCustomer(
+          context: context,
+          customerName: existingCustomer.displayName,
+          phone: phone,
+        );
+        if (!mounted) return;
+        if (!confirmed) {
+          _snack('لم يتم الإنشاء — الرقم مسجّل كعميل قائم');
+          return;
+        }
+        customer = existingCustomer;
+      } else {
+        final customerResult = await c.customerService.create(
+          displayName: name,
+          identifierType: CustomerIdentifierType.phoneNumber,
+          identifierValue: phone,
+        );
+        if (customerResult is Failure) {
+          if (mounted) _snack((customerResult as Failure).error.message);
+          return;
+        }
+        customer = (customerResult as Success<Customer>).value;
       }
-      final customer = (customerResult as Success<Customer>).value;
 
       final posResult = await c.posCatalog.savePointOfSale(name: name);
       if (posResult is Failure) {
