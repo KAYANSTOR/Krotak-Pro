@@ -10,6 +10,16 @@ CI على main — analyze + test + Android debug APK build
 
 ## Post-V1
 
+### Phase 43-2 — محرك إرسال الرسائل والطابور وقياس الزمن (2026-09-21) ✅ برمجيًا
+
+- طابور إرسال داخلي `OutgoingDispatchQueue` يغلّف `NativeMessageSender`.
+- أولوية: مالي مكتمل → إعادة إرسال → رسائل غير حرجة.
+- Idempotency على مفتاح الإرسال: النجاح لا يُعاد، الفشل يُسمح بإعادة المحاولة.
+- قياس زمن: `dispatch_enqueued` / `dispatch_started` / `sms_send_result` في سجل التدقيق.
+- معيار القبول المحلي: زمن الانتظار داخل الطابور حتى بدء الإرسال < 10 ثوانٍ.
+- لا يُعاد تنفيذ العملية المالية عند إعادة الإرسال.
+- تقرير: [phase-43-2-message-engine.md](phase-43-2-message-engine.md)
+
 ### Phase 43A — اقتراح أرقام العملاء في البيع المباشر (2026-09-21) ✅ برمجيًا
 
 - البحث يبدأ من أول رقم عبر `CustomerRepository.suggestPhonesByPrefix`.
@@ -18,4 +28,3 @@ CI على main — analyze + test + Android debug APK build
 - الضغط يملأ الرقم (والاسم إن كان فارغًا) دون إنشاء عميل.
 - Debounce 160ms + حد 8 نتائج لمنع N+1.
 - زر جهات الاتصال ومسار `sellManual` بدون تغيير قواعد البيع.
-
