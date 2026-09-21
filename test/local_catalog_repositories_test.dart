@@ -1,13 +1,13 @@
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:net_app/core/result.dart';
-import 'package:net_app/data/database/app_database.dart' hide Customer, Card, Sale, TransferTemplate;
-import 'package:net_app/data/repositories/local_repositories.dart';
-import 'package:net_app/domain/entities/card.dart' as domain;
-import 'package:net_app/domain/entities/customer.dart' as domain;
-import 'package:net_app/domain/entities/money.dart';
-import 'package:net_app/domain/entities/transaction.dart' as domain;
-import 'package:net_app/domain/entities/wallet.dart' as domain;
+import 'package:krotak_pro/core/result.dart';
+import 'package:krotak_pro/data/database/app_database.dart' hide Customer, Card, Sale, TransferTemplate;
+import 'package:krotak_pro/data/repositories/local_repositories.dart';
+import 'package:krotak_pro/domain/entities/card.dart' as domain;
+import 'package:krotak_pro/domain/entities/customer.dart' as domain;
+import 'package:krotak_pro/domain/entities/money.dart';
+import 'package:krotak_pro/domain/entities/transaction.dart' as domain;
+import 'package:krotak_pro/domain/entities/wallet.dart' as domain;
 
 void main() {
   late AppDatabase database;
