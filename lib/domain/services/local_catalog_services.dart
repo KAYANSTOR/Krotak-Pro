@@ -6,6 +6,7 @@ import '../entities/audit.dart';
 import '../entities/card.dart';
 import '../entities/setting.dart';
 import '../entities/wallet.dart';
+import '../entities/payment_event.dart';
 import '../repositories/repositories.dart';
 import '../repositories/unit_of_work.dart';
 import 'services.dart';
@@ -326,10 +327,20 @@ final class LocalWalletCatalogService implements WalletCatalogService {
     for (final spec in _defaults) {
       final key = spec.name.toLowerCase();
       if (byName.containsKey(key)) {
-        // Never overwrite operator-edited sender/mode/package on subsequent boots.
+        // Preserve operator choices, but repair legacy default wallets that
+        // were created before the built-in Android package was stored.
         final id = byName[key]!.id;
-        if (!extras.containsKey(id)) {
-          await _writeExtras(id, spec.senderId, spec.sourceMode, spec.packageName);
+        final current = extras[id];
+        final currentPackage = current?['packageName']?.toString().trim();
+        if (current == null || currentPackage == null || currentPackage.isEmpty) {
+          await _writeExtras(
+            id,
+            current?['senderId']?.toString() ?? spec.senderId,
+            current?['sourceMode']?.toString() == 'notification'
+                ? WalletSourceMode.notification
+                : spec.sourceMode,
+            spec.packageName,
+          );
         }
         continue;
       }
@@ -348,8 +359,83 @@ final class LocalWalletCatalogService implements WalletCatalogService {
         updatedAt: clock.now(),
       ),
     );
+
+    // Built-in notification package catalog is separate from the wallet's
+    // primary transport setting, so SMS and notification ingestion can both
+    // be trusted for the same wallet when the package is configured.
+    final currentSources = await _readNotificationSources();
+    if (currentSources != null) {
+      var changed = false;
+      final byPackage = {
+        for (final source in currentSources)
+          if ((source.packageName ?? '').trim().isNotEmpty)
+            source.packageName!.trim(): source,
+      };
+      for (final spec in _defaults) {
+        final package = spec.packageName?.trim();
+        if (package == null || package.isEmpty || byPackage.containsKey(package)) {
+          continue;
+        }
+        byPackage[package] = PaymentSource(
+          id: 'notification:$package',
+          displayName: spec.name,
+          channel: PaymentChannel.notification,
+          packageName: package,
+          enabled: true,
+        );
+        changed = true;
+      }
+      if (changed) {
+        await settings.save(
+          AppSetting(
+            key: SettingKeys.notificationSources,
+            value: jsonEncode(
+              byPackage.values
+                  .map((source) => {
+                        'id': source.id,
+                        'displayName': source.displayName,
+                        'channel': 'notification',
+                        'packageName': source.packageName,
+                        'smsSenderHint': source.smsSenderHint,
+                        'enabled': source.enabled,
+                      })
+                  .toList(growable: false),
+            ),
+            updatedAt: clock.now(),
+          ),
+        );
+      }
+    }
     return const Success(null);
   }
+  Future<List<PaymentSource>?> _readNotificationSources() async {
+    final found = await settings.find(SettingKeys.notificationSources);
+    if (found is! Success<AppSetting?>) return null;
+    final raw = found.value?.value;
+    if (raw == null || raw.trim().isEmpty) return <PaymentSource>[];
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! List) return <PaymentSource>[];
+      return decoded
+          .whereType<Map>()
+          .map((row) => PaymentSource(
+                id: row['id']?.toString() ?? '',
+                displayName: row['displayName']?.toString() ?? '',
+                channel: PaymentChannel.notification,
+                packageName: row['packageName']?.toString(),
+                smsSenderHint: row['smsSenderHint']?.toString(),
+                enabled: row['enabled'] == true,
+              ))
+          .where((source) =>
+              source.id.trim().isNotEmpty &&
+              source.displayName.trim().isNotEmpty &&
+              (source.packageName ?? '').trim().isNotEmpty)
+          .toList(growable: false);
+    } catch (_) {
+      return <PaymentSource>[];
+    }
+  }
+
   Future<Map<String, Map<String, dynamic>>> _readExtras() async {
     final found = await settings.find(SettingKeys.walletExtras);
     if (found is! Success<AppSetting?> || found.value == null) return {};
