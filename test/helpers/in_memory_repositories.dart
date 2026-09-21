@@ -44,6 +44,10 @@ final class InMemoryMessageRepository implements MessageRepository {
   }
 
   @override
+  Future<Result<int>> countByStatus(MessageProcessingStatus status) async =>
+      Success(_byId.values.where((m) => m.status == status).length);
+
+  @override
   Future<Result<List<IncomingMessage>>> listRecent({int limit = 100}) async {
     final list = _byId.values.toList()
       ..sort((a, b) => b.receivedAt.compareTo(a.receivedAt));
