@@ -1,7 +1,7 @@
 # خطة ما بعد V1 — نظام التراخيص وعمولة المنصة والتحكم المركزي
 
 **المشروع:** NET / كروتك  
-**المستودع:** KAYANSTOR/net-flutter  
+**المستودع:** KAYANSTOR/Krotak-Pro  
 **نوع الوثيقة:** خطة تصميم وتنفيذ مستقبلية — غير قابلة للتنفيذ حاليًا  
 **الحالة:** SPECIFICATION ONLY / POST-V1  
 **تاريخ الاعتماد الأولي:** 2026-09-21
@@ -713,7 +713,7 @@ https://github.com/KAYANSTOR/Krotic-Admin-App
 ### العلاقة بين المستودعين
 
 ~~~text
-KAYANSTOR/net-flutter
+KAYANSTOR/Krotak-Pro
         │
         │ Android App
         │
@@ -1346,7 +1346,7 @@ Production
 - [ ] Pilot ناجح.
 - [ ] اعتماد Production.
 - [ ] لوحة الإدارة مستقرة ومتصلة ببيئة الإنتاج وفق الصلاحيات المعتمدة.
-- [ ] التكامل بين KAYANSTOR/net-flutter وKAYANSTOR/Krotic-Admin-App موثق ومختبر.
+- [ ] التكامل بين KAYANSTOR/Krotak-Pro وKAYANSTOR/Krotic-Admin-App موثق ومختبر.
 
 ---
 
@@ -1417,8 +1417,8 @@ Production
 ## المستودعات المرتبطة
 
 ### تطبيق Android
-**KAYANSTOR/net-flutter**  
-https://github.com/KAYANSTOR/net-flutter
+**KAYANSTOR/Krotak-Pro**  
+https://github.com/KAYANSTOR/Krotak-Pro
 
 ### لوحة التحكم Web Admin
 **KAYANSTOR/Krotic-Admin-App**  
