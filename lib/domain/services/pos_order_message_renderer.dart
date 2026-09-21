@@ -4,6 +4,7 @@ import '../entities/money.dart';
 import '../entities/pos_account.dart';
 import '../entities/setting.dart';
 import '../repositories/repositories.dart';
+import 'outbound_template_gate.dart';
 
 /// Renders the two outbound SMS messages produced by a POS card order.
 final class PosOrderMessageRenderer {
@@ -135,10 +136,7 @@ final class PosOrderMessageRenderer {
   }
 
   Future<Result<String>> _template(String key, String fallback) async {
-    final result = await settings.find(key);
-    if (result is Failure<AppSetting?>) return Failure(result.error);
-    final value = (result as Success<AppSetting?>).value?.value.trim();
-    return Success(value == null || value.isEmpty ? fallback : value);
+    return OutboundTemplateGate(settings).requireBody(key: key, fallback: fallback);
   }
 
   String _replace(String body, Map<String, String> values) {

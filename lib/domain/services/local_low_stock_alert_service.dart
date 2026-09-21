@@ -6,6 +6,7 @@ import '../../core/result.dart';
 import '../entities/card.dart';
 import '../entities/setting.dart';
 import '../repositories/repositories.dart';
+import 'outbound_template_gate.dart';
 import 'services.dart';
 
 final class LowStockAlert {
@@ -168,6 +169,7 @@ final class LocalLowStockAlertService {
       available: available,
       template: template,
     );
+    if (body.trim().isEmpty) return const Success(null);
     return sender.send(destination: dest, body: body);
   }
 

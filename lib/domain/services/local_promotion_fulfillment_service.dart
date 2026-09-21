@@ -8,6 +8,7 @@ import '../entities/setting.dart';
 import '../entities/transaction.dart';
 import '../phone_normalizer.dart';
 import '../repositories/repositories.dart';
+import 'outbound_template_gate.dart';
 import '../repositories/unit_of_work.dart';
 import 'local_promotion_catalog.dart';
 import 'local_promotion_progress_service.dart';
@@ -226,7 +227,9 @@ final class LocalPromotionFulfillmentService {
       'code': card.secretCode,
       'amount': (amountMinor / 100).toStringAsFixed(2),
     });
-    final sent = await sender.send(destination: destination, body: body);
+    final sent = if (body.trim().isNotEmpty) {
+      await sender.send(destination: destination, body: body);
+    }
     await auditLogs.append(
       AuditLog(
         id: ids.next('audit'),
@@ -254,14 +257,12 @@ final class LocalPromotionFulfillmentService {
   }
 
   Future<String> _renderTemplate(Map<String, String> values) async {
-    final result = await settings.find(SettingKeys.promotionRewardSmsTemplate);
-    final raw = result is Success<AppSetting?> ? result.value?.value : null;
-    var output = (raw != null && raw.trim().isNotEmpty)
-        ? raw
-        : defaultRewardSmsTemplate;
-    values.forEach((name, value) {
-      output = output.replaceAll('{$name}', value);
-    });
-    return output;
+    final rendered = await OutboundTemplateGate(settings).render(
+      key: SettingKeys.promotionRewardSmsTemplate,
+      fallback: defaultRewardSmsTemplate,
+      values: values,
+    );
+    if (rendered is Failure<String?>) return '';
+    return (rendered as Success<String?>).value ?? '';
   }
 }

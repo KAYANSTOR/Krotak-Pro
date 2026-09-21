@@ -347,10 +347,20 @@ class _DeleteChip extends StatelessWidget {
 }
 
 class _AddCardsSheet extends StatefulWidget {
-  const _AddCardsSheet({required this.categories, required this.initialCategoryId, required this.onDone});
+  const _AddCardsSheet({
+    required this.categories,
+    required this.initialCategoryId,
+    required this.onDone,
+    this.initialTab = 0,
+    this.fileOnly = false,
+  });
   final List<domain.CardCategory> categories;
   final String initialCategoryId;
   final Future<void> Function() onDone;
+  /// 0 = مفرد، 1 = مجموعة/ملف.
+  final int initialTab;
+  /// عند true تُخفى تبويبة الإدخال المفرد ويُفتح مسار الملف مباشرة.
+  final bool fileOnly;
   @override
   State<_AddCardsSheet> createState() => _AddCardsSheetState();
 }
@@ -360,7 +370,7 @@ class _AddCardsSheetState extends State<_AddCardsSheet> {
   final _serialCtrl = TextEditingController();
   final _secretCtrl = TextEditingController();
   final _batchCtrl = TextEditingController();
-  int _tab = 0;
+  late int _tab;
   CardImportFormat _format = CardImportFormat.serialAndPin;
   bool _busy = false;
   bool _analyzing = false;
@@ -413,6 +423,7 @@ class _AddCardsSheetState extends State<_AddCardsSheet> {
   void initState() {
     super.initState();
     _categoryId = widget.initialCategoryId;
+    _tab = widget.fileOnly ? 1 : widget.initialTab.clamp(0, 1);
   }
 
   @override
@@ -613,14 +624,29 @@ class _AddCardsSheetState extends State<_AddCardsSheet> {
                   onChanged: (v) { if (v != null) setState(() => _categoryId = v); },
                 ),
                 const SizedBox(height: 12),
-                SegmentedButton<int>(
-                  segments: const [
-                    ButtonSegment(value: 0, label: Text('مفرد', style: TextStyle(fontFamily: 'Tajawal'))),
-                    ButtonSegment(value: 1, label: Text('مجموعة / ملف', style: TextStyle(fontFamily: 'Tajawal'))),
-                  ],
-                  selected: {_tab},
-                  onSelectionChanged: (s) => setState(() => _tab = s.first),
-                ),
+                if (!widget.fileOnly)
+                  SegmentedButton<int>(
+                    segments: const [
+                      ButtonSegment(value: 0, label: Text('مفرد', style: TextStyle(fontFamily: 'Tajawal'))),
+                      ButtonSegment(value: 1, label: Text('مجموعة / ملف', style: TextStyle(fontFamily: 'Tajawal'))),
+                    ],
+                    selected: {_tab},
+                    onSelectionChanged: (s) => setState(() => _tab = s.first),
+                  )
+                else
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: KayanPalette.of(context).primary.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: KayanPalette.of(context).primary.withValues(alpha: 0.25)),
+                    ),
+                    child: const Text(
+                      'استيراد من ملف فقط — الصيغ المدعومة: PDF و Excel (.xlsx) و CSV.\nاضغط «اختيار ملف» ثم راجع التحليل قبل الاستيراد.',
+                      style: TextStyle(fontFamily: 'Tajawal', fontSize: 13, height: 1.4),
+                    ),
+                  ),
                 const SizedBox(height: 12),
                 const Text('نوع الكرت', style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w700)),
                 const SizedBox(height: 8),

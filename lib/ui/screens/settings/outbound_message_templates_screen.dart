@@ -48,6 +48,7 @@ class _OutboundMessageTemplatesScreenState
   late final TabController _tabs;
   bool _loading = true;
   final Map<String, String> _values = {};
+  final Set<String> _disabledKeys = {};
 
   /// بحث موحّد في **كل** التبويبات (اسم القالب أو نصه) — القوالب صارت 18.
   final _searchCtrl = TextEditingController();
@@ -178,6 +179,20 @@ class _OutboundMessageTemplatesScreenState
       }
     }
 
+    final disabledRaw = await c.settings.find(SettingKeys.outboundTemplatesDisabled);
+    final disabled = <String>{};
+    final dPayload = disabledRaw is Success<AppSetting?> ? disabledRaw.value?.value : null;
+    if (dPayload != null && dPayload.trim().isNotEmpty) {
+      try {
+        final decoded = jsonDecode(dPayload);
+        if (decoded is List) {
+          for (final e in decoded) {
+            if (e is String && e.trim().isNotEmpty) disabled.add(e.trim());
+          }
+        }
+      } on FormatException {}
+    }
+
     // القوالب المخصّصة — تُقرأ من إعداد واحد وتُوزّع على تبويباتها.
     final custom = <int, List<_Tpl>>{};
     final raw = await c.settings.find(SettingKeys.customOutboundTemplates);
@@ -209,6 +224,9 @@ class _OutboundMessageTemplatesScreenState
     setState(() {
       _values..clear()..addAll(next);
       _custom..clear()..addAll(custom);
+      _disabledKeys
+        ..clear()
+        ..addAll(disabled);
       _loading = false;
     });
   }
@@ -298,6 +316,35 @@ class _OutboundMessageTemplatesScreenState
     await _load();
   }
 
+
+  Future<void> _setTemplateEnabled(String key, bool enabled) async {
+    final next = {..._disabledKeys};
+    if (enabled) {
+      next.remove(key);
+    } else {
+      next.add(key);
+    }
+    final c = AppScope.of(context);
+    final r = await c.settings.save(
+      AppSetting(
+        key: SettingKeys.outboundTemplatesDisabled,
+        value: jsonEncode(next.toList()..sort()),
+        updatedAt: c.clock.now(),
+      ),
+    );
+    if (!mounted) return;
+    if (r is Failure) {
+      _snack(r.error.message);
+      return;
+    }
+    setState(() {
+      _disabledKeys
+        ..clear()
+        ..addAll(next);
+    });
+    _snack(enabled ? 'تم تفعيل القالب' : 'تم إيقاف القالب — لن تُرسل رسائله');
+  }
+
   Future<void> _save(String key, String value) async {
     final c = AppScope.of(context);
     final r = await c.settings.save(AppSetting(key: key, value: value, updatedAt: c.clock.now()));
@@ -311,6 +358,37 @@ class _OutboundMessageTemplatesScreenState
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m, style: const TextStyle(fontFamily: 'Tajawal'))));
   }
+
+  /// تسميات عربية لأزرار إدراج المتغيرات (بدل الأسماء الإنجليزية).
+  static const Map<String, String> _varLabelAr = {
+    'serial': 'الرقم',
+    'code': 'الرمز',
+    'secret': 'الرمز السري',
+    'title': 'العنوان',
+    'promotion_name': 'اسم العرض',
+    'reward_value': 'قيمة المكافأة',
+    'amount': 'المبلغ',
+    'balance': 'الرصيد',
+    'pos': 'نقطة البيع',
+    'pos_name': 'اسم نقطة البيع',
+    'debt': 'الدين',
+    'limit': 'السقف',
+    'sales': 'المبيعات',
+    'transfers': 'التحويلات',
+    'reason': 'السبب',
+    'remaining': 'المتبقي',
+    'category': 'الفئة',
+    'count': 'العدد',
+    'phone': 'الجوال',
+    'CARD_CODE': 'كود الكرت',
+    'CARD_VALUE': 'قيمة الكرت',
+    'CURRENCY': 'العملة',
+    'NETWORK_NAME': 'اسم الشبكة',
+    'SETTLEMENT_AMOUNT': 'مبلغ التسوية',
+    'REMAINING_BALANCE': 'الرصيد المتبقي',
+  };
+
+  String _chipLabel(String v) => _varLabelAr[v] ?? v;
 
   String _preview(String body) {
     return body
@@ -388,7 +466,7 @@ class _OutboundMessageTemplatesScreenState
                     const SizedBox(height: 8),
                     Wrap(spacing: 8, runSpacing: 8, children: [
                       for (final v in vars)
-                        ActionChip(label: Text('+'+v, style: const TextStyle(fontFamily: 'Tajawal', fontSize: 12)), onPressed: () {
+                        ActionChip(label: Text(_chipLabel(v), style: const TextStyle(fontFamily: 'Tajawal', fontSize: 12)), onPressed: () {
                           final t = bodyCtrl.text; final sel = bodyCtrl.selection; final ins = '{'+v+'}';
                           final start = sel.isValid ? sel.start : t.length; final end = sel.isValid ? sel.end : t.length;
                           bodyCtrl.text = t.replaceRange(start, end, ins);
@@ -539,7 +617,35 @@ class _OutboundMessageTemplatesScreenState
             ),
           ),
           const SizedBox(width: 6),
-          Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3), decoration: BoxDecoration(color: const Color(0xFF10B981).withValues(alpha: 0.12), borderRadius: BorderRadius.circular(8)), child: const Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.check_circle, size: 14, color: Color(0xFF10B981)), SizedBox(width: 4), Text('نشط', style: TextStyle(fontFamily: 'Tajawal', fontSize: 11, color: Color(0xFF10B981), fontWeight: FontWeight.w700))])),
+          Builder(builder: (_) {
+            final active = !_disabledKeys.contains(t.keyName);
+            return Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: (active ? const Color(0xFF10B981) : const Color(0xFF6B7280))
+                        .withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    active ? 'نشط' : 'متوقف',
+                    style: TextStyle(
+                      fontFamily: 'Tajawal',
+                      fontSize: 11,
+                      color: active ? const Color(0xFF10B981) : const Color(0xFF6B7280),
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                Switch(
+                  value: active,
+                  onChanged: (v) => _setTemplateEnabled(t.keyName, v),
+                ),
+              ],
+            );
+          }),
           if (unknown.isNotEmpty) ...[
             const SizedBox(width: 6),
             Container(

@@ -48,8 +48,9 @@ final class DefaultPosTemplatesSeeder {
       return Failure(existing.error);
     }
     final all = (existing as Success<List<TransferTemplate>>).value;
+    final byId = {for (final t in all) t.id: t};
     final existingIds = !overwriteExisting
-        ? {for (final t in all) t.id}
+        ? byId.keys.toSet()
         : const <String>{};
 
     var changed = 0;
@@ -81,7 +82,26 @@ final class DefaultPosTemplatesSeeder {
 
     for (final spec in _specs) {
       final id = 'tpl-pos-$posId-${spec.variant}';
-      if (existingIds.contains(id)) continue;
+      if (existingIds.contains(id)) {
+        final existingTpl = byId[id];
+        if (existingTpl != null && !existingTpl.isActive) {
+          final repaired = existingTpl.copyWith(
+            isActive: true,
+            pattern: spec.pattern,
+            name: spec.name,
+            sampleBody: spec.sampleBody,
+            identifierKind: spec.identifierKind,
+            priority: spec.priority,
+            noteLabel: spec.noteLabel,
+            senderNameLabel: spec.senderNameLabel,
+            requireReference: spec.requireReference,
+          );
+          final save = await templates.save(repaired);
+          if (save is Failure<void>) return Failure(save.error);
+          changed++;
+        }
+        continue;
+      }
       final tpl = TransferTemplate(
         id: id,
         name: spec.name,

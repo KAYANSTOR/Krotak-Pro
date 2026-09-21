@@ -156,6 +156,33 @@ class _InventoryScreenState extends State<InventoryScreen> {
         categories: _categories,
         initialCategoryId: _categoryFilter ?? _categories.first.id,
         onDone: _load,
+        initialTab: 0,
+        fileOnly: false,
+      ),
+    );
+  }
+
+  /// استيراد من ملف فقط (PDF / Excel / CSV) — ليس مسار الإضافة اليدوية.
+  Future<void> _openImportFromFile() async {
+    if (_categories.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'أضف فئة أولاً قبل استيراد الكروت',
+            style: TextStyle(fontFamily: NetTypography.family),
+          ),
+        ),
+      );
+      return;
+    }
+    await NetSheet.show<void>(
+      context,
+      builder: (ctx) => _AddCardsSheet(
+        categories: _categories,
+        initialCategoryId: _categoryFilter ?? _categories.first.id,
+        onDone: _load,
+        initialTab: 1,
+        fileOnly: true,
       ),
     );
   }
@@ -372,7 +399,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                 const SizedBox(width: 12),
                 Expanded(
                   child: FilledButton.icon(
-                    onPressed: _openAddCards,
+                    onPressed: _openImportFromFile,
                     icon: const Icon(Icons.cloud_upload_rounded, size: 20),
                     label: const Text(
                       'استيراد من ملف',

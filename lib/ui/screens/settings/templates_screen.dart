@@ -582,17 +582,35 @@ class _TemplatesScreenState extends State<TemplatesScreen> {
 bool _isTemplateDraft(TransferTemplate t) {
   final p = t.pattern.trim();
   if (p.isEmpty) return true;
-  // قالب طلب رصيد نقطة البيع لا يحمل مبلغاً ولا معرّفاً: يُطابق نص الرسالة
-  // نفسه (مثل «111») ويُقرأ المعرّف من رقم المرسل — وكان يُعرض خطأً «مسودة»
-  // بمفتاح معطّل، وهو قالب نشط ومزروع افتراضياً.
+  // طلب رصيد نقطة البيع: نص ثابت مثل «111»، الهوية من رقم المرسل.
   if (t.identifierKind == TemplateIdentifierKind.balanceRequestCode) return false;
+
   final hasAmount = p.contains('{amount}') || p.contains('%amount');
+  final hasQty = p.contains('{qty}') || p.contains('%qty');
+  final hasDest = p.contains('{dest}') ||
+      p.contains('{phone}') ||
+      p.contains('%phone') ||
+      p.contains('{account}') ||
+      p.contains('%account');
+
+  // قوالب نقطة البيع: الهوية من رقم المرسل دائماً — يكفي المبلغ (ومع اختيار dest).
+  final isPos = (t.posId ?? '').trim().isNotEmpty;
+  if (isPos) {
+    // طلب رصيد بلا مبلغ عولج أعلاه؛ أوامر الكروت تحتاج مبلغاً على الأقل.
+    if (hasAmount || (hasQty && hasAmount)) return false;
+    // نمط نصي ثابت مخصّص لنقطة البيع (نادر) — لا يُجبر كمسودة إن وُجد نص.
+    if (p.isNotEmpty && !p.contains('{') && !p.contains('%')) return false;
+    return !hasAmount;
+  }
+
+  if (!hasAmount) return true;
   final hasIdentifier = switch (t.identifierKind) {
-    TemplateIdentifierKind.phone => p.contains('{phone}') || p.contains('%phone'),
+    TemplateIdentifierKind.phone =>
+      p.contains('{phone}') || p.contains('%phone') || hasDest,
     TemplateIdentifierKind.balanceRequestCode => true,
-    _ => p.contains('{account}') || p.contains('%account'),
+    _ => p.contains('{account}') || p.contains('%account') || hasDest,
   };
-  return !hasAmount || !hasIdentifier;
+  return !hasIdentifier;
 }
 
 class _TemplateCard extends StatelessWidget {

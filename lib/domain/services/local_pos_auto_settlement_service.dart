@@ -11,6 +11,7 @@ import '../entities/transaction.dart';
 import '../ledger.dart';
 import '../phone_normalizer.dart';
 import '../repositories/repositories.dart';
+import 'outbound_template_gate.dart';
 import 'local_pos_account_registry.dart';
 import 'services.dart';
 
@@ -163,6 +164,7 @@ final class LocalPosAutoSettlementService {
       SettingKeys.posSettlementSuccessTemplate,
       SettingDefaults.posSettlementSuccessTemplate,
     );
+    if (raw.trim().isEmpty) return;
     final amountText = (amount.minorUnits / 100).toStringAsFixed(0);
     final remainingText = (remainingDebt / 100).toStringAsFixed(0);
     final body = raw
@@ -172,7 +174,9 @@ final class LocalPosAutoSettlementService {
         .replaceAll('{remaining}', remainingText)
         .replaceAll('{REMAINING_BALANCE}', remainingText)
         .replaceAll('{identifier}', account.identifiers.isEmpty ? '' : account.identifiers.first);
-    await sender.send(destination: dest, body: body);
+    if (body.trim().isNotEmpty) {
+      await sender.send(destination: dest, body: body);
+    }
   }
 
   Future<void> _notifyFailure(PosAccount account, {required String reason}) async {
@@ -183,9 +187,11 @@ final class LocalPosAutoSettlementService {
       SettingKeys.posSettlementFailedTemplate,
       SettingDefaults.posSettlementFailedTemplate,
     );
+    if (raw.trim().isEmpty) return;
     final body = raw
         .replaceAll('{pos}', account.name)
         .replaceAll('{reason}', reason);
+    if (body.trim().isEmpty) return;
     await sender.send(destination: dest, body: body);
   }
 
@@ -199,11 +205,11 @@ final class LocalPosAutoSettlementService {
   }
 
   Future<String> _template(String key, String fallback) async {
-    final found = await settings.find(key);
-    if (found is Success<AppSetting?>) {
-      final value = found.value?.value.trim();
-      if (value != null && value.isNotEmpty) return value;
-    }
-    return fallback;
+    final rendered = await OutboundTemplateGate(settings).resolveBody(
+      key: key,
+      fallback: fallback,
+    );
+    if (rendered is Failure<String?>) return '';
+    return (rendered as Success<String?>).value ?? '';
   }
 }

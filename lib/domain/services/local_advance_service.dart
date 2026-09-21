@@ -7,6 +7,7 @@ import '../entities/card.dart';
 import '../entities/customer.dart';
 import '../entities/money.dart';
 import '../entities/setting.dart';
+import 'outbound_template_gate.dart';
 import '../entities/transaction.dart';
 import '../phone_normalizer.dart';
 import '../repositories/repositories.dart';
@@ -166,7 +167,7 @@ final class LocalAdvanceService implements AdvanceService {
         'code': selectedCard.secretCode,
       },
     );
-    final send = await messageSender.send(destination: destination, body: body);
+    final send = if (body.trim().isNotEmpty) { await messageSender.send(destination: destination, body: body); }
     if (send is Failure<void>) {
       await auditLogs.append(AuditLog(
         id: ids.next('audit'),
@@ -244,7 +245,7 @@ final class LocalAdvanceService implements AdvanceService {
       await auditLogs.append(AuditLog(id: ids.next('audit'), entityType: 'advance', entityId: advance.id, action: nowRemaining <= 0 ? 'settled' : 'partially_settled', occurredAt: clock.now(), payloadJson: '{"paymentReference":"${_escape(reference)}","applied":$pay,"remaining":$nowRemaining}'));
       final destination = await _deliveryPhone(customerId);
       if (destination.isNotEmpty) {
-        await messageSender.send(destination: destination, body: await _render(settledTemplateKey, defaultSettled, {'amount': _money(Money(minorUnits: pay, currencyCode: amount.currencyCode)), 'remaining': _money(Money(minorUnits: nowRemaining, currencyCode: amount.currencyCode))}));
+        final settledBody = await _render(settledTemplateKey, defaultSettled, {'amount': _money(Money(minorUnits: pay, currencyCode: amount.currencyCode)), 'remaining': _money(Money(minorUnits: nowRemaining, currencyCode: amount.currencyCode))}); if (settledBody.trim().isNotEmpty) { await messageSender.send(destination: destination, body: settledBody); }
       }
     }
     return Success(AdvancePaymentResult(applied: Money(minorUnits: applied, currencyCode: amount.currencyCode), remaining: Money(minorUnits: remaining, currencyCode: amount.currencyCode), settlementTransaction: lastSettlement));
@@ -284,11 +285,13 @@ final class LocalAdvanceService implements AdvanceService {
   }
 
   Future<String> _render(String key, String fallback, Map<String, String> values) async {
-    final result = await settings.find(key);
-    final template = result is Success<AppSetting?> && result.value?.value.trim().isNotEmpty == true ? result.value!.value : fallback;
-    var output = template;
-    values.forEach((name, value) => output = output.replaceAll('{$name}', value));
-    return output;
+    final rendered = await OutboundTemplateGate(settings).render(
+      key: key,
+      fallback: fallback,
+      values: values,
+    );
+    if (rendered is Failure<String?>) return '';
+    return (rendered as Success<String?>).value ?? '';
   }
 
   String _money(Money money) => (money.minorUnits / 100).toStringAsFixed(2);
@@ -297,7 +300,9 @@ final class LocalAdvanceService implements AdvanceService {
     final target = customerId == null ? destination : await _deliveryPhone(customerId);
     if (target != null && target.trim().isNotEmpty) {
       final body = await _render(rejectedTemplateKey, defaultRejected, {'reason': message});
-      await messageSender.send(destination: target, body: body);
+      if (body.trim().isNotEmpty) {
+        await messageSender.send(destination: target, body: body);
+      }
     }
     await auditLogs.append(AuditLog(id: ids.next('audit'), entityType: 'advance_request', entityId: customerId ?? destination ?? 'unknown', action: 'rejected', occurredAt: clock.now(), payloadJson: '{"code":"${_escape(code)}","reason":"${_escape(message)}"}'));
     return Failure(AppFailure(code: code, message: message));

@@ -22,6 +22,7 @@ import 'services.dart';
 import 'local_pos_account_registry.dart';
 import 'local_category_commission_store.dart';
 import 'pos_wholesale_pricing.dart';
+import 'outbound_template_gate.dart';
 import 'pos_order_message_renderer.dart';
 import 'message_pipeline_trace.dart';
 
@@ -616,7 +617,7 @@ final class LocalTransferProcessor implements TransferProcessor {
           )
         : effectiveCategory.faceValue;
 
-    if (isPosOrder) {
+    if (isPosOrder && posAccount != null) {
       final limitCheck = await _assertPosCreditLimit(
         posAccount: posAccount,
         chargeMinorUnits: posCharge.minorUnits * transfer.quantity,
@@ -765,8 +766,43 @@ final class LocalTransferProcessor implements TransferProcessor {
     // Mark sending before the native SMS call so recovery/worker sees an
     // in-flight delivery and can re-attempt quickly if the first send fails.
     await messages.updateStatus(message.id, MessageProcessingStatus.sending);
-    final body =
-        cardDeliverySmsBody(serialNumber: card.serialNumber, secretCode: card.secretCode);
+    final String? body;
+    final settingsRepo = settings;
+    if (settingsRepo != null) {
+      body = await OutboundTemplateGate(settingsRepo).voucherBody(
+        serialNumber: card.serialNumber,
+        secretCode: card.secretCode,
+      );
+    } else {
+      body = cardDeliverySmsBody(
+        serialNumber: card.serialNumber,
+        secretCode: card.secretCode,
+      );
+    }
+    if (body == null || body.trim().isEmpty) {
+      await auditLogs.append(
+        AuditLog(
+          id: ids.next('audit'),
+          entityType: 'message',
+          entityId: message.id,
+          action: 'sms_skipped_template_disabled',
+          occurredAt: clock.now(),
+          payloadJson: '{"template":"voucher_delivery_sms_template","operationId":"$operationId"}',
+        ),
+      );
+      // البيع ملتزم؛ الإرسال موقوف بقرار القالب.
+      await messages.updateStatus(message.id, MessageProcessingStatus.processed);
+      final ledger = await transactionRepo.findByReference('sale-op:$operationId');
+      if (ledger is Success<Transaction?> && ledger.value != null) {
+        return Success<Transaction>(ledger.value!);
+      }
+      return Failure<Transaction>(
+        const AppFailure(
+          code: 'sale_ledger_missing',
+          message: 'تم الالتزام بالبيع لكن سجل العملية غير موجود بعد إيقاف القالب',
+        ),
+      );
+    }
     final sent = await sender.send(destination: destination, body: body);
     if (sent is Failure<void>) {
       await auditLogs.append(

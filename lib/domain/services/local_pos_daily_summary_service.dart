@@ -10,6 +10,7 @@ import '../entities/setting.dart';
 import '../entities/transaction.dart';
 import '../phone_normalizer.dart';
 import '../repositories/repositories.dart';
+import 'outbound_template_gate.dart';
 import 'local_pos_account_registry.dart';
 import 'services.dart';
 
@@ -295,13 +296,10 @@ final class LocalPosDailySummaryService {
   }
 
   Future<Result<String>> _loadTemplate() async {
-    final found = await settings.find(SettingKeys.dailyPosSummaryTemplate);
-    if (found is Failure<AppSetting?>) return Failure(found.error);
-    final value = (found as Success<AppSetting?>).value?.value.trim();
-    if (value == null || value.isEmpty) {
-      return const Success(SettingDefaults.dailyPosSummaryTemplate);
-    }
-    return Success(value);
+    return OutboundTemplateGate(settings).requireBody(
+      key: SettingKeys.dailyPosSummaryTemplate,
+      fallback: SettingDefaults.dailyPosSummaryTemplate,
+    );
   }
 
   String? _destinationFor(PosAccount account) {
