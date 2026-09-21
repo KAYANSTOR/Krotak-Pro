@@ -1,7 +1,7 @@
 # Post-V1 Phase 2 — Unified Payment Event Engine
 
 **التاريخ:** 2026-09-13  
-**المستودع:** KAYANSTOR/net-flutter  
+**المستودع:** KAYANSTOR/Krotak-Pro  
 **الحالة:** منفَّذ في Domain + Application + Tests
 
 ## الهدف
