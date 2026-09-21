@@ -25,7 +25,7 @@
     </queries>
 
     <application
-        android:label="Krotak"
+        android:label="Krotak Pro"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
@@ -71,7 +71,7 @@
         <service
             android:name=".NotificationListener"
             android:exported="false"
-            android:label="Krotak - إشعارات المحافظ"
+            android:label="Krotak Pro - إشعارات المحافظ"
             android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
             <intent-filter>
                 <action android:name="android.service.notification.NotificationListenerService" />
