@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:krotak_pro/domain/domain.dart';
+import 'package:net_app/domain/domain.dart';
 
 void main() {
   test('exactly 13 documented rejection codes', () {

@@ -1,16 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:krotak_pro/domain/entities/money.dart';
-import 'package:krotak_pro/domain/entities/transaction.dart';
-import 'package:krotak_pro/ui/theme/kayan_theme.dart';
-import 'package:krotak_pro/ui/widgets/async_views.dart';
-import 'package:krotak_pro/ui/widgets/net/net_alert_banner.dart';
-import 'package:krotak_pro/ui/widgets/net/net_balance_card.dart';
-import 'package:krotak_pro/ui/widgets/net/net_dashboard_header.dart';
-import 'package:krotak_pro/ui/widgets/net/net_metric_card.dart';
-import 'package:krotak_pro/ui/widgets/net/net_quick_action_card.dart';
-import 'package:krotak_pro/ui/widgets/net/net_recent_transaction_card.dart';
-import 'package:krotak_pro/ui/widgets/net/net_section_header.dart';
+import 'package:net_app/domain/entities/money.dart';
+import 'package:net_app/domain/entities/transaction.dart';
+import 'package:net_app/ui/theme/kayan_theme.dart';
+import 'package:net_app/ui/widgets/async_views.dart';
+import 'package:net_app/ui/widgets/net/net_alert_banner.dart';
+import 'package:net_app/ui/widgets/net/net_balance_card.dart';
+import 'package:net_app/ui/widgets/net/net_dashboard_header.dart';
+import 'package:net_app/ui/widgets/net/net_metric_card.dart';
+import 'package:net_app/ui/widgets/net/net_quick_action_card.dart';
+import 'package:net_app/ui/widgets/net/net_recent_transaction_card.dart';
+import 'package:net_app/ui/widgets/net/net_section_header.dart';
 
 Widget _wrap(Widget child) => MaterialApp(
       theme: buildKayanLightTheme(),
