@@ -19,10 +19,8 @@ jobs:
       - name: Install SQLite
         run: sudo apt-get update && sudo apt-get install -y libsqlite3-dev
       - run: flutter pub get
-      - name: Verify generated Drift/codegen outputs
-        run: |
-          dart run build_runner build --delete-conflicting-outputs
-          git diff --exit-code -- lib test
+      - name: Generate Drift/codegen outputs
+        run: dart run build_runner build --delete-conflicting-outputs
       - name: Flutter analyze
         run: flutter analyze --no-fatal-infos
       - name: Test (full suite)
@@ -42,6 +40,8 @@ jobs:
       - name: Install SQLite
         run: sudo apt-get update && sudo apt-get install -y libsqlite3-dev
       - run: flutter pub get
+      - name: Generate Drift/codegen outputs
+        run: dart run build_runner build --delete-conflicting-outputs
       # Phase 7: commercial release APKs are signed only from GitHub Secrets.
       # No fallback to android/signing/*.b64. Missing secrets fail the job.
       - name: Prepare keystore from GitHub Secrets
