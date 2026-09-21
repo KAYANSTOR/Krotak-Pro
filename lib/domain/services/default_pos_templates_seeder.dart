@@ -83,23 +83,8 @@ final class DefaultPosTemplatesSeeder {
     for (final spec in _specs) {
       final id = 'tpl-pos-$posId-${spec.variant}';
       if (existingIds.contains(id)) {
-        final existingTpl = byId[id];
-        if (existingTpl != null && !existingTpl.isActive) {
-          final repaired = existingTpl.copyWith(
-            isActive: true,
-            pattern: spec.pattern,
-            name: spec.name,
-            sampleBody: spec.sampleBody,
-            identifierKind: spec.identifierKind,
-            priority: spec.priority,
-            noteLabel: spec.noteLabel,
-            senderNameLabel: spec.senderNameLabel,
-            requireReference: spec.requireReference,
-          );
-          final save = await templates.save(repaired);
-          if (save is Failure<void>) return Failure(save.error);
-          changed++;
-        }
+        // Never re-enable or overwrite an existing built-in template here.
+        // A disabled/customized template is an explicit operator decision.
         continue;
       }
       final tpl = TransferTemplate(
