@@ -51,13 +51,12 @@ void main() {
         'استعلام رصيد نقطة البيع',
       },
     );
-    expect(
-      repo.map['tpl-pos-pos-1-cards-to-pos-customer']!.pattern,
-      '{phone} {amount}',
-    );
+    final customerTemplate = repo.map['tpl-pos-pos-1-cards-to-pos-customer']!;
+    expect(customerTemplate.pattern, '{phone} {amount}');
+    expect(customerTemplate.isActive, isTrue);
   });
 
-  test('repairs an existing customer-delivery default without reactivating it', () async {
+  test('repairs and reactivates an existing legacy customer-delivery default', () async {
     final repo = _MemTemplates();
     repo.map['tpl-pos-pos-1-cards-to-pos-customer'] = TransferTemplate(
       id: 'tpl-pos-pos-1-cards-to-pos-customer',
@@ -77,7 +76,7 @@ void main() {
     expect(repaired.pattern, '{phone} {amount}');
     expect(repaired.name, 'إرسال كروت إلى عميل نقطة البيع');
     expect(repaired.sampleBody, '779776919 100');
-    expect(repaired.isActive, isFalse);
+    expect(repaired.isActive, isTrue);
   });
 
   test('deactivates retired default variants without deleting custom templates', () async {
