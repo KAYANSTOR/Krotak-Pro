@@ -12,6 +12,7 @@ import '../data/database/database_provider.dart';
 import '../data/database/drift_unit_of_work.dart';
 import '../data/repositories/local_repositories.dart';
 import '../domain/entities/message.dart';
+import '../domain/entities/pos_account.dart';
 import '../domain/entities/setting.dart';
 import '../domain/services/local_account_merge_service.dart';
 import '../data/repositories/local_broadcast_repository.dart';
