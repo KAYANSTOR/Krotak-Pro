@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'sold_cards_sheet.dart';
 import 'package:flutter/services.dart';
 
 import '../../core/result.dart';
@@ -159,6 +160,14 @@ class _InventoryScreenState extends State<InventoryScreen> {
     );
   }
 
+  Future<void> _openSoldCards() async {
+    await showSoldCardsSheet(
+      context: context,
+      categories: _categories,
+      onChanged: _load,
+    );
+  }
+
   Future<void> _openCategories() async {
     await showCategoriesSheet(
       context: context,
@@ -235,7 +244,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          'تم حذف $deleted كرت من المخزون',
+          'تمت معالجة $deleted كرت (حذف أو تعطيل المباع)',
           style: const TextStyle(fontFamily: NetTypography.family),
         ),
       ),
@@ -376,6 +385,21 @@ class _InventoryScreenState extends State<InventoryScreen> {
                   ),
                 ),
               ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(NetSpacing.lg, 0, NetSpacing.lg, NetSpacing.sm),
+            child: OutlinedButton.icon(
+              onPressed: _openSoldCards,
+              icon: const Icon(Icons.sell_outlined, size: 20),
+              label: const Text(
+                'الكروت المباعة — فلاتر وتصدير',
+                style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w800),
+              ),
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size.fromHeight(44),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
             ),
           ),
         if (_selectionMode)

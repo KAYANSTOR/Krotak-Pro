@@ -11,6 +11,7 @@ import 'payment_fingerprint_service.dart';
 import 'payment_source_guard.dart';
 import 'local_pos_balance_request_service.dart';
 import 'services.dart';
+import 'message_pipeline_trace.dart';
 
 /// Single ingest path for SMS, wallet notifications, and manual entry.
 ///
@@ -26,6 +27,7 @@ final class UnifiedPaymentEventEngine implements PaymentEventEngine {
     this.settings,
     this.sourceGuard,
     this.posBalanceRequestService,
+    this.metrics,
     this.fingerprints = const PaymentFingerprintService(),
   });
 
@@ -36,6 +38,7 @@ final class UnifiedPaymentEventEngine implements PaymentEventEngine {
   final SettingsRepository? settings;
   final PaymentSourceGuard? sourceGuard;
   final LocalPosBalanceRequestService? posBalanceRequestService;
+  final MessagePipelineMetrics? metrics;
   final PaymentFingerprintService fingerprints;
 
   @override
@@ -152,6 +155,10 @@ final class UnifiedPaymentEventEngine implements PaymentEventEngine {
       instantCharge: parsedTransfer.instantCharge,
     );
     await messages.updateStatus(message.id, MessageProcessingStatus.parsed);
+    final trace = MessagePipelineTrace(
+      messageId: message.id,
+      receivedAt: message.receivedAt,
+    )..markParsed();
 
     final balanceService = posBalanceRequestService;
     if (balanceService != null &&
@@ -176,7 +183,18 @@ final class UnifiedPaymentEventEngine implements PaymentEventEngine {
 
     final processResult = await processor.process(boundParse);
     if (processResult is Success<Transaction>) {
+      trace.markCommitted();
+      final m = metrics;
+      if (m != null) {
+        // ignore: discarded_futures
+        m.persist(trace);
+      }
       return Success(processResult.value);
+    }
+    final m = metrics;
+    if (m != null) {
+      // ignore: discarded_futures
+      m.persist(trace);
     }
     return Failure((processResult as Failure<Transaction>).error);
   }

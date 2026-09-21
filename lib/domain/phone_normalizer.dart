@@ -16,8 +16,27 @@
 abstract final class PhoneNormalizer {
   static final RegExp _nonDigit = RegExp(r'\D');
 
-  /// Digits only, preserving a leading `+` signal via [digitsOnly].
-  static String digitsOnly(String raw) => raw.replaceAll(_nonDigit, '');
+  /// خرائط الأرقام العربية-الهندية والفارسية إلى لاتينية قبل استخراج الأرقام.
+  static const Map<String, String> _easternDigits = {
+    '٠': '0', '١': '1', '٢': '2', '٣': '3', '٤': '4',
+    '٥': '5', '٦': '6', '٧': '7', '٨': '8', '٩': '9',
+    '۰': '0', '۱': '1', '۲': '2', '۳': '3', '۴': '4',
+    '۵': '5', '۶': '6', '۷': '7', '۸': '8', '۹': '9',
+  };
+
+  /// يحوّل الأرقام الشرقية إلى لاتينية دون حذف باقي المحارف.
+  static String toWesternDigits(String raw) {
+    if (raw.isEmpty) return raw;
+    final buf = StringBuffer();
+    for (final ch in raw.split('')) {
+      buf.write(_easternDigits[ch] ?? ch);
+    }
+    return buf.toString();
+  }
+
+  /// Digits only (بعد تطبيع الأرقام الشرقية)، بدون علامات.
+  static String digitsOnly(String raw) =>
+      toWesternDigits(raw).replaceAll(_nonDigit, '');
 
   /// True when the value is plausibly a phone number (not account/name).
   static bool isPhoneLike(String raw) {
