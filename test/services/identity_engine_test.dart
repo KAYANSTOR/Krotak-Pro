@@ -1,16 +1,16 @@
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:net_app/core/clock.dart';
-import 'package:net_app/core/id_generator.dart';
-import 'package:net_app/core/result.dart';
-import 'package:net_app/data/database/app_database.dart' hide Customer, CustomerIdentifier;
-import 'package:net_app/data/database/drift_unit_of_work.dart';
-import 'package:net_app/data/repositories/local_repositories.dart';
-import 'package:net_app/domain/entities/customer.dart';
-import 'package:net_app/domain/entities/message.dart';
-import 'package:net_app/domain/services/local_account_merge_service.dart';
-import 'package:net_app/domain/services/local_customer_identity_resolver.dart';
-import 'package:net_app/domain/services/local_customer_service.dart';
+import 'package:krotak_pro/core/clock.dart';
+import 'package:krotak_pro/core/id_generator.dart';
+import 'package:krotak_pro/core/result.dart';
+import 'package:krotak_pro/data/database/app_database.dart' hide Customer, CustomerIdentifier;
+import 'package:krotak_pro/data/database/drift_unit_of_work.dart';
+import 'package:krotak_pro/data/repositories/local_repositories.dart';
+import 'package:krotak_pro/domain/entities/customer.dart';
+import 'package:krotak_pro/domain/entities/message.dart';
+import 'package:krotak_pro/domain/services/local_account_merge_service.dart';
+import 'package:krotak_pro/domain/services/local_customer_identity_resolver.dart';
+import 'package:krotak_pro/domain/services/local_customer_service.dart';
 
 void main() {
   late AppDatabase database;
