@@ -145,7 +145,7 @@ void main() {
     expect(batchValue.deliveryOverride, '779776919');
   });
 
-  test('parses stock-to-POS and customer-delivery Arabic card phrases', () async {
+  test('parses Arabic POS stock phrase and keeps POS identity separate from delivery', () async {
     final repo = _MemTemplates();
     await DefaultPosTemplatesSeeder(templates: repo).seedForPos(
       posId: 'pos-1',
@@ -166,20 +166,52 @@ void main() {
     final stock = (toPos as Success<ParsedTransfer>).value;
     expect(stock.quantity, 10);
     expect(stock.amount.minorUnits, 10000);
+    expect(stock.customerIdentifier, '779000111');
     expect(stock.deliveryOverride, '779000111');
 
     final toCustomer = parser.parse(
       IncomingMessage(
         id: 'm2',
         sender: '779000111',
-        body: '1 كرت 100 777123456',
+        body: '777123456 100 2',
         receivedAt: DateTime(2026, 9, 21),
         status: MessageProcessingStatus.received,
       ),
     );
     expect(toCustomer, isA<Success<ParsedTransfer>>());
     final dest = (toCustomer as Success<ParsedTransfer>).value;
-    expect(dest.quantity, 1);
+    expect(dest.quantity, 2);
+    expect(dest.customerIdentifier, '779000111');
     expect(dest.deliveryOverride, '777123456');
+  });
+
+  test('custom POS template still supports explicit Arabic destination syntax', () {
+    final parser = LocalMessageParser(
+      templates: [
+        TransferTemplate(
+          id: 'custom-pos-dest',
+          name: 'قالب مخصص',
+          pattern: '{qty} كرت {amount} {dest}',
+          isActive: true,
+          posId: 'pos-1',
+          requireReference: false,
+        ),
+      ],
+    );
+
+    final parsed = parser.parse(
+      IncomingMessage(
+        id: 'm3',
+        sender: '779000111',
+        body: '1 كرت 100 777123456',
+        receivedAt: DateTime(2026, 9, 21),
+        status: MessageProcessingStatus.received,
+      ),
+    );
+    expect(parsed, isA<Success<ParsedTransfer>>());
+    final value = (parsed as Success<ParsedTransfer>).value;
+    expect(value.quantity, 1);
+    expect(value.customerIdentifier, '779000111');
+    expect(value.deliveryOverride, '777123456');
   });
 }

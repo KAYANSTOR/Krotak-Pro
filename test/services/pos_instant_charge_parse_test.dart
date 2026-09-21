@@ -75,7 +75,7 @@ void main() {
     expect(parsed, isA<Success<ParsedTransfer>>());
     final value = (parsed as Success<ParsedTransfer>).value;
     expect(value.instantCharge, isFalse);
-    expect(value.customerIdentifier, '779776919');
+    expect(value.customerIdentifier, '777000111');
     expect(value.deliveryOverride, '733123456');
   });
 
@@ -85,7 +85,7 @@ void main() {
     expect(parsed, isA<Success<ParsedTransfer>>());
     final value = (parsed as Success<ParsedTransfer>).value;
     expect(value.instantCharge, isFalse);
-    expect(value.deliveryOverride, isNull);
-    expect(value.customerIdentifier, '779776919');
+    expect(value.deliveryOverride, '779776919');
+    expect(value.customerIdentifier, '777000111');
   });
 }

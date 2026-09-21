@@ -37,7 +37,8 @@ void main() {
     final value = (parsed as Success<ParsedTransfer>).value;
     expect(value.quantity, 1);
     expect(value.amount.minorUnits, 10000);
-    expect(value.customerIdentifier, '779776919');
+    expect(value.customerIdentifier, '777000111');
+    expect(value.deliveryOverride, '779776919');
     expect(value.posId, 'pos-1');
   });
 
