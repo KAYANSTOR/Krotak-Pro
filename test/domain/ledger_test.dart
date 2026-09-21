@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:net_app/domain/entities/money.dart';
-import 'package:net_app/domain/entities/transaction.dart';
-import 'package:net_app/domain/ledger.dart';
+import 'package:krotak_pro/domain/entities/money.dart';
+import 'package:krotak_pro/domain/entities/transaction.dart';
+import 'package:krotak_pro/domain/ledger.dart';
 
 void main() {
   test('completed deposits increase and sales decrease the ledger', () {
