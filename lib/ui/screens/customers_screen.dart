@@ -5,7 +5,6 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'dart:convert';
 import 'dart:io';
-import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/result.dart';
@@ -72,10 +71,21 @@ class _CustomersScreenState extends State<CustomersScreen> {
     _load(_searchCtrl.text);
   }
 
+  void _onScroll() {
+    if (!_listScroll.hasClients || _listScroll.position.extentAfter > 160) {
+      return;
+    }
+    final next = (_visibleLimit + _pageSize).clamp(0, _visible.length);
+    if (next != _visibleLimit && mounted) {
+      setState(() => _visibleLimit = next);
+    }
+  }
+
   @override
   void dispose() {
     widget.refreshSignal?.removeListener(_onExternalRefresh);
     _searchCtrl.dispose();
+    _listScroll.dispose();
     super.dispose();
   }
 
@@ -275,7 +285,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
   Future<void> _exportFilteredCsv() async {
     final rows = _visible;
     if (rows.isEmpty) {
-      _toast('لا توجد حسابات لتصديرها');
+      _snack('لا توجد حسابات لتصديرها');
       return;
     }
     final buf = StringBuffer();

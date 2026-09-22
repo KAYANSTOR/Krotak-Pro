@@ -26,6 +26,7 @@ final class LocalSaleService implements SaleService, ReservedSaleService {
     required this.clock,
     required this.ids,
     this.messageSender,
+    this.settings,
     this.reservationTtl = const Duration(minutes: 5),
   });
 
@@ -41,6 +42,7 @@ final class LocalSaleService implements SaleService, ReservedSaleService {
   final Clock clock;
   final IdGenerator ids;
   final MessageSender? messageSender;
+  final SettingsRepository? settings;
   final Duration reservationTtl;
 
   @override
