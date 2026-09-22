@@ -119,6 +119,18 @@ final class LocalMessageRepository implements MessageRepository {
   }
 
   @override
+  Stream<int> watchCountByStatus(domain.MessageProcessingStatus status) {
+    final countExp = database.incomingMessages.id.count();
+    final query = database.selectOnly(database.incomingMessages)
+      ..where(database.incomingMessages.status.equals(status.name))
+      ..addColumns([countExp]);
+    return query.watch().map((rows) {
+      if (rows.isEmpty) return 0;
+      return rows.first.read(countExp) ?? 0;
+    });
+  }
+
+  @override
   Future<Result<List<domain.IncomingMessage>>> listRecent({int limit = 100}) async {
     try {
       final rows = await (database.select(database.incomingMessages)
