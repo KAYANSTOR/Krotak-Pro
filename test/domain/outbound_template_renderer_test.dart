@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:net_app/core/result.dart';
 import 'package:net_app/domain/services/outbound_template_renderer.dart';
 
 void main() {
@@ -7,8 +8,8 @@ void main() {
       template: 'رقم الكرت: {serial}\nالرمز: {code}',
       values: {'serial': '111', 'code': '222'},
     );
-    expect(r.isSuccess, isTrue);
-    expect((r as dynamic).value, contains('111'));
+    expect(r, isA<Success<String>>());
+    expect((r as Success<String>).value, contains('111'));
   });
 
   test('strict render fails on unresolved placeholder', () {
@@ -16,8 +17,8 @@ void main() {
       template: 'كرت {serial_number} والرمز {code}',
       values: {'serial': '111', 'code': '222'},
     );
-    expect(r.isFailure, isTrue);
-    final err = (r as dynamic).error;
+    expect(r, isA<Failure<String>>());
+    final err = (r as Failure<String>).error;
     expect(err.code, 'outbound_unresolved_placeholder');
     expect(err.message, contains('serial_number'));
   });
