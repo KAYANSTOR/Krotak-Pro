@@ -757,32 +757,10 @@ class _TemplateWizardScreenState extends State<TemplateWizardScreen> {
     if (sample.isNotEmpty && pattern.isNotEmpty) {
       final isPosTemplate = _posId != null && _posId!.trim().isNotEmpty;
       final senderInput = _senderCtrl.text.trim();
-      // POS parser resolves the POS identity from the sender and therefore
-      // requires a phone-shaped sender even during local preview.
+      // POS preview must provide a phone-shaped sender because the parser
+      // resolves POS identity from the sender rather than the message body.
       final sender = isPosTemplate
-          ? (RegExp(r'^\+?[0-9]{7,15}$').hasMatch(senderInput)
-              ? senderInput
-              : '700000000')
-          : (senderInput.isEmpty ? 'PREVIEW' : senderInput);
-
-      final parser = LocalMessageParser(templates: [
-        TransferTemplate(
-          id: 'preview',
-          name: _nameCtrl.text.trim().isEmpty ? 'معاينة' : _nameCtrl.text.trim(),
-          pattern: pattern,
-          isActive: true,
-          identifierKind: _kind,
-          requireReference: _patternHasRef(pattern),
-          posId: _posId,
-        ),
-      ]);
-      final msg = IncomingMessage(
-        id: 'preview-msg',
-        sender: sender,
-        body: sample,
-        receivedAt: DateTime.now().toUtc(),
-        status: MessageProcessingStatus.received,
-      );
+          ? (RegExp(r'^\+?[0-9]{7,15}
       final r = parser.parse(msg);
       if (r is Success<ParsedTransfer>) {
         matched = r.value;
@@ -1176,6 +1154,7 @@ class _WordChip extends StatelessWidget {
               ? senderInput
               : '700000000')
           : (senderInput.isEmpty ? 'PREVIEW' : senderInput);
+
       final parser = LocalMessageParser(templates: [
         TransferTemplate(
           id: 'preview',
