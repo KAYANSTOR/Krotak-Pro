@@ -167,8 +167,9 @@ final class LocalAdvanceService implements AdvanceService {
         'code': selectedCard.secretCode,
       },
     );
-    final send = if (body.trim().isNotEmpty) {
-      await messageSender.send(destination: destination, body: body);
+    Result<void>? send;
+    if (body.trim().isNotEmpty) {
+      send = await messageSender.send(destination: destination, body: body);
     }
     if (send is Failure<void>) {
       await auditLogs.append(AuditLog(
