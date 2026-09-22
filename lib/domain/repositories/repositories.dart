@@ -104,6 +104,8 @@ abstract interface class MessageRepository {
   Future<Result<List<IncomingMessage>>> pendingProcessing();
   Future<Result<List<IncomingMessage>>> listByStatus(MessageProcessingStatus status);
   Future<Result<int>> countByStatus(MessageProcessingStatus status);
+  /// Live COUNT for a status. Emits immediately then on every table change.
+  Stream<int> watchCountByStatus(MessageProcessingStatus status);
   Future<Result<List<IncomingMessage>>> listRecent({int limit = 100});
   Future<Result<void>> updateStatus(String id, MessageProcessingStatus status);
   Future<Result<void>> delete(String id);
