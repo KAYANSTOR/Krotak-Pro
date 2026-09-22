@@ -12,6 +12,7 @@ import 'payment_source_guard.dart';
 import 'local_pos_balance_request_service.dart';
 import 'services.dart';
 import 'message_pipeline_trace.dart';
+import 'template_performance_service.dart';
 
 /// Single ingest path for SMS, wallet notifications, and manual entry.
 ///
@@ -28,6 +29,7 @@ final class UnifiedPaymentEventEngine implements PaymentEventEngine {
     this.sourceGuard,
     this.posBalanceRequestService,
     this.metrics,
+    this.templatePerformance,
     this.fingerprints = const PaymentFingerprintService(),
   });
 
@@ -39,6 +41,7 @@ final class UnifiedPaymentEventEngine implements PaymentEventEngine {
   final PaymentSourceGuard? sourceGuard;
   final LocalPosBalanceRequestService? posBalanceRequestService;
   final MessagePipelineMetrics? metrics;
+  final TemplatePerformanceService? templatePerformance;
   final PaymentFingerprintService fingerprints;
 
   @override
@@ -127,12 +130,14 @@ final class UnifiedPaymentEventEngine implements PaymentEventEngine {
 
     if (parseResult is Failure<ParsedTransfer>) {
       await messages.updateStatus(message.id, MessageProcessingStatus.rejected);
+      await templatePerformance?.recordUnmatched();
       return Failure(parseResult.error);
     }
 
     final parsedTransfer = parsed;
     if (parsedTransfer == null) {
       await messages.updateStatus(message.id, MessageProcessingStatus.rejected);
+      await templatePerformance?.recordUnmatched();
       return const Failure(
         AppFailure(
           code: 'message_not_parsed',
@@ -140,6 +145,8 @@ final class UnifiedPaymentEventEngine implements PaymentEventEngine {
         ),
       );
     }
+
+    await templatePerformance?.recordMatch(parsedTransfer.templateId ?? '');
 
     final boundParse = ParsedTransfer(
       messageId: message.id,
