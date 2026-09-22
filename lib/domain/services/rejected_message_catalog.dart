@@ -36,8 +36,6 @@ abstract final class RejectionCategories {
       case RejectionCodes.parseFailure:
       case 'message_parse_failed':
       case 'transfer_parse_failed':
-      case 'message_not_matched':
-      case 'no_active_template':
         return templateMismatch;
       case RejectionCodes.unknownSender:
       case 'transfer_unresolved':
@@ -136,8 +134,6 @@ final class RejectedMessageCatalog {
     'message_parse_failed',
     'transfer_parse_failed',
     'transfer_unmatched_amount_pending',
-    'message_not_matched',
-    'no_active_template',
   };
 
   Future<Result<List<RejectedMessageItem>>> listRejected({
