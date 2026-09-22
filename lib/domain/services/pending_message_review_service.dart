@@ -46,10 +46,19 @@ final class PendingMessageReviewService {
     // حصر القائمة في `parsed` وحدها كان يُخفي أي رسالة تحمل حالة `pending`.
     final collected = <String, IncomingMessage>{};
     for (final status in const [
+      MessageProcessingStatus.received,
       MessageProcessingStatus.parsed,
       MessageProcessingStatus.pending,
     ]) {
-      final result = await messages.listByStatus(status);
+      final result = await messages.listByStatus(status).timeout(
+        const Duration(seconds: 15),
+        onTimeout: () => const Failure(
+          AppFailure(
+            code: 'pending_messages_timeout',
+            message: 'انتهت مهلة تحميل الرسائل المعلّقة',
+          ),
+        ),
+      );
       if (result is Failure<List<IncomingMessage>>) return result;
       for (final message in (result as Success<List<IncomingMessage>>).value) {
         collected[message.id] = message;

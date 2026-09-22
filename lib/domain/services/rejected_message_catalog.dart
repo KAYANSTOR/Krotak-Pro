@@ -148,7 +148,15 @@ final class RejectedMessageCatalog {
   Future<Result<List<RejectedMessageItem>>> listRejected({
     DateTime? viewedAfter,
   }) async {
-    final result = await messages.listByStatus(MessageProcessingStatus.rejected);
+    final result = await messages.listByStatus(MessageProcessingStatus.rejected).timeout(
+      const Duration(seconds: 15),
+      onTimeout: () => const Failure(
+        AppFailure(
+          code: 'rejected_messages_timeout',
+          message: 'انتهت مهلة تحميل الرسائل المرفوضة',
+        ),
+      ),
+    );
     if (result is Failure<List<IncomingMessage>>) return Failure(result.error);
     final list = (result as Success<List<IncomingMessage>>).value;
 
@@ -176,7 +184,15 @@ final class RejectedMessageCatalog {
 
     String? action;
     String? payloadReason;
-    final audits = await auditLogs.findByEntity('message', m.id);
+    final audits = await auditLogs.findByEntity('message', m.id).timeout(
+      const Duration(seconds: 10),
+      onTimeout: () => const Failure(
+        AppFailure(
+          code: 'rejected_message_details_timeout',
+          message: 'انتهت مهلة تحميل تفاصيل الرسالة المرفوضة',
+        ),
+      ),
+    );
     if (audits is Success<List<AuditLog>>) {
       final logs = audits.value;
       final relevant = logs.where((l) => _rejectActions.contains(l.action)).toList()
