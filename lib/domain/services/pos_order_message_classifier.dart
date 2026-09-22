@@ -20,32 +20,7 @@ abstract final class PosOrderMessageClassifier {
       final phone = normalized[3];
       final digits = phone.startsWith('+') ? phone.substring(1) : phone;
       if (digits.length < 7 || digits.length > 15) return false;
-      if (!RegExp(r'^\d{7,15}
-    }
-
-    return true;
-  }
-
-  static String _normalizeDigits(String input) {
-    const eastern = '٠١٢٣٤٥٦٧٨٩';
-    const persian = '۰۱۲۳۴۵۶۷۸۹';
-    final out = StringBuffer();
-    for (final rune in input.runes) {
-      final ch = String.fromCharCode(rune);
-      final e = eastern.indexOf(ch);
-      final p = persian.indexOf(ch);
-      if (e >= 0) {
-        out.write(e);
-      } else if (p >= 0) {
-        out.write(p);
-      } else {
-        out.write(ch);
-      }
-    }
-    return out.toString();
-  }
-}
-).hasMatch(digits)) return false;
+      if (!RegExp(r'^\d{7,15}\$').hasMatch(digits)) return false;
     }
 
     return true;
