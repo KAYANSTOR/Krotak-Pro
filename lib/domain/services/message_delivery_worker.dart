@@ -10,6 +10,7 @@ import 'message_retry_policy.dart';
 import 'message_pipeline_trace.dart';
 import 'services.dart';
 import 'outbound_template_renderer.dart';
+import 'outbound_message_dispatch_guard.dart';
 
 /// Phase 4 delivery worker: resend voucher SMS for already-committed sales.
 ///
@@ -43,6 +44,13 @@ final class MessageDeliveryWorker {
   final MessageRetryPolicy policy;
   final MessagePipelineMetrics? metrics;
   final SettingsRepository? settings;
+
+  OutboundMessageDispatchGuard? get _dispatchGuard {
+    final value = messages;
+    return value is OutboundMessageStore
+        ? OutboundMessageDispatchGuard(store: value)
+        : null;
+  }
 
   /// Per-tick audit cache to avoid N+1 findByEntity for the same message.
   final Map<String, List<AuditLog>> _auditCache = {};
@@ -150,6 +158,19 @@ final class MessageDeliveryWorker {
         continue;
       }
       final body = (rendered as Success<String>).value;
+
+      final guard = _dispatchGuard;
+      if (guard != null) {
+        final claimed = await guard.store.claimForDispatch(
+          message.id,
+          now: clock.now(),
+          staleBefore: clock.now().subtract(policy.confirmPendingTimeout),
+        );
+        if (!claimed) {
+          skipped++;
+          continue;
+        }
+      }
 
       final trace = MessagePipelineTrace(
         messageId: message.id,

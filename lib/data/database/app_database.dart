@@ -216,6 +216,7 @@ class AppDatabase extends _$AppDatabase {
       );
 
   Future<void> _ensureTransferTemplateColumns() async {
+    await _addColumnIfMissing('incoming_messages', 'last_attempt_at', 'INTEGER');
     await _addColumnIfMissing('transfer_templates', 'wallet_id', 'TEXT');
     await _addColumnIfMissing(
       'transfer_templates',
@@ -306,6 +307,10 @@ class AppDatabase extends _$AppDatabase {
     await customStatement(
       'CREATE INDEX IF NOT EXISTS idx_incoming_messages_received '
       'ON incoming_messages (received_at)',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_incoming_messages_dispatch '
+      'ON incoming_messages (status, last_attempt_at)',
     );
     await customStatement(
       'CREATE INDEX IF NOT EXISTS idx_transactions_customer '
