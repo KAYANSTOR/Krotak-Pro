@@ -14,13 +14,6 @@ enum MessageProcessingStatus {
 
 enum TransferIdentifierType { phone, account, reference, name, unknown }
 
-enum ParsedTransferKind {
-  financialTransfer,
-  posCardOrder,
-  posInstantCharge,
-  posBalanceRequest,
-}
-
 enum TemplateIdentifierKind {
   phone,
   alternativeNumber,
@@ -128,7 +121,6 @@ final class ParsedTransfer {
     this.quantity = 1,
     this.deliveryOverride,
     this.instantCharge = false,
-    this.kind = ParsedTransferKind.financialTransfer,
   });
 
   final String messageId;
@@ -143,8 +135,4 @@ final class ParsedTransfer {
   final int quantity;
   final String? deliveryOverride;
   final bool instantCharge;
-
-  /// Semantic contract of this parsed message. For POS card orders, [amount]
-  /// represents the selected card category value, not a cash deposit.
-  final ParsedTransferKind kind;
 }
