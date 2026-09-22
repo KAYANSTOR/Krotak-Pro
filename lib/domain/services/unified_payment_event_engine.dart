@@ -9,6 +9,7 @@ import '../repositories/repositories.dart';
 import 'local_blocked_number_service.dart';
 import 'payment_fingerprint_service.dart';
 import 'payment_source_guard.dart';
+import 'pos_order_message_classifier.dart';
 import 'local_pos_balance_request_service.dart';
 import 'services.dart';
 import 'message_pipeline_trace.dart';
@@ -139,6 +140,21 @@ final class UnifiedPaymentEventEngine implements PaymentEventEngine {
           message: 'Inbound payment message could not be parsed',
         ),
       );
+    }
+
+    // Canonical POS card-order text is a product/order command, not a cash
+    // transfer. Never let a generic financial template reinterpret it.
+    final isExplicitPosOrder =
+        parsedTransfer.kind == ParsedTransferKind.posCardOrder ||
+        parsedTransfer.kind == ParsedTransferKind.posInstantCharge;
+    if (PosOrderMessageClassifier.isCardOrder(message.body) &&
+        !isExplicitPosOrder) {
+      const failure = AppFailure(
+        code: 'pos_order_template_required',
+        message: 'رسالة طلب كروت تحتاج قالب طلب POS نشط',
+      );
+      await messages.updateStatus(message.id, MessageProcessingStatus.rejected);
+      return const Failure<Transaction?>(failure);
     }
 
     final boundParse = ParsedTransfer(

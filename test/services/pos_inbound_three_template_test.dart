@@ -51,13 +51,12 @@ void main() {
         'استعلام رصيد نقطة البيع',
       },
     );
-    expect(
-      repo.map['tpl-pos-pos-1-cards-to-pos-customer']!.pattern,
-      '{phone} {amount}',
-    );
+    final customerTemplate = repo.map['tpl-pos-pos-1-cards-to-pos-customer']!;
+    expect(customerTemplate.pattern, '{qty} كرت {amount} {phone}');
+    expect(customerTemplate.isActive, isTrue);
   });
 
-  test('repairs an existing customer-delivery default without reactivating it', () async {
+  test('repairs and reactivates an existing legacy customer-delivery default', () async {
     final repo = _MemTemplates();
     repo.map['tpl-pos-pos-1-cards-to-pos-customer'] = TransferTemplate(
       id: 'tpl-pos-pos-1-cards-to-pos-customer',
@@ -74,10 +73,32 @@ void main() {
     );
 
     final repaired = repo.map['tpl-pos-pos-1-cards-to-pos-customer']!;
-    expect(repaired.pattern, '{phone} {amount}');
+    expect(repaired.pattern, '{qty} كرت {amount} {phone}');
     expect(repaired.name, 'إرسال كروت إلى عميل نقطة البيع');
-    expect(repaired.sampleBody, '779776919 100');
-    expect(repaired.isActive, isFalse);
+    expect(repaired.sampleBody, '1 كرت 100 779776919');
+    expect(repaired.isActive, isTrue);
+  });
+
+  test('migrates the previous phone-first customer template to the exact new contract', () async {
+    final repo = _MemTemplates();
+    repo.map['tpl-pos-pos-1-cards-to-pos-customer'] = TransferTemplate(
+      id: 'tpl-pos-pos-1-cards-to-pos-customer',
+      name: 'إرسال كروت إلى عميل نقطة البيع',
+      pattern: '{phone} {amount}',
+      isActive: true,
+      posId: 'pos-1',
+      requireReference: false,
+    );
+
+    await DefaultPosTemplatesSeeder(templates: repo).seedForPos(
+      posId: 'pos-1',
+      posName: 'نقطة',
+    );
+
+    final migrated = repo.map['tpl-pos-pos-1-cards-to-pos-customer']!;
+    expect(migrated.pattern, '{qty} كرت {amount} {phone}');
+    expect(migrated.sampleBody, '1 كرت 100 779776919');
+    expect(migrated.isActive, isTrue);
   });
 
   test('deactivates retired default variants without deleting custom templates', () async {
@@ -107,7 +128,7 @@ void main() {
     expect(repo.map['tpl-pos-pos-1-cards-to-pos']!.isActive, isTrue);
   });
 
-  test('seeded customer template parses the documented numeric syntax', () async {
+  test('customer template requires quantity, category, then customer phone', () async {
     final repo = _MemTemplates();
     await DefaultPosTemplatesSeeder(templates: repo).seedForPos(
       posId: 'pos-1',
@@ -117,9 +138,9 @@ void main() {
 
     final single = parser.parse(
       IncomingMessage(
-        id: 'numeric-1',
+        id: 'customer-1',
         sender: '779000111',
-        body: '779776919 100',
+        body: '1 كرت 100 779776919',
         receivedAt: DateTime(2026, 9, 21),
         status: MessageProcessingStatus.received,
       ),
@@ -127,14 +148,16 @@ void main() {
     expect(single, isA<Success<ParsedTransfer>>());
     final singleValue = (single as Success<ParsedTransfer>).value;
     expect(singleValue.quantity, 1);
+    expect(singleValue.amount.minorUnits, 10000);
+    expect(singleValue.customerIdentifier, '779000111');
     expect(singleValue.deliveryOverride, '779776919');
     expect(singleValue.posId, 'pos-1');
 
     final batch = parser.parse(
       IncomingMessage(
-        id: 'numeric-2',
+        id: 'customer-2',
         sender: '779000111',
-        body: '779776919 100 3',
+        body: '3 كروت 100 779776919',
         receivedAt: DateTime(2026, 9, 21),
         status: MessageProcessingStatus.received,
       ),
@@ -142,7 +165,20 @@ void main() {
     expect(batch, isA<Success<ParsedTransfer>>());
     final batchValue = (batch as Success<ParsedTransfer>).value;
     expect(batchValue.quantity, 3);
+    expect(batchValue.amount.minorUnits, 10000);
+    expect(batchValue.customerIdentifier, '779000111');
     expect(batchValue.deliveryOverride, '779776919');
+
+    final oldOrder = parser.parse(
+      IncomingMessage(
+        id: 'customer-old',
+        sender: '779000111',
+        body: '779776919 100 3',
+        receivedAt: DateTime(2026, 9, 21),
+        status: MessageProcessingStatus.received,
+      ),
+    );
+    expect(oldOrder, isA<Failure<ParsedTransfer>>());
   });
 
   test('parses Arabic POS stock phrase and keeps POS identity separate from delivery', () async {
@@ -169,11 +205,27 @@ void main() {
     expect(stock.customerIdentifier, '779000111');
     expect(stock.deliveryOverride, '779000111');
 
+    final toPosSingular = parser.parse(
+      IncomingMessage(
+        id: 'm1-singular',
+        sender: '779000111',
+        body: '1 كرت 100',
+        receivedAt: DateTime(2026, 9, 21),
+        status: MessageProcessingStatus.received,
+      ),
+    );
+    expect(toPosSingular, isA<Success<ParsedTransfer>>());
+    final stockSingular = (toPosSingular as Success<ParsedTransfer>).value;
+    expect(stockSingular.quantity, 1);
+    expect(stockSingular.amount.minorUnits, 10000);
+    expect(stockSingular.customerIdentifier, '779000111');
+    expect(stockSingular.deliveryOverride, '779000111');
+
     final toCustomer = parser.parse(
       IncomingMessage(
         id: 'm2',
         sender: '779000111',
-        body: '777123456 100 2',
+        body: '2 كروت 100 777123456',
         receivedAt: DateTime(2026, 9, 21),
         status: MessageProcessingStatus.received,
       ),

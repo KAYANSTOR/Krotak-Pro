@@ -8,13 +8,15 @@ import '../repositories/repositories.dart';
 /// default inbound POS templates. POS identity is always taken from the SMS
 /// sender / registered identifier — never from the message body.
 ///
-/// 1. Cards to the POS itself: `{qty} كرت {amount}`
-/// 2. Cards to a POS customer: `{phone} {amount}` (optional trailing quantity).
+/// 1. Cards to the POS itself: `{qty} كرت {amount}` (accepts كرت/كروت).
+/// 2. Cards to a POS customer: `{qty} كرت {amount} {phone}`.
 /// 3. Balance inquiry: `111`
 ///
 /// Custom templates the operator creates are left untouched. A known migration
-/// repairs the previously shipped customer-delivery default while preserving
-/// the operator's enabled/disabled state.
+/// repairs the previously shipped customer-delivery default and re-enables that
+/// built-in row when it is still carrying the old broken default contract.
+/// This targets only the exact legacy built-in pattern; manually customized
+/// templates remain untouched.
 final class DefaultPosTemplatesSeeder {
   const DefaultPosTemplatesSeeder({required this.templates});
 
@@ -95,7 +97,11 @@ final class DefaultPosTemplatesSeeder {
           id: id,
           name: spec.name,
           pattern: spec.pattern,
-          isActive: overwriteExisting ? true : existingTemplate.isActive,
+          isActive: overwriteExisting ||
+                  (spec.variant == 'cards-to-pos-customer' &&
+                      _isLegacyCustomerPattern(existingTemplate.pattern))
+              ? true
+              : existingTemplate.isActive,
           priority: spec.priority,
           walletId: existingTemplate.walletId,
           posId: posId,
@@ -149,7 +155,13 @@ final class DefaultPosTemplatesSeeder {
 
   static bool _needsKnownMigration(TransferTemplate existing, _TplSpec spec) {
     return spec.variant == 'cards-to-pos-customer' &&
-        existing.pattern.trim() == '{qty} كرت {amount} {dest}';
+        _isLegacyCustomerPattern(existing.pattern);
+  }
+
+  static bool _isLegacyCustomerPattern(String pattern) {
+    final normalized = pattern.trim();
+    return normalized == '{phone} {amount}' ||
+        normalized == '{qty} كرت {amount} {dest}';
   }
 
   static const _specs = <_TplSpec>[
@@ -169,8 +181,8 @@ final class DefaultPosTemplatesSeeder {
       variant: 'cards-to-pos-customer',
       name: 'إرسال كروت إلى عميل نقطة البيع',
       priority: 2,
-      pattern: '{phone} {amount}',
-      sampleBody: '779776919 100',
+      pattern: '{qty} كرت {amount} {phone}',
+      sampleBody: '1 كرت 100 779776919',
       senderNameLabel: 'نقطة البيع',
       noteLabel: 'كروت لعميل نقطة البيع',
       requireReference: false,
