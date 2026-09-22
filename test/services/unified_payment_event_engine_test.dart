@@ -7,10 +7,13 @@ import 'package:net_app/domain/entities/payment_event.dart';
 import 'package:net_app/domain/entities/setting.dart';
 import 'package:net_app/domain/entities/transaction.dart';
 import 'package:net_app/domain/repositories/repositories.dart';
+import 'package:net_app/domain/entities/wallet.dart';
 import 'package:net_app/domain/services/payment_fingerprint_service.dart';
+import 'package:net_app/domain/services/payment_source_guard.dart';
 import 'package:net_app/domain/services/services.dart';
 import 'package:net_app/domain/services/unified_payment_event_engine.dart';
 
+import '../helpers/in_memory_repositories.dart';
 import '../helpers/trusted_payment_source.dart';
 
 void main() {
@@ -219,6 +222,58 @@ void main() {
       );
     });
   });
+
+  group('UnifiedPaymentEventEngine untrusted source', () {
+    test('persists the rejected message instead of dropping it silently',
+        () async {
+      final messages = _FakeMessages();
+      final audit = InMemoryAuditLogRepository();
+      final engine = UnifiedPaymentEventEngine(
+        messages: messages,
+        parser: _FailingParser(),
+        processor: _FakeProcessor(),
+        ids: SequentialIdGenerator(),
+        sourceGuard: PaymentSourceGuard(
+          wallets: _NoWallets(),
+          templates: InMemoryTransferTemplateRepository(),
+        ),
+        auditLogs: audit,
+      );
+      final event = PaymentEvent(
+        channel: PaymentChannel.sms,
+        sourceKey: '779000999',
+        body: '10 كرت 100',
+        receivedAt: DateTime.utc(2026, 9, 22),
+      );
+
+      final result = await engine.ingest(event);
+
+      expect(result, isA<Failure<Transaction?>>());
+      expect(
+        (result as Failure<Transaction?>).error.code,
+        'untrusted_payment_source',
+      );
+      final saved = messages.store.values.single;
+      expect(saved.status, MessageProcessingStatus.rejected);
+      expect(saved.externalReference, isNotNull);
+      expect(audit.logs.single.action, 'untrusted_payment_source');
+
+      // نفس الرسالة مرة أخرى بنفس البصمة لا تُنشئ صفًا ثانيًا.
+      await engine.ingest(event);
+      expect(messages.store, hasLength(1));
+    });
+  });
+}
+
+final class _NoWallets implements WalletRepository {
+  @override
+  Future<Result<Wallet?>> findById(String id) async => const Success(null);
+
+  @override
+  Future<Result<List<Wallet>>> listAll() async => const Success(<Wallet>[]);
+
+  @override
+  Future<Result<void>> save(Wallet wallet) async => const Success(null);
 }
 
 final class _FakeParser implements MessageParser {

@@ -176,6 +176,13 @@ final class DefaultPosTemplatesSeeder {
   }
 
   static bool _needsKnownMigration(TransferTemplate existing, _TplSpec spec) {
+    if (spec.variant == 'cards-to-pos') {
+      // نسخة سابقة زُرعت بنوع معرّف `phone` بلا عنصر نائب في النص، فظهرت
+      // "مسودة" واستحال تفعيلها. يُصلَح النوع فقط، وبشرط أن يكون النص هو النص
+      // الافتراضي (لا نلمس نص المشغّل المخصص).
+      return existing.pattern.trim() == '{qty} كرت {amount}' &&
+          existing.identifierKind != TemplateIdentifierKind.senderNameOnly;
+    }
     if (spec.variant != 'cards-to-pos-customer') return false;
     final pattern = existing.pattern.trim();
     return pattern == '{qty} كرت {amount} {dest}' ||
@@ -191,6 +198,9 @@ final class DefaultPosTemplatesSeeder {
       priority: 1,
       pattern: '{qty} كرت {amount}',
       sampleBody: '10 كرت 100',
+      // الهوية تأتي من رقم المرسل (نقطة البيع) لا من نص الرسالة؛ بدون هذا
+      // النوع يُصنَّف القالب "مسودة" في الواجهة ويمتنع تفعيله.
+      identifierKind: TemplateIdentifierKind.senderNameOnly,
       senderNameLabel: 'نقطة البيع',
       noteLabel: 'كروت لنقطة البيع',
       requireReference: false,

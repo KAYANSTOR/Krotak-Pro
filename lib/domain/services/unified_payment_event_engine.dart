@@ -1,5 +1,6 @@
 import '../../core/id_generator.dart';
 import '../../core/result.dart';
+import '../entities/audit.dart';
 import '../entities/message.dart';
 import '../entities/payment_event.dart';
 import '../entities/setting.dart';
@@ -30,6 +31,7 @@ final class UnifiedPaymentEventEngine implements PaymentEventEngine {
     this.posBalanceRequestService,
     this.metrics,
     this.templatePerformance,
+    this.auditLogs,
     this.fingerprints = const PaymentFingerprintService(),
   });
 
@@ -42,6 +44,7 @@ final class UnifiedPaymentEventEngine implements PaymentEventEngine {
   final LocalPosBalanceRequestService? posBalanceRequestService;
   final MessagePipelineMetrics? metrics;
   final TemplatePerformanceService? templatePerformance;
+  final AuditLogRepository? auditLogs;
   final PaymentFingerprintService fingerprints;
 
   @override
@@ -61,7 +64,7 @@ final class UnifiedPaymentEventEngine implements PaymentEventEngine {
     if (sourceGuard != null) {
       final sourceAuthorization = await sourceGuard!.authorize(event);
       if (sourceAuthorization is Failure<void>) {
-        return Failure(sourceAuthorization.error);
+        return _rejectUnauthorized(event, sourceAuthorization.error);
       }
     }
 
@@ -88,7 +91,7 @@ final class UnifiedPaymentEventEngine implements PaymentEventEngine {
         matchedTemplateId: parsed.templateId,
       );
       if (templateAuthorization is Failure<void>) {
-        return Failure(templateAuthorization.error);
+        return _rejectUnauthorized(event, templateAuthorization.error);
       }
     }
 
@@ -204,6 +207,51 @@ final class UnifiedPaymentEventEngine implements PaymentEventEngine {
       m.persist(trace);
     }
     return Failure((processResult as Failure<Transaction>).error);
+  }
+
+  /// يحفظ رسالة **مرفوضة** عندما تفشل حدود الثقة في المصدر (رقم غير مهيّأ،
+  /// نقطة بيع بلا قالب نشط، أو قالب لا يخص المصدر).
+  ///
+  /// قبل ذلك كانت هذه الحالات تُرجع فشلًا بلا أي أثر محفوظ، فلا تظهر الرسالة
+  /// في «المعلّقة» ولا في «المرفوضة» ولا في أي تقرير — وهو ما يجعل الحالة
+  /// الميدانية غير قابلة للتفسير للمشغّل. الآن تُحفَظ بنفس بصمة منع التكرار
+  /// فلا تتكرر عند وصول نفس الرسالة مرة أخرى، وبلا أي عمل دفتري.
+  Future<Result<Transaction?>> _rejectUnauthorized(
+    PaymentEvent event,
+    AppFailure failure,
+  ) async {
+    final provisional = event.toProvisionalMessage(id: ids.next('msg'));
+    final fingerprint = fingerprints.compute(event: event, parsed: null);
+    final existing = await messages.findByExternalReference(fingerprint.key);
+    if (existing is Success<IncomingMessage?> && existing.value != null) {
+      return Failure(failure);
+    }
+
+    await messages.save(
+      IncomingMessage(
+        id: provisional.id,
+        sender: event.sourceKey,
+        body: provisional.body,
+        receivedAt: event.receivedAt,
+        status: MessageProcessingStatus.rejected,
+        externalReference: fingerprint.key,
+      ),
+    );
+
+    final audit = auditLogs;
+    if (audit != null) {
+      await audit.append(
+        AuditLog(
+          id: ids.next('audit'),
+          entityType: 'message',
+          entityId: provisional.id,
+          action: failure.code,
+          occurredAt: event.receivedAt,
+        ),
+      );
+    }
+
+    return Failure(failure);
   }
 
   Future<Result<Transaction?>> _rejectBlocked(PaymentEvent event) async {

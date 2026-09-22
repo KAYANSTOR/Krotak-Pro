@@ -271,8 +271,8 @@ final class AppContainer {
       ids: ids,
     );
     final pipelineMetrics = MessagePipelineMetrics(auditLogs: auditLogs, clock: clock, ids: ids);
-    final smsEngine = UnifiedPaymentEventEngine(messages: messages, parser: parser, processor: processor, ids: ids, settings: settings, sourceGuard: sourceGuard, posBalanceRequestService: posBalanceRequests, metrics: pipelineMetrics);
-    final notificationEngine = UnifiedPaymentEventEngine(messages: messages, parser: parser, processor: processor, ids: ids, settings: settings, sourceGuard: sourceGuard, posBalanceRequestService: posBalanceRequests, metrics: pipelineMetrics);
+    final smsEngine = UnifiedPaymentEventEngine(messages: messages, parser: parser, processor: processor, ids: ids, settings: settings, sourceGuard: sourceGuard, posBalanceRequestService: posBalanceRequests, metrics: pipelineMetrics, auditLogs: auditLogs);
+    final notificationEngine = UnifiedPaymentEventEngine(messages: messages, parser: parser, processor: processor, ids: ids, settings: settings, sourceGuard: sourceGuard, posBalanceRequestService: posBalanceRequests, metrics: pipelineMetrics, auditLogs: auditLogs);
     final recoveryService = LocalMessageRecoveryService(messages: messages, parser: parser, processor: processor, sourceGuard: sourceGuard, retryService: retryService, settings: settings, auditLogs: auditLogs);
     final deliveryWorker = MessageDeliveryWorker(messages: messages, auditLogs: auditLogs, cards: cards, messageSender: messageSender, retryService: retryService, clock: clock, ids: ids, metrics: pipelineMetrics);
     final posOrderDeliveryWorker = PosOrderDeliveryWorker(messages: messages, auditLogs: auditLogs, cards: cards, settings: settings, posRegistry: posRegistry, messageSender: messageSender, retryService: retryService, clock: clock, ids: ids);
