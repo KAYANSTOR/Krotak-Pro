@@ -183,4 +183,92 @@ void main() {
     expect(afterPos.length, DefaultPosTemplatesSeeder.catalogSize);
     expect(afterPos.firstWhere((t) => t.id == disabled.id).isActive, isFalse);
   });
+
+  test('create and update persist a custom per-POS balance request code', () async {
+    Future<TransferTemplate> balanceTemplate(String posId) async {
+      final all = (await templates.listAll() as Success<List<TransferTemplate>>)
+          .value;
+      return all.firstWhere(
+        (t) =>
+            t.posId == posId &&
+            t.identifierKind == TemplateIdentifierKind.balanceRequestCode,
+      );
+    }
+
+    final created = await profiles.create(
+      name: 'نقطة الرمز',
+      phone: '779666777',
+      balanceRequestCode: '222',
+    );
+    expect(created, isA<Success<PosProfile>>());
+    final profile = (created as Success<PosProfile>).value;
+    expect(profile.account.balanceRequestCode, '222');
+
+    final seeded = await balanceTemplate(profile.pointOfSale.id);
+    expect(seeded.pattern, '222');
+    expect(seeded.sampleBody, '222');
+
+    final updated = await profiles.update(
+      posId: profile.pointOfSale.id,
+      status: PointOfSaleStatus.active,
+      name: 'نقطة الرمز',
+      phone: '779666777',
+      existingAccount: profile.account,
+      balanceRequestCode: '333',
+    );
+    expect(updated, isA<Success<PosProfile>>());
+    final next = (updated as Success<PosProfile>).value;
+    expect(next.account.balanceRequestCode, '333');
+    expect((await balanceTemplate(profile.pointOfSale.id)).pattern, '333');
+
+    // الرمز الفارغ يعود إلى الافتراضي 111.
+    final cleared = await profiles.update(
+      posId: profile.pointOfSale.id,
+      status: PointOfSaleStatus.active,
+      name: 'نقطة الرمز',
+      phone: '779666777',
+      existingAccount: next.account,
+      balanceRequestCode: '   ',
+    );
+    expect(cleared, isA<Success<PosProfile>>());
+    expect(
+      (cleared as Success<PosProfile>).value.account.balanceRequestCode,
+      '111',
+    );
+    expect((await balanceTemplate(profile.pointOfSale.id)).pattern, '111');
+  });
+
+  test('code change updates the template without re-activating a disabled one',
+      () async {
+    final created = await profiles.create(
+      name: 'نقطة معطّلة',
+      phone: '779666888',
+      balanceRequestCode: '222',
+    );
+    final profile = (created as Success<PosProfile>).value;
+    final all = (await templates.listAll() as Success<List<TransferTemplate>>)
+        .value;
+    final balance = all.firstWhere(
+      (t) =>
+          t.posId == profile.pointOfSale.id &&
+          t.identifierKind == TemplateIdentifierKind.balanceRequestCode,
+    );
+    await templates.save(balance.copyWith(isActive: false));
+
+    final updated = await profiles.update(
+      posId: profile.pointOfSale.id,
+      status: PointOfSaleStatus.active,
+      name: 'نقطة معطّلة',
+      phone: '779666888',
+      existingAccount: profile.account,
+      balanceRequestCode: '444',
+    );
+    expect(updated, isA<Success<PosProfile>>());
+
+    final after = (await templates.listAll() as Success<List<TransferTemplate>>)
+        .value;
+    final updatedTemplate = after.firstWhere((t) => t.id == balance.id);
+    expect(updatedTemplate.pattern, '444');
+    expect(updatedTemplate.isActive, isFalse);
+  });
 }
