@@ -13,7 +13,12 @@ final class NativeMessageSender implements MessageSender {
     required String body,
   }) async {
     try {
-      await bridge.sendSms(to: destination, body: body);
+      final receipt = await bridge.sendSms(to: destination, body: body);
+      if (!receipt.sent) {
+        return const Failure(
+          AppFailure(code: 'sms_send_failed', message: 'radio rejected SMS'),
+        );
+      }
       return const Success(null);
     } catch (e) {
       return Failure(
