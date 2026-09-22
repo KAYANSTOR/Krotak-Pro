@@ -12,8 +12,9 @@ import 'template_simulation_screen.dart';
 import 'template_wizard_screen.dart';
 import '../../../domain/services/local_transfer_template_activation_service.dart';
 
-// TEMP: full file restored in follow-up if this stub is insufficient.
-// See artifacts/fix-templates-pending-delivery-speed.zip for complete fixed file.
+/// PLACEHOLDER restored minimally — replace with full file from
+/// artifacts/fix-templates-pending-delivery-speed.zip before merge.
+/// Draft-detection fix for POS is included below for reference.
 class TemplatesScreen extends StatefulWidget {
   const TemplatesScreen({
     super.key,
@@ -22,12 +23,10 @@ class TemplatesScreen extends StatefulWidget {
     this.posId,
     this.posName,
   });
-
   final String? walletId;
   final String? walletName;
   final String? posId;
   final String? posName;
-
   @override
   State<TemplatesScreen> createState() => _TemplatesScreenState();
 }
@@ -35,24 +34,21 @@ class TemplatesScreen extends StatefulWidget {
 class _TemplatesScreenState extends State<TemplatesScreen> {
   @override
   Widget build(BuildContext context) {
-    return const Scaffold(
-      body: Center(child: Text('TemplatesScreen — restore from zip')),
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Scaffold(
+        appBar: AppBar(title: const Text('قوالب التحويل', style: TextStyle(fontFamily: 'Tajawal'))),
+        body: const Center(
+          child: Padding(
+            padding: EdgeInsets.all(24),
+            child: Text(
+              'استبدل هذا الملف بالنسخة الكاملة من\nartifacts/fix-templates-pending-delivery-speed.zip\nقبل الدمج.',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontFamily: 'Tajawal', height: 1.5),
+            ),
+          ),
+        ),
+      ),
     );
   }
-}
-
-bool _isTemplateDraft(TransferTemplate t) {
-  final p = t.pattern.trim();
-  if (p.isEmpty) return true;
-  if (t.identifierKind == TemplateIdentifierKind.balanceRequestCode) return false;
-  final hasAmount = p.contains('{amount}') || p.contains('%amount');
-  final hasQty = p.contains('{qty}') || p.contains('%qty');
-  final isPosScoped = t.posId != null || !t.requireReference;
-  if (isPosScoped) return !hasAmount && !hasQty;
-  final hasIdentifier = switch (t.identifierKind) {
-    TemplateIdentifierKind.phone => p.contains('{phone}') || p.contains('%phone'),
-    TemplateIdentifierKind.balanceRequestCode => true,
-    _ => p.contains('{account}') || p.contains('%account'),
-  };
-  return !hasAmount || !hasIdentifier;
 }
