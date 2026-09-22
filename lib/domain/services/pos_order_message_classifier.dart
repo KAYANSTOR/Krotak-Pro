@@ -20,7 +20,7 @@ abstract final class PosOrderMessageClassifier {
       final phone = normalized[3];
       final digits = phone.startsWith('+') ? phone.substring(1) : phone;
       if (digits.length < 7 || digits.length > 15) return false;
-      if (!RegExp(r'^\d{7,15}\$').hasMatch(digits)) return false;
+      if (!RegExp(r'^\d{7,15}$').hasMatch(digits)) return false;
     }
 
     return true;
