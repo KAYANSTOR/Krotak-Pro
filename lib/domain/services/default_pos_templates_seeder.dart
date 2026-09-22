@@ -154,8 +154,17 @@ final class DefaultPosTemplatesSeeder {
   }
 
   static bool _needsKnownMigration(TransferTemplate existing, _TplSpec spec) {
-    return spec.variant == 'cards-to-pos-customer' &&
-        _isLegacyCustomerPattern(existing.pattern);
+    final pattern = existing.pattern.trim();
+    if (spec.variant == 'cards-to-pos-customer' &&
+        _isLegacyCustomerPattern(pattern)) {
+      return true;
+    }
+    if (spec.variant == 'cards-to-pos' &&
+        (pattern == '{amount} كرت {qty}' ||
+            pattern == '{amount} كرت{qty}')) {
+      return true;
+    }
+    return false;
   }
 
   static bool _isLegacyCustomerPattern(String pattern) {
