@@ -267,7 +267,7 @@ final class LocalMessageParser implements MessageParser {
       quantity: quantity,
       deliveryOverride: deliveryOverride,
       instantCharge: false,
-      kind: isPos
+      kind: template.posId != null
           ? ParsedTransferKind.posCardOrder
           : ParsedTransferKind.financialTransfer,
     );
