@@ -1,39 +1,51 @@
 #!/usr/bin/env sh
-# يستخرج مفتاح التوقيع الثابت المُخزّن في المستودع إلى مكانه المحلي، حتى تُوقّع
-# بناءاتك المحلية بنفس مفتاح بناءات CI — فيثبّت أي APK جديد فوق التطبيق المثبّت
-# مباشرةً بدون رسالة «حزمة التثبيت لا تتوافق مع النسخة المثبّتة».
+# يجهّز مفتاح توقيع Android محلياً من متغيرات البيئة فقط.
+# لا تضع keystore أو كلمات المرور داخل المستودع.
 #
-# الاستخدام:  sh ./tools/setup_upload_keystore.sh
+# المتغيرات المطلوبة:
+#   APK_KEYSTORE_B64
+#   APK_KEYSTORE_PASSWORD
+#   APK_KEY_PASSWORD
+#   APK_KEY_ALIAS
 #
-# ثم:  flutter build apk --release
-set -e
+# الاستخدام:
+#   export APK_KEYSTORE_B64="$(base64 -w 0 /secure/path/upload.jks)"
+#   export APK_KEYSTORE_PASSWORD='...'
+#   export APK_KEY_PASSWORD='...'
+#   export APK_KEY_ALIAS='...'
+#   sh ./tools/setup_upload_keystore.sh
+set -eu
 
-root=$(cd "$(dirname "$0")/.." && pwd)
+root=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
 cd "$root"
 
-if [ ! -f android/signing/net-upload.jks.b64 ]; then
-  echo "خطأ: لم يُعثر على android/signing/net-upload.jks.b64" >&2
-  exit 1
-fi
+: "${APK_KEYSTORE_B64:?خطأ: APK_KEYSTORE_B64 غير مضبوط}"
+: "${APK_KEYSTORE_PASSWORD:?خطأ: APK_KEYSTORE_PASSWORD غير مضبوط}"
+: "${APK_KEY_PASSWORD:?خطأ: APK_KEY_PASSWORD غير مضبوط}"
+: "${APK_KEY_ALIAS:?خطأ: APK_KEY_ALIAS غير مضبوط}"
 
 mkdir -p android/app/keystore
 
-# GNU base64 يستخدم -d وmacOS يستخدم -D.
-if base64 -d android/signing/net-upload.jks.b64 > android/app/keystore/net-upload.jks 2>/dev/null; then
+if printf '%s' "$APK_KEYSTORE_B64" | base64 -d > android/app/keystore/upload.jks 2>/dev/null; then
+  :
+elif printf '%s' "$APK_KEYSTORE_B64" | base64 -D > android/app/keystore/upload.jks 2>/dev/null; then
   :
 else
-  base64 -D android/signing/net-upload.jks.b64 > android/app/keystore/net-upload.jks
+  echo "خطأ: APK_KEYSTORE_B64 ليس Base64 صالحاً" >&2
+  rm -f android/app/keystore/upload.jks
+  exit 1
 fi
 
+umask 077
 {
-  echo "storeFile=keystore/net-upload.jks"
-  echo "storeType=PKCS12"
-  echo "keyAlias=net-upload"
-  echo "storePassword=netupload2026"
-  echo "keyPassword=netupload2026"
+  printf 'storeFile=keystore/upload.jks\n'
+  printf 'storeType=PKCS12\n'
+  printf 'keyAlias=%s\n' "$APK_KEY_ALIAS"
+  printf 'storePassword=%s\n' "$APK_KEYSTORE_PASSWORD"
+  printf 'keyPassword=%s\n' "$APK_KEY_PASSWORD"
 } > android/key.properties
 
-echo "تم تجهيز مفتاح التوقيع الثابت:"
-echo "  android/app/keystore/net-upload.jks"
-echo "  android/key.properties"
-echo "يمكنك الآن: flutter build apk --release"
+echo "تم تجهيز مفتاح التوقيع من متغيرات البيئة فقط."
+echo "شغّل flutter build apk --release ثم احذف android/key.properties و android/app/keystore/upload.jks."
+trap 'rm -f android/key.properties android/app/keystore/upload.jks' EXIT INT TERM
+flutter build apk --release
