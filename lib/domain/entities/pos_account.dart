@@ -19,7 +19,11 @@ final class PosAccount {
     this.status = PointOfSaleStatus.active,
     this.percentageMode = PosPercentageMode.defaultCategory,
     this.creditLimitMinorUnits,
+    this.balanceRequestCode = defaultBalanceRequestCode,
   });
+
+  /// الرمز الافتراضي الموحد لطلب الرصيد إن لم يُخصَّص رمز لنقطة البيع.
+  static const defaultBalanceRequestCode = '111';
 
   final String posId;
   final String customerId;
@@ -32,6 +36,10 @@ final class PosAccount {
   /// سقف الدين المسموح به لنقطة البيع (بالهللة/الوحدة الصغرى). null = بلا سقف.
   final int? creditLimitMinorUnits;
 
+  /// رمز استعلام الرصيد الخاص بهذه النقطة (مثال: `111` أو `222`).
+  /// يُطابق نص الرسالة الواردة بعد التطبيع؛ الهوية تبقى من رقم المرسل.
+  final String balanceRequestCode;
+
   PosAccount copyWith({
     String? customerId,
     String? name,
@@ -40,6 +48,7 @@ final class PosAccount {
     PointOfSaleStatus? status,
     PosPercentageMode? percentageMode,
     int? creditLimitMinorUnits,
+    String? balanceRequestCode,
     bool clearNotifyPhone = false,
     bool clearCreditLimit = false,
   }) {
@@ -54,7 +63,15 @@ final class PosAccount {
       creditLimitMinorUnits: clearCreditLimit
           ? null
           : (creditLimitMinorUnits ?? this.creditLimitMinorUnits),
+      balanceRequestCode: _normalizeCode(
+        balanceRequestCode ?? this.balanceRequestCode,
+      ),
     );
+  }
+
+  static String _normalizeCode(String raw) {
+    final trimmed = raw.trim();
+    return trimmed.isEmpty ? defaultBalanceRequestCode : trimmed;
   }
 
   Map<String, Object?> toJson() => {
@@ -66,6 +83,7 @@ final class PosAccount {
         'status': status.name,
         'percentageMode': percentageMode.name,
         'creditLimitMinorUnits': creditLimitMinorUnits,
+        'balanceRequestCode': balanceRequestCode,
       };
 
   /// Defensive decoder for persisted settings. Old/corrupt records must never
@@ -96,6 +114,9 @@ final class PosAccount {
       status: status,
       percentageMode: percentageMode,
       creditLimitMinorUnits: (json['creditLimitMinorUnits'] as num?)?.toInt(),
+      balanceRequestCode: _normalizeCode(
+        json['balanceRequestCode'] as String? ?? defaultBalanceRequestCode,
+      ),
     );
   }
 
