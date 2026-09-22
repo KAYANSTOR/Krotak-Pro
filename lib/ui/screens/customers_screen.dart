@@ -5,7 +5,6 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'dart:convert';
 import 'dart:io';
-import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/result.dart';
@@ -70,6 +69,15 @@ class _CustomersScreenState extends State<CustomersScreen> {
   void _onExternalRefresh() {
     if (!mounted) return;
     _load(_searchCtrl.text);
+  }
+
+  void _onScroll() {
+    if (!_listScroll.hasClients || _visibleLimit >= _visible.length) return;
+    if (_listScroll.position.pixels >= _listScroll.position.maxScrollExtent - 400) {
+      setState(() {
+        _visibleLimit = (_visibleLimit + _pageSize).clamp(0, _visible.length);
+      });
+    }
   }
 
   @override
@@ -224,6 +232,8 @@ class _CustomersScreenState extends State<CustomersScreen> {
       ),
     );
   }
+
+  void _toast(String message) => _snack(message);
 
   void _snack(String message) {
     if (!mounted) return;
