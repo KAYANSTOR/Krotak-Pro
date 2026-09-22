@@ -215,7 +215,7 @@ void main() {
       final result = await engine.ingest(
         PaymentEvent(
           channel: PaymentChannel.sms,
-          sourceKey: 'pos-779000111',
+          sourceKey: 'bank',
           body: '3 كروت 100',
           receivedAt: DateTime.utc(2026, 9, 13),
         ),
