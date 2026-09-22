@@ -24,7 +24,6 @@ import 'local_category_commission_store.dart';
 import 'pos_wholesale_pricing.dart';
 import 'pos_order_message_renderer.dart';
 import 'outbound_template_renderer.dart';
-import 'message_pipeline_trace.dart';
 
 /// Completes the real incoming-transfer business flow using the existing
 /// catalog, inventory, sale and native SMS boundaries.

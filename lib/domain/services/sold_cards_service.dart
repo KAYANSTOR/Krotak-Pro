@@ -1,7 +1,6 @@
 import '../../core/clock.dart';
 import '../../core/id_generator.dart';
 import '../../core/result.dart';
-import '../entities/audit.dart';
 import '../entities/card.dart';
 import '../entities/customer.dart';
 import '../entities/money.dart';

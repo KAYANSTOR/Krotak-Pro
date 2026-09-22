@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import '../../core/result.dart';
 import '../../domain/entities/transaction.dart';
 import '../app_scope.dart';
-import '../labels/net_labels.dart';
 import '../theme/kayan_palette.dart';
 import '../theme/net_semantic_colors.dart';
 import '../theme/net_tokens.dart';

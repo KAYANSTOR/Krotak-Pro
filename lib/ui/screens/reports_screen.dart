@@ -18,7 +18,6 @@ import 'failed_messages_screen.dart';
 import 'pending_messages_screen.dart';
 import 'rejected_messages_screen.dart';
 import 'reports/pos_accounts_ledger_screen.dart';
-import 'reports/pos_report_screen.dart';
 import 'reports/sales_period_report_screen.dart';
 import 'transactions_log_screen.dart';
 

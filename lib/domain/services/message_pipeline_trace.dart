@@ -2,7 +2,6 @@ import 'dart:convert';
 
 import '../../core/clock.dart';
 import '../../core/id_generator.dart';
-import '../../core/result.dart';
 import '../entities/audit.dart';
 import '../repositories/repositories.dart';
 

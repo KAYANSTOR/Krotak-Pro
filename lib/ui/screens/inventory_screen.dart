@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -8,7 +7,6 @@ import 'package:flutter/services.dart';
 
 import '../../core/result.dart';
 import '../../domain/entities/card.dart' as domain;
-import '../../domain/entities/money.dart';
 import '../../domain/services/card_import_file_reader.dart';
 import '../../domain/services/card_import_parser.dart';
 import '../../domain/services/card_import_preview.dart';

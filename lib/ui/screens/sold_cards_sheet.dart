@@ -5,8 +5,6 @@ import '../../domain/services/report_pdf_service.dart';
 import '../services/report_pdf_export.dart';
 import 'package:flutter/services.dart';
 
-import '../../core/clock.dart';
-import '../../core/id_generator.dart';
 import '../../core/result.dart';
 import '../../domain/entities/card.dart' as domain;
 import '../../domain/entities/money.dart';

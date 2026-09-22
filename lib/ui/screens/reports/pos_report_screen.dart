@@ -7,7 +7,6 @@ import '../../../core/result.dart';
 import '../../../domain/entities/money.dart';
 import '../../../domain/entities/pos_account.dart';
 import '../../../domain/entities/setting.dart';
-import '../../../domain/entities/transaction.dart';
 import '../../../domain/entities/wallet.dart';
 import '../../app_scope.dart';
 import '../../theme/kayan_palette.dart';
