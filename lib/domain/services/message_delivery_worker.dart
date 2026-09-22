@@ -10,6 +10,7 @@ import 'message_retry_policy.dart';
 import 'message_pipeline_trace.dart';
 import 'services.dart';
 import 'outbound_template_renderer.dart';
+import '../repositories/repositories.dart';
 
 /// Phase 4 delivery worker: resend voucher SMS for already-committed sales.
 ///
