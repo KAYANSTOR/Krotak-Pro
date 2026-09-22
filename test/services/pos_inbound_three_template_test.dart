@@ -225,7 +225,7 @@ void main() {
       IncomingMessage(
         id: 'm2',
         sender: '779000111',
-        body: '777123456 100 2',
+        body: '2 كروت 100 777123456',
         receivedAt: DateTime(2026, 9, 21),
         status: MessageProcessingStatus.received,
       ),
