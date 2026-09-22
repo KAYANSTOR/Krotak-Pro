@@ -1,5 +1,9 @@
 package com.kayan.net_app
 
+import android.app.PendingIntent
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.IntentFilter
 import android.Manifest
 import android.content.ComponentName
 import android.content.Intent
@@ -71,32 +75,7 @@ class MainActivity : FlutterActivity(), SmsListener {
                         result.error("no_permission", "SMS permission not granted", null)
                         return@setMethodCallHandler
                     }
-                    try {
-                        val manager = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                            getSystemService(SmsManager::class.java)
-                        } else {
-                            @Suppress("DEPRECATION") SmsManager.getDefault()
-                        }
-                        // POS delivery messages can contain multiple cards and exceed
-                        // the single-SMS size limit (especially Arabic/UCS-2).
-                        // Split explicitly so Android sends all parts instead of failing
-                        // or truncating a long customer/confirmation message.
-                        val parts = manager.divideMessage(body)
-                        if (parts.size <= 1) {
-                            manager.sendTextMessage(to, null, body, null, null)
-                        } else {
-                            manager.sendMultipartTextMessage(
-                                to,
-                                null,
-                                parts,
-                                null,
-                                null,
-                            )
-                        }
-                        result.success(true)
-                    } catch (e: Exception) {
-                        result.error("send_failed", e.message, null)
-                    }
+                    sendSmsWithDeliveryReport(to, body, result)
                 }
                 else -> result.notImplemented()
             }
@@ -416,6 +395,65 @@ class MainActivity : FlutterActivity(), SmsListener {
             }
         }
         return null
+    }
+
+
+    private fun sendSmsWithDeliveryReport(to: String, body: String, result: MethodChannel.Result) {
+        try {
+            val manager = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                getSystemService(SmsManager::class.java)
+            } else {
+                @Suppress("DEPRECATION") SmsManager.getDefault()
+            }
+            val parts = manager.divideMessage(body)
+            val requestId = (System.currentTimeMillis() and 0x7fffffff).toInt()
+            val action = "$packageName.SMS_SENT_$requestId"
+            val completed = java.util.concurrent.atomic.AtomicBoolean(false)
+            val receiver = object : BroadcastReceiver() {
+                override fun onReceive(context: Context?, intent: Intent?) {
+                    if (!completed.compareAndSet(false, true)) return
+                    try { unregisterReceiver(this) } catch (_: Exception) {}
+                    when (resultCode) {
+                        android.app.Activity.RESULT_OK -> result.success(true)
+                        SmsManager.RESULT_ERROR_GENERIC_FAILURE ->
+                            result.error("send_failed", "generic_failure", null)
+                        SmsManager.RESULT_ERROR_NO_SERVICE ->
+                            result.error("send_failed", "no_service", null)
+                        SmsManager.RESULT_ERROR_NULL_PDU ->
+                            result.error("send_failed", "null_pdu", null)
+                        SmsManager.RESULT_ERROR_RADIO_OFF ->
+                            result.error("send_failed", "radio_off", null)
+                        else -> result.error("send_failed", "result_code_$resultCode", null)
+                    }
+                }
+            }
+            val filter = IntentFilter(action)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
+            } else {
+                registerReceiver(receiver, filter)
+            }
+            val flags = PendingIntent.FLAG_UPDATE_CURRENT or
+                (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0)
+            val sentPi = PendingIntent.getBroadcast(
+                this, requestId, Intent(action).setPackage(packageName), flags,
+            )
+            if (parts.size <= 1) {
+                manager.sendTextMessage(to, null, body, sentPi, null)
+            } else {
+                val sentList = ArrayList<PendingIntent>(parts.size)
+                repeat(parts.size) { sentList.add(sentPi) }
+                manager.sendMultipartTextMessage(to, null, parts, sentList, null)
+            }
+            window.decorView.postDelayed({
+                if (completed.compareAndSet(false, true)) {
+                    try { unregisterReceiver(receiver) } catch (_: Exception) {}
+                    result.error("send_timeout", "SMS sent-status not received within 20s", null)
+                }
+            }, 20_000L)
+        } catch (e: Exception) {
+            result.error("send_failed", e.message, null)
+        }
     }
 
     private fun openOemAutostartSettings() {

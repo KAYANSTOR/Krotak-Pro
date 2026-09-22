@@ -1,4 +1,5 @@
 import '../../core/result.dart';
+import 'outbound_template_renderer.dart';
 import '../entities/card.dart';
 import '../entities/money.dart';
 import '../entities/pos_account.dart';
@@ -63,7 +64,7 @@ final class PosOrderMessageRenderer {
 
     final first = cards.first;
     final quantityText = _quantityText(effectiveQty);
-    final customerBody = _replace(
+    final customerBodyResult = _replace(
       (customerTemplate as Success<String>).value,
       <String, String>{
         'serial': first.serialNumber,
@@ -91,7 +92,7 @@ final class PosOrderMessageRenderer {
       },
     );
 
-    final posBody = _replace(
+    final posBodyResult = _replace(
       (posTemplate as Success<String>).value,
       <String, String>{
         'pos': posAccount.name,
@@ -122,6 +123,15 @@ final class PosOrderMessageRenderer {
       },
     );
 
+    if (customerBodyResult is Failure<String>) {
+      return Failure(customerBodyResult.error);
+    }
+    if (posBodyResult is Failure<String>) {
+      return Failure(posBodyResult.error);
+    }
+    final customerBody = (customerBodyResult as Success<String>).value;
+    final posBody = (posBodyResult as Success<String>).value;
+
     return Success(
       PosOrderMessages(
         customerBody: customerBody,
@@ -141,13 +151,11 @@ final class PosOrderMessageRenderer {
     return Success(value == null || value.isEmpty ? fallback : value);
   }
 
-  String _replace(String body, Map<String, String> values) {
-    var result = body;
-    for (final entry in values.entries) {
-      result = result.replaceAll('{' + entry.key + '}', entry.value);
-      result = result.replaceAll('%' + entry.key, entry.value);
-    }
-    return result.trim();
+  Result<String> _replace(String body, Map<String, String> values) {
+    return OutboundTemplateRenderer.renderStrict(
+      template: body,
+      values: values,
+    );
   }
 
   String _currency(Money money) =>

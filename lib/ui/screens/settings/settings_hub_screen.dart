@@ -51,6 +51,7 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
   bool _posBalanceRequests = SettingDefaults.posBalanceRequestsEnabled;
   int _lowStock = SettingDefaults.lowStockThreshold;
   int _posBalanceLimit = SettingDefaults.posBalanceRequestDailyLimit;
+  String? _lastRecoveryAt;
 
   final _searchCtrl = TextEditingController();
   String _query = '';
@@ -148,7 +149,12 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text('جاهزية التشغيل', style: TextStyle(fontFamily: NetTypography.family, fontWeight: FontWeight.w800, fontSize: 14.5, color: palette.textPrimary)),
-                  Text('ملخص سريع — التفاصيل الكاملة من «فحص النظام» في قسم النظام', style: TextStyle(fontFamily: NetTypography.family, fontSize: 11.5, color: palette.textSecondary)),
+                  Text(
+                    _lastRecoveryAt == null
+                        ? 'ملخص سريع — لم تُسجَّل بعد دورة استرداد. التفاصيل من «فحص النظام»'
+                        : 'آخر دورة استرداد/تسليم: ${_formatRecoveryAt(_lastRecoveryAt!)}',
+                    style: TextStyle(fontFamily: NetTypography.family, fontSize: 11.5, color: palette.textSecondary),
+                  ),
                 ],
               ),
             ),
@@ -194,6 +200,7 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
     final posBalance = await read(SettingKeys.posBalanceRequestsEnabled);
     final low = await read(SettingKeys.lowStockThreshold);
     final posLimit = await read(SettingKeys.posBalanceRequestDailyLimit);
+    final lastRec = await read(SettingKeys.lastRecoveryPassAt);
     if (!mounted) return;
     setState(() {
       _loading = false;
@@ -208,6 +215,7 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
       _posBalanceRequests = SettingBool.read(posBalance, defaultValue: SettingDefaults.posBalanceRequestsEnabled);
       _lowStock = SettingInt.read(low, defaultValue: SettingDefaults.lowStockThreshold);
       _posBalanceLimit = SettingInt.read(posLimit, defaultValue: SettingDefaults.posBalanceRequestDailyLimit);
+      _lastRecoveryAt = lastRec?.trim().isEmpty == true ? null : lastRec;
       final t = (theme ?? SettingDefaults.themeMode).toLowerCase();
       _themeMode = NetThemeSchedule.parse(theme);
       _darkMode = t == 'dark';
@@ -318,9 +326,11 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
                               if (_sectionVisible(_systemKeywords))
                                 SettingsGroupCard(children: [
                                   SettingsGroupNavRow(icon: Icons.badge_outlined, title: 'اسم الشبكة', subtitle: 'الاسم الحالي: '+_networkName, searchText: 'النظام الشبكة الاسم', onTap: _openNetworkName),
-                                  SettingsGroupSwitchRow(icon: Icons.check_circle_outline, title: 'المعالجة التلقائية للرسائل', subtitle: 'الخدمة تعمل — يتم استقبال ومعالجة الرسائل تلقائياً', value: _autoSms, onChanged: (v) async { setState(() => _autoSms = v); await _saveBool(SettingKeys.smsAutoProcessingEnabled, v); }),
+                                  SettingsGroupSwitchRow(icon: Icons.check_circle_outline, title: 'المعالجة التلقائية للرسائل', subtitle: _autoSms
+                                      ? 'مفعّل أثناء تشغيل التطبيق — الاستقبال في الخلفية يعتمد على أذونات الجهاز وOEM'
+                                      : 'متوقف — تُحفظ الرسائل دون معالجة تجارية', value: _autoSms, onChanged: (v) async { setState(() => _autoSms = v); await _saveBool(SettingKeys.smsAutoProcessingEnabled, v); }),
                                   SettingsGroupSwitchRow(icon: Icons.filter_alt_outlined, title: 'معالجة مبالغ الفئات فقط', subtitle: 'عند التفعيل، سيتم فقط معالجة رسائل المحافظ التي تطابق مبالغ الفئات المعرفة في النظام', value: _categoryOnly, onChanged: (v) async { setState(() => _categoryOnly = v); await _saveBool(SettingKeys.processCategoryAmountsOnly, v); }),
-                                  SettingsGroupSwitchRow(icon: Icons.history, title: 'معالجة الرسائل القديمة (عند التوقف)', subtitle: 'تفعيل لمعالجة رسائل SMS التي وصلت أثناء إغلاق أو توقف التطبيق عند فتحه مجدداً', value: _oldMsgs, onChanged: (v) async { setState(() => _oldMsgs = v); await _saveBool(SettingKeys.processOldMessagesOnResume, v); }),
+                                  SettingsGroupSwitchRow(icon: Icons.history, title: 'معالجة الرسائل القديمة (عند التوقف)', subtitle: 'عند فتح التطبيق مجدداً فقط — لا تضمن المعالجة والتطبيق مغلق أو بعد Force-stop', value: _oldMsgs, onChanged: (v) async { setState(() => _oldMsgs = v); await _saveBool(SettingKeys.processOldMessagesOnResume, v); }),
                                   SettingsGroupSwitchRow(icon: Icons.notifications_active_outlined, title: 'تنبيه العمليات التي تتطلب تدخلاً', subtitle: _interventionAlert ? 'يصدر تنبيه صوتي عند وجود عملية معلّقة تحتاج تدخلاً يدوياً' : 'التنبيه الصوتي معطّل — الرسائل المعلّقة تظهر في القائمة دون صوت', value: _interventionAlert, onChanged: (v) async { setState(() => _interventionAlert = v); await _saveBool(SettingKeys.pendingAttentionAlertEnabled, v); }),
                                   SettingsGroupNavRow(icon: Icons.notifications_active_outlined, title: 'تنبيهات انخفاض مخزون الكروت', subtitle: 'سيتم تنبيهك عندما يقل مخزون أي فئة عن '+_lowStock.toString()+' كرت', onTap: _openLowStock),
                                   SettingsGroupNavRow(icon: Icons.sim_card_outlined, title: 'شرائح الاتصال', subtitle: 'اختيار شريحة الاستقبال والإرسال', onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SimSettingsScreen()))),
@@ -364,7 +374,7 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
                                     searchText: 'نسخ احتياطي استعادة بيانات',
                                     onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const BackupRestoreScreen())),
                                   ),
-                                  SettingsGroupNavRow(icon: Icons.cleaning_services_outlined, title: 'تنظيف السجلات', subtitle: 'حذف السجلات القديمة', onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const CleanLogsScreen()))),
+                                  SettingsGroupNavRow(icon: Icons.cleaning_services_outlined, title: 'تنظيف السجلات', subtitle: 'يدوي فقط — لا يوجد تنظيف دوري تلقائي في الخلفية', onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const CleanLogsScreen()))),
                                   SettingsGroupNavRow(icon: Icons.auto_fix_high_outlined, title: 'تنظيف عميق للنظام', subtitle: 'إعادة بناء فهارس قاعدة البيانات لتحرير المساحة وتسريع الأداء', onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const DeepCleanScreen()))),
                                   SettingsGroupNavRow(icon: Icons.upload_file_outlined, title: 'تصدير السجل', subtitle: 'تصدير دفتر الحسابات', onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ExportLedgerScreen()))),
                                 ]),

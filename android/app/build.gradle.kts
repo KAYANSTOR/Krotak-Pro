@@ -19,21 +19,15 @@ android {
 
     defaultConfig {
         applicationId = "com.kayan.net_app"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
-        // Uses the version code from pubspec.yaml. When using split APKs, 1000 * ABI_VERSION
-        // is added automatically by Flutter. (https://developer.android.com/studio/build/configure-apk-splits#configure-APK-versions)
-        // You can force using the value of versionCode by specifying the `-P force-version-code-ignoring-abi=true`
-        // flag during build.
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
 
     signingConfigs {
-        // مفتاح توقيع ثابت — نفس المفتاح عبر كل بناءات CI والمحلية حتى يثبّت
-        // APK الجديد مباشرة فوق النسخة المثبتة بدون «حزمة التثبيت لا تتوافق».
+        // مفتاح توقيع ثابت — نفس الشهادة عبر كل بناءات التحديث حتى يثبّت
+        // APK فوق النسخة المثبتة بدون «حزمة التثبيت لا تتوافق».
         create("upload") {
             val keystorePropertiesFile = rootProject.file("key.properties")
             if (keystorePropertiesFile.exists()) {
@@ -41,11 +35,21 @@ android {
                     load(FileInputStream(keystorePropertiesFile))
                 }
                 keyAlias = props.getProperty("keyAlias")
+                    ?: error("key.properties: keyAlias مفقود")
                 keyPassword = props.getProperty("keyPassword")
-                storeFile = props.getProperty("storeFile")?.let { file(it) }
+                    ?: error("key.properties: keyPassword مفقود")
                 storePassword = props.getProperty("storePassword")
-                // المفتاح محفوظ بصيغة PKCS12؛ نحدّد النوع صراحةً حتى لا يعتمد
-                // البناء على تخمين Gradle من امتداد الملف.
+                    ?: error("key.properties: storePassword مفقود")
+                val storePath = props.getProperty("storeFile")
+                    ?: error("key.properties: storeFile مفقود")
+                val resolved = file(storePath)
+                if (!resolved.isFile) {
+                    error(
+                        "ملف الـ keystore غير موجود: ${resolved.absolutePath}\n" +
+                            "انظر android/key.properties.example و docs/signing-and-updates-ar.md",
+                    )
+                }
+                storeFile = resolved
                 storeType = props.getProperty("storeType") ?: "PKCS12"
             }
         }
@@ -53,11 +57,35 @@ android {
 
     buildTypes {
         release {
-            signingConfig = if (rootProject.file("key.properties").exists()) {
-                signingConfigs.getByName("upload")
-            } else {
-                // محلي بلا key.properties: مفتاح debug حتى يبقى flutter run --release يعمل.
-                signingConfigs.getByName("debug")
+            // لا نسقط صامتاً إلى debug: ذلك يسبب «حزمة التثبيت لا تتوافق»
+            // عند محاولة التحديث فوق نسخة موقّعة بمفتاح الإصدار.
+            val keyProps = rootProject.file("key.properties")
+            val allowDebugRelease =
+                project.hasProperty("allowDebugRelease") &&
+                    project.property("allowDebugRelease").toString() == "true"
+            signingConfig = when {
+                keyProps.exists() -> signingConfigs.getByName("upload")
+                allowDebugRelease -> {
+                    logger.warn(
+                        "WARNING: release موقّع بمفتاح debug (−PallowDebugRelease=true). " +
+                            "لن يتوافق مع APK الإصدار التجاري المثبّت على الأجهزة.",
+                    )
+                    signingConfigs.getByName("debug")
+                }
+                else -> error(
+                    """
+                    |رفض بناء release: ملف android/key.properties غير موجود.
+                    |
+                    |بدون نفس مفتاح التوقيع الثابت، أندرويد يرفض التحديث برسالة
+                    |«حزمة التثبيت لا تتوافق» ويطلب إلغاء التثبيت.
+                    |
+                    |الحل:
+                    |1) انسخ أسرار التوقيع من GitHub Secrets إلى android/key.properties
+                    |   (انظر android/key.properties.example و docs/signing-and-updates-ar.md)
+                    |2) أو ابنِ من CI على main (artifact موقّع بالمفتاح التجاري)
+                    |3) للاختبار المحلي فقط: flutter build apk --release -PallowDebugRelease=true
+                    """.trimMargin(),
+                )
             }
         }
     }

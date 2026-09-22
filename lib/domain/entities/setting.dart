@@ -3,6 +3,8 @@ abstract final class SettingKeys {
   static const reservationMinutes = 'reservation_minutes';
   static const preferredSimSlot = 'preferred_sim_slot';
   static const preferredSendSimSlot = 'preferred_send_sim_slot';
+  /// ISO-8601 of last successful recovery/delivery pass (settings honesty).
+  static const lastRecoveryPassAt = 'last_recovery_pass_at';
   static const simAutoFailover = 'sim_auto_failover';
   static const smsListenEnabled = 'sms_listen_enabled';
   static const batteryOptimizationAcknowledged = 'battery_optimization_acknowledged';

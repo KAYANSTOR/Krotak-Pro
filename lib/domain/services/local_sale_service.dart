@@ -9,6 +9,7 @@ import '../entities/transaction.dart';
 import '../repositories/repositories.dart';
 import '../repositories/unit_of_work.dart';
 import 'manual_sale_runner.dart';
+import '../repositories/repositories.dart';
 import 'services.dart';
 
 final class LocalSaleService implements SaleService, ReservedSaleService {

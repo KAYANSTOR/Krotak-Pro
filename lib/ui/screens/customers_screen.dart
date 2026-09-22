@@ -1,6 +1,11 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
+import 'dart:convert';
+import 'dart:io';
+import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/result.dart';
@@ -46,6 +51,9 @@ class _CustomersScreenState extends State<CustomersScreen> {
   List<_AccountRow> _allRows = const [];
   _AccountFilter _filter = _AccountFilter.all;
   _AccountSort _sort = _AccountSort.balanceDesc;
+  static const _pageSize = 80;
+  int _visibleLimit = _pageSize;
+  final ScrollController _listScroll = ScrollController();
 
   /// نص البحث المكتوب الآن — يُصفّي الصفوف المحمّلة فوراً بلا استعلام جديد،
   /// ثم يُرسل للبحث في قاعدة البيانات عند الإرسال (Enter/زر البحث).
@@ -54,6 +62,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
   @override
   void initState() {
     super.initState();
+    _listScroll.addListener(_onScroll);
     widget.refreshSignal?.addListener(_onExternalRefresh);
     WidgetsBinding.instance.addPostFrameCallback((_) => _load());
   }
@@ -148,6 +157,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
     setState(() {
       _loading = false;
       _allRows = rows;
+      _visibleLimit = _pageSize;
     });
   }
 
@@ -262,8 +272,37 @@ class _CustomersScreenState extends State<CustomersScreen> {
       .where((v) => v > 0)
       .fold<int>(0, (a, b) => a + b);
 
+  Future<void> _exportFilteredCsv() async {
+    final rows = _visible;
+    if (rows.isEmpty) {
+      _toast('لا توجد حسابات لتصديرها');
+      return;
+    }
+    final buf = StringBuffer();
+    buf.writeln('id,name,status,phone,balance_yer,provisional');
+    for (final r in rows) {
+      final bal = ((r.balance?.minorUnits ?? 0) / 100).toStringAsFixed(2);
+      final phone = (r.phone ?? '').replaceAll(',', ' ');
+      final name = r.customer.displayName.replaceAll(',', ' ');
+      buf.writeln(
+        '${r.customer.id},$name,${r.customer.status.name},$phone,$bal,${r.customer.status == CustomerStatus.provisional}',
+      );
+    }
+    final dir = await getTemporaryDirectory();
+    final file = File(
+      '${dir.path}/accounts_export_${DateTime.now().millisecondsSinceEpoch}.csv',
+    );
+    await file.writeAsString(buf.toString(), encoding: utf8);
+    await Share.shareXFiles(
+      [XFile(file.path, mimeType: 'text/csv')],
+      subject: 'تصدير الحسابات المفلترة',
+      text: 'عدد الصفوف: ${rows.length}',
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+
     final visible = _visible;
     final palette = KayanPalette.of(context);
     final net = context.netColors;
@@ -285,6 +324,11 @@ class _CustomersScreenState extends State<CustomersScreen> {
               icon: Icons.campaign_outlined,
               tooltip: 'إرسال رسالة للعملاء',
               onPressed: () => BroadcastSheet.show(context),
+            ),
+            NetHeaderAction(
+              icon: Icons.file_download_outlined,
+              tooltip: 'تصدير CSV للنتائج المفلترة',
+              onPressed: _exportFilteredCsv,
             ),
             PopupMenuButton<_AccountSort>(
               tooltip: 'ترتيب القائمة',
@@ -329,7 +373,9 @@ class _CustomersScreenState extends State<CustomersScreen> {
                   indicators: [
                     NetIndicatorTile(
                       label: 'الحسابات',
-                      value: '${_allRows.length}',
+                      value: _filter == _AccountFilter.all && _searchCtrl.text.isEmpty
+                          ? '${_allRows.length}'
+                          : '${_visible.length}/${_allRows.length}',
                       icon: Icons.groups_rounded,
                     ),
                     NetIndicatorTile(
@@ -500,14 +546,45 @@ class _CustomersScreenState extends State<CustomersScreen> {
                           onRefresh: () => _load(_searchCtrl.text),
                           color: palette.primary,
                           child: ListView.separated(
+                            controller: _listScroll,
                             padding: const EdgeInsets.only(
                               top: NetSpacing.xs,
                               bottom: 88,
                             ),
-                            itemCount: visible.length,
+                            itemCount: () {
+                              final page = visible.length < _visibleLimit
+                                  ? visible.length
+                                  : _visibleLimit;
+                              final hasMore = page < visible.length;
+                              return page + (hasMore ? 1 : 0);
+                            }(),
                             separatorBuilder: (_, __) =>
                                 const SizedBox(height: NetSpacing.sm),
                             itemBuilder: (_, i) {
+                              final page = visible.length < _visibleLimit
+                                  ? visible.length
+                                  : _visibleLimit;
+                              if (i >= page) {
+                                return Padding(
+                                  padding: const EdgeInsets.all(NetSpacing.md),
+                                  child: Center(
+                                    child: TextButton(
+                                      onPressed: () => setState(() {
+                                        _visibleLimit =
+                                            (_visibleLimit + _pageSize)
+                                                .clamp(0, visible.length);
+                                      }),
+                                      child: Text(
+                                        'عرض المزيد (${visible.length - page} متبقي)',
+                                        style: const TextStyle(
+                                          fontFamily: NetTypography.family,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              }
                               final row = visible[i];
                               void open() {
                                 AppRoutes.openCustomerDetail(
@@ -549,7 +626,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
         backgroundColor: palette.surface,
         side: BorderSide(color: selected ? palette.primary : palette.border),
         shape: RoundedRectangleBorder(borderRadius: NetRadii.pillAll),
-        onSelected: (_) => setState(() => _filter = value),
+        onSelected: (_) => setState(() { _filter = value; _visibleLimit = _pageSize; }),
       ),
     );
   }

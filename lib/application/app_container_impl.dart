@@ -348,6 +348,15 @@ final class AppContainer {
       await _runDailyPosSummary();
     } finally {
       _recoveryBusy = false;
+      try {
+        await settings.save(
+          AppSetting(
+            key: SettingKeys.lastRecoveryPassAt,
+            value: clock.now().toIso8601String(),
+            updatedAt: clock.now(),
+          ),
+        );
+      } catch (_) {}
     }
   }
 

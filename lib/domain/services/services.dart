@@ -247,8 +247,8 @@ final class CardImportDraft {
   bool get hasSecret => secretCode.trim().isNotEmpty;
 }
 
-/// Builds customer SMS body for a delivered voucher.
-/// Serial-only cards omit the PIN line.
+/// Fallback voucher body only — prefer [OutboundTemplateRenderer.renderVoucherDelivery]
+/// so operators can edit the template and unresolved placeholders are blocked.
 String cardDeliverySmsBody({required String serialNumber, required String secretCode}) {
   final serial = serialNumber.trim();
   final secret = secretCode.trim();

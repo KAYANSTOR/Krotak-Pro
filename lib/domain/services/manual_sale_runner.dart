@@ -5,6 +5,7 @@ import '../entities/customer.dart';
 import '../entities/money.dart';
 import '../entities/transaction.dart';
 import 'local_sale_service.dart';
+import 'outbound_template_renderer.dart';
 import 'services.dart';
 
 /// Domain runner for operator manual sales.
@@ -214,10 +215,28 @@ final class ManualSaleRunner {
       // Deliver voucher SMS to customer phone (same body as auto-transfer path).
       final sender = host.messageSender;
       if (sender != null) {
-        final body = cardDeliverySmsBody(
+        final rendered = await OutboundTemplateRenderer(
+          settings: host.settings,
+        ).renderVoucherDelivery(
           serialNumber: card.serialNumber,
           secretCode: card.secretCode,
         );
+        if (rendered is Failure<String>) {
+          await host.auditLogs.append(
+            AuditLog(
+              id: host.ids.next('audit'),
+              entityType: 'sale',
+              entityId: sale.id,
+              action: 'sms_template_render_failed',
+              payloadJson: '{"error":"${rendered.error.code}"}',
+              occurredAt: host.clock.now(),
+            ),
+          );
+          // Sale already committed — do not roll back; delivery worker can retry
+          // only for transfer path; manual path records failure in audit.
+          return Success(sale);
+        }
+        final body = (rendered as Success<String>).value;
         final sent = await sender.send(destination: phoneTrim, body: body);
         await host.auditLogs.append(
           AuditLog(

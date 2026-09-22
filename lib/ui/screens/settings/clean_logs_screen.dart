@@ -201,7 +201,7 @@ class _CleanLogsScreenState extends State<CleanLogsScreen> {
                             border: Border.all(color: palette.border),
                           ),
                           child: Text(
-                            'التنظيف الذكي يحذف فقط: المرفوض (>30 يوم)، المكتمل (>3 أيام)، والمستنفد (>30 يوم). لا يمس المبيعات أو القيود المحاسبية.',
+                            'يدوي فقط — لا جدولة خلفية. التنظيف الذكي يحذف فقط: المرفوض (>30 يوم)، المكتمل (>3 أيام)، والمستنفد (>30 يوم). لا يمس المبيعات أو القيود المحاسبية.',
                             style: TextStyle(
                               fontFamily: 'Tajawal',
                               fontSize: 13,

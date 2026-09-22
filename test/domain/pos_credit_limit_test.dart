@@ -69,4 +69,22 @@ void main() {
       10_000,
     );
   });
+
+  test('multi-quantity charge uses total additional amount', () {
+    // limit 10000, debt 9000, unit 500 × qty 3 = 1500 → exceeds
+    final failure = PosCreditLimit.evaluate(
+      account: _pos(limit: 10_000),
+      currentBalanceMinor: -9_000,
+      additionalChargeMinor: 500 * 3,
+    );
+    expect(failure?.code, RejectionCodes.creditLimitExceeded);
+    expect(
+      PosCreditLimit.evaluate(
+        account: _pos(limit: 10_000),
+        currentBalanceMinor: -9_000,
+        additionalChargeMinor: 500 * 2,
+      ),
+      isNull,
+    );
+  });
 }

@@ -1,5 +1,9 @@
+# انسخ هذا الملف إلى: android/key.properties  (لا يُرفع إلى Git)
+# القيم يجب أن تطابق GitHub Secrets / المفتاح التجاري التاريخي.
+#
+# storeFile مسار نسبي من مجلد android/app/  أو مطلق.
 storeFile=keystore/upload.jks
 storeType=PKCS12
-keyAlias=REPLACE_ME
-storePassword=REPLACE_ME
-keyPassword=REPLACE_ME
+keyAlias=YOUR_KEY_ALIAS
+storePassword=YOUR_STORE_PASSWORD
+keyPassword=YOUR_KEY_PASSWORD

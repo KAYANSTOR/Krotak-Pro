@@ -23,6 +23,7 @@ import 'local_pos_account_registry.dart';
 import 'local_category_commission_store.dart';
 import 'pos_wholesale_pricing.dart';
 import 'pos_order_message_renderer.dart';
+import 'outbound_template_renderer.dart';
 import 'message_pipeline_trace.dart';
 
 /// Completes the real incoming-transfer business flow using the existing
@@ -765,9 +766,35 @@ final class LocalTransferProcessor implements TransferProcessor {
     // Mark sending before the native SMS call so recovery/worker sees an
     // in-flight delivery and can re-attempt quickly if the first send fails.
     await messages.updateStatus(message.id, MessageProcessingStatus.sending);
-    final body =
-        cardDeliverySmsBody(serialNumber: card.serialNumber, secretCode: card.secretCode);
+    final rendered = await OutboundTemplateRenderer(settings: settings)
+        .renderVoucherDelivery(
+      serialNumber: card.serialNumber,
+      secretCode: card.secretCode,
+    );
+    if (rendered is Failure<String>) {
+      await auditLogs.append(
+        AuditLog(
+          id: ids.next('audit'),
+          entityType: 'message',
+          entityId: message.id,
+          action: 'sms_template_render_failed',
+          occurredAt: clock.now(),
+          payloadJson:
+              '{"error":"${rendered.error.code}","message":"${rendered.error.message}"}',
+        ),
+      );
+      await messages.updateStatus(message.id, MessageProcessingStatus.failed);
+      final ledgerOnRenderFail =
+          await transactionRepo.findByReference('sale-op:$operationId');
+      if (ledgerOnRenderFail is Success<Transaction?> &&
+          ledgerOnRenderFail.value != null) {
+        return Success<Transaction>(ledgerOnRenderFail.value!);
+      }
+      return Failure<Transaction>(rendered.error);
+    }
+    final body = (rendered as Success<String>).value;
     final sent = await sender.send(destination: destination, body: body);
+
     if (sent is Failure<void>) {
       await auditLogs.append(
         AuditLog(
@@ -1577,11 +1604,39 @@ final class LocalTransferProcessor implements TransferProcessor {
     final lines = <String>[];
     for (var i = 0; i < sold.length; i++) {
       final card = sold[i];
-      lines.add('الكرت ${i + 1}: ${card.serialNumber} - ${card.secretCode}');
+      final secret = card.secretCode.trim();
+      lines.add(
+        secret.isEmpty
+            ? 'الكرت ${i + 1}: ${card.serialNumber}'
+            : 'الكرت ${i + 1}: ${card.serialNumber} - $secret',
+      );
+    }
+    final batchTemplate = await OutboundTemplateRenderer(settings: settings)
+        .renderFromSettings(
+      key: SettingKeys.posCustomerCardDeliveryTemplate,
+      fallback:
+          'تم تنفيذ طلب {quantity} كروت بنجاح\n{cards}',
+      values: {
+        'quantity': '${sold.length}',
+        'QUANTITY': '${sold.length}',
+        'cards': lines.join('\n'),
+        'CARDS': lines.join('\n'),
+      },
+    );
+    if (batchTemplate is Failure<String>) {
+      await _persistTerminalFailure(
+        messageId: message.id,
+        status: MessageProcessingStatus.failed,
+        action: 'sms_template_render_failed',
+        error: batchTemplate.error,
+        transfer: transfer,
+        deliveryPhone: destination,
+      );
+      return Failure<Transaction>(batchTemplate.error);
     }
     final sent = await sender.send(
       destination: destination,
-      body: 'تم تنفيذ طلب ${sold.length} كروت بنجاح\n${lines.join('\n')}',
+      body: (batchTemplate as Success<String>).value,
     );
     if (sent is Failure<void>) {
       await _persistTerminalFailure(messageId: message.id, status: MessageProcessingStatus.failed,

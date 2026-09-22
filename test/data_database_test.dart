@@ -156,4 +156,18 @@ void main() {
       throwsA(isA<Exception>()),
     );
   });
+
+  test('perf: extended hot-path indexes exist', () async {
+    final names = await database
+        .customSelect("SELECT name FROM sqlite_master WHERE type = 'index'")
+        .get();
+    final set = names.map((r) => r.read<String>('name')).toSet();
+    expect(set, containsAll([
+      'idx_audit_logs_entity',
+      'idx_incoming_messages_status',
+      'idx_transactions_customer',
+      'idx_cards_category_status',
+      'idx_sales_customer',
+    ]));
+  });
 }

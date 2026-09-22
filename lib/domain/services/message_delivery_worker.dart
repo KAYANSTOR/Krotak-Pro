@@ -9,6 +9,8 @@ import 'local_message_retry_service.dart';
 import 'message_retry_policy.dart';
 import 'message_pipeline_trace.dart';
 import 'services.dart';
+import 'outbound_template_renderer.dart';
+import '../repositories/repositories.dart';
 
 /// Phase 4 delivery worker: resend voucher SMS for already-committed sales.
 ///
@@ -29,6 +31,7 @@ final class MessageDeliveryWorker {
     required this.ids,
     this.policy = const MessageRetryPolicy(),
     this.metrics,
+    this.settings,
   });
 
   final MessageRepository messages;
@@ -40,6 +43,7 @@ final class MessageDeliveryWorker {
   final IdGenerator ids;
   final MessageRetryPolicy policy;
   final MessagePipelineMetrics? metrics;
+  final SettingsRepository? settings;
 
   /// Per-tick audit cache to avoid N+1 findByEntity for the same message.
   final Map<String, List<AuditLog>> _auditCache = {};
@@ -121,8 +125,32 @@ final class MessageDeliveryWorker {
         continue;
       }
 
-      final body =
-          cardDeliverySmsBody(serialNumber: card.serialNumber, secretCode: card.secretCode);
+      final rendered = await OutboundTemplateRenderer(settings: settings)
+          .renderVoucherDelivery(
+        serialNumber: card.serialNumber,
+        secretCode: card.secretCode,
+      );
+      if (rendered is Failure<String>) {
+        failed++;
+        errors.add('${message.id}:${rendered.error.code}');
+        await retryService.recordFailure(
+          messageId: message.id,
+          error: rendered.error,
+        );
+        await auditLogs.append(
+          AuditLog(
+            id: ids.next('audit'),
+            entityType: 'message',
+            entityId: message.id,
+            action: 'sms_template_render_failed',
+            occurredAt: clock.now(),
+            payloadJson:
+                '{"error":"${rendered.error.code}","message":"${rendered.error.message}"}',
+          ),
+        );
+        continue;
+      }
+      final body = (rendered as Success<String>).value;
 
       final trace = MessagePipelineTrace(
         messageId: message.id,

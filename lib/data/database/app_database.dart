@@ -181,6 +181,9 @@ class AppDatabase extends _$AppDatabase {
           await migrator.createAll();
           await _ensureTransferTemplateColumns();
           await _createIdempotencyIndexes();
+          await _createPerformanceIndexes();
+          await _createBroadcastTables();
+          await _applySqlitePragmas();
         },
         onUpgrade: (Migrator migrator, int from, int to) async {
           // Never wipe data. All steps are additive / IF NOT EXISTS / best-effort.
@@ -199,10 +202,16 @@ class AppDatabase extends _$AppDatabase {
             await _createIdempotencyIndexes();
             await _ensureTransferTemplateColumns();
           }
+          await _createPerformanceIndexes();
+          await _createBroadcastTables();
+          await _applySqlitePragmas();
         },
         beforeOpen: (details) async {
           await _ensureTransferTemplateColumns();
           await _createIdempotencyIndexes();
+          await _createPerformanceIndexes();
+          await _createBroadcastTables();
+          await _applySqlitePragmas();
         },
       );
 
@@ -279,5 +288,90 @@ class AppDatabase extends _$AppDatabase {
       'CREATE UNIQUE INDEX IF NOT EXISTS idx_sales_card_id '
       'ON sales (card_id)',
     );
+  }
+/// Hot-path indexes for message delivery, recovery, balances, inventory.
+  Future<void> _createPerformanceIndexes() async {
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_audit_logs_entity '
+      'ON audit_logs (entity_type, entity_id)',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_audit_logs_occurred '
+      'ON audit_logs (occurred_at)',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_incoming_messages_status '
+      'ON incoming_messages (status)',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_incoming_messages_received '
+      'ON incoming_messages (received_at)',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_transactions_customer '
+      'ON transactions (customer_id)',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_transactions_created '
+      'ON transactions (created_at)',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_sales_customer '
+      'ON sales (customer_id)',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_sales_created '
+      'ON sales (created_at)',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_cards_category_status '
+      'ON cards (category_id, status)',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_customer_identifiers_customer '
+      'ON customer_identifiers (customer_id)',
+    );
+  }
+
+  Future<void> _createBroadcastTables() async {
+    await customStatement(
+      'CREATE TABLE IF NOT EXISTS broadcast_jobs ('
+      'id TEXT NOT NULL PRIMARY KEY,'
+      'body TEXT NOT NULL,'
+      'status TEXT NOT NULL,'
+      'created_at INTEGER NOT NULL,'
+      'confirmed_at INTEGER,'
+      'completed_at INTEGER,'
+      'fingerprint TEXT'
+      ')',
+    );
+    await customStatement(
+      'CREATE TABLE IF NOT EXISTS broadcast_recipients ('
+      'job_id TEXT NOT NULL,'
+      'customer_id TEXT NOT NULL,'
+      'phone TEXT NOT NULL,'
+      'display_name TEXT NOT NULL,'
+      'status TEXT NOT NULL,'
+      'error_code TEXT,'
+      'attempts INTEGER NOT NULL DEFAULT 0,'
+      'sent_at INTEGER,'
+      'PRIMARY KEY (job_id, customer_id)'
+      ')',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_broadcast_recipients_job '
+      'ON broadcast_recipients (job_id)',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_broadcast_jobs_fingerprint '
+      'ON broadcast_jobs (fingerprint) WHERE fingerprint IS NOT NULL',
+    );
+  }
+
+  /// WAL + reasonable sync for concurrent readers during recovery ticks.
+  Future<void> _applySqlitePragmas() async {
+    await customStatement('PRAGMA journal_mode=WAL');
+    await customStatement('PRAGMA synchronous=NORMAL');
+    await customStatement('PRAGMA temp_store=MEMORY');
   }
 }

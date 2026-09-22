@@ -56,8 +56,28 @@ class _WalletNotificationSettingsScreenState extends State<WalletNotificationSet
   }
 
   Future<void> _toggle(PaymentSource source, bool enabled) async {
+    if (enabled && !_accessGranted) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'امنح إذن وصول الإشعارات من أندرويد أولاً — التفعيل المحلي وحده لا يلتقط شيئاً',
+              style: TextStyle(fontFamily: 'Tajawal'),
+            ),
+          ),
+        );
+      }
+      await _openAccess();
+      await _load();
+      return;
+    }
     final result = await AppScope.of(context).notificationSources.setEnabled(source.packageName!, enabled);
-    if (result is Failure) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(result.error.message))); return; }
+    if (result is Failure) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(result.error.message)));
+      }
+      return;
+    }
     await _sync();
   }
 
@@ -157,7 +177,9 @@ class _WalletNotificationSettingsScreenState extends State<WalletNotificationSet
                                 ),
                                 const SizedBox(height: NetSpacing.xs),
                                 Text(
-                                  'يتم قراءة إشعارات مصادر الدفع التي يحددها المشغّل فقط.',
+                                  _accessGranted
+                                      ? 'أندرويد منح الخدمة — فقط الحزم المفعّلة في القائمة تُلتقط.'
+                                      : 'بدون منح إذن NotificationListener لن يُلتقط أي إشعار مهما فعّلت المصادر أدناه.',
                                   style: TextStyle(
                                     fontFamily: NetTypography.family,
                                     fontSize: 12,
@@ -195,7 +217,7 @@ class _WalletNotificationSettingsScreenState extends State<WalletNotificationSet
                         ),
                         IconButton(
                           tooltip: 'إضافة مصدر',
-                          onPressed: _add,
+                          onPressed: _accessGranted ? _add : null,
                           icon: Icon(
                             Icons.add_circle_outline_rounded,
                             color: palette.primary,

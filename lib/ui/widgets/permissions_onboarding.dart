@@ -19,7 +19,7 @@ import 'net/net_surface_card.dart';
 /// بهوية NET (بطاقة + تقدم + خطوة واحدة) فوق لوحة التحكم دون شاشة كاملة.
 abstract final class PermissionsOnboarding {
   /// تغيير الإصدار يعيد التحقق بعد تحديث متطلبات الصلاحيات.
-  static const doneKey = 'permissions_onboarding_done_v6';
+  static const doneKey = 'permissions_onboarding_done_v7';
 
   static Future<void> maybeRun(BuildContext context) async {
     if (!Platform.isAndroid) return;
@@ -118,8 +118,11 @@ abstract final class PermissionsOnboarding {
         icon: Icons.battery_saver_rounded,
         title: 'العمل في الخلفية (البطارية)',
         body:
-            'يجب السماح للتطبيق بالعمل دون تقييد البطارية حتى تستمر معالجة الرسائل والإشعارات بعد إغلاق الشاشة.',
-        actionLabel: 'فتح إعدادات البطارية',
+            'بدون استثناء تحسين البطارية قد يقتل أندرويد عملية NET في الخلفية. '
+            'اسمح بـ «بدون قيود» أو «غير مُحسَّن» لهذا التطبيق حتى تستمر معالجة SMS '
+            'والإشعارات بعد إغلاق الشاشة. ملاحظة: Force-stop من إعدادات التطبيق '
+            'يوقف الاستقبال حتى يُفتح NET يدوياً.',
+        actionLabel: 'فتح إعدادات البطارية / بدون قيود',
         verify: () async =>
             (await diag.probe())['batteryOptimizationIgnored'] == true,
         onAllow: () => diag.openBatteryOptimization(),
@@ -129,10 +132,26 @@ abstract final class PermissionsOnboarding {
         icon: Icons.restart_alt_rounded,
         title: 'التشغيل التلقائي بعد إعادة تشغيل الهاتف',
         body:
-            'على بعض الأجهزة (شاومي، هواوي، أوبو، فيفو…) يجب السماح بالتشغيل التلقائي حتى يعود NET للعمل بعد إقلاع الجهاز.',
-        actionLabel: 'فتح إعدادات التشغيل التلقائي',
+            'على شاومي / هواوي / أوبو / فيفو / سامسونج غالباً يُمنع التشغيل بعد إعادة '
+            'التشغيل ما لم تُفعّل «التشغيل التلقائي» و«النشاط في الخلفية» يدوياً. '
+            'افتح الإعدادات وفعّل NET في القائمة، ثم ارجع هنا واضغط متابعة. '
+            'لا يمكن لأندرويد التحقق برمجياً من كل الشركات — التأكيد منك.',
+        actionLabel: 'فتح إعدادات التشغيل التلقائي (OEM)',
         verify: () async => false,
         onAllow: () => diag.openAutoStartSettings(),
+        specialAccess: true,
+        optionalAfterOpen: true,
+      ),
+      _PermStep(
+        icon: Icons.verified_user_outlined,
+        title: 'تأكيد ميداني سريع',
+        body:
+            'بعد منح الأذونات: 1) أرسل SMS تجريبي للتطبيق وهو في الخلفية. '
+            '2) أعد تشغيل الهاتف دون فتح NET أولاً إن أمكن. '
+            '3) لا تستخدم Force-stop على NET. أي فشل على جهازك وثّقه في شاشة البطارية.',
+        actionLabel: 'فهمت — متابعة',
+        verify: () async => true,
+        onAllow: () async {},
         specialAccess: true,
         optionalAfterOpen: true,
       ),
