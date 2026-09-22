@@ -9,7 +9,7 @@ import '../repositories/repositories.dart';
 /// sender / registered identifier — never from the message body.
 ///
 /// 1. Cards to the POS itself: `{qty} كرت {amount}`
-/// 2. Cards to a POS customer: `{phone} {amount}` (optional trailing quantity).
+/// 2. Cards to a POS customer: `{qty} كرت {amount} {phone}`.
 /// 3. Balance inquiry: `111`
 ///
 /// Custom templates the operator creates are left untouched. A known migration
@@ -148,8 +148,11 @@ final class DefaultPosTemplatesSeeder {
   }
 
   static bool _needsKnownMigration(TransferTemplate existing, _TplSpec spec) {
-    return spec.variant == 'cards-to-pos-customer' &&
-        existing.pattern.trim() == '{qty} كرت {amount} {dest}';
+    if (spec.variant != 'cards-to-pos-customer') return false;
+    final pattern = existing.pattern.trim();
+    return pattern == '{qty} كرت {amount} {dest}' ||
+        pattern == '{phone} {amount}' ||
+        pattern == '{amount} {phone}';
   }
 
   static const _specs = <_TplSpec>[
@@ -169,8 +172,8 @@ final class DefaultPosTemplatesSeeder {
       variant: 'cards-to-pos-customer',
       name: 'إرسال كروت إلى عميل نقطة البيع',
       priority: 2,
-      pattern: '{phone} {amount}',
-      sampleBody: '779776919 100',
+      pattern: '{qty} كرت {amount} {phone}',
+      sampleBody: '1 كرت 100 779776919',
       senderNameLabel: 'نقطة البيع',
       noteLabel: 'كروت لعميل نقطة البيع',
       requireReference: false,
