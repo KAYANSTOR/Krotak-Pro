@@ -48,7 +48,7 @@ final class MessageDeliveryWorker {
   OutboundMessageDispatchGuard? get _dispatchGuard {
     final value = messages;
     return value is OutboundMessageStore
-        ? OutboundMessageDispatchGuard(store: value)
+        ? OutboundMessageDispatchGuard(store: value as OutboundMessageStore)
         : null;
   }
 

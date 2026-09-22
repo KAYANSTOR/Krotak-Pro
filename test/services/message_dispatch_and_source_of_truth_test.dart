@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:net_app/core/result.dart';
 import 'package:net_app/domain/entities/message.dart';
+import 'package:net_app/domain/repositories/repositories.dart';
 import 'package:net_app/domain/services/messages_source_of_truth.dart';
 import 'package:net_app/domain/services/outbound_message_dispatch_guard.dart';
 
