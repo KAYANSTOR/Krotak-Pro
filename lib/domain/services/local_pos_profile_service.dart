@@ -34,12 +34,6 @@ final class LocalPosProfileService {
   final CustomerService customerService;
   final TransferTemplateRepository templates;
 
-  /// عميل قائم مسجّل بنفس رقم الجوال الذي ستستخدمه نقطة البيع.
-  ///
-  /// نقطة البيع مرتبطة بضرورة بحساب عميل في الدفتر (`PosAccount.customerId`)
-  /// ولا يوجد دفتر مالي مستقل لنقاط البيع، لذلك إن كان الرقم مسجّلاً لعميل قائم
-  /// فالخيار الصحيح هو إعادة استخدام نفس الحساب (ربط) بدل إنشاء حساب ثانٍ بنفس
-  /// الرقم — وهو ما كان يُرفض سابقاً فيسدّ الطريق على المستخدم.
   Future<Result<Customer?>> linkableCustomer(String phone) async {
     final trimmed = phone.trim();
     if (trimmed.isEmpty) return const Success(null);
@@ -74,9 +68,6 @@ final class LocalPosProfileService {
       return 'الرقم مرتبط بنقطة بيع أخرى: ${foundPos.name}';
     }
 
-    // إنشاء نقطة بيع جديدة يسمح بإعادة استخدام حساب عميل قائم يحمل نفس الرقم
-    // (بعد تأكيد صريح من المستخدم في الواجهة). التعديل يبقى مقيّداً حتى لا
-    // تُعاد توجيه حسابات نقطة بيع قائمة إلى حساب عميل آخر.
     if (!allowExistingCustomer) {
       final customer = await customers.findByIdentifier(trimmedPhone);
       if (customer is Failure<Customer?>) return customer.error.message;
@@ -93,6 +84,7 @@ final class LocalPosProfileService {
     required String phone,
     PosPercentageMode percentageMode = PosPercentageMode.defaultCategory,
     int? creditLimitMinorUnits,
+    String? balanceRequestCode,
   }) async {
     final problem = await validate(
       name: name,
@@ -104,9 +96,6 @@ final class LocalPosProfileService {
     }
 
     final storedPhone = PhoneNormalizer.forStorage(phone.trim(), asPhone: true);
-    // حساب العميل خلف نقطة البيع: يُعاد استخدامه إن كان الرقم مسجّلاً مسبقاً،
-    // وإلا يُنشأ حساب جديد. (إنشاء حساب ثانٍ بنفس الرقم مستحيل لأن هوية الرقم
-    // فريدة في الدفتر.)
     final linkable = await linkableCustomer(phone);
     if (linkable is Failure<Customer?>) return Failure(linkable.error);
     final existingCustomer = (linkable as Success<Customer?>).value;
@@ -138,12 +127,20 @@ final class LocalPosProfileService {
       notifyPhone: storedPhone,
       percentageMode: percentageMode,
       creditLimitMinorUnits: creditLimitMinorUnits,
+      balanceRequestCode:
+          (balanceRequestCode == null || balanceRequestCode.trim().isEmpty)
+              ? PosAccount.defaultBalanceRequestCode
+              : balanceRequestCode.trim(),
     );
     final savedAccount = await posRegistry.save(account);
     if (savedAccount is Failure<void>) return Failure(savedAccount.error);
 
     final seeded = await DefaultPosTemplatesSeeder(templates: templates)
-        .seedForPos(posId: pos.id, posName: name.trim());
+        .seedForPos(
+          posId: pos.id,
+          posName: name.trim(),
+          balanceRequestCode: account.balanceRequestCode,
+        );
     if (seeded is Failure<int>) return Failure(seeded.error);
 
     return Success(PosProfile(pointOfSale: pos, account: account));
@@ -158,6 +155,7 @@ final class LocalPosProfileService {
     PosPercentageMode? percentageMode,
     int? creditLimitMinorUnits,
     bool clearCreditLimit = false,
+    String? balanceRequestCode,
   }) async {
     final problem = await validate(
       name: name,
@@ -185,20 +183,22 @@ final class LocalPosProfileService {
       percentageMode: percentageMode,
       creditLimitMinorUnits: creditLimitMinorUnits,
       clearCreditLimit: clearCreditLimit,
+      balanceRequestCode: balanceRequestCode,
     );
     final savedAccount = await posRegistry.save(nextAccount);
     if (savedAccount is Failure<void>) return Failure(savedAccount.error);
 
-    // Idempotent: adds any catalog variants missing on older installs
-    // (e.g. multi-card {qty} / delivery {dest}) without duplicating rows.
     final seeded = await DefaultPosTemplatesSeeder(templates: templates)
-        .seedForPos(posId: posId, posName: name.trim());
+        .seedForPos(
+          posId: posId,
+          posName: name.trim(),
+          balanceRequestCode: nextAccount.balanceRequestCode,
+        );
     if (seeded is Failure<int>) return Failure(seeded.error);
 
     return Success(PosProfile(pointOfSale: pos, account: nextAccount));
   }
 
-  /// Re-seed the full inbound catalog for an existing POS (safe to call anytime).
   Future<Result<int>> ensureInboundTemplates({
     required String posId,
     required String posName,
