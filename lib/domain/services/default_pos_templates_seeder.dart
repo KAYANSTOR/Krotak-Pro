@@ -95,7 +95,7 @@ final class DefaultPosTemplatesSeeder {
           id: id,
           name: spec.name,
           pattern: spec.pattern,
-          isActive: overwriteExisting ? true : existingTemplate.isActive,
+          isActive: shouldRepair ? true : existingTemplate.isActive,
           priority: spec.priority,
           walletId: existingTemplate.walletId,
           posId: posId,
