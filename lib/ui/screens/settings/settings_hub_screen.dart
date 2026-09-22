@@ -284,6 +284,16 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
     NetThemeRawCache.raw = NetThemeSchedule.encode(picked);
   }
 
+  String _formatRecoveryAt(String raw) {
+    final dt = DateTime.tryParse(raw);
+    if (dt == null) return raw;
+    final local = dt.toLocal();
+    final day = local.day.toString().padLeft(2, '0');
+    final month = local.month.toString().padLeft(2, '0');
+    final hour = local.hour.toString().padLeft(2, '0');
+    final minute = local.minute.toString().padLeft(2, '0');
+    return '$day/$month/${local.year} $hour:$minute';
+  }
   Future<void> _openNetworkName() async {
     await Navigator.of(context).push(MaterialPageRoute(builder: (_) => const NetworkNameSettingsScreen()));
     if (mounted) await _load();
