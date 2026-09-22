@@ -141,6 +141,20 @@ final class UnifiedPaymentEventEngine implements PaymentEventEngine {
       );
     }
 
+    // Canonical POS card-order text is a product/order command, not a cash
+    // transfer. Never let a generic financial template reinterpret it.
+    final isExplicitPosOrder =
+        parsedTransfer.kind == ParsedTransferKind.posCardOrder ||
+        parsedTransfer.kind == ParsedTransferKind.posInstantCharge;
+    if (_looksLikePosCardOrderBody(message.body) && !isExplicitPosOrder) {
+      const failure = AppFailure(
+        code: 'pos_order_template_required',
+        message: 'رسالة طلب كروت تحتاج قالب طلب POS نشط',
+      );
+      await messages.updateStatus(message.id, MessageProcessingStatus.rejected);
+      return const Failure<Transaction?>(failure);
+    }
+
     final boundParse = ParsedTransfer(
       messageId: message.id,
       amount: parsedTransfer.amount,
@@ -198,6 +212,68 @@ final class UnifiedPaymentEventEngine implements PaymentEventEngine {
       m.persist(trace);
     }
     return Failure((processResult as Failure<Transaction>).error);
+  }
+
+  bool _looksLikePosCardOrderBody(String raw) {
+    var normalized = raw
+        .trim()
+        .replaceAll(RegExp(r'[\u200e\u200f\u202a-\u202e\u2066-\u2069]'), '');
+    const eastern = '٠١٢٣٤٥٦٧٨٩';
+    const persian = '۰۱۲۳۴۵۶۷۸۹';
+    final digits = StringBuffer();
+    for (final rune in normalized.runes) {
+      final ch = String.fromCharCode(rune);
+      final e = eastern.indexOf(ch);
+      final p = persian.indexOf(ch);
+      if (e >= 0) {
+        digits.write(e);
+      } else if (p >= 0) {
+        digits.write(p);
+      } else {
+        digits.write(ch);
+      }
+    }
+    normalized = digits
+        .toString()
+        .replaceAll('كروت', 'كرت')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+
+    return RegExp(
+      r'^\d{1,2}\s+كرت\s+\d+(?:[.,]\d{1,2})?(?:\s+\+?\d{7,15})?
+    final message = IncomingMessage(
+      id: ids.next('msg'),
+      sender: event.sourceKey,
+      body: event.body,
+      receivedAt: event.receivedAt,
+      status: MessageProcessingStatus.rejected,
+      customerIdentifier: event.sourceKey,
+    );
+    await messages.save(message);
+    return const Failure(
+      AppFailure(
+        code: RejectionCodes.blacklisted,
+        message: 'Blocked number — processing skipped before parse',
+      ),
+    );
+  }
+
+  Future<bool> _autoProcessingEnabled() async {
+    final s = settings;
+    if (s == null) return SettingDefaults.smsAutoProcessingEnabled;
+    final result = await s.find(SettingKeys.smsAutoProcessingEnabled);
+    if (result is! Success<AppSetting?>) {
+      return SettingDefaults.smsAutoProcessingEnabled;
+    }
+    return SettingBool.read(
+      result.value?.value,
+      defaultValue: SettingDefaults.smsAutoProcessingEnabled,
+    );
+  }
+}
+,
+      unicode: true,
+    ).hasMatch(normalized);
   }
 
   Future<Result<Transaction?>> _rejectBlocked(PaymentEvent event) async {
