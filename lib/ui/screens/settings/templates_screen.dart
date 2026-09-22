@@ -582,24 +582,13 @@ class _TemplatesScreenState extends State<TemplatesScreen> {
 bool _isTemplateDraft(TransferTemplate t) {
   final p = t.pattern.trim();
   if (p.isEmpty) return true;
+  // قالب طلب رصيد نقطة البيع لا يحمل مبلغاً ولا معرّفاً: يُطابق نص الرسالة
+  // نفسه (مثل «111») ويُقرأ المعرّف من رقم المرسل — وكان يُعرض خطأً «مسودة»
+  // بمفتاح معطّل، وهو قالب نشط ومزروع افتراضياً.
   if (t.identifierKind == TemplateIdentifierKind.balanceRequestCode) return false;
-
   final hasAmount = p.contains('{amount}') || p.contains('%amount');
-  final hasPosScope = t.posId != null && t.posId!.trim().isNotEmpty;
-  final posOptOutReference = !t.requireReference && hasPosScope;
-
-  // POS templates identify the point of sale from the message sender, so a
-  // phone/account placeholder is not required to make the template complete.
-  // A POS customer-delivery template may also include {phone}/{dest}; that is
-  // optional from the completeness perspective because the POS itself is the
-  // parsed identity.
-  if (hasPosScope || posOptOutReference) {
-    return !hasAmount && !(p.contains('{qty}') || p.contains('%qty'));
-  }
-
   final hasIdentifier = switch (t.identifierKind) {
-    TemplateIdentifierKind.phone =>
-      p.contains('{phone}') || p.contains('%phone'),
+    TemplateIdentifierKind.phone => p.contains('{phone}') || p.contains('%phone'),
     TemplateIdentifierKind.balanceRequestCode => true,
     _ => p.contains('{account}') || p.contains('%account'),
   };
