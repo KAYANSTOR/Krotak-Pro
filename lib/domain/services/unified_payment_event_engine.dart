@@ -153,6 +153,7 @@ final class UnifiedPaymentEventEngine implements PaymentEventEngine {
       quantity: parsedTransfer.quantity,
       deliveryOverride: parsedTransfer.deliveryOverride,
       instantCharge: parsedTransfer.instantCharge,
+      kind: parsedTransfer.kind,
     );
     await messages.updateStatus(message.id, MessageProcessingStatus.parsed);
     final trace = MessagePipelineTrace(
