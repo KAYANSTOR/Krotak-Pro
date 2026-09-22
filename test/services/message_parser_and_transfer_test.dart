@@ -414,7 +414,7 @@ void main() {
 }
 
 
-class _FakeCustomerService implements CustomerService {
+final class _FakeCustomerService implements CustomerService {
   _FakeCustomerService(this.customers, this.ids, this.clock);
   final _FakeCustomers customers;
   final IdGenerator ids;
