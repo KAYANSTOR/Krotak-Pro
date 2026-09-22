@@ -191,6 +191,48 @@ void main() {
       );
     });
 
+    test('never routes POS card-order text into financial processing', () async {
+      final messages = _FakeMessages();
+      final processor = _FakeProcessor();
+      final engine = UnifiedPaymentEventEngine(
+        messages: messages,
+        parser: _FakeParser(
+          const ParsedTransfer(
+            messageId: 'unused',
+            amount: Money(minorUnits: 10000, currencyCode: 'YER'),
+            customerIdentifier: '779000111',
+            identifierType: TransferIdentifierType.phone,
+            reference: '100',
+            quantity: 3,
+            kind: ParsedTransferKind.financialTransfer,
+          ),
+        ),
+        processor: processor,
+        ids: SequentialIdGenerator(),
+        sourceGuard: trustedPaymentSourceGuard(),
+      );
+
+      final result = await engine.ingest(
+        PaymentEvent(
+          channel: PaymentChannel.sms,
+          sourceKey: 'pos-779000111',
+          body: '3 كروت 100',
+          receivedAt: DateTime.utc(2026, 9, 13),
+        ),
+      );
+
+      expect(result, isA<Failure<Transaction?>>());
+      expect(
+        (result as Failure<Transaction?>).error.code,
+        'pos_order_template_required',
+      );
+      expect(processor.calls, 0);
+      expect(
+        messages.store.values.single.status,
+        MessageProcessingStatus.rejected,
+      );
+    });
+
     test('unparsed event is rejected and not processed', () async {
       final messages = _FakeMessages();
       final processor = _FakeProcessor();
@@ -236,6 +278,10 @@ final class _FakeParser implements MessageParser {
         reference: parsed.reference,
         templateId: parsed.templateId,
         rawIdentifier: parsed.rawIdentifier,
+        quantity: parsed.quantity,
+        deliveryOverride: parsed.deliveryOverride,
+        instantCharge: parsed.instantCharge,
+        kind: parsed.kind,
       ),
     );
   }
