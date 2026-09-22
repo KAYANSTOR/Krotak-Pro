@@ -121,7 +121,6 @@ final class LocalMessageParser implements MessageParser {
       rawIdentifier: ledger,
       quantity: 1,
       instantCharge: false,
-      kind: ParsedTransferKind.posBalanceRequest,
     );
   }
 
@@ -185,7 +184,6 @@ final class LocalMessageParser implements MessageParser {
       quantity: 1,
       deliveryOverride: destPhone,
       instantCharge: true,
-      kind: ParsedTransferKind.posInstantCharge,
     );
   }
 
@@ -267,9 +265,6 @@ final class LocalMessageParser implements MessageParser {
       quantity: quantity,
       deliveryOverride: deliveryOverride,
       instantCharge: false,
-      kind: template.posId != null
-          ? ParsedTransferKind.posCardOrder
-          : ParsedTransferKind.financialTransfer,
     );
   }
 
