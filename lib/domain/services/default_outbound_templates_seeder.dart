@@ -24,9 +24,9 @@ final class DefaultOutboundTemplatesSeeder {
   /// Legacy bodies from released versions. We migrate only these exact system
   /// defaults; custom operator templates are never overwritten.
   static const _legacyPosCustomerTemplateWithoutCategory =
-      'شبكة {NETWORK_NAME}\\n{cards}';
+      'شبكة {NETWORK_NAME}\n{cards}';
   static const _legacyPosCustomerTemplateWithValue =
-      'شبكة {NETWORK_NAME}\\nالفئة: {CARD_VALUE} {CURRENCY}\\n{cards}';
+      'شبكة {NETWORK_NAME}\nالفئة: {CARD_VALUE} {CURRENCY}\n{cards}';
 
   /// Full catalog keyed by [SettingKeys] → default body.
   static Map<String, String> catalog() => <String, String>{
@@ -100,14 +100,10 @@ final class DefaultOutboundTemplatesSeeder {
   String? _migrateKnownLegacy(String key, String current) {
     if (key != SettingKeys.posCustomerCardDeliveryTemplate) return null;
 
-    final normalized = current
-        .replaceAll('\\r\\n', '\\n')
-        .replaceAll(r'\\n', '\\n')
-        .trim();
-    final legacyWithoutCategory = _legacyPosCustomerTemplateWithoutCategory
-        .replaceAll(r'\\n', '\\n');
-    final legacyWithValue = _legacyPosCustomerTemplateWithValue
-        .replaceAll(r'\\n', '\\n');
+    final normalized = current.replaceAll('\r\n', '\n').trim();
+    final legacyWithoutCategory =
+        _legacyPosCustomerTemplateWithoutCategory.trim();
+    final legacyWithValue = _legacyPosCustomerTemplateWithValue.trim();
     if (normalized == legacyWithoutCategory ||
         normalized == legacyWithValue) {
       return SettingDefaults.posCustomerCardDeliveryTemplate;
