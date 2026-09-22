@@ -14,6 +14,14 @@ abstract interface class CustomerRepository {
   Future<Result<Customer?>> findByIdentifier(String value);
   Future<Result<List<Customer>>> search(String query);
 
+  /// صفحة من نتائج البحث لتفادي تحميل آلاف الحسابات دفعة واحدة.
+  /// [offset] صفوف تُتخطى بعد الترتيب بالاسم.
+  Future<Result<List<Customer>>> searchPage(
+    String query, {
+    int limit = 80,
+    int offset = 0,
+  });
+
   /// اقتراح أرقام جوال بالبادئة أثناء الكتابة (بيع مباشر).
   /// يعيد أرقاماً مطبّعة مع الاسم والحالة، مرتبة بالأحدث، بدون حسابات موقوفة/مدمجة/مؤرشفة.
   /// [limit] يمنع N+1 واستعلامات ثقيلة.
