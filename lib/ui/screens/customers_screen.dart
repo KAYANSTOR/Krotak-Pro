@@ -75,7 +75,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
     if (!_listScroll.hasClients || _visibleLimit >= _visible.length) return;
     if (_listScroll.position.pixels >= _listScroll.position.maxScrollExtent - 400) {
       setState(() {
-        _visibleLimit = (_visibleLimit + _pageSize).clamp(0, _visible.length);
+        _visibleLimit = (_visibleLimit + _pageSize).clamp(0, _visible.length).toInt();
       });
     }
   }
