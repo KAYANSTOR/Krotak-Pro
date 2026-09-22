@@ -40,10 +40,11 @@ jobs:
           flutter-version: 3.47.5
           cache: true
       - run: flutter pub get
-      # Commercial main builds require the stable signing key from GitHub Secrets.
-      # PR builds use a disposable CI-only key so validation can produce an APK
-      # without exposing or weakening the stable release signing key.
+      # Main prefers the commercial signing key. When repository signing
+      # secrets are not configured yet, use a disposable validation key so CI
+      # can still build/test the Android artifact without committing secrets.
       - name: Prepare stable keystore from GitHub Secrets
+        id: stable-signing
         if: github.event_name != 'pull_request'
         env:
           APK_KEYSTORE_B64: ${{ secrets.APK_KEYSTORE_B64 }}
@@ -53,10 +54,9 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "${APK_KEYSTORE_B64}" ] || [ -z "${APK_KEYSTORE_PASSWORD}" ] || [ -z "${APK_KEY_PASSWORD}" ] || [ -z "${APK_KEY_ALIAS}" ]; then
-            echo "Phase 7: missing signing secrets for a commercial main build."
-            echo "Required repository secrets: APK_KEYSTORE_B64, APK_KEYSTORE_PASSWORD, APK_KEY_PASSWORD, APK_KEY_ALIAS"
-            echo "See docs/phase-7-ci-signing.md"
-            exit 1
+            echo "mode=validation" >> "${GITHUB_OUTPUT}"
+            echo "Commercial signing secrets are not configured; using disposable CI validation signing."
+            exit 0
           fi
           mkdir -p android/app/keystore
           printf '%s' "${APK_KEYSTORE_B64}" | base64 -d > android/app/keystore/upload.jks
@@ -67,21 +67,14 @@ jobs:
             echo "storePassword=${APK_KEYSTORE_PASSWORD}"
             echo "keyPassword=${APK_KEY_PASSWORD}"
           } > android/key.properties
-      - name: Prepare disposable PR validation keystore
-        if: github.event_name == 'pull_request'
+          echo "mode=stable" >> "${GITHUB_OUTPUT}"
+
+      - name: Prepare disposable validation keystore
+        if: github.event_name == 'pull_request' || steps.stable-signing.outputs.mode != 'stable'
         run: |
           set -euo pipefail
           mkdir -p android/app/keystore
-          keytool -genkeypair -noprompt \
-            -alias ci-validation \
-            -keyalg RSA \
-            -keysize 2048 \
-            -validity 2 \
-            -keystore android/app/keystore/upload.jks \
-            -storetype PKCS12 \
-            -storepass ci-validation-store \
-            -keypass ci-validation-store \
-            -dname "CN=Krotak Pro CI Validation, OU=CI, O=Krotak Pro, L=CI, ST=CI, C=US"
+          keytool -genkeypair -noprompt             -alias ci-validation             -keyalg RSA             -keysize 2048             -validity 2             -keystore android/app/keystore/upload.jks             -storetype PKCS12             -storepass ci-validation-store             -keypass ci-validation-store             -dname "CN=Krotak Pro CI Validation, OU=CI, O=Krotak Pro, L=CI, ST=CI, C=US"
           {
             echo "storeFile=keystore/upload.jks"
             echo "storeType=PKCS12"
@@ -98,11 +91,11 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v7
         with:
-          name: ${{ github.event_name == 'pull_request' && 'krotak-pro-pr-validation-apk' || 'krotak-pro-release-apk' }}
+          name: ${{ steps.stable-signing.outputs.mode == 'stable' && 'krotak-pro-release-apk' || 'krotak-pro-validation-apk' }}
           path: build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
       - name: Publish GitHub Release
-        if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+        if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && steps.stable-signing.outputs.mode == 'stable'
         uses: softprops/action-gh-release@v3
         with:
           tag_name: apk-${{ github.run_number }}
