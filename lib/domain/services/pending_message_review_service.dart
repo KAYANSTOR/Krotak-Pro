@@ -41,10 +41,23 @@ final class PendingMessageReviewService {
   LocalCustomerIdentityResolver get _resolver => identityResolver ?? LocalCustomerIdentityResolver(customers: customers);
 
   Future<Result<List<IncomingMessage>>> listPending() async {
-    final result = await messages.listByStatus(MessageProcessingStatus.parsed);
-    if (result is Failure<List<IncomingMessage>>) return result;
-    final list = List<IncomingMessage>.of((result as Success<List<IncomingMessage>>).value);
-    list.sort((a, b) => b.receivedAt.compareTo(a.receivedAt));
+    final parsed = await messages.listByStatus(MessageProcessingStatus.parsed);
+    if (parsed is Failure<List<IncomingMessage>>) return parsed;
+    final pending = await messages.listByStatus(MessageProcessingStatus.pending);
+    if (pending is Failure<List<IncomingMessage>>) return pending;
+
+    final byId = <String, IncomingMessage>{};
+    for (final message
+        in (parsed as Success<List<IncomingMessage>>).value) {
+      byId[message.id] = message;
+    }
+    for (final message
+        in (pending as Success<List<IncomingMessage>>).value) {
+      byId[message.id] = message;
+    }
+
+    final list = byId.values.toList(growable: false)
+      ..sort((a, b) => b.receivedAt.compareTo(a.receivedAt));
     return Success(list);
   }
 
@@ -55,7 +68,16 @@ final class PendingMessageReviewService {
     if (message == null) return const Failure(AppFailure(code: 'message_not_found', message: 'Message was not found'));
     if (message.status == MessageProcessingStatus.processed) return const Failure(AppFailure(code: 'message_already_processed', message: 'Message was already approved'));
     if (message.status == MessageProcessingStatus.rejected) return const Failure(AppFailure(code: 'message_already_rejected', message: 'Message was already rejected'));
-    if (message.status != MessageProcessingStatus.parsed && message.status != MessageProcessingStatus.received) return const Failure(AppFailure(code: 'message_not_pending', message: 'Message is not pending review'));
+    if (message.status != MessageProcessingStatus.parsed &&
+        message.status != MessageProcessingStatus.received &&
+        message.status != MessageProcessingStatus.pending) {
+      return const Failure(
+        AppFailure(
+          code: 'message_not_pending',
+          message: 'Message is not pending review',
+        ),
+      );
+    }
 
     final event = _eventForMessage(message);
     final sourceAuthorization = await sourceGuard.authorize(event);
