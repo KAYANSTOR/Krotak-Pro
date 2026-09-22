@@ -311,10 +311,8 @@ final class LocalAdvanceService implements AdvanceService {
     if (target != null && target.trim().isNotEmpty) {
       final body = await _render(rejectedTemplateKey, defaultRejected, {'reason': message});
       if (body.trim().isNotEmpty) {
-      if (body.trim().isNotEmpty) {
-      await messageSender.send(destination: target, body: body);
-    }
-    }
+        await messageSender.send(destination: target, body: body);
+      }
     }
     await auditLogs.append(AuditLog(id: ids.next('audit'), entityType: 'advance_request', entityId: customerId ?? destination ?? 'unknown', action: 'rejected', occurredAt: clock.now(), payloadJson: '{"code":"${_escape(code)}","reason":"${_escape(message)}"}'));
     return Failure(AppFailure(code: code, message: message));
