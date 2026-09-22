@@ -79,6 +79,28 @@ void main() {
     expect(repaired.isActive, isTrue);
   });
 
+  test('migrates the previous phone-first customer template to the exact new contract', () async {
+    final repo = _MemTemplates();
+    repo.map['tpl-pos-pos-1-cards-to-pos-customer'] = TransferTemplate(
+      id: 'tpl-pos-pos-1-cards-to-pos-customer',
+      name: 'إرسال كروت إلى عميل نقطة البيع',
+      pattern: '{phone} {amount}',
+      isActive: true,
+      posId: 'pos-1',
+      requireReference: false,
+    );
+
+    await DefaultPosTemplatesSeeder(templates: repo).seedForPos(
+      posId: 'pos-1',
+      posName: 'نقطة',
+    );
+
+    final migrated = repo.map['tpl-pos-pos-1-cards-to-pos-customer']!;
+    expect(migrated.pattern, '{qty} كرت {amount} {phone}');
+    expect(migrated.sampleBody, '1 كرت 100 779776919');
+    expect(migrated.isActive, isTrue);
+  });
+
   test('deactivates retired default variants without deleting custom templates', () async {
     final repo = _MemTemplates();
     repo.map['tpl-pos-pos-1-normal'] = TransferTemplate(
@@ -182,6 +204,22 @@ void main() {
     expect(stock.amount.minorUnits, 10000);
     expect(stock.customerIdentifier, '779000111');
     expect(stock.deliveryOverride, '779000111');
+
+    final toPosSingular = parser.parse(
+      IncomingMessage(
+        id: 'm1-singular',
+        sender: '779000111',
+        body: '1 كرت 100',
+        receivedAt: DateTime(2026, 9, 21),
+        status: MessageProcessingStatus.received,
+      ),
+    );
+    expect(toPosSingular, isA<Success<ParsedTransfer>>());
+    final stockSingular = (toPosSingular as Success<ParsedTransfer>).value;
+    expect(stockSingular.quantity, 1);
+    expect(stockSingular.amount.minorUnits, 10000);
+    expect(stockSingular.customerIdentifier, '779000111');
+    expect(stockSingular.deliveryOverride, '779000111');
 
     final toCustomer = parser.parse(
       IncomingMessage(
