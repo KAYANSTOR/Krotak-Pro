@@ -757,15 +757,39 @@ class _TemplateWizardScreenState extends State<TemplateWizardScreen> {
     if (sample.isNotEmpty && pattern.isNotEmpty) {
       final isPosTemplate = _posId != null && _posId!.trim().isNotEmpty;
       final senderInput = _senderCtrl.text.trim();
+      // POS parser resolves the POS identity from the sender and therefore
+      // requires a phone-shaped sender even during local preview.
       final sender = isPosTemplate
-          ? (RegExp(r'^\+?[0-9]{7,15}
+          ? (RegExp(r'^\+?[0-9]{7,15}$').hasMatch(senderInput)
+              ? senderInput
+              : '700000000')
+          : (senderInput.isEmpty ? 'PREVIEW' : senderInput);
+
+      final parser = LocalMessageParser(templates: [
+        TransferTemplate(
+          id: 'preview',
+          name: _nameCtrl.text.trim().isEmpty ? 'معاينة' : _nameCtrl.text.trim(),
+          pattern: pattern,
+          isActive: true,
+          identifierKind: _kind,
+          requireReference: _patternHasRef(pattern),
+          posId: _posId,
+        ),
+      ]);
+      final msg = IncomingMessage(
+        id: 'preview-msg',
+        sender: sender,
+        body: sample,
+        receivedAt: DateTime.now().toUtc(),
+        status: MessageProcessingStatus.received,
+      );
       final r = parser.parse(msg);
       if (r is Success<ParsedTransfer>) {
         matched = r.value;
         resultText = 'نجح التوليد التلقائي بنجاح!';
         resultColor = context.netColors.available;
       } else {
-        resultText = '✗ لم يتطابق النمط مع الرسالة النموذجية\n${(r as Failure).error.message}';
+        resultText = '✗ لم يتطابق النمط مع الرسالة النموذجية\n\${(r as Failure).error.message}';
         resultColor = context.netColors.rejected;
       }
     }
@@ -823,7 +847,7 @@ class _TemplateWizardScreenState extends State<TemplateWizardScreen> {
                 _previewField(
                   kayan,
                   'المبلغ',
-                  '${matched.amount.minorUnits / 100}',
+                  '\${matched.amount.minorUnits / 100}',
                   true,
                 ),
                 _previewField(
