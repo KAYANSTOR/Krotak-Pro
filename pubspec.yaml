@@ -12,7 +12,6 @@ dependencies:
   flutter_localizations:
     sdk: flutter
 
-  cupertino_icons: ^1.0.8
   drift: ^2.22.0
   sqlite3_flutter_libs: ^0.5.24
   path: ^1.9.0
@@ -35,17 +34,24 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  # فقط الأصول المستخدمة وقت التشغيل تُحزَّم في APK:
+  # - app_icon.png: أيقونة شاشة «عن التطبيق».
+  # - Tajawal-Regular/Bold: يُقرآن بالمسار عبر rootBundle في report_pdf_service.
+  # الملف الأصلي assets/icon/krotak_icon.png يبقى في المستودع لأنه مصدر أدوات
+  # توليد أيقونات Android (tools/apply_krotak_icon.py)، لكنه لا يُحزَّم.
   assets:
-    - assets/fonts/
-    - assets/icon/
+    - assets/icon/app_icon.png
+    - assets/fonts/Tajawal-Regular.ttf
+    - assets/fonts/Tajawal-Bold.ttf
 
   # Tajawal bundled with the app so the Arabic UI never depends on a runtime
   # font download (the app is offline-first).
+  # الوزنان 300 (Light) و900 (Black) غير مستخدمين في الواجهة إطلاقًا (لا يوجد
+  # FontWeight.w300/w900 في المشروع)، فبقي ملفّاهما في المستودع دون حزم؛ لإعادة
+  # استخدام أي وزن مستقبلًا يكفي إعلان سطر asset الخاص به هنا.
   fonts:
     - family: Tajawal
       fonts:
-        - asset: assets/fonts/Tajawal-Light.ttf
-          weight: 300
         - asset: assets/fonts/Tajawal-Regular.ttf
           weight: 400
         - asset: assets/fonts/Tajawal-Medium.ttf
@@ -54,5 +60,3 @@ flutter:
           weight: 700
         - asset: assets/fonts/Tajawal-ExtraBold.ttf
           weight: 800
-        - asset: assets/fonts/Tajawal-Black.ttf
-          weight: 900
