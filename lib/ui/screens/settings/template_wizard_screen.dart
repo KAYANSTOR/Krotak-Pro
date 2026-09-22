@@ -789,7 +789,7 @@ class _TemplateWizardScreenState extends State<TemplateWizardScreen> {
         resultText = 'نجح التوليد التلقائي بنجاح!';
         resultColor = context.netColors.available;
       } else {
-        resultText = '✗ لم يتطابق النمط مع الرسالة النموذجية\n\${(r as Failure).error.message}';
+        resultText = '✗ لم يتطابق النمط مع الرسالة النموذجية\n${(r as Failure).error.message}';
         resultColor = context.netColors.rejected;
       }
     }
@@ -847,7 +847,7 @@ class _TemplateWizardScreenState extends State<TemplateWizardScreen> {
                 _previewField(
                   kayan,
                   'المبلغ',
-                  '\${matched.amount.minorUnits / 100}',
+                  '${matched.amount.minorUnits / 100}',
                   true,
                 ),
                 _previewField(
