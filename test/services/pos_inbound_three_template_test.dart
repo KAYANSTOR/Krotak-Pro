@@ -52,7 +52,7 @@ void main() {
       },
     );
     final customerTemplate = repo.map['tpl-pos-pos-1-cards-to-pos-customer']!;
-    expect(customerTemplate.pattern, '{phone} {amount}');
+    expect(customerTemplate.pattern, '{qty} كرت {amount} {phone}');
     expect(customerTemplate.isActive, isTrue);
   });
 
@@ -73,9 +73,9 @@ void main() {
     );
 
     final repaired = repo.map['tpl-pos-pos-1-cards-to-pos-customer']!;
-    expect(repaired.pattern, '{phone} {amount}');
+    expect(repaired.pattern, '{qty} كرت {amount} {phone}');
     expect(repaired.name, 'إرسال كروت إلى عميل نقطة البيع');
-    expect(repaired.sampleBody, '779776919 100');
+    expect(repaired.sampleBody, '1 كرت 100 779776919');
     expect(repaired.isActive, isTrue);
   });
 
@@ -106,7 +106,7 @@ void main() {
     expect(repo.map['tpl-pos-pos-1-cards-to-pos']!.isActive, isTrue);
   });
 
-  test('seeded customer template parses the documented numeric syntax', () async {
+  test('customer template requires quantity, category, then customer phone', () async {
     final repo = _MemTemplates();
     await DefaultPosTemplatesSeeder(templates: repo).seedForPos(
       posId: 'pos-1',
@@ -116,9 +116,9 @@ void main() {
 
     final single = parser.parse(
       IncomingMessage(
-        id: 'numeric-1',
+        id: 'customer-1',
         sender: '779000111',
-        body: '779776919 100',
+        body: '1 كرت 100 779776919',
         receivedAt: DateTime(2026, 9, 21),
         status: MessageProcessingStatus.received,
       ),
@@ -126,14 +126,16 @@ void main() {
     expect(single, isA<Success<ParsedTransfer>>());
     final singleValue = (single as Success<ParsedTransfer>).value;
     expect(singleValue.quantity, 1);
+    expect(singleValue.amount.minorUnits, 10000);
+    expect(singleValue.customerIdentifier, '779000111');
     expect(singleValue.deliveryOverride, '779776919');
     expect(singleValue.posId, 'pos-1');
 
     final batch = parser.parse(
       IncomingMessage(
-        id: 'numeric-2',
+        id: 'customer-2',
         sender: '779000111',
-        body: '779776919 100 3',
+        body: '3 كروت 100 779776919',
         receivedAt: DateTime(2026, 9, 21),
         status: MessageProcessingStatus.received,
       ),
@@ -141,7 +143,20 @@ void main() {
     expect(batch, isA<Success<ParsedTransfer>>());
     final batchValue = (batch as Success<ParsedTransfer>).value;
     expect(batchValue.quantity, 3);
+    expect(batchValue.amount.minorUnits, 10000);
+    expect(batchValue.customerIdentifier, '779000111');
     expect(batchValue.deliveryOverride, '779776919');
+
+    final oldOrder = parser.parse(
+      IncomingMessage(
+        id: 'customer-old',
+        sender: '779000111',
+        body: '779776919 100 3',
+        receivedAt: DateTime(2026, 9, 21),
+        status: MessageProcessingStatus.received,
+      ),
+    );
+    expect(oldOrder, isA<Failure<ParsedTransfer>>());
   });
 
   test('parses Arabic POS stock phrase and keeps POS identity separate from delivery', () async {
