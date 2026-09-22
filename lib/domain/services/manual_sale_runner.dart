@@ -214,9 +214,9 @@ final class ManualSaleRunner {
 
       // Deliver voucher SMS to customer phone (same body as auto-transfer path).
       final sender = host.messageSender;
-      if (sender != null && host.settings != null) {
+      if (sender != null) {
         final rendered = await OutboundTemplateRenderer(
-          settings: host.settings!,
+          settings: host.settings,
         ).renderVoucherDelivery(
           serialNumber: card.serialNumber,
           secretCode: card.secretCode,
