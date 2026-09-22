@@ -76,14 +76,14 @@ jobs:
             -keystore android/app/keystore/upload.jks \
             -storetype PKCS12 \
             -storepass ci-validation-store \
-            -keypass ci-validation-key \
+            -keypass ci-validation-store \
             -dname "CN=Krotak Pro CI Validation, OU=CI, O=Krotak Pro, L=CI, ST=CI, C=US"
           {
             echo "storeFile=keystore/upload.jks"
             echo "storeType=PKCS12"
             echo "keyAlias=ci-validation"
             echo "storePassword=ci-validation-store"
-            echo "keyPassword=ci-validation-key"
+            echo "keyPassword=ci-validation-store"
           } > android/key.properties
       - name: Build release APK
         run: flutter build apk --release
