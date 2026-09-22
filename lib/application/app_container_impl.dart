@@ -199,7 +199,7 @@ final class AppContainer {
     final parser = LocalMessageParser(templates: live.isNotEmpty ? live : templates);
     final smsBridge = SmsBridge();
     final messageSender = NativeMessageSender(smsBridge);
-    final saleService = LocalSaleService(customers: customers, categories: categories, cards: cards, sales: sales, transactions: transactions, balances: balanceService, inventory: inventoryService, auditLogs: auditLogs, unitOfWork: uow, clock: clock, ids: ids, messageSender: messageSender, settings: settings);
+    final saleService = LocalSaleService(customers: customers, categories: categories, cards: cards, sales: sales, transactions: transactions, balances: balanceService, inventory: inventoryService, auditLogs: auditLogs, unitOfWork: uow, clock: clock, ids: ids, messageSender: messageSender);
         final broadcastJobs = LocalBroadcastRepository(settings: settings);
     final broadcastService = LocalBroadcastService(customers: customers, jobs: broadcastJobs, settings: settings, auditLogs: auditLogs, messageSender: messageSender, clock: clock, ids: ids, transactions: transactions, posRegistry: posRegistry, sendDelay: Duration.zero);
     final advanceService = LocalAdvanceService(advances: advanceRepository, customers: customers, categories: categories, cards: cards, inventory: inventoryService, transactions: transactions, sales: sales, auditLogs: auditLogs, settings: settings, unitOfWork: uow, messageSender: messageSender, clock: clock, ids: ids, posRegistry: posRegistry);
