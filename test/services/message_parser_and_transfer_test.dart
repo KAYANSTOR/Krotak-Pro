@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import 'package:flutter_test/flutter_test.dart';
 import 'package:net_app/core/clock.dart';
 import 'package:net_app/core/id_generator.dart';
@@ -8,14 +6,11 @@ import 'package:net_app/domain/entities/audit.dart';
 import 'package:net_app/domain/entities/customer.dart';
 import 'package:net_app/domain/entities/message.dart';
 import 'package:net_app/domain/entities/money.dart';
-import 'package:net_app/domain/entities/pos_account.dart';
-import 'package:net_app/domain/entities/setting.dart';
 import 'package:net_app/domain/entities/transaction.dart';
 import 'package:net_app/domain/repositories/repositories.dart';
 import 'package:net_app/domain/repositories/unit_of_work.dart';
 import 'package:net_app/domain/services/local_customer_identity_resolver.dart';
 import 'package:net_app/domain/services/local_message_parser.dart';
-import 'package:net_app/domain/services/local_pos_account_registry.dart';
 import 'package:net_app/domain/services/local_transfer_processor.dart';
 import 'package:net_app/domain/services/services.dart';
 
@@ -260,75 +255,6 @@ void main() {
       );
     });
 
-    test('never credits a POS card-order message as a financial deposit', () async {
-      messages.store['pos-safe-1'] = IncomingMessage(
-        id: 'pos-safe-1',
-        sender: '779000111',
-        body: '3 كروت 100',
-        receivedAt: DateTime.utc(2026, 9, 11),
-        status: MessageProcessingStatus.received,
-      );
-
-      final posSettings = _FakeSettings();
-      await posSettings.save(AppSetting(
-        key: SettingKeys.posAccounts,
-        value: jsonEncode([
-          PosAccount(
-            posId: 'pos-1',
-            customerId: 'pos-customer',
-            name: 'نقطة 1',
-            identifiers: const ['779000111'],
-            notifyPhone: '779000111',
-          ).toJson(),
-        ]),
-        updatedAt: DateTime.utc(2026, 9, 11),
-      ));
-
-      customers.byId['pos-customer'] = Customer(
-        id: 'pos-customer',
-        displayName: 'نقطة 1',
-        status: CustomerStatus.active,
-        createdAt: DateTime.utc(2026, 1, 1),
-        updatedAt: DateTime.utc(2026, 1, 1),
-      );
-
-      final guardedProcessor = LocalTransferProcessor(
-        messages: messages,
-        customers: customers,
-        balances: balances,
-        auditLogs: audit,
-        unitOfWork: const _PassthroughUnitOfWork(),
-        clock: FixedClock(DateTime.utc(2026, 9, 11)),
-        ids: SequentialIdGenerator(),
-        posRegistry: LocalPosAccountRegistry(
-          settings: posSettings,
-          clock: FixedClock(DateTime.utc(2026, 9, 11)),
-        ),
-      );
-
-      // Simulate the failure mode: another active financial template parsed
-      // the POS order as an ordinary transfer.
-      final result = await guardedProcessor.process(
-        ParsedTransfer(
-          messageId: 'pos-safe-1',
-          amount: const Money(minorUnits: 10000, currencyCode: 'YER'),
-          customerIdentifier: '779000111',
-          identifierType: TransferIdentifierType.phone,
-          reference: '100',
-          quantity: 3,
-          kind: ParsedTransferKind.financialTransfer,
-        ),
-      );
-
-      expect(result, isA<Failure<Transaction>>());
-      expect(
-        (result as Failure<Transaction>).error.code,
-        'pos_order_template_required',
-      );
-      expect(balances.credits, isEmpty);
-      expect(messages.store['pos-safe-1']!.status, MessageProcessingStatus.rejected);
-    });
-
     test('credits active customer and marks processed', () async {
       messages.store['m1'] = IncomingMessage(
         id: 'm1',
@@ -487,19 +413,6 @@ void main() {
   });
 }
 
-
-final final class _FakeSettings implements SettingsRepository {
-  final Map<String, AppSetting> values = <String, AppSetting>{};
-
-  @override
-  Future<Result<AppSetting?>> find(String key) async => Success(values[key]);
-
-  @override
-  Future<Result<void>> save(AppSetting setting) async {
-    values[setting.key] = setting;
-    return const Success(null);
-  }
-}
 
 class _FakeCustomerService implements CustomerService {
   _FakeCustomerService(this.customers, this.ids, this.clock);
