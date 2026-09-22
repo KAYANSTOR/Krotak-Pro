@@ -100,9 +100,16 @@ final class DefaultOutboundTemplatesSeeder {
   String? _migrateKnownLegacy(String key, String current) {
     if (key != SettingKeys.posCustomerCardDeliveryTemplate) return null;
 
-    final normalized = current.replaceAll('\\r\\n', '\\n').trim();
-    if (normalized == _legacyPosCustomerTemplateWithoutCategory ||
-        normalized == _legacyPosCustomerTemplateWithValue) {
+    final normalized = current
+        .replaceAll('\\r\\n', '\\n')
+        .replaceAll(r'\\n', '\\n')
+        .trim();
+    final legacyWithoutCategory = _legacyPosCustomerTemplateWithoutCategory
+        .replaceAll(r'\\n', '\\n');
+    final legacyWithValue = _legacyPosCustomerTemplateWithValue
+        .replaceAll(r'\\n', '\\n');
+    if (normalized == legacyWithoutCategory ||
+        normalized == legacyWithValue) {
       return SettingDefaults.posCustomerCardDeliveryTemplate;
     }
     return null;
