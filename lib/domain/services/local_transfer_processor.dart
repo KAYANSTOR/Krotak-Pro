@@ -1,0 +1,1627 @@
+import 'dart:convert';
+
+import '../../core/clock.dart';
+import '../../core/id_generator.dart';
+import '../../core/result.dart';
+import '../entities/advance.dart';
+import '../entities/customer.dart';
+import '../entities/audit.dart';
+import '../entities/card.dart';
+import '../entities/message.dart';
+import '../entities/money.dart';
+import '../entities/pos_account.dart';
+import '../entities/wallet.dart';
+import '../entities/setting.dart';
+import '../entities/transaction.dart';
+import '../rejection_codes.dart';
+import '../repositories/repositories.dart';
+import '../repositories/unit_of_work.dart';
+import 'local_customer_identity_resolver.dart';
+import 'contact_directory.dart';
+import 'services.dart';
+import 'local_pos_account_registry.dart';
+import 'local_category_commission_store.dart';
+import 'pos_wholesale_pricing.dart';
+import 'pos_order_message_renderer.dart';
+import 'message_pipeline_trace.dart';
+
+/// Completes the real incoming-transfer business flow using the existing
+/// catalog, inventory, sale and native SMS boundaries.
+final class LocalTransferProcessor implements TransferProcessor {
+  LocalTransferProcessor({
+    required this.messages,
+    required this.customers,
+    required this.balances,
+    required this.auditLogs,
+    required this.unitOfWork,
+    required this.clock,
+    required this.ids,
+    this.categories,
+    this.cards,
+    this.inventory,
+    this.transactions,
+    this.reservedSales,
+    this.messageSender,
+    this.identityResolver,
+    this.settings,
+    this.advanceService,
+    this.customerService,
+    this.contactDirectory,
+    this.posRegistry,
+    this.categoryCommissionStore,
+    this.sales,
+    this.reservationTtl = const Duration(minutes: 5),
+  });
+
+  final MessageRepository messages;
+  final CustomerRepository customers;
+  final CustomerBalanceService balances;
+  final AuditLogRepository auditLogs;
+  final UnitOfWork unitOfWork;
+  final Clock clock;
+  final IdGenerator ids;
+  final CardCategoryRepository? categories;
+  final CardRepository? cards;
+  final CardInventoryService? inventory;
+  final TransactionRepository? transactions;
+  final ReservedSaleService? reservedSales;
+  final MessageSender? messageSender;
+  final LocalCustomerIdentityResolver? identityResolver;
+  final SettingsRepository? settings;
+  final AdvanceService? advanceService;
+  final CustomerService? customerService;
+  final ContactDirectory? contactDirectory;
+  final LocalPosAccountRegistry? posRegistry;
+  final LocalCategoryCommissionStore? categoryCommissionStore;
+  final SaleRepository? sales;
+  final Duration reservationTtl;
+
+  List<CardCategory>? _categoryCache;
+  DateTime? _categoryCacheAt;
+  static const Duration _categoryCacheTtl = Duration(seconds: 45);
+
+
+  /// Enforces POS credit ceiling before any reservation/sale.
+  /// debt + charge must be <= creditLimit when the limit is set.
+  Future<Result<void>> _assertPosCreditLimit({
+    required PosAccount posAccount,
+    required int chargeMinorUnits,
+    required IncomingMessage message,
+    required ParsedTransfer transfer,
+    required String destination,
+  }) async {
+    final limit = posAccount.creditLimitMinorUnits;
+    // null = unlimited; 0 = no additional debt allowed
+    if (limit == null) return const Success(null);
+    if (chargeMinorUnits <= 0) return const Success(null);
+
+    final balanceResult = await balances.getBalance(
+      customerId: posAccount.customerId,
+      currencyCode: 'YER',
+    );
+    if (balanceResult is Failure<Money>) {
+      return Failure(balanceResult.error);
+    }
+    final balance = (balanceResult as Success<Money>).value;
+    // Debt is the absolute negative balance (customer owes the store).
+    final currentDebt = balance.minorUnits < 0 ? -balance.minorUnits : 0;
+    final projected = currentDebt + chargeMinorUnits;
+    if (projected <= limit) return const Success(null);
+
+    final remaining = (limit - currentDebt).clamp(0, limit);
+    final failure = AppFailure(
+      code: RejectionCodes.creditLimitExceeded,
+      message:
+          'تجاوز سقف دين نقطة البيع. المتبقي المسموح: ${(remaining / 100).toStringAsFixed(0)}',
+    );
+    await _persistTerminalFailure(
+      messageId: message.id,
+      status: MessageProcessingStatus.rejected,
+      action: 'pos_credit_limit_exceeded',
+      error: failure,
+      transfer: transfer,
+      deliveryPhone: destination,
+    );
+    await auditLogs.append(
+      AuditLog(
+        id: ids.next('audit'),
+        entityType: 'pos_account',
+        entityId: posAccount.posId,
+        action: 'credit_limit_exceeded',
+        occurredAt: clock.now(),
+        payloadJson:
+            '{"debt":$currentDebt,"charge":$chargeMinorUnits,"limit":$limit,"remaining":$remaining}',
+      ),
+    );
+    return Failure(failure);
+  }
+
+  LocalCustomerIdentityResolver get _resolver =>
+      identityResolver ?? LocalCustomerIdentityResolver(customers: customers);
+
+  bool get _configured =>
+      categories != null &&
+      cards != null &&
+      inventory != null &&
+      transactions != null &&
+      reservedSales != null &&
+      messageSender != null;
+
+  bool get _partiallyConfigured =>
+      categories != null ||
+      cards != null ||
+      inventory != null ||
+      transactions != null ||
+      reservedSales != null ||
+      messageSender != null;
+
+  @override
+  Future<Result<Transaction>> process(ParsedTransfer transfer) async {
+    final messageResult = await messages.findById(transfer.messageId);
+    if (messageResult is Failure<IncomingMessage?>) {
+      return Failure<Transaction>(messageResult.error);
+    }
+    final message = (messageResult as Success<IncomingMessage?>).value;
+    if (message == null) {
+      return const Failure<Transaction>(
+        AppFailure(code: 'message_not_found', message: 'Message was not found'),
+      );
+    }
+
+    final operationId = _operationId(transfer);
+
+    // Resolve POS scope before any recovery path that depends on it.
+    final posLookup = posRegistry == null
+        ? null
+        : transfer.posId != null && transfer.posId!.trim().isNotEmpty
+            ? await posRegistry!.findByPosId(transfer.posId!.trim())
+            : await posRegistry!.findByIdentifier(message.sender);
+    if (transfer.posId != null && posLookup is Failure<PosAccount?>) {
+      return Failure<Transaction>(posLookup.error);
+    }
+    final posAccount = posLookup is Success<PosAccount?> ? posLookup.value : null;
+    final isPosOrder = posAccount != null &&
+        posAccount.status == PointOfSaleStatus.active &&
+        (transfer.posId == null || transfer.posId == posAccount.posId);
+
+    final txRepo = transactions;
+    if (txRepo != null) {
+      final existingLedger = await txRepo.findByReference('sale-op:$operationId');
+      if (existingLedger is Failure<Transaction?>) {
+        return Failure<Transaction>(existingLedger.error);
+      }
+      final existing = (existingLedger as Success<Transaction?>).value;
+      if (existing != null) {
+        if (isPosOrder) {
+          final recovered = await _recoverCommittedPosSale(
+            operationId: operationId,
+            transfer: transfer,
+            message: message,
+            posAccount: posAccount,
+            transactionRepo: txRepo,
+            sender: messageSender,
+          );
+          if (recovered is Success<Transaction>) return recovered;
+          if (recovered is Failure<Transaction>) return recovered;
+        }
+        await messages.updateStatus(message.id, MessageProcessingStatus.processed);
+        return Success<Transaction>(existing);
+      }
+    }
+
+    if (message.status == MessageProcessingStatus.processed) {
+      return const Failure<Transaction>(
+        AppFailure(
+          code: 'message_already_processed',
+          message: 'Message was already processed',
+        ),
+      );
+    }
+
+    CustomerIdentityResolution resolution;
+    Result<CustomerIdentityResolution> resolutionResult;
+    if (isPosOrder) {
+      final posCustomerResult = await customers.findById(posAccount.customerId);
+      if (posCustomerResult is Failure<Customer?>) {
+        return Failure<Transaction>(posCustomerResult.error);
+      }
+      final posCustomer = (posCustomerResult as Success<Customer?>).value;
+      if (posCustomer == null) {
+        const failure = AppFailure(
+          code: 'pos_account_customer_missing',
+          message: 'POS ledger account customer was not found',
+        );
+        await _persistTerminalFailure(
+          messageId: message.id,
+          status: MessageProcessingStatus.failed,
+          action: 'pos_order_invalid_account',
+          error: failure,
+          transfer: transfer,
+          deliveryPhone: transfer.deliveryOverride ?? transfer.customerIdentifier,
+        );
+        return const Failure<Transaction>(failure);
+      }
+      final destination = (transfer.deliveryOverride ?? transfer.customerIdentifier).trim();
+      if (destination.isEmpty) {
+        const failure = AppFailure(
+          code: 'pos_customer_phone_missing',
+          message: 'POS order customer phone is missing',
+        );
+        await _persistTerminalFailure(
+          messageId: message.id,
+          status: MessageProcessingStatus.rejected,
+          action: 'pos_order_missing_destination',
+          error: failure,
+          transfer: transfer,
+        );
+        return const Failure<Transaction>(failure);
+      }
+      resolution = CustomerIdentityResolution.resolved(
+        customer: posCustomer,
+        deliveryPhone: destination,
+        matchedIdentifier: null,
+      );
+      resolutionResult = Success(resolution);
+    } else {
+      resolutionResult = await _resolver.resolve(
+        identifierValue: transfer.customerIdentifier,
+        identifierType: transfer.identifierType,
+      );
+      if (resolutionResult is Failure<CustomerIdentityResolution>) {
+        return Failure<Transaction>(resolutionResult.error);
+      }
+      resolution = (resolutionResult as Success<CustomerIdentityResolution>).value;
+    }
+    // Auto-provision unknown phone senders from enabled-wallet transfers so
+    // card delivery proceeds without a pre-registered customer account.
+    if ((!resolution.isResolved || resolution.customer == null) &&
+        customerService != null &&
+        _canAutoProvision(transfer)) {
+      final provisioned = await _autoProvisionCustomer(transfer);
+      if (provisioned is Success<Customer>) {
+        resolutionResult = await _resolver.resolve(
+          identifierValue: transfer.customerIdentifier,
+          identifierType: transfer.identifierType,
+        );
+        if (resolutionResult is Failure<CustomerIdentityResolution>) {
+          return Failure<Transaction>(resolutionResult.error);
+        }
+        resolution =
+            (resolutionResult as Success<CustomerIdentityResolution>).value;
+        await auditLogs.append(
+          AuditLog(
+            id: ids.next('audit'),
+            entityType: 'message',
+            entityId: message.id,
+            action: 'ledger_account_auto_provisioned',
+            occurredAt: clock.now(),
+            payloadJson:
+                '{\"customerId\":\"${provisioned.value.id}\",\"identifier\":\"${transfer.customerIdentifier}\",\"identifierType\":\"${transfer.identifierType.name}\"}',
+          ),
+        );
+      }
+    }
+
+    if (!resolution.isResolved || resolution.customer == null) {
+      final failure = AppFailure(
+        code: resolution.reasonCode ?? 'unresolved_identity',
+        message: resolution.reasonMessage ?? 'Could not resolve customer identity',
+      );
+      await _persistTerminalFailure(
+        messageId: message.id,
+        status: MessageProcessingStatus.rejected,
+        action: 'transfer_unresolved',
+        error: failure,
+        transfer: transfer,
+        deliveryPhone: resolution.deliveryPhone,
+      );
+      return Failure<Transaction>(failure);
+    }
+
+    // If account was provisional but the phone is now in contacts, promote
+    // to a full customer and adopt the contact display name.
+    final liveCustomer = resolution.customer;
+    if (!isPosOrder &&
+        liveCustomer != null &&
+        liveCustomer.status == CustomerStatus.provisional &&
+        customerService != null &&
+        contactDirectory != null) {
+      final match = await contactDirectory!.findByPhone(
+        transfer.customerIdentifier,
+      );
+      if (match != null && match.displayName.trim().isNotEmpty) {
+        final promoted = await customerService!.promoteToActive(liveCustomer.id);
+        if (promoted is Success<Customer>) {
+          final named = promoted.value.copyWith(
+            displayName: match.displayName.trim(),
+            updatedAt: clock.now(),
+          );
+          await customers.save(named);
+          resolutionResult = await _resolver.resolve(
+            identifierValue: transfer.customerIdentifier,
+            identifierType: transfer.identifierType,
+          );
+          if (resolutionResult is Success<CustomerIdentityResolution>) {
+            resolution =
+                (resolutionResult as Success<CustomerIdentityResolution>).value;
+          }
+          await auditLogs.append(
+            AuditLog(
+              id: ids.next('audit'),
+              entityType: 'customer',
+              entityId: named.id,
+              action: 'promoted_from_contacts',
+              occurredAt: clock.now(),
+              payloadJson:
+                  '{\"phone\":\"${transfer.customerIdentifier}\",\"displayName\":\"${match.displayName.trim()}\"}',
+            ),
+          );
+        }
+      }
+    }
+
+    final bindPhone =
+        (resolution.deliveryPhone ?? transfer.customerIdentifier).trim();
+    if (!isPosOrder &&
+        customerService != null &&
+        bindPhone.isNotEmpty &&
+        transfer.identifierType == TransferIdentifierType.phone) {
+      await customerService!.bindPrimaryGsm(
+        customerId: resolution.customer!.id,
+        phone: bindPhone,
+      );
+    }
+
+    if (!_configured) {
+      if (_partiallyConfigured) {
+        const failure = AppFailure(
+          code: 'commercial_flow_misconfigured',
+          message: 'Commercial transfer flow is partially configured',
+        );
+        await _persistTerminalFailure(
+          messageId: message.id,
+          status: MessageProcessingStatus.failed,
+          action: 'transfer_failed',
+          error: failure,
+          transfer: transfer,
+          deliveryPhone: resolution.deliveryPhone,
+        );
+        return const Failure<Transaction>(failure);
+      }
+      final legacy = await unitOfWork.run(() async {
+        final credit = await balances.credit(
+          customerId: resolution.customer!.id,
+          amount: transfer.amount,
+          reference: transfer.reference.isEmpty ? null : transfer.reference,
+        );
+        if (credit is Failure<Transaction>) return Failure<Transaction>(credit.error);
+        final tx = (credit as Success<Transaction>).value;
+        await messages.updateStatus(message.id, MessageProcessingStatus.processed);
+        final delivery = resolution.deliveryPhone ?? '';
+        final audited = await auditLogs.append(
+          AuditLog(
+            id: ids.next('audit'),
+            entityType: 'message',
+            entityId: message.id,
+            action: 'transfer_processed',
+            occurredAt: clock.now(),
+            payloadJson:
+                '{\"transactionId\":\"${tx.id}\",\"reference\":\"${transfer.reference}\",\"identifierType\":\"${transfer.identifierType.name}\",\"deliveryPhone\":\"$delivery\"}',
+          ),
+        );
+        if (audited is Failure<void>) return Failure<Transaction>(audited.error);
+        return Success<Transaction>(tx);
+      });
+      if (legacy is Failure<Transaction>) {
+        await messages.updateStatus(message.id, MessageProcessingStatus.failed);
+        return Failure<Transaction>(legacy.error);
+      }
+      return Success<Transaction>((legacy as Success<Transaction>).value);
+    }
+
+    final categoriesRepo = categories!;
+    final cardsRepo = cards!;
+    final inventoryService = inventory!;
+    final saleCompleter = reservedSales!;
+    final sender = messageSender!;
+    final transactionRepo = transactions!;
+    final customer = resolution.customer!;
+    final destination = (isPosOrder
+            ? (transfer.deliveryOverride ?? transfer.customerIdentifier)
+            : resolution.deliveryPhone)
+        ?.trim() ??
+        '';
+    if (destination.isEmpty) {
+      const failure = AppFailure(
+        code: 'delivery_phone_missing',
+        message: 'Customer has no resolved delivery phone',
+      );
+      await _persistTerminalFailure(
+        messageId: message.id,
+        status: MessageProcessingStatus.rejected,
+        action: 'transfer_rejected',
+        error: failure,
+        transfer: transfer,
+      );
+      return const Failure<Transaction>(failure);
+    }
+
+    final deliveryStateResult = await _deliveryState(message.id);
+    if (deliveryStateResult is Failure<_DeliveryState?>) {
+      await messages.updateStatus(message.id, MessageProcessingStatus.failed);
+      return Failure<Transaction>(deliveryStateResult.error);
+    }
+    final deliveryState = (deliveryStateResult as Success<_DeliveryState?>).value;
+    if (deliveryState != null) {
+      final ensured = await _ensureReservation(
+        cardId: deliveryState.cardId,
+        reservationId: deliveryState.reservationId,
+        categoryId: deliveryState.categoryId,
+        now: clock.now(),
+        cardsRepo: cardsRepo,
+      );
+      if (ensured is Failure<Card>) {
+        await _persistTerminalFailure(
+          messageId: message.id,
+          status: MessageProcessingStatus.failed,
+          action: 'transfer_delivery_recovery_failed',
+          error: ensured.error,
+          transfer: transfer,
+          deliveryPhone: destination,
+        );
+        return Failure<Transaction>(ensured.error);
+      }
+      final completed = await saleCompleter.completeReservedSale(
+        customerId: customer.id,
+        cardId: deliveryState.cardId,
+        reservationId: deliveryState.reservationId,
+        operationId: operationId,
+      );
+      if (completed is Failure<Sale>) {
+        await _persistTerminalFailure(
+          messageId: message.id,
+          status: MessageProcessingStatus.failed,
+          action: 'transfer_sale_recovery_failed',
+          error: completed.error,
+          transfer: transfer,
+          deliveryPhone: destination,
+        );
+        return Failure<Transaction>(completed.error);
+      }
+      final ledger = await transactionRepo.findByReference('sale-op:$operationId');
+      if (ledger is Success<Transaction?> && ledger.value != null) {
+        await messages.updateStatus(message.id, MessageProcessingStatus.processed);
+        return Success<Transaction>(ledger.value!);
+      }
+      return const Failure<Transaction>(
+        AppFailure(
+          code: 'sale_ledger_missing',
+          message: 'Sale completed but its ledger record could not be found',
+        ),
+      );
+    }
+
+    var effectiveAmount = transfer.amount;
+    final advanceEngine = advanceService;
+    if (advanceEngine != null) {
+      final settlement = await advanceEngine.applyPayment(
+        customerId: customer.id,
+        amount: transfer.amount,
+        // Salafni settlement requires a non-null reference; `_operationId`
+        // (below) supplies a stable per-message fallback pattern, but this
+        // call's own dedup-by-prefix scheme is unaffected either way — an
+        // empty reference here only ever causes a conservative rejection
+        // (`settlement_reference_conflict`), never a silent double-credit.
+        reference: transfer.reference,
+      );
+      if (settlement is Failure<AdvancePaymentResult>) {
+        await _persistTerminalFailure(
+          messageId: message.id,
+          status: MessageProcessingStatus.failed,
+          action: 'salafni_settlement_failed',
+          error: settlement.error,
+          transfer: transfer,
+          deliveryPhone: destination,
+        );
+        return Failure<Transaction>(settlement.error);
+      }
+      final settled = (settlement as Success<AdvancePaymentResult>).value;
+      effectiveAmount = settled.remaining;
+      if (effectiveAmount.minorUnits == 0) {
+        final settlementTransaction = settled.settlementTransaction;
+        if (settlementTransaction == null) {
+          const failure = AppFailure(
+            code: 'salafni_settlement_state_invalid',
+            message: 'Salafni was settled but no settlement transaction was returned',
+          );
+          await _persistTerminalFailure(
+            messageId: message.id,
+            status: MessageProcessingStatus.failed,
+            action: 'salafni_settlement_state_invalid',
+            error: failure,
+            transfer: transfer,
+            deliveryPhone: destination,
+          );
+          return const Failure<Transaction>(failure);
+        }
+        await messages.updateStatus(message.id, MessageProcessingStatus.processed);
+        return Success<Transaction>(settlementTransaction);
+      }
+    }
+
+    final matchResult = await _matchActiveCategory(effectiveAmount);
+    if (matchResult is Failure<List<CardCategory>>) {
+      return Failure<Transaction>(matchResult.error);
+    }
+    final matches = (matchResult as Success<List<CardCategory>>).value;
+    if (matches.isEmpty) {
+      final categoryOnly = await _processCategoryAmountsOnly();
+      if (categoryOnly) {
+        const failure = AppFailure(
+          code: 'unmatched_amount_pending',
+          message: 'No active card category matches the transfer amount; awaiting review',
+        );
+        await _persistTerminalFailure(
+          messageId: message.id,
+          status: MessageProcessingStatus.parsed,
+          action: 'transfer_unmatched_amount_pending',
+          error: failure,
+          transfer: transfer,
+          deliveryPhone: destination,
+        );
+        return const Failure<Transaction>(failure);
+      }
+      const failure = AppFailure(
+        code: 'unmatched_amount',
+        message: 'No active card category matches the transfer amount',
+      );
+      await _persistTerminalFailure(
+        messageId: message.id,
+        status: MessageProcessingStatus.rejected,
+        action: 'transfer_unmatched_amount',
+        error: failure,
+        transfer: transfer,
+        deliveryPhone: destination,
+      );
+      return const Failure<Transaction>(failure);
+    }
+    if (matches.length > 1) {
+      const failure = AppFailure(
+        code: 'ambiguous_amount_category',
+        message: 'Multiple active card categories match the transfer amount',
+      );
+      await _persistTerminalFailure(
+        messageId: message.id,
+        status: MessageProcessingStatus.rejected,
+        action: 'transfer_ambiguous_category',
+        error: failure,
+        transfer: transfer,
+        deliveryPhone: destination,
+      );
+      return const Failure<Transaction>(failure);
+    }
+
+    final category = matches.single;
+    var effectiveCategory = category;
+    if (isPosOrder && categoryCommissionStore != null) {
+      final commission = await categoryCommissionStore!.bpsFor(category.id);
+      if (commission is Success<int>) {
+        effectiveCategory = category.withCommission(commission.value);
+      }
+    }
+    final posCharge = isPosOrder
+        ? PosWholesalePricing().unitPrice(
+            category: effectiveCategory,
+            mode: posAccount.percentageMode,
+          )
+        : effectiveCategory.faceValue;
+
+    if (isPosOrder) {
+      final limitCheck = await _assertPosCreditLimit(
+        posAccount: posAccount,
+        chargeMinorUnits: posCharge.minorUnits * transfer.quantity,
+        message: message,
+        transfer: transfer,
+        destination: destination,
+      );
+      if (limitCheck is Failure<void>) {
+        return Failure<Transaction>(limitCheck.error);
+      }
+    }
+
+    if (transfer.quantity > 1) {
+      return _processBatchSale(
+        transfer: transfer, message: message, customer: customer, destination: destination,
+        category: category, posAccount: posAccount, isPosOrder: isPosOrder, posCharge: posCharge,
+        operationId: operationId, inventoryService: inventoryService, saleCompleter: saleCompleter,
+        sender: sender, transactionRepo: transactionRepo,
+      );
+    }
+
+    final reservationId = 'transfer-reservation:$operationId';
+    final now = clock.now();
+    final reserved = await inventoryService.reserveAvailableCard(
+      categoryId: category.id,
+      reservationId: reservationId,
+      now: now,
+      expiresAt: now.add(reservationTtl),
+    );
+    if (reserved is Failure<Card>) {
+      final failure = reserved.error.code == 'card_unavailable'
+          ? const AppFailure(
+              code: 'out_of_stock',
+              message: 'No available card exists in the matching category',
+            )
+          : reserved.error;
+      await _persistTerminalFailure(
+        messageId: message.id,
+        status: MessageProcessingStatus.rejected,
+        action: failure.code == 'out_of_stock'
+            ? 'transfer_out_of_stock'
+            : 'transfer_reservation_failed',
+        error: failure,
+        transfer: transfer,
+        deliveryPhone: destination,
+      );
+      return Failure<Transaction>(failure);
+    }
+    final card = (reserved as Success<Card>).value;
+
+    if (!isPosOrder) {
+      final credit = await balances.credit(
+        customerId: customer.id,
+        amount: effectiveAmount,
+        reference: transfer.reference.isEmpty ? null : transfer.reference,
+      );
+      if (credit is Failure<Transaction>) {
+        await inventoryService.releaseReservation(
+          cardId: card.id,
+          reservationId: reservationId,
+        );
+        await _persistTerminalFailure(
+          messageId: message.id,
+          status: MessageProcessingStatus.failed,
+          action: 'transfer_credit_failed',
+          error: credit.error,
+          transfer: transfer,
+          deliveryPhone: destination,
+        );
+        return Failure<Transaction>(credit.error);
+      }
+    }
+
+    final completed = await saleCompleter.completeReservedSale(
+      customerId: customer.id,
+      cardId: card.id,
+      reservationId: reservationId,
+      operationId: operationId,
+      saleAmount: posCharge,
+      allowNegativeBalance: isPosOrder,
+    );
+    if (completed is Failure<Sale>) {
+      await inventoryService.releaseReservation(
+        cardId: card.id,
+        reservationId: reservationId,
+      );
+      await _persistTerminalFailure(
+        messageId: message.id,
+        status: MessageProcessingStatus.failed,
+        action: 'transfer_sale_commit_failed',
+        error: completed.error,
+        transfer: transfer,
+        deliveryPhone: destination,
+      );
+      return Failure<Transaction>(completed.error);
+    }
+
+    if (isPosOrder) {
+      final pos = posAccount;
+      return _deliverPosOrder(
+        transfer: transfer,
+        message: message,
+        posAccount: pos,
+        category: category,
+        items: <_PosOrderItem>[
+          _PosOrderItem(
+            card: card,
+            reservationId: reservationId,
+            saleOperationId: operationId,
+          ),
+        ],
+        customerDestination: destination,
+        posDestination: pos.notifyPhone?.trim().isNotEmpty == true
+            ? pos.notifyPhone!.trim()
+            : message.sender.trim(),
+        unitCharge: posCharge,
+        operationId: operationId,
+        sender: sender,
+        transactionRepo: transactionRepo,
+      );
+    }
+
+    final commitAudit = await auditLogs.append(
+      AuditLog(
+        id: ids.next('audit'),
+        entityType: 'message',
+        entityId: message.id,
+        action: 'voucher_committed',
+        occurredAt: clock.now(),
+        payloadJson:
+            '{\"operationId\":\"$operationId\",\"cardId\":\"${card.id}\",\"categoryId\":\"${category.id}\",\"reservationId\":\"$reservationId\",\"destination\":\"$destination\"}',
+      ),
+    );
+    if (commitAudit is Failure<void>) {
+      await _persistTerminalFailure(
+        messageId: message.id,
+        status: MessageProcessingStatus.failed,
+        action: 'voucher_commit_state_persist_failed',
+        error: commitAudit.error,
+        transfer: transfer,
+        deliveryPhone: destination,
+      );
+      return Failure<Transaction>(commitAudit.error);
+    }
+
+    // Mark sending before the native SMS call so recovery/worker sees an
+    // in-flight delivery and can re-attempt quickly if the first send fails.
+    await messages.updateStatus(message.id, MessageProcessingStatus.sending);
+    final body =
+        cardDeliverySmsBody(serialNumber: card.serialNumber, secretCode: card.secretCode);
+    final sent = await sender.send(destination: destination, body: body);
+    if (sent is Failure<void>) {
+      await auditLogs.append(
+        AuditLog(
+          id: ids.next('audit'),
+          entityType: 'message',
+          entityId: message.id,
+          action: 'sms_delivery_failed',
+          occurredAt: clock.now(),
+          payloadJson:
+              '{\"operationId\":\"$operationId\",\"cardId\":\"${card.id}\",\"categoryId\":\"${category.id}\",\"reservationId\":\"$reservationId\",\"destination\":\"$destination\",\"error\":\"${sent.error.code}\"}',
+        ),
+      );
+      // Sale/voucher already committed — do not reverse. Leave status failed so
+      // MessageDeliveryWorker retries within seconds.
+      await messages.updateStatus(message.id, MessageProcessingStatus.failed);
+      final ledgerOnFail =
+          await transactionRepo.findByReference('sale-op:$operationId');
+      if (ledgerOnFail is Success<Transaction?> && ledgerOnFail.value != null) {
+        return Success<Transaction>(ledgerOnFail.value!);
+      }
+      return Failure<Transaction>(sent.error);
+    }
+
+    final deliveryAudit = await auditLogs.append(
+      AuditLog(
+        id: ids.next('audit'),
+        entityType: 'message',
+        entityId: message.id,
+        action: 'sms_delivery_succeeded',
+        occurredAt: clock.now(),
+        payloadJson:
+            '{\"operationId\":\"$operationId\",\"cardId\":\"${card.id}\",\"categoryId\":\"${category.id}\",\"reservationId\":\"$reservationId\",\"destination\":\"$destination\"}',
+      ),
+    );
+    if (deliveryAudit is Failure<void>) {
+      await _persistTerminalFailure(
+        messageId: message.id,
+        status: MessageProcessingStatus.failed,
+        action: 'sms_delivery_state_persist_failed',
+        error: deliveryAudit.error,
+        transfer: transfer,
+        deliveryPhone: destination,
+      );
+      return Failure<Transaction>(deliveryAudit.error);
+    }
+
+    final ledger = await transactionRepo.findByReference('sale-op:$operationId');
+    if (ledger is Failure<Transaction?>) return Failure<Transaction>(ledger.error);
+    final saleLedger = (ledger as Success<Transaction?>).value;
+    if (saleLedger == null) {
+      const failure = AppFailure(
+        code: 'sale_ledger_missing',
+        message: 'Sale completed but its ledger record could not be found',
+      );
+      await _persistTerminalFailure(
+        messageId: message.id,
+        status: MessageProcessingStatus.failed,
+        action: 'transfer_ledger_missing',
+        error: failure,
+        transfer: transfer,
+        deliveryPhone: destination,
+      );
+      return const Failure<Transaction>(failure);
+    }
+
+    await messages.updateStatus(message.id, MessageProcessingStatus.processed);
+    return Success<Transaction>(saleLedger);
+  }
+
+
+  Future<Result<Transaction>> _recoverCommittedPosSale({
+    required String operationId,
+    required ParsedTransfer transfer,
+    required IncomingMessage message,
+    required PosAccount? posAccount,
+    required TransactionRepository transactionRepo,
+    required MessageSender? sender,
+  }) async {
+    if (posAccount == null ||
+        sender == null ||
+        sales == null ||
+        cards == null ||
+        categories == null ||
+        settings == null) {
+      return const Failure(
+        AppFailure(
+          code: 'pos_order_recovery_not_configured',
+          message: 'POS committed-sale recovery is not fully configured',
+        ),
+      );
+    }
+
+    final saleResult = await sales!.findById(operationId);
+    if (saleResult is Failure<Sale?>) return Failure(saleResult.error);
+    final sale = (saleResult as Success<Sale?>).value;
+    if (sale == null) {
+      return const Failure(
+        AppFailure(
+          code: 'pos_order_sale_missing',
+          message: 'Committed POS sale record was not found',
+        ),
+      );
+    }
+
+    final cardResult = await cards!.findById(sale.cardId);
+    if (cardResult is Failure<Card?>) return Failure(cardResult.error);
+    final card = (cardResult as Success<Card?>).value;
+    if (card == null) {
+      return const Failure(
+        AppFailure(
+          code: 'pos_order_card_missing',
+          message: 'Committed POS card was not found',
+        ),
+      );
+    }
+
+    final categoryResult = await categories!.findById(card.categoryId);
+    if (categoryResult is Failure<CardCategory?>) {
+      return Failure(categoryResult.error);
+    }
+    final category = (categoryResult as Success<CardCategory?>).value;
+    if (category == null) {
+      return const Failure(
+        AppFailure(
+          code: 'pos_order_category_missing',
+          message: 'Committed POS card category was not found',
+        ),
+      );
+    }
+
+    final destination =
+        (transfer.deliveryOverride ?? transfer.customerIdentifier).trim();
+    final posDestination = posAccount.notifyPhone?.trim().isNotEmpty == true
+        ? posAccount.notifyPhone!.trim()
+        : message.sender.trim();
+
+    return _deliverPosOrder(
+      transfer: transfer,
+      message: message,
+      posAccount: posAccount,
+      category: category,
+      items: <_PosOrderItem>[
+        _PosOrderItem(
+          card: card,
+          reservationId: 'recovered:' + operationId,
+          saleOperationId: operationId,
+        ),
+      ],
+      customerDestination: destination,
+      posDestination: posDestination,
+      unitCharge: sale.amount,
+      operationId: operationId,
+      sender: sender,
+      transactionRepo: transactionRepo,
+    );
+  }
+
+  Future<Result<Transaction>> _deliverPosOrder({
+    required ParsedTransfer transfer,
+    required IncomingMessage message,
+    required PosAccount posAccount,
+    required CardCategory category,
+    required List<_PosOrderItem> items,
+    required String customerDestination,
+    required String posDestination,
+    required Money unitCharge,
+    required String operationId,
+    required MessageSender sender,
+    required TransactionRepository transactionRepo,
+  }) async {
+    // Durable commit marker is written BEFORE rendering/sending. The sale/card
+    // is already committed at this point, so every outbound failure (including
+    // a broken template) remains recoverable by PosOrderDeliveryWorker without
+    // allocating another card.
+    final commitPayload = jsonEncode({
+      'operationId': operationId,
+      'posId': posAccount.posId,
+      'posName': posAccount.name,
+      'customerDestination': customerDestination,
+      'posDestination': posDestination,
+      'categoryId': category.id,
+      'categoryName': category.name,
+      'faceValueMinor': category.faceValue.minorUnits,
+      'currencyCode': category.faceValue.currencyCode,
+      'unitChargeMinor': unitCharge.minorUnits,
+      'totalChargeMinor': unitCharge.minorUnits * items.length,
+      'quantity': items.length,
+      'items': [
+        for (final item in items)
+          {
+            'cardId': item.card.id,
+            'reservationId': item.reservationId,
+            'saleOperationId': item.saleOperationId,
+          },
+      ],
+    });
+
+    final commitAudit = await auditLogs.append(
+      AuditLog(
+        id: ids.next('audit'),
+        entityType: 'message',
+        entityId: message.id,
+        action: 'pos_order_committed',
+        occurredAt: clock.now(),
+        payloadJson: commitPayload,
+      ),
+    );
+    if (commitAudit is Failure<void>) {
+      await _persistTerminalFailure(
+        messageId: message.id,
+        status: MessageProcessingStatus.failed,
+        action: 'pos_order_commit_state_persist_failed',
+        error: commitAudit.error,
+        transfer: transfer,
+        deliveryPhone: customerDestination,
+      );
+      return Failure<Transaction>(commitAudit.error);
+    }
+
+    await messages.updateStatus(message.id, MessageProcessingStatus.sending);
+
+    final settingsRepo = settings;
+    if (settingsRepo == null) {
+      const failure = AppFailure(
+        code: 'pos_message_templates_unavailable',
+        message: 'POS outbound message templates are not configured',
+      );
+      await _persistTerminalFailure(
+        messageId: message.id,
+        status: MessageProcessingStatus.failed,
+        action: 'pos_order_message_configuration_failed',
+        error: failure,
+        transfer: transfer,
+        deliveryPhone: customerDestination,
+      );
+      return const Failure<Transaction>(failure);
+    }
+
+    final rendered = await PosOrderMessageRenderer(settings: settingsRepo).render(
+      posAccount: posAccount,
+      customerPhone: customerDestination,
+      posNotificationPhone: posDestination,
+      categoryName: category.name,
+      faceValue: category.faceValue,
+      unitCharge: unitCharge,
+      cards: items.map((e) => e.card).toList(growable: false),
+      quantity: items.length,
+    );
+    if (rendered is Failure<PosOrderMessages>) {
+      await _persistTerminalFailure(
+        messageId: message.id,
+        status: MessageProcessingStatus.failed,
+        action: 'pos_order_message_render_failed',
+        error: rendered.error,
+        transfer: transfer,
+        deliveryPhone: customerDestination,
+      );
+      return Failure<Transaction>(rendered.error);
+    }
+    final messagesBody = (rendered as Success<PosOrderMessages>).value;
+
+    final customerSent = await sender.send(
+      destination: messagesBody.customerDestination,
+      body: messagesBody.customerBody,
+    );
+    if (customerSent is Failure<void>) {
+      await auditLogs.append(
+        AuditLog(
+          id: ids.next('audit'),
+          entityType: 'message',
+          entityId: message.id,
+          action: 'pos_order_customer_sms_failed',
+          occurredAt: clock.now(),
+          payloadJson: jsonEncode({
+            'operationId': operationId,
+            'destination': messagesBody.customerDestination,
+            'error': customerSent.error.code,
+          }),
+        ),
+      );
+      await messages.updateStatus(message.id, MessageProcessingStatus.failed);
+      final ledger = await transactionRepo.findByReference('sale-op:$operationId');
+      if (ledger is Success<Transaction?> && ledger.value != null) {
+        return Success<Transaction>(ledger.value!);
+      }
+      return Failure<Transaction>(customerSent.error);
+    }
+
+    final customerAudit = await auditLogs.append(
+      AuditLog(
+        id: ids.next('audit'),
+        entityType: 'message',
+        entityId: message.id,
+        action: 'pos_order_customer_sms_succeeded',
+        occurredAt: clock.now(),
+        payloadJson: jsonEncode({
+          'operationId': operationId,
+          'destination': messagesBody.customerDestination,
+          'quantity': items.length,
+        }),
+      ),
+    );
+    if (customerAudit is Failure<void>) {
+      await messages.updateStatus(message.id, MessageProcessingStatus.failed);
+      final ledger = await transactionRepo.findByReference('sale-op:$operationId');
+      if (ledger is Success<Transaction?> && ledger.value != null) {
+        return Success<Transaction>(ledger.value!);
+      }
+      return Failure<Transaction>(customerAudit.error);
+    }
+
+    final posSent = await sender.send(
+      destination: messagesBody.posDestination,
+      body: messagesBody.posBody,
+    );
+    if (posSent is Failure<void>) {
+      await auditLogs.append(
+        AuditLog(
+          id: ids.next('audit'),
+          entityType: 'message',
+          entityId: message.id,
+          action: 'pos_order_pos_sms_failed',
+          occurredAt: clock.now(),
+          payloadJson: jsonEncode({
+            'operationId': operationId,
+            'destination': messagesBody.posDestination,
+            'error': posSent.error.code,
+          }),
+        ),
+      );
+      await messages.updateStatus(message.id, MessageProcessingStatus.failed);
+      final ledger = await transactionRepo.findByReference('sale-op:$operationId');
+      if (ledger is Success<Transaction?> && ledger.value != null) {
+        return Success<Transaction>(ledger.value!);
+      }
+      return Failure<Transaction>(posSent.error);
+    }
+
+    final posAudit = await auditLogs.append(
+      AuditLog(
+        id: ids.next('audit'),
+        entityType: 'message',
+        entityId: message.id,
+        action: 'pos_order_pos_sms_succeeded',
+        occurredAt: clock.now(),
+        payloadJson: jsonEncode({
+          'operationId': operationId,
+          'destination': messagesBody.posDestination,
+        }),
+      ),
+    );
+    if (posAudit is Failure<void>) {
+      await messages.updateStatus(message.id, MessageProcessingStatus.failed);
+      final ledger = await transactionRepo.findByReference('sale-op:$operationId');
+      if (ledger is Success<Transaction?> && ledger.value != null) {
+        return Success<Transaction>(ledger.value!);
+      }
+      return Failure<Transaction>(posAudit.error);
+    }
+
+    final ledger = await transactionRepo.findByReference('sale-op:$operationId');
+    if (ledger is Failure<Transaction?>) return Failure<Transaction>(ledger.error);
+    final saleLedger = (ledger as Success<Transaction?>).value;
+    if (saleLedger == null) {
+      const failure = AppFailure(
+        code: 'sale_ledger_missing',
+        message: 'POS order completed but its ledger record could not be found',
+      );
+      await _persistTerminalFailure(
+        messageId: message.id,
+        status: MessageProcessingStatus.failed,
+        action: 'pos_order_ledger_missing',
+        error: failure,
+        transfer: transfer,
+        deliveryPhone: customerDestination,
+      );
+      return const Failure<Transaction>(failure);
+    }
+
+    await messages.updateStatus(message.id, MessageProcessingStatus.processed);
+    return Success<Transaction>(saleLedger);
+  }
+
+
+  Future<Result<List<CardCategory>>> _matchActiveCategory(Money amount) async {
+    final categoriesRepo = categories!;
+    final now = clock.now();
+    final stale = _categoryCache == null ||
+        _categoryCacheAt == null ||
+        now.difference(_categoryCacheAt!) > _categoryCacheTtl;
+    if (stale) {
+      final all = await categoriesRepo.listAll();
+      if (all is Failure<List<CardCategory>>) {
+        return Failure(all.error);
+      }
+      _categoryCache = (all as Success<List<CardCategory>>).value;
+      _categoryCacheAt = now;
+    }
+    final matches = _categoryCache!
+        .where(
+          (category) =>
+              category.isActive &&
+              category.faceValue.currencyCode == amount.currencyCode &&
+              category.faceValue.minorUnits == amount.minorUnits,
+        )
+        .toList(growable: false);
+    return Success(matches);
+  }
+
+  bool _canAutoProvision(ParsedTransfer transfer) {
+    if (transfer.identifierType != TransferIdentifierType.phone) return false;
+    final value = transfer.customerIdentifier.trim();
+    if (value.isEmpty) return false;
+    return value.length >= 7 && RegExp(r'^[0-9+\s-]+$').hasMatch(value);
+  }
+
+  Future<Result<Customer>> _autoProvisionCustomer(ParsedTransfer transfer) async {
+    final service = customerService;
+    if (service == null) {
+      return const Failure(
+        AppFailure(code: 'customer_service_unavailable', message: 'Customer service not wired'),
+      );
+    }
+    final phone = transfer.customerIdentifier.trim();
+    // Contacts decide identity: in phonebook => full customer with name;
+    // otherwise provisional ledger-only account.
+    var displayName = phone;
+    var status = CustomerStatus.provisional;
+    final match = await contactDirectory?.findByPhone(phone);
+    if (match != null && match.displayName.trim().isNotEmpty) {
+      displayName = match.displayName.trim();
+      status = CustomerStatus.active;
+    }
+    final created = await service.create(
+      displayName: displayName,
+      identifierType: CustomerIdentifierType.phoneNumber,
+      identifierValue: phone,
+      status: status,
+    );
+    if (created is Success<Customer>) return created;
+    if (created is Failure<Customer> &&
+        created.error.code == 'duplicate_identifier') {
+      final existing = await customers.findByIdentifier(phone);
+      if (existing is Success<Customer?> && existing.value != null) {
+        return Success(existing.value!);
+      }
+    }
+    return Failure(created is Failure<Customer> ? created.error : const AppFailure(
+      code: 'auto_provision_failed',
+      message: 'Could not auto-create customer from transfer phone',
+    ));
+  }
+
+  String _operationId(ParsedTransfer transfer) {
+    final ref = transfer.reference.trim();
+    return ref.isNotEmpty ? ref : 'message:${transfer.messageId}';
+  }
+
+  Future<Result<_DeliveryState?>> _deliveryState(String messageId) async {
+    final logs = await auditLogs.findByEntity('message', messageId);
+    if (logs is Failure<List<AuditLog>>) return Failure<_DeliveryState?>(logs.error);
+    final entries = (logs as Success<List<AuditLog>>)
+        .value
+        .where((log) =>
+            log.action == 'sms_delivery_succeeded' ||
+            log.action == 'voucher_committed')
+        .toList(growable: false);
+    if (entries.isEmpty) return const Success<_DeliveryState?>(null);
+    final payload = entries.last.payloadJson ?? '';
+    final cardId = _field(payload, 'cardId');
+    final reservationId = _field(payload, 'reservationId');
+    final categoryId = _field(payload, 'categoryId');
+    if (cardId == null || reservationId == null || categoryId == null) {
+      return const Failure<_DeliveryState?>(
+        AppFailure(
+          code: 'delivery_state_invalid',
+          message: 'Persisted SMS delivery state is invalid',
+        ),
+      );
+    }
+    return Success<_DeliveryState?>(
+      _DeliveryState(
+        cardId: cardId,
+        reservationId: reservationId,
+        categoryId: categoryId,
+      ),
+    );
+  }
+
+  Future<Result<Card>> _ensureReservation({
+    required String cardId,
+    required String reservationId,
+    required String categoryId,
+    required DateTime now,
+    required CardRepository cardsRepo,
+  }) async {
+    final found = await cardsRepo.findById(cardId);
+    if (found is Failure<Card?>) return Failure<Card>(found.error);
+    final card = (found as Success<Card?>).value;
+    if (card == null) {
+      return const Failure<Card>(
+        AppFailure(code: 'card_not_found', message: 'Card was not found'),
+      );
+    }
+    if (card.status == CardStatus.reserved &&
+        card.reservation.reservationId == reservationId) {
+      return Success<Card>(card);
+    }
+    if (card.status == CardStatus.sold) {
+      return const Failure<Card>(
+        AppFailure(
+          code: 'delivered_card_already_sold',
+          message: 'The already-delivered card was already sold',
+        ),
+      );
+    }
+    if (card.status != CardStatus.available || card.categoryId != categoryId) {
+      return const Failure<Card>(
+        AppFailure(
+          code: 'delivered_card_unavailable',
+          message: 'The already-delivered card is no longer safely recoverable',
+        ),
+      );
+    }
+    final reserved = await cardsRepo.reserve(
+      card.id,
+      CardReservation(
+        reservationId: reservationId,
+        reservedAt: now,
+        expiresAt: now.add(reservationTtl),
+      ),
+    );
+    if (reserved is Failure<void>) return Failure<Card>(reserved.error);
+    final reloaded = await cardsRepo.findById(card.id);
+    if (reloaded is Failure<Card?>) return Failure<Card>(reloaded.error);
+    final result = (reloaded as Success<Card?>).value;
+    if (result == null) {
+      return const Failure<Card>(
+        AppFailure(code: 'card_not_found', message: 'Card was not found'),
+      );
+    }
+    return Success<Card>(result);
+  }
+
+  String? _field(String payload, String name) {
+    final match = RegExp('\"$name\":\"([^\"]*)\"').firstMatch(payload);
+    return match?.group(1);
+  }
+
+  Future<bool> _processCategoryAmountsOnly() async {
+    final s = settings;
+    if (s == null) return SettingDefaults.processCategoryAmountsOnly;
+    final result = await s.find(SettingKeys.processCategoryAmountsOnly);
+    if (result is! Success<AppSetting?>) {
+      return SettingDefaults.processCategoryAmountsOnly;
+    }
+    return SettingBool.read(
+      result.value?.value,
+      defaultValue: SettingDefaults.processCategoryAmountsOnly,
+    );
+  }
+
+  Future<void> _persistTerminalFailure({
+    required String messageId,
+    required MessageProcessingStatus status,
+    required String action,
+    required AppFailure error,
+    required ParsedTransfer transfer,
+    String? deliveryPhone,
+  }) async {
+    await messages.updateStatus(messageId, status);
+    await auditLogs.append(
+      AuditLog(
+        id: ids.next('audit'),
+        entityType: 'message',
+        entityId: messageId,
+        action: action,
+        occurredAt: clock.now(),
+        payloadJson:
+            '{\"code\":\"${error.code}\",\"reference\":\"${transfer.reference}\",\"operationId\":\"${_operationId(transfer)}\",\"identifierType\":\"${transfer.identifierType.name}\",\"identifier\":\"${transfer.customerIdentifier}\",\"deliveryPhone\":\"${deliveryPhone ?? ''}\"}',
+      ),
+    );
+  }
+
+  Future<Result<Transaction>> _processBatchSale({
+    required ParsedTransfer transfer,
+    required IncomingMessage message,
+    required Customer customer,
+    required String destination,
+    required CardCategory category,
+    required PosAccount? posAccount,
+    required bool isPosOrder,
+    required Money posCharge,
+    required String operationId,
+    required CardInventoryService inventoryService,
+    required ReservedSaleService saleCompleter,
+    required MessageSender sender,
+    required TransactionRepository transactionRepo,
+  }) async {
+    final quantity = transfer.quantity.clamp(2, 20).toInt();
+    final reservations = <({Card card, String reservationId})>[];
+    final freshReservations = <({Card card, String reservationId})>[];
+    final now = clock.now();
+
+    // Progress audits make a partially completed multi-card order resumable.
+    // Existing committed items are reused; only missing indexes allocate new stock.
+    final committedByIndex = <int, ({String cardId, String reservationId})>{};
+    final progressLogs = await auditLogs.findByEntity('message', message.id);
+    if (progressLogs is Failure<List<AuditLog>>) {
+      return Failure<Transaction>(progressLogs.error);
+    }
+    for (final log in (progressLogs as Success<List<AuditLog>>).value) {
+      if (log.action != 'voucher_batch_item_committed') continue;
+      final payload = log.payloadJson ?? '';
+      try {
+        final decoded = jsonDecode(payload);
+        if (decoded is! Map) continue;
+        final row = Map<String, Object?>.from(decoded);
+        final rawIndex = row['index'];
+        final rawCardId = row['cardId'];
+        final rawReservationId = row['reservationId'];
+        if (rawIndex is num &&
+            rawCardId is String &&
+            rawReservationId is String) {
+          committedByIndex[rawIndex.toInt()] = (
+            cardId: rawCardId,
+            reservationId: rawReservationId,
+          );
+        }
+      } catch (_) {
+        // An individual progress record is ignored; a valid committed
+        // transaction is still protected by its stable sale reference.
+      }
+    }
+
+    Future<void> releaseFreshReservations() async {
+      for (final item in freshReservations) {
+        await inventoryService.releaseReservation(
+          cardId: item.card.id,
+          reservationId: item.reservationId,
+        );
+      }
+    }
+
+    for (var i = 0; i < quantity; i++) {
+      final previous = committedByIndex[i];
+      if (previous != null) {
+        final existingTx = await transactionRepo.findByReference(
+          'sale-op:' + operationId + ':' + i.toString(),
+        );
+        if (existingTx is Failure<Transaction?>) {
+          return Failure<Transaction>(existingTx.error);
+        }
+        if ((existingTx as Success<Transaction?>).value == null) {
+          const failure = AppFailure(
+            code: 'transfer_batch_progress_invalid',
+            message: 'A recorded POS/card batch item has no matching sale ledger record',
+          );
+          await _persistTerminalFailure(
+            messageId: message.id,
+            status: MessageProcessingStatus.failed,
+            action: 'transfer_batch_progress_invalid',
+            error: failure,
+            transfer: transfer,
+            deliveryPhone: destination,
+          );
+          return const Failure<Transaction>(failure);
+        }
+        final cardResult = await cards!.findById(previous.cardId);
+        if (cardResult is Failure<Card?>) {
+          return Failure<Transaction>(cardResult.error);
+        }
+        final card = (cardResult as Success<Card?>).value;
+        if (card == null) {
+          const failure = AppFailure(
+            code: 'transfer_batch_progress_card_missing',
+            message: 'A committed batch card could not be found',
+          );
+          await _persistTerminalFailure(
+            messageId: message.id,
+            status: MessageProcessingStatus.failed,
+            action: 'transfer_batch_progress_card_missing',
+            error: failure,
+            transfer: transfer,
+            deliveryPhone: destination,
+          );
+          return const Failure<Transaction>(failure);
+        }
+        reservations.add((
+          card: card,
+          reservationId: previous.reservationId,
+        ));
+        continue;
+      }
+
+      final reservationId = 'transfer-reservation:' + operationId + ':' + i.toString();
+      final reserved = await inventoryService.reserveAvailableCard(
+        categoryId: category.id,
+        reservationId: reservationId,
+        now: now,
+        expiresAt: now.add(reservationTtl),
+      );
+      if (reserved is Failure<Card>) {
+        await releaseFreshReservations();
+        final failure = reserved.error.code == 'card_unavailable'
+            ? const AppFailure(
+                code: 'out_of_stock',
+                message: 'لا يوجد عدد كافٍ من الكروت المتاحة في الفئة',
+              )
+            : reserved.error;
+        await _persistTerminalFailure(
+          messageId: message.id,
+          status: MessageProcessingStatus.rejected,
+          action: 'transfer_batch_reservation_failed',
+          error: failure,
+          transfer: transfer,
+          deliveryPhone: destination,
+        );
+        return Failure<Transaction>(failure);
+      }
+      final item = (card: (reserved as Success<Card>).value, reservationId: reservationId);
+      reservations.add(item);
+      freshReservations.add(item);
+    }
+
+    if (!isPosOrder) {
+      final total = Money(minorUnits: transfer.amount.minorUnits * quantity, currencyCode: transfer.amount.currencyCode);
+      final credit = await balances.credit(
+        customerId: customer.id, amount: total,
+        reference: transfer.reference.isEmpty ? 'batch-credit:' + operationId : transfer.reference,
+      );
+      if (credit is Failure<Transaction>) {
+        await releaseFreshReservations();
+        await _persistTerminalFailure(messageId: message.id, status: MessageProcessingStatus.failed,
+          action: 'transfer_batch_credit_failed', error: credit.error, transfer: transfer, deliveryPhone: destination);
+        return Failure<Transaction>(credit.error);
+      }
+    }
+
+    final sold = <Card>[];
+    Transaction? lastTransaction;
+    for (var i = 0; i < reservations.length; i++) {
+      final item = reservations[i];
+      final ref = 'sale-op:${operationId}:${i}';
+      final existing = await transactionRepo.findByReference(ref);
+      if (existing is Success<Transaction?> && existing.value != null) {
+        lastTransaction = existing.value;
+        sold.add(item.card);
+        continue;
+      }
+      final completed = await saleCompleter.completeReservedSale(
+        customerId: customer.id, cardId: item.card.id, reservationId: item.reservationId,
+        operationId: '${operationId}:${i}',
+        saleAmount: isPosOrder ? posCharge : transfer.amount,
+        allowNegativeBalance: isPosOrder,
+      );
+      if (completed is Failure<Sale>) {
+        await releaseFreshReservations();
+        await _persistTerminalFailure(messageId: message.id, status: MessageProcessingStatus.failed,
+          action: 'transfer_batch_sale_failed', error: completed.error, transfer: transfer, deliveryPhone: destination);
+        return Failure<Transaction>(completed.error);
+      }
+      final ledger = await transactionRepo.findByReference(ref);
+      if (ledger is Success<Transaction?> && ledger.value != null) lastTransaction = ledger.value;
+      sold.add(item.card);
+      await auditLogs.append(AuditLog(
+        id: ids.next('audit'), entityType: 'message', entityId: message.id,
+        action: 'voucher_batch_item_committed', occurredAt: clock.now(),
+        payloadJson: '{"operationId":"${operationId}","index":${i},"cardId":"${item.card.id}","reservationId":"${item.reservationId}"}',
+      ));
+    }
+
+    if (isPosOrder) {
+      final pos = posAccount!;
+      return _deliverPosOrder(
+        transfer: transfer,
+        message: message,
+        posAccount: pos,
+        category: category,
+        items: [
+          for (var index = 0; index < reservations.length; index++)
+            _PosOrderItem(
+              card: reservations[index].card,
+              reservationId: reservations[index].reservationId,
+              saleOperationId: operationId + ':' + index.toString(),
+            ),
+        ],
+        customerDestination: destination,
+        posDestination: pos.notifyPhone?.trim().isNotEmpty == true
+            ? pos.notifyPhone!.trim()
+            : message.sender.trim(),
+        unitCharge: posCharge,
+        operationId: operationId,
+        sender: sender,
+        transactionRepo: transactionRepo,
+      );
+    }
+
+    if (lastTransaction == null) {
+      const failure = AppFailure(code: 'sale_ledger_missing', message: 'تم إكمال الدفعة لكن سجل العملية غير موجود');
+      await _persistTerminalFailure(messageId: message.id, status: MessageProcessingStatus.failed,
+        action: 'transfer_batch_ledger_missing', error: failure, transfer: transfer, deliveryPhone: destination);
+      return const Failure<Transaction>(failure);
+    }
+
+    await messages.updateStatus(message.id, MessageProcessingStatus.sending);
+    final lines = <String>[];
+    for (var i = 0; i < sold.length; i++) {
+      final card = sold[i];
+      lines.add('الكرت ${i + 1}: ${card.serialNumber} - ${card.secretCode}');
+    }
+    final sent = await sender.send(
+      destination: destination,
+      body: 'تم تنفيذ طلب ${sold.length} كروت بنجاح\n${lines.join('\n')}',
+    );
+    if (sent is Failure<void>) {
+      await _persistTerminalFailure(messageId: message.id, status: MessageProcessingStatus.failed,
+        action: 'transfer_batch_delivery_failed', error: sent.error, transfer: transfer, deliveryPhone: destination);
+      return Failure<Transaction>(sent.error);
+    }
+
+    await auditLogs.append(AuditLog(
+      id: ids.next('audit'), entityType: 'message', entityId: message.id,
+      action: 'voucher_batch_delivered', occurredAt: clock.now(),
+      payloadJson: '{"operationId":"${operationId}","quantity":${sold.length},"destination":"${destination}"}',
+    ));
+    await messages.updateStatus(message.id, MessageProcessingStatus.processed);
+    return Success<Transaction>(lastTransaction);
+  }
+
+
+}
+
+final class _DeliveryState {
+  const _DeliveryState({
+    required this.cardId,
+    required this.reservationId,
+    required this.categoryId,
+  });
+  final String cardId;
+  final String reservationId;
+  final String categoryId;
+}
+
+
+
+final class _PosOrderItem {
+  const _PosOrderItem({
+    required this.card,
+    required this.reservationId,
+    required this.saleOperationId,
+  });
+
+  final Card card;
+  final String reservationId;
+  final String saleOperationId;
+}
