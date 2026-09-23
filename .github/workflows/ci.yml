@@ -105,6 +105,16 @@ jobs:
           testers: ${{ secrets.FIREBASE_TESTERS }}
           file: build/app/outputs/flutter-apk/app-release.apk
           releaseNotes: ${{ github.event.head_commit.message }}
+      - name: Publish GitHub Release
+        if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && steps.stable-signing.outputs.mode == 'stable'
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: apk-${{ github.run_number }}
+          name: Krotak Pro APK ${{ github.run_number }}
+          body: "Release APK from CI run ${{ github.run_number }} (Secrets-only signing)"
+          files: build/app/outputs/flutter-apk/app-release.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Authenticate to Google Cloud (Test Lab)
         if: github.event_name != 'pull_request' && env.FIREBASE_PROJECT_ID != ''
         id: gcp-auth
@@ -129,13 +139,3 @@ jobs:
             --app build/app/outputs/flutter-apk/app-release.apk \
             --device "$TESTLAB_DEVICE" \
             --timeout 5m
-      - name: Publish GitHub Release
-        if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && steps.stable-signing.outputs.mode == 'stable'
-        uses: softprops/action-gh-release@v3
-        with:
-          tag_name: apk-${{ github.run_number }}
-          name: Krotak Pro APK ${{ github.run_number }}
-          body: "Release APK from CI run ${{ github.run_number }} (Secrets-only signing)"
-          files: build/app/outputs/flutter-apk/app-release.apk
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
