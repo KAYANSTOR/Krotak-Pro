@@ -9,6 +9,7 @@ import 'package:net_app/data/database/app_database.dart' hide Customer, Card, Sa
 import 'package:net_app/domain/entities/message.dart';
 import 'package:net_app/main.dart';
 import 'package:net_app/ui/home_shell.dart';
+import 'package:net_app/ui/screens/net_splash_screen.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -38,9 +39,14 @@ void main() {
       await tester.pumpWidget(NetApp(container: container));
       // Finite pumps only — never pumpAndSettle (recovery Timer.periodic would never idle).
       await tester.pump();
-      await tester.pump(const Duration(milliseconds: 200));
-      await tester.pump(const Duration(milliseconds: 200));
-      expect(tester.takeException(), isNull, reason: 'Runtime exception during initial app render');
+      expect(find.byType(NetSplashScreen), findsOneWidget);
+      expect(tester.takeException(), isNull, reason: 'Runtime exception during splash render');
+
+      // Splash animation is 1400ms + ~420ms fade route to HomeShell.
+      await tester.pump(const Duration(milliseconds: 1500));
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(tester.takeException(), isNull, reason: 'Runtime exception after splash transition');
+      expect(find.byType(HomeShell), findsOneWidget);
 
       const navKeys = <String, String>{
         'الحسابات': 'nav-accounts',
