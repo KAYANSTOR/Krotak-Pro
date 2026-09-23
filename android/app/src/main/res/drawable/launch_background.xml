@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- شاشة ما قبل الدخول: تدرج الهوية + أيقونة التطبيق في الوسط. -->
+<!-- شاشة ما قبل الدخول: لون خلفية الأيقونة الرسمية + أيقونة التطبيق في الوسط. -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:drawable="@drawable/launch_gradient" />
+    <item android:drawable="@drawable/ic_launcher_background" />
     <item>
         <bitmap
             android:gravity="center"

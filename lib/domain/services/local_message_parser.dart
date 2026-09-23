@@ -383,7 +383,8 @@ final class LocalMessageParser implements MessageParser {
       buf.write(r'(?:\s+(?<qty>\d{1,2}))?');
     }
 
-    final source = '^${buf.toString()}$';
+    // Keep the end anchor escaped (`\$`) so it is always a literal `$`.
+    final source = '^${buf.toString()}\$';
     try {
       return RegExp(source, caseSensitive: false, unicode: true);
     } on FormatException {

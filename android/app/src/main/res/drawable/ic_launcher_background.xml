@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- خلفية الأيقونة المتكيّفة — لون التراكوتا من الأيقونة الأصلية المعتمدة -->
+<!-- خلفية الأيقونة المتكيّفة — نفس لون خلفية الأيقونة الرسمية -->
 <shape xmlns:android="http://schemas.android.com/apk/res/android"
     android:shape="rectangle">
-    <solid android:color="#D26E4C" />
+    <solid android:color="#D26D4D" />
 </shape>

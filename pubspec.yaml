@@ -35,7 +35,7 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   # الأيقونة الرسمية: مصدر Base64 + PNG للشاشة الترحيبية و«عن التطبيق».
-  # في CI يُطبَّق tools/apply_krotak_icon.py قبل بناء Android.
+  # الملفات المولّدة مرفوعة في المستودع؛ tools/apply_krotak_icon.py لإعادة توليدها عند تغيير الأيقونة فقط.
   assets:
     - assets/icon/krotak_icon.b64
     - assets/icon/app_icon.png
