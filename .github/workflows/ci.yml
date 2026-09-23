@@ -95,6 +95,7 @@ jobs:
           path: build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
       - name: Distribute APK to Firebase App Distribution
+        id: fad
         if: github.event_name != 'pull_request' && env.FIREBASE_APP_ID != ''
         continue-on-error: true
         uses: wzieba/Firebase-Distribution-Github-Action@v1
@@ -127,15 +128,27 @@ jobs:
         continue-on-error: true
         uses: google-github-actions/setup-gcloud@v2
       - name: Firebase Test Lab (Robo test)
+        id: testlab
         if: github.event_name != 'pull_request' && env.FIREBASE_PROJECT_ID != '' && steps.gcp-auth.outcome == 'success'
         continue-on-error: true
         env:
           TESTLAB_DEVICE: ${{ vars.TESTLAB_DEVICE || 'model=MediumPhone.arm,version=34,locale=ar,orientation=portrait' }}
         run: |
-          gcloud firebase test android models list --filter="form=VIRTUAL" --format="value(codename,supportedVersionIds)" | head -20 || true
-          gcloud firebase test android run \
-            --project "$FIREBASE_PROJECT_ID" \
-            --type robo \
-            --app build/app/outputs/flutter-apk/app-release.apk \
-            --device "$TESTLAB_DEVICE" \
-            --timeout 5m
+          set +e
+          {
+            gcloud firebase test android models list --filter="form=VIRTUAL" --format="value(codename,supportedVersionIds)" | head -20
+            gcloud firebase test android run \
+              --project "$FIREBASE_PROJECT_ID" \
+              --type robo \
+              --app build/app/outputs/flutter-apk/app-release.apk \
+              --device "$TESTLAB_DEVICE" \
+              --timeout 5m
+          } > /tmp/testlab.log 2>&1
+          rc=$?
+          msg=$(tail -c 3500 /tmp/testlab.log | tr '\n' ' ' | sed 's/%/%25/g')
+          echo "::notice title=TestLab exit=$rc::$msg"
+          exit $rc
+      - name: Report Firebase step outcomes
+        if: always() && env.FIREBASE_APP_ID != ''
+        run: |
+          echo "::notice title=Firebase outcomes::app-distribution=${{ steps.fad.outcome }} test-lab=${{ steps.testlab.outcome }}"
