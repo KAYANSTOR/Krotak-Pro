@@ -140,4 +140,7 @@ abstract interface class SettingsRepository {
 abstract interface class AuditLogRepository {
   Future<Result<void>> append(AuditLog log);
   Future<Result<List<AuditLog>>> findByEntity(String entityType, String entityId);
+
+  /// Phase 16 — lookup by entity id, action, or payload fragment.
+  Future<Result<List<AuditLog>>> search({required String query, int limit = 200});
 }
