@@ -13,6 +13,7 @@ import 'domain/entities/message.dart';
 import 'domain/entities/setting.dart';
 import 'ui/app_scope.dart';
 import 'ui/home_shell.dart';
+import 'ui/screens/net_splash_screen.dart';
 import 'ui/theme/kayan_theme.dart';
 import 'ui/theme/net_theme_schedule.dart';
 
@@ -155,7 +156,7 @@ class _NetAppState extends State<NetApp> with WidgetsBindingObserver {
                 child: child ?? const SizedBox.shrink(),
               );
             },
-            home: const HomeShell(),
+            home: const NetSplashScreen(),
           ),
         ),
       );
