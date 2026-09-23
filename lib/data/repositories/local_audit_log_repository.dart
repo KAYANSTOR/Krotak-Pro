@@ -25,6 +25,38 @@ final class LocalAuditLogRepository implements AuditLogRepository {
   }
 
   @override
+  Future<Result<List<domain.AuditLog>>> search({
+    required String query,
+    int limit = 200,
+  }) async {
+    final needle = query.trim();
+    if (needle.isEmpty) {
+      return const Success([]);
+    }
+    try {
+      final like = '%$needle%';
+      final rows = await (database.select(database.auditLogs)
+            ..where(
+              (table) =>
+                  table.entityId.like(like) |
+                  table.action.like(like) |
+                  table.payloadJson.like(like),
+            )
+            ..orderBy([
+              (table) => OrderingTerm(
+                    expression: table.occurredAt,
+                    mode: OrderingMode.desc,
+                  ),
+            ])
+            ..limit(limit))
+          .get();
+      return Success(rows.map(_toAudit).toList(growable: false));
+    } catch (error) {
+      return Failure(_failure('audit_search_failed', error));
+    }
+  }
+
+  @override
   Future<Result<List<domain.AuditLog>>> findByEntity(
     String entityType,
     String entityId,
