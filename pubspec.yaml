@@ -34,10 +34,11 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
-  # الأيقونة مصدرها نص Base64 صغير ويُفك ترميزه داخل واجهة «عن التطبيق».
-  # في CI يُستعاد منه PNG قبل بناء Android.
+  # الأيقونة الرسمية: مصدر Base64 + PNG للشاشة الترحيبية و«عن التطبيق».
+  # في CI يُطبَّق tools/apply_krotak_icon.py قبل بناء Android.
   assets:
     - assets/icon/krotak_icon.b64
+    - assets/icon/app_icon.png
     - assets/fonts/Tajawal-Regular.ttf
     - assets/fonts/Tajawal-Bold.ttf
 
