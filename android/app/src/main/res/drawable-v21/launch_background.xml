@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Krotak launch surface for Android 5+: brand gradient plus the approved mark. -->
+<!-- شاشة ما قبل الدخول (API 21+): تدرج الهوية + أيقونة التطبيق في الوسط. -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
     <item android:drawable="@drawable/launch_gradient" />
     <item>
