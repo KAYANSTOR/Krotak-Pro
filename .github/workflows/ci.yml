@@ -33,6 +33,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    env:
+      FIREBASE_APP_ID: ${{ secrets.FIREBASE_APP_ID }}
     steps:
       - uses: actions/checkout@v7
       - uses: subosito/flutter-action@v2
@@ -91,6 +93,17 @@ jobs:
           name: ${{ steps.stable-signing.outputs.mode == 'stable' && 'krotak-pro-release-apk' || 'krotak-pro-validation-apk' }}
           path: build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
+      - name: Distribute APK to Firebase App Distribution
+        if: github.event_name != 'pull_request' && env.FIREBASE_APP_ID != ''
+        continue-on-error: true
+        uses: wzieba/Firebase-Distribution-Github-Action@v1
+        with:
+          appId: ${{ secrets.FIREBASE_APP_ID }}
+          serviceCredentialsFileContent: ${{ secrets.FIREBASE_SERVICE_CREDENTIALS }}
+          groups: ${{ secrets.FIREBASE_GROUPS }}
+          testers: ${{ secrets.FIREBASE_TESTERS }}
+          file: build/app/outputs/flutter-apk/app-release.apk
+          releaseNotes: ${{ github.event.head_commit.message }}
       - name: Publish GitHub Release
         if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && steps.stable-signing.outputs.mode == 'stable'
         uses: softprops/action-gh-release@v3
