@@ -10,6 +10,7 @@ import '../domain/repositories/repositories.dart';
 import '../domain/services/payment_source_guard.dart';
 import '../domain/services/services.dart';
 import '../domain/services/unified_payment_event_engine.dart';
+import '../domain/services/template_performance_service.dart';
 import '../platform/sms_bridge.dart';
 
 final class IncomingSmsHandler {
@@ -32,6 +33,9 @@ final class IncomingSmsHandler {
              ids: ids,
              settings: settings,
              sourceGuard: sourceGuard,
+             templatePerformance: settings == null
+                 ? null
+                 : TemplatePerformanceService(settings: settings),
            );
 
   final SmsBridge bridge;
