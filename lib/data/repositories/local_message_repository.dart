@@ -11,9 +11,13 @@ final class LocalMessageRepository implements MessageRepository, OutboundMessage
     required DateTime now,
     required DateTime staleBefore,
   }) async {
+    // `parsed` is included alongside pending/failed/sending so a POS order
+    // whose commit audit landed but whose status update to `sending` was
+    // interrupted (app killed mid-commit) can still be claimed by
+    // PosOrderDeliveryWorker instead of being silently skipped forever.
     final changed = await database.customUpdate(
       'UPDATE incoming_messages SET status = ?, last_attempt_at = ? '
-      'WHERE id = ? AND status IN (?, ?, ?) '
+      'WHERE id = ? AND status IN (?, ?, ?, ?) '
       'AND (last_attempt_at IS NULL OR last_attempt_at < ?)',
       variables: [
         Variable.withString(domain.MessageProcessingStatus.sending.name),
@@ -22,6 +26,7 @@ final class LocalMessageRepository implements MessageRepository, OutboundMessage
         Variable.withString(domain.MessageProcessingStatus.pending.name),
         Variable.withString(domain.MessageProcessingStatus.failed.name),
         Variable.withString(domain.MessageProcessingStatus.sending.name),
+        Variable.withString(domain.MessageProcessingStatus.parsed.name),
         Variable.withDateTime(staleBefore),
       ],
       updates: {database.incomingMessages},

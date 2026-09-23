@@ -134,6 +134,7 @@ final class AppContainer {
   final ValueNotifier<ThemeMode> themeModeNotifier;
   Timer? _recoveryTimer;
   bool _recoveryBusy = false;
+  bool _recoveryQueued = false;
   bool _dailySummaryBusy = false;
   bool _disposed = false;
   DateTime? _lastStockSyncAt;
@@ -325,23 +326,33 @@ final class AppContainer {
   }
 
   Future<void> _runRecovery() async {
-    if (_recoveryBusy || _disposed) return;
-    // مزامنة إشعار المخزون الحي مع المخزون الفعلي (مُقيَّدة زمنياً). تُشغَّل حتى
-    // أثناء عمل التطبيق في الخلفية، فتنقص الفئة من بيع عبر SMS فيظهر التنبيه،
-    // ولا يُلغى إلا بعد إعادة التعبئة فوق العتبة.
-    await _runStockAlertSync();
-    final enabled = await settings.find(SettingKeys.autoRetryFailedMessages);
-    final raw = enabled is Success<AppSetting?> ? enabled.value?.value : null;
-    if (!SettingBool.read(raw, defaultValue: SettingDefaults.autoRetryFailedMessages)) {
-      try {
-        await deliveryWorker.tick();
-        await posOrderDeliveryWorker.tick();
-      } catch (_) {}
-      await _runDailyPosSummary();
+    if (_disposed) return;
+    // مررّة تعمل الآن دون استثناء لضمان عدم تشغيل جولتَي تسليم متزامنتَين على
+    // الإطلاق (كانت الحالة المعطّلة للإعادة التلقائية تتجاوز هذا الحارس تماماً،
+    // وهو ما يسمح بإرسال الرسالة نفسها مرتين إن تداخل التِك التالي).
+    if (_recoveryBusy) {
+      // لا تُسقط هذا التِك: بدلاً من الانتظار حتى التِك الدوري التالي (حتى 3
+      // ثوانٍ، وقد يتكرر تحت الحمل)، سجّل طلب جولة إضافية تُشغَّل فور انتهاء
+      // الجولة الحالية مباشرة.
+      _recoveryQueued = true;
       return;
     }
     _recoveryBusy = true;
     try {
+      // مزامنة إشعار المخزون الحي مع المخزون الفعلي (مُقيَّدة زمنياً). تُشغَّل
+      // حتى أثناء عمل التطبيق في الخلفية، فتنقص الفئة من بيع عبر SMS فيظهر
+      // التنبيه، ولا يُلغى إلا بعد إعادة التعبئة فوق العتبة.
+      await _runStockAlertSync();
+      final enabled = await settings.find(SettingKeys.autoRetryFailedMessages);
+      final raw = enabled is Success<AppSetting?> ? enabled.value?.value : null;
+      if (!SettingBool.read(raw, defaultValue: SettingDefaults.autoRetryFailedMessages)) {
+        try {
+          await deliveryWorker.tick();
+          await posOrderDeliveryWorker.tick();
+        } catch (_) {}
+        await _runDailyPosSummary();
+        return;
+      }
       await recoveryService.recoverPending();
       await deliveryWorker.tick();
       await posOrderDeliveryWorker.tick();
@@ -357,6 +368,10 @@ final class AppContainer {
           ),
         );
       } catch (_) {}
+      if (_recoveryQueued && !_disposed) {
+        _recoveryQueued = false;
+        unawaited(_runRecovery());
+      }
     }
   }
 
