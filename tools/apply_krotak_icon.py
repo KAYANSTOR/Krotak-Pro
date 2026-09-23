@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
-"""Apply the approved Krotak launcher icon to Flutter/Android resources."""
+"""Apply the supplied Krotak launcher artwork to Flutter and Android resources."""
+import base64
+from io import BytesIO
 from pathlib import Path
+
 from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCE = ROOT / "assets" / "icon" / "krotak_icon.png"
+SOURCE_B64 = ROOT / "tools" / "krotak_icon.jpg.b64"
 RES = ROOT / "android" / "app" / "src" / "main" / "res"
 
 DENSITIES = {
@@ -18,20 +21,37 @@ DENSITIES = {
 
 def save_png(image: Image.Image, path: Path, size: int) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    image.resize((size, size), Image.Resampling.LANCZOS).save(path, "PNG", optimize=True)
+    image.resize((size, size), Image.Resampling.LANCZOS).save(
+        path, "PNG", optimize=True
+    )
+
+
+def load_source_image() -> Image.Image:
+    encoded = "".join(SOURCE_B64.read_text(encoding="utf-8").split())
+    if not encoded:
+        raise RuntimeError(f"Icon source is empty: {SOURCE_B64}")
+    try:
+        raw = base64.b64decode(encoded, validate=True)
+    except Exception as exc:
+        raise RuntimeError("Icon source Base64 is invalid") from exc
+    image = Image.open(BytesIO(raw))
+    image.load()
+    return image.convert("RGBA")
 
 
 def main() -> None:
-    image = Image.open(SOURCE).convert("RGBA")
+    image = load_source_image()
+
+    # Flutter settings -> About App icon.
     save_png(image, ROOT / "assets" / "icon" / "app_icon.png", 192)
 
+    # Android launcher + notification resources.
     for density, (launcher_size, art_size, notif_size) in DENSITIES.items():
         save_png(image, RES / f"mipmap-{density}" / "ic_launcher.png", launcher_size)
         save_png(image, RES / f"drawable-{density}" / "ic_launcher_art.png", art_size)
         save_png(image, RES / f"drawable-{density}" / "ic_notif_large.png", notif_size)
 
-    # The existing generated monochrome art remains transparent and suitable
-    # for Android 13 themed icons; only the full-colour launcher art is replaced.
+    # Adaptive-icon foreground points to the generated full-colour artwork.
     (RES / "drawable" / "ic_launcher_foreground.xml").write_text(
         '<?xml version="1.0" encoding="utf-8"?>\n'
         '<bitmap xmlns:android="http://schemas.android.com/apk/res/android"\n'
