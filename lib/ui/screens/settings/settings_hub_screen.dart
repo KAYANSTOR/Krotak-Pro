@@ -1,4 +1,7 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../../core/app_brand.dart';
 import '../../../core/result.dart';
@@ -450,14 +453,36 @@ class _AboutAppCard extends StatelessWidget {
               borderRadius: BorderRadius.circular(18),
               border: Border.all(color: palette.primary.withValues(alpha: 0.25)),
             ),
-            child: Image.asset(
-              'assets/icon/app_icon.png',
-              fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) => Container(
-                alignment: Alignment.center,
-                color: palette.primary.withValues(alpha: 0.12),
-                child: Icon(Icons.wifi_tethering_rounded, color: palette.primary, size: 30),
-              ),
+            child: FutureBuilder<String>(
+              future: rootBundle.loadString('assets/icon/krotak_icon.b64'),
+              builder: (context, snapshot) {
+                if (snapshot.hasData) {
+                  try {
+                    final bytes = base64Decode(snapshot.data!.trim());
+                    return Image.memory(
+                      bytes,
+                      fit: BoxFit.cover,
+                      gaplessPlayback: true,
+                    );
+                  } catch (_) {
+                    // Fall through to the stable placeholder below.
+                  }
+                }
+                if (snapshot.hasError) {
+                  return Container(
+                    alignment: Alignment.center,
+                    color: palette.primary.withValues(alpha: 0.12),
+                    child: Icon(Icons.wifi_tethering_rounded, color: palette.primary, size: 30),
+                  );
+                }
+                return const Center(
+                  child: SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                );
+              },
             ),
           ),
           const SizedBox(height: 12),
