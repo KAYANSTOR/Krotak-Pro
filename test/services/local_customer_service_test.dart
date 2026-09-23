@@ -4,7 +4,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:net_app/core/clock.dart';
 import 'package:net_app/core/id_generator.dart';
 import 'package:net_app/core/result.dart';
-import 'package:net_app/data/database/app_database.dart' hide Customer;
+import 'package:net_app/data/database/app_database.dart'
+    hide Customer, CustomerIdentifier, AuditLog;
 import 'package:net_app/data/database/drift_unit_of_work.dart';
 import 'package:net_app/data/repositories/local_repositories.dart';
 import 'package:net_app/domain/entities/audit.dart';
@@ -63,7 +64,7 @@ void main() {
       expect((found as Success<Customer?>).value?.id, c.id);
 
       final audits = await auditsFor(c.id);
-      expect(audits.any((a) => a.action == 'created'), isTrue);
+      expect(audits.any((AuditLog a) => a.action == 'created'), isTrue);
     });
 
     test('creates provisional when status requested', () async {
@@ -151,7 +152,7 @@ void main() {
       expect((promoted as Success<Customer>).value.status, CustomerStatus.active);
 
       final audits = await auditsFor(id);
-      expect(audits.any((a) => a.action == 'promoted_to_active'), isTrue);
+      expect(audits.any((AuditLog a) => a.action == 'promoted_to_active'), isTrue);
     });
 
     test('returns same customer when already active', () async {
@@ -203,7 +204,7 @@ void main() {
       expect((found as Success<Customer?>).value?.status, CustomerStatus.blacklisted);
 
       final audits = await auditsFor(id);
-      expect(audits.any((a) => a.action == 'blacklisted'), isTrue);
+      expect(audits.any((AuditLog a) => a.action == 'blacklisted'), isTrue);
     });
 
     test('fails when customer missing', () async {
@@ -295,7 +296,7 @@ void main() {
       expect((found as Success<Customer?>).value?.id, id);
 
       final audits = await auditsFor(id);
-      expect(audits.any((a) => a.action == 'bind_primary_gsm'), isTrue);
+      expect(audits.any((AuditLog a) => a.action == 'bind_primary_gsm'), isTrue);
     });
 
     test('no-op success when customer already has a phone', () async {
@@ -312,7 +313,6 @@ void main() {
       );
       expect(r, isA<Success<void>>());
 
-      // الرقم الأصلي يبقى مربوطاً؛ لا يُستبدل تلقائياً.
       final primary = await customers.findByIdentifier('737111222');
       expect((primary as Success<Customer?>).value?.id, id);
     });
