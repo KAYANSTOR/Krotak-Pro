@@ -1,7 +1,7 @@
 import 'dart:io';
 
 import 'package:drift/native.dart';
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Card;
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:net_app/application/app_container.dart';
@@ -104,7 +104,6 @@ void main() {
       expect(cards.where((c) => c.status == CardStatus.sold), hasLength(1));
       expect(cards.where((c) => c.status == CardStatus.available), hasLength(2));
 
-      // نفس operationId → نفس البيع دون استهلاك كرت إضافي.
       final second = await container.saleService.sellManual(
         phone: '777123456',
         displayName: 'مشتري نقدي',
@@ -253,7 +252,6 @@ void main() {
       expect(find.text('بيع مباشر - يدوي'), findsOneWidget);
 
       final fields = find.byType(TextField);
-      // phone, amount, name — order from sheet layout
       await tester.enterText(fields.at(0), '777654321');
       await tester.enterText(fields.at(1), '200');
       await tester.enterText(fields.at(2), 'عميل الواجهة');
@@ -262,11 +260,9 @@ void main() {
 
       await tester.tap(find.text('تأكيد البيع المباشر'));
       await tester.pump();
-      // Allow async sellManual + pop.
       await tester.pump(const Duration(milliseconds: 800));
       await tester.pump(const Duration(milliseconds: 400));
 
-      // Sheet should close on success.
       expect(find.text('بيع مباشر - يدوي'), findsNothing);
 
       final stock = await container.cards.findByCategory('cat-ds-200');
@@ -294,7 +290,6 @@ void main() {
       await tester.pump(const Duration(milliseconds: 200));
 
       await tester.enterText(find.byType(TextField).first, '733');
-      // Debounce 250ms + query.
       await tester.pump(const Duration(milliseconds: 400));
       await tester.pump(const Duration(milliseconds: 200));
 
