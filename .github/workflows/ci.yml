@@ -82,6 +82,8 @@ jobs:
             echo "storePassword=ci-validation-store"
             echo "keyPassword=ci-validation-store"
           } > android/key.properties
+      - name: Regenerate launcher icons (brand palette)
+        run: python3 tools/generate_launcher_icons.py
       - name: Build release APK
         run: flutter build apk --release
       - name: Scrub signing material
