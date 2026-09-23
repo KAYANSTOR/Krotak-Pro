@@ -38,11 +38,24 @@ final class LocalCustomerRepository implements CustomerRepository {
 
   @override
   Future<Result<List<domain.Customer>>> search(String query) async {
+    return searchPage(query, limit: 100000, offset: 0);
+  }
+
+  @override
+  Future<Result<List<domain.Customer>>> searchPage(
+    String query, {
+    int limit = 80,
+    int offset = 0,
+  }) async {
     try {
+      final safeLimit = limit < 1 ? 80 : limit;
+      final safeOffset = offset < 0 ? 0 : offset;
       final trimmed = query.trim();
+
       if (trimmed.isEmpty) {
         final rows = await (database.select(database.customers)
-              ..orderBy([(table) => OrderingTerm(expression: table.displayName)]))
+              ..orderBy([(table) => OrderingTerm(expression: table.displayName)])
+              ..limit(safeLimit, offset: safeOffset))
             .get();
         return Success(rows.map(_toCustomer).toList(growable: false));
       }
@@ -67,9 +80,10 @@ final class LocalCustomerRepository implements CustomerRepository {
             ..where((table) => table.id.isIn(ids))
             ..orderBy([(table) => OrderingTerm(expression: table.displayName)]))
           .get();
-      return Success(rows.map(_toCustomer).toList(growable: false));
+      final window = rows.skip(safeOffset).take(safeLimit);
+      return Success(window.map(_toCustomer).toList(growable: false));
     } catch (error) {
-      return Failure(_failure('customer_search_failed', error));
+      return Failure(_failure('customer_search_page_failed', error));
     }
   }
 
