@@ -40,9 +40,6 @@ jobs:
           flutter-version: 3.47.5
           cache: true
       - run: flutter pub get
-      # Main prefers the commercial signing key. When repository signing
-      # secrets are not configured yet, use a disposable validation key so CI
-      # can still build/test the Android artifact without committing secrets.
       - name: Prepare stable keystore from GitHub Secrets
         id: stable-signing
         if: github.event_name != 'pull_request'
@@ -82,6 +79,10 @@ jobs:
             echo "storePassword=ci-validation-store"
             echo "keyPassword=ci-validation-store"
           } > android/key.properties
+      - name: Restore supplied launcher icon source
+        run: |
+          set -euo pipefail
+          xxd -r -p assets/icon/krotak_icon.b64 > assets/icon/krotak_icon.png
       - name: Install Pillow for supplied launcher icon
         run: python3 -m pip install --disable-pip-version-check --no-input Pillow
       - name: Apply supplied launcher icon
