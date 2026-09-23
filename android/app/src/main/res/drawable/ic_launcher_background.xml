@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- خلفية أيقونة كروتك المتكيّفة: ليل عميق (Midnight) يتدرّج إلى الزمردي (Emerald)
-     بنفس قيم `tools/generate_launcher_icons.py` حتى تتطابق الأيقونة المتكيّفة
+<!-- خلفية أيقونة كروتك المتكيّفة: داكن → Primary Dark → Primary
+     بنفس قيم tools/generate_launcher_icons.py حتى تتطابق الأيقونة المتكيّفة
      مع أيقونة الأجهزة الأقدم (mipmap PNG). -->
 <shape xmlns:android="http://schemas.android.com/apk/res/android"
     android:shape="rectangle">
     <gradient
         android:type="linear"
         android:angle="135"
-        android:startColor="#04121C"
-        android:centerColor="#0A4C55"
-        android:endColor="#0F9C8A" />
+        android:startColor="#1F1F1F"
+        android:centerColor="#B85C3E"
+        android:endColor="#D97757" />
 </shape>

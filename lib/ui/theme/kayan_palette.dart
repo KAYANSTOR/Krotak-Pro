@@ -24,7 +24,7 @@ class KayanPalette {
   final bool isDark;
   final Color primary;
 
-  /// نص/أيقونة فوق تعبئة [primary] — يتبع الوضع لتجنّب نص أبيض على تيل فاتح.
+  /// نص/أيقونة فوق تعبئة [primary] — يتبع الوضع لتجنّب تباين ضعيف.
   final Color onPrimary;
   final Color appBackground;
   final Color surface;
@@ -48,22 +48,22 @@ class KayanPalette {
     textTertiary: KayanColors.textTertiary,
     border: KayanColors.borderGray,
     iconBadgeBackground: KayanColors.lightBackground,
-    disabledForeground: Color(0xFF9CA3AF),
+    disabledForeground: KayanColors.textTertiary,
   );
 
   static const dark = KayanPalette(
     isDark: true,
-    primary: Color(0xFF35A3A4),
+    primary: Color(0xFFE08A6A),
     onPrimary: KayanColors.darkAppBackground,
     appBackground: KayanColors.darkAppBackground,
     surface: KayanColors.darkSurface,
     surfaceVariant: KayanColors.darkSurfaceVariant,
     textPrimary: KayanColors.darkTextPrimary,
     textSecondary: KayanColors.darkTextSecondary,
-    textTertiary: Color(0xFF64748B),
+    textTertiary: Color(0xFF78716C),
     border: KayanColors.darkBorder,
     iconBadgeBackground: KayanColors.darkLightBackground,
-    disabledForeground: Color(0xFF64748B),
+    disabledForeground: Color(0xFF78716C),
   );
 
   static KayanPalette of(BuildContext context) {
