@@ -79,14 +79,6 @@ jobs:
             echo "storePassword=ci-validation-store"
             echo "keyPassword=ci-validation-store"
           } > android/key.properties
-      - name: Restore supplied launcher icon source
-        run: |
-          set -euo pipefail
-          xxd -r -p assets/icon/krotak_icon.b64 > assets/icon/krotak_icon.png
-      - name: Install Pillow for supplied launcher icon
-        run: python3 -m pip install --disable-pip-version-check --no-input Pillow
-      - name: Apply supplied launcher icon
-        run: python3 tools/apply_krotak_icon.py
       - name: Build release APK
         run: flutter build apk --release
       - name: Scrub signing material
