@@ -35,6 +35,7 @@ jobs:
       contents: write
     env:
       FIREBASE_APP_ID: ${{ secrets.FIREBASE_APP_ID }}
+      FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
     steps:
       - uses: actions/checkout@v7
       - uses: subosito/flutter-action@v2
@@ -104,6 +105,30 @@ jobs:
           testers: ${{ secrets.FIREBASE_TESTERS }}
           file: build/app/outputs/flutter-apk/app-release.apk
           releaseNotes: ${{ github.event.head_commit.message }}
+      - name: Authenticate to Google Cloud (Test Lab)
+        if: github.event_name != 'pull_request' && env.FIREBASE_PROJECT_ID != ''
+        id: gcp-auth
+        continue-on-error: true
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_CREDENTIALS }}
+      - name: Set up gcloud
+        if: github.event_name != 'pull_request' && env.FIREBASE_PROJECT_ID != '' && steps.gcp-auth.outcome == 'success'
+        continue-on-error: true
+        uses: google-github-actions/setup-gcloud@v2
+      - name: Firebase Test Lab (Robo test)
+        if: github.event_name != 'pull_request' && env.FIREBASE_PROJECT_ID != '' && steps.gcp-auth.outcome == 'success'
+        continue-on-error: true
+        env:
+          TESTLAB_DEVICE: ${{ vars.TESTLAB_DEVICE || 'model=MediumPhone.arm,version=34,locale=ar,orientation=portrait' }}
+        run: |
+          gcloud firebase test android models list --filter="form=VIRTUAL" --format="value(codename,supportedVersionIds)" | head -20 || true
+          gcloud firebase test android run \
+            --project "$FIREBASE_PROJECT_ID" \
+            --type robo \
+            --app build/app/outputs/flutter-apk/app-release.apk \
+            --device "$TESTLAB_DEVICE" \
+            --timeout 5m
       - name: Publish GitHub Release
         if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && steps.stable-signing.outputs.mode == 'stable'
         uses: softprops/action-gh-release@v3
