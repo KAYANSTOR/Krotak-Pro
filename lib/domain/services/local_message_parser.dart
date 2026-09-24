@@ -61,36 +61,58 @@ final class LocalMessageParser implements MessageParser {
 
   @override
   Result<ParsedTransfer> parse(IncomingMessage message) {
-    final active = _templates.where((t) => t.isActive).toList(growable: false);
-    if (active.isEmpty) {
+    // Never throw into UI / catalog paths — a bad template must not crash screens.
+    try {
+      final active = _templates.where((t) => t.isActive).toList(growable: false);
+      if (active.isEmpty) {
+        return const Failure(
+          AppFailure(
+            code: 'no_active_template',
+            message: 'No active transfer template configured',
+          ),
+        );
+      }
+
+      final body = _normalizeBody(message.body);
+      for (final template in active) {
+        try {
+          final balanceRequest =
+              _tryBalanceRequest(template, message.id, message.sender, body);
+          if (balanceRequest != null) return Success(balanceRequest);
+
+          final instant =
+              _tryInstantCharge(template, message.id, message.sender, body);
+          if (instant != null) return Success(instant);
+
+          final parsed = _tryMatch(template, message.id, message.sender, body);
+          if (parsed != null) return Success(parsed);
+        } on FormatException {
+          // Skip templates whose pattern does not compile; try the next one.
+          continue;
+        }
+      }
+
       return const Failure(
         AppFailure(
-          code: 'no_active_template',
-          message: 'No active transfer template configured',
+          code: 'message_not_matched',
+          message: 'Message body did not match any active transfer template',
+        ),
+      );
+    } on FormatException catch (e) {
+      return Failure(
+        AppFailure(
+          code: 'message_parse_failed',
+          message: 'Invalid transfer template pattern: ${e.message}',
+        ),
+      );
+    } catch (e) {
+      return Failure(
+        AppFailure(
+          code: 'message_parse_failed',
+          message: 'Message parse failed: $e',
         ),
       );
     }
-
-    final body = _normalizeBody(message.body);
-    for (final template in active) {
-      final balanceRequest =
-          _tryBalanceRequest(template, message.id, message.sender, body);
-      if (balanceRequest != null) return Success(balanceRequest);
-
-      final instant =
-          _tryInstantCharge(template, message.id, message.sender, body);
-      if (instant != null) return Success(instant);
-
-      final parsed = _tryMatch(template, message.id, message.sender, body);
-      if (parsed != null) return Success(parsed);
-    }
-
-    return const Failure(
-      AppFailure(
-        code: 'message_not_matched',
-        message: 'Message body did not match any active transfer template',
-      ),
-    );
   }
 
   /// POS balance request: template with [TemplateIdentifierKind.balanceRequestCode]
@@ -163,12 +185,10 @@ final class LocalMessageParser implements MessageParser {
         destination = sendCard.group(2);
       }
     }
-
     if (destination == null || amountRaw == null) return null;
 
     final destPhone = _normalizePhone(destination);
     if (destPhone == null) return null;
-
     final minor = _parseAmountToMinor(amountRaw);
     if (minor == null || minor <= 0) return null;
 
@@ -214,8 +234,6 @@ final class LocalMessageParser implements MessageParser {
     final destinationRaw = _group(match, 'dest');
     final qtyRaw = _group(match, 'qty');
 
-    // Financial templates require a captured reference unless the template
-    // explicitly opts out (POS card-request templates).
     if (template.requireReference && (ref == null || ref.isEmpty)) return null;
 
     String? identifier;
@@ -306,9 +324,9 @@ final class LocalMessageParser implements MessageParser {
     var i = 0;
     while (i < unified.length) {
       if (_flexibleSeparators.contains(unified[i])) {
+        // Use RegExp.escape — with unicode:true, manual "\\," / "\\:" are invalid escapes.
         buf.write(r'\s*');
-        buf.write(r'\');
-        buf.write(unified[i]);
+        buf.write(RegExp.escape(unified[i]));
         buf.write(r'\s*');
         i++;
         continue;
@@ -353,29 +371,27 @@ final class LocalMessageParser implements MessageParser {
           i++;
         }
       } else if (_regexMeta.contains(ch)) {
-        buf.write(r'\');
-        buf.write(ch);
+        // Only escape true regex metacharacters (safe under unicode:true).
+        buf.write(RegExp.escape(ch));
       } else {
         buf.write(ch);
       }
       i++;
     }
 
-    // POS single-card patterns may accept an optional trailing quantity
-    // (`779776919 100 3`) when the pattern itself has no `{qty}`.
     if (allowImplicitPosQuantity && !unified.contains('{qty}')) {
       buf.write(r'(?:\s+(?<qty>\d{1,2}))?');
     }
 
-    return RegExp(
-      '^${buf.toString()}\$',
-      caseSensitive: false,
-      unicode: true,
-    );
+    // Keep the end anchor escaped (`\$`) so it is always a literal `$`.
+    final source = '^${buf.toString()}\$';
+    try {
+      return RegExp(source, caseSensitive: false, unicode: true);
+    } on FormatException {
+      return RegExp(source, caseSensitive: false);
+    }
   }
 
-  /// Collapse whitespace, strip bidi marks, unify Arabic letter variants, and
-  /// map Eastern digits — applied identically to pattern and body.
   String _normalizeBody(String input) {
     var s = _normalizeDigits(input.trim());
     s = s
@@ -386,7 +402,6 @@ final class LocalMessageParser implements MessageParser {
         .replaceAll(RegExp(r'[\u0622\u0623\u0625\u0627\u0671]'), '\u0627')
         .replaceAll('\u0649', '\u064a')
         .replaceAll('\u0629', '\u0647')
-        // Unify card singular/plural so one POS pattern matches both.
         .replaceAll('كروت', 'كرت')
         .replaceAll(RegExp(r'[ \t\u00a0]+'), ' ')
         .replaceAll(RegExp(r'\s*\n\s*'), ' ');

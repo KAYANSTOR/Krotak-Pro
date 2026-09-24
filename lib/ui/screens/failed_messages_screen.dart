@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/result.dart';
 import '../../domain/entities/message.dart';
 import '../../domain/services/local_message_retry_service.dart';
+import '../../domain/services/messages_source_of_truth.dart';
 import '../app_scope.dart';
 import '../theme/net_semantic_colors.dart';
 import '../widgets/async_views.dart';
@@ -35,7 +36,8 @@ class _FailedMessagesScreenState extends State<FailedMessagesScreen> {
       _error = null;
     });
     final c = AppScope.of(context);
-    final result = await c.messages.listByStatus(MessageProcessingStatus.failed);
+    final result = await MessagesFacade(RepositoryMessagesSource(c.messages))
+        .list(MessageListCategory.failed);
     if (!mounted) return;
     if (result is Failure<List<IncomingMessage>>) {
       setState(() {

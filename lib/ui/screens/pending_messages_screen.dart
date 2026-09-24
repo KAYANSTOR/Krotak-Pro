@@ -49,7 +49,7 @@ class _PendingMessagesScreenState extends State<PendingMessagesScreen>
   Future<void> _loadAlertSetting() async {
     final r = await AppScope.of(context).settings.find(
           SettingKeys.pendingAttentionAlertEnabled,
-        );
+        ).timeout(const Duration(seconds: 10));
     if (!mounted) return;
     final raw = r is Success<AppSetting?> ? r.value?.value : null;
     _alertEnabled = SettingBool.read(
@@ -81,33 +81,36 @@ class _PendingMessagesScreenState extends State<PendingMessagesScreen>
       _loading = true;
       _error = null;
     });
-    final c = AppScope.of(context);
-    await _loadAlertSetting();
-    final result = await c.pendingReview.listPending();
-    if (!mounted) return;
-    if (result is Failure<List<IncomingMessage>>) {
+    try {
+      final c = AppScope.of(context);
+      await _loadAlertSetting();
+      final result = await c.pendingReview.listPending();
+      if (result is Failure<List<IncomingMessage>>) {
+        throw StateError(result.error.message);
+      }
+      final list = (result as Success<List<IncomingMessage>>).value;
+      final rows = <_PendingRow>[];
+      for (final m in list) {
+        rows.add(await _enrich(m));
+      }
+      if (!mounted) return;
       setState(() {
         _loading = false;
-        _error = result.error.message;
+        _all = list;
+        _rows = rows;
       });
-      return;
-    }
-    final list = (result as Success<List<IncomingMessage>>).value;
-    final rows = <_PendingRow>[];
-    for (final m in list) {
-      rows.add(await _enrich(m));
-    }
-    if (!mounted) return;
-    setState(() {
-      _loading = false;
-      _all = list;
-      _rows = rows;
-    });
-    if (_alertEnabled && rows.isNotEmpty && !_alarm.isMuted) {
-      _alarm.unmute();
-      _alarm.start();
-    } else {
-      _alarm.stop();
+      if (_alertEnabled && rows.isNotEmpty && !_alarm.isMuted) {
+        _alarm.unmute();
+        _alarm.start();
+      } else {
+        _alarm.stop();
+      }
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = 'تعذر تحميل الرسائل المعلّقة: $error';
+      });
     }
   }
 
@@ -123,7 +126,9 @@ class _PendingMessagesScreenState extends State<PendingMessagesScreen>
       phone = parse.value.customerIdentifier;
       reference = parse.value.reference;
     }
-    final audits = await c.auditLogs.findByEntity('message', m.id);
+    final audits = await c.auditLogs.findByEntity('message', m.id).timeout(
+      const Duration(seconds: 10),
+    );
     if (audits is Success) {
       final logs = (audits as Success).value;
       final pending =

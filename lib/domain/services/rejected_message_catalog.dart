@@ -36,9 +36,12 @@ abstract final class RejectionCategories {
       case RejectionCodes.parseFailure:
       case 'message_parse_failed':
       case 'transfer_parse_failed':
+      case 'no_source_template':
+      case 'template_source_mismatch':
         return templateMismatch;
       case RejectionCodes.unknownSender:
       case 'transfer_unresolved':
+      case 'untrusted_payment_source':
         return unresolvedCustomer;
       case RejectionCodes.categoryMismatch:
       case 'transfer_unmatched_amount':
@@ -82,6 +85,12 @@ abstract final class RejectionCategories {
         return 'فشل حجز الكرت من المخزون';
       case 'transfer_rejected':
         return 'رُفضت الرسالة أثناء المعالجة';
+      case 'no_source_template':
+        return 'لا يوجد قالب نشط مرتبط بهذا المصدر — فعّل قالب نقطة البيع';
+      case 'template_source_mismatch':
+        return 'القالب المطابق غير مرتبط بهذا المصدر';
+      case 'untrusted_payment_source':
+        return 'المصدر غير مهيّأ (محفظة أو نقطة بيع غير مسجّلة)';
       default:
         return templateMismatch;
     }
@@ -139,7 +148,15 @@ final class RejectedMessageCatalog {
   Future<Result<List<RejectedMessageItem>>> listRejected({
     DateTime? viewedAfter,
   }) async {
-    final result = await messages.listByStatus(MessageProcessingStatus.rejected);
+    final result = await messages.listByStatus(MessageProcessingStatus.rejected).timeout(
+      const Duration(seconds: 15),
+      onTimeout: () => const Failure(
+        AppFailure(
+          code: 'rejected_messages_timeout',
+          message: 'انتهت مهلة تحميل الرسائل المرفوضة',
+        ),
+      ),
+    );
     if (result is Failure<List<IncomingMessage>>) return Failure(result.error);
     final list = (result as Success<List<IncomingMessage>>).value;
 
@@ -167,7 +184,15 @@ final class RejectedMessageCatalog {
 
     String? action;
     String? payloadReason;
-    final audits = await auditLogs.findByEntity('message', m.id);
+    final audits = await auditLogs.findByEntity('message', m.id).timeout(
+      const Duration(seconds: 10),
+      onTimeout: () => const Failure(
+        AppFailure(
+          code: 'rejected_message_details_timeout',
+          message: 'انتهت مهلة تحميل تفاصيل الرسالة المرفوضة',
+        ),
+      ),
+    );
     if (audits is Success<List<AuditLog>>) {
       final logs = audits.value;
       final relevant = logs.where((l) => _rejectActions.contains(l.action)).toList()

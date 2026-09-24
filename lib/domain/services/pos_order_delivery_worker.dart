@@ -14,6 +14,7 @@ import 'local_pos_account_registry.dart';
 import 'services.dart';
 import 'local_message_retry_service.dart';
 import 'message_retry_policy.dart';
+import 'outbound_message_dispatch_guard.dart';
 import 'pos_order_message_renderer.dart';
 
 /// Recovery worker for POS orders that have already committed their cards.
@@ -47,6 +48,19 @@ final class PosOrderDeliveryWorker {
   final Clock clock;
   final IdGenerator ids;
   final MessageRetryPolicy policy;
+
+  /// Same atomic per-message claim used by the customer-voucher delivery
+  /// worker, applied here to close the same duplicate-send window: without it, two
+  /// overlapping `tick()` passes (e.g. the periodic recovery timer firing
+  /// while a manual kick is still running) could both pass the
+  /// `customerDone`/`posDone` checks for the same message before either has
+  /// recorded its success audit, and each independently send the SMS.
+  OutboundMessageDispatchGuard? get _dispatchGuard {
+    final value = messages;
+    return value is OutboundMessageStore
+        ? OutboundMessageDispatchGuard(store: value as OutboundMessageStore)
+        : null;
+  }
 
   Future<Result<PosOrderDeliveryWorkerReport>> tick() async {
     final candidates = await _candidateMessages();
@@ -191,6 +205,19 @@ final class PosOrderDeliveryWorker {
         continue;
       }
       final body = (rendered as Success<PosOrderMessages>).value;
+
+      final guard = _dispatchGuard;
+      if (guard != null) {
+        final claimed = await guard.store.claimForDispatch(
+          message.id,
+          now: clock.now(),
+          staleBefore: clock.now().subtract(policy.confirmPendingTimeout),
+        );
+        if (!claimed) {
+          skipped++;
+          continue;
+        }
+      }
 
       attempted++;
       if (!customerDelivered) {

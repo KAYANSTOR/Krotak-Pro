@@ -69,77 +69,77 @@ class _RejectedMessagesScreenState extends State<RejectedMessagesScreen> {
       _loading = true;
       _error = null;
     });
-    final c = AppScope.of(context);
-
-    DateTime? viewedAfter;
-    final viewed = await c.settings.find(SettingKeys.lastRejectedMessagesViewedAt);
-    if (viewed is Success<AppSetting?> && viewed.value != null) {
-      viewedAfter = DateTime.tryParse(viewed.value!.value)?.toUtc();
-    }
-
-    final catalog = RejectedMessageCatalog(
-      messages: c.messages,
-      auditLogs: c.auditLogs,
-      parser: c.messageParser,
-    );
-    final result = await catalog.listRejected(viewedAfter: viewedAfter);
-    if (!mounted) return;
-    if (result is Failure<List<RejectedMessageItem>>) {
-      setState(() {
-        _loading = false;
-        _error = result.error.message;
-      });
-      return;
-    }
-    final items = (result as Success<List<RejectedMessageItem>>).value;
-    final newCount = items.where((i) => i.isNew).length;
-
-    // الأرشيف: الرسائل المحلولة بنجاح (معالجة أو مستردة) — عرض فقط.
-    final archive = <RejectedMessageItem>[];
-    for (final status in [
-      MessageProcessingStatus.processed,
-      MessageProcessingStatus.recovered,
-    ]) {
-      final r = await c.messages.listByStatus(status);
-      if (r is Success<List<IncomingMessage>>) {
-        for (final m in r.value) {
-          final parse = c.messageParser.parse(m);
-          archive.add(
-            RejectedMessageItem(
-              message: m,
-              category: RejectionCategories.all,
-              reason: 'تمت معالجة الرسالة بنجاح',
-              isNew: false,
-              amount: parse is Success<ParsedTransfer> ? parse.value.amount : null,
-              phone: parse is Success<ParsedTransfer>
-                  ? parse.value.customerIdentifier
-                  : m.customerIdentifier,
-              reference:
-                  parse is Success<ParsedTransfer> ? parse.value.reference : null,
-            ),
-          );
+    try {
+      final c = AppScope.of(context);
+      DateTime? viewedAfter;
+      final viewed = await c.settings
+          .find(SettingKeys.lastRejectedMessagesViewedAt)
+          .timeout(const Duration(seconds: 10));
+      if (viewed is Success<AppSetting?> && viewed.value != null) {
+        viewedAfter = DateTime.tryParse(viewed.value!.value)?.toUtc();
+      }
+      final catalog = RejectedMessageCatalog(
+        messages: c.messages,
+        auditLogs: c.auditLogs,
+        parser: c.messageParser,
+      );
+      final result = await catalog.listRejected(viewedAfter: viewedAfter);
+      if (result is Failure<List<RejectedMessageItem>>) {
+        throw StateError(result.error.message);
+      }
+      final items = (result as Success<List<RejectedMessageItem>>).value;
+      final newCount = items.where((i) => i.isNew).length;
+      final archive = <RejectedMessageItem>[];
+      for (final status in [
+        MessageProcessingStatus.processed,
+        MessageProcessingStatus.recovered,
+      ]) {
+        final r = await c.messages.listByStatus(status).timeout(
+          const Duration(seconds: 10),
+        );
+        if (r is Success<List<IncomingMessage>>) {
+          for (final m in r.value) {
+            final parse = c.messageParser.parse(m);
+            archive.add(
+              RejectedMessageItem(
+                message: m,
+                category: RejectionCategories.all,
+                reason: 'تمت معالجة الرسالة بنجاح',
+                isNew: false,
+                amount: parse is Success<ParsedTransfer> ? parse.value.amount : null,
+                phone: parse is Success<ParsedTransfer>
+                    ? parse.value.customerIdentifier
+                    : m.customerIdentifier,
+                reference: parse is Success<ParsedTransfer> ? parse.value.reference : null,
+              ),
+            );
+          }
         }
       }
+      archive.sort((a, b) => b.message.receivedAt.compareTo(a.message.receivedAt));
+      if (markViewed) {
+        await c.settings.save(
+          AppSetting(
+            key: SettingKeys.lastRejectedMessagesViewedAt,
+            value: c.clock.now().toUtc().toIso8601String(),
+            updatedAt: c.clock.now(),
+          ),
+        );
+      }
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _items = items;
+        _newCount = newCount;
+        _archiveItems = archive;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = 'تعذر تحميل الرسائل المرفوضة: $error';
+      });
     }
-    archive.sort((a, b) => b.message.receivedAt.compareTo(a.message.receivedAt));
-
-    if (markViewed) {
-      await c.settings.save(
-        AppSetting(
-          key: SettingKeys.lastRejectedMessagesViewedAt,
-          value: c.clock.now().toUtc().toIso8601String(),
-          updatedAt: c.clock.now(),
-        ),
-      );
-    }
-
-    if (!mounted) return;
-    setState(() {
-      _loading = false;
-      _items = items;
-      _newCount = newCount;
-      _archiveItems = archive;
-    });
   }
 
   List<String> get _availableCategories {

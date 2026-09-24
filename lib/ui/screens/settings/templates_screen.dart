@@ -4,6 +4,7 @@ import '../../../core/result.dart';
 import '../../../domain/entities/message.dart';
 import '../../../domain/entities/wallet.dart';
 import '../../../domain/services/default_pos_templates_seeder.dart';
+import '../../../domain/template_draft_rules.dart';
 import '../../app_scope.dart';
 import '../../theme/kayan_palette.dart';
 import '../../theme/net_semantic_colors.dart';
@@ -577,23 +578,9 @@ class _TemplatesScreenState extends State<TemplatesScreen> {
 
 /// بطاقة قالب مطابقة لإطار `tpl_sys50.jpg`:
 /// [⋮] [Switch]  …  [اسم + شارات]  [✓]
-/// مسودة = القالب ناقص حقلاً مطلوباً (المبلغ، أو معرّف العميل حسب نوعه) —
-/// لا يمكن أن يكون نشطاً فعلياً حتى يُستكمل. مطابق لحالة "مسودة" في الفيديو.
-bool _isTemplateDraft(TransferTemplate t) {
-  final p = t.pattern.trim();
-  if (p.isEmpty) return true;
-  // قالب طلب رصيد نقطة البيع لا يحمل مبلغاً ولا معرّفاً: يُطابق نص الرسالة
-  // نفسه (مثل «111») ويُقرأ المعرّف من رقم المرسل — وكان يُعرض خطأً «مسودة»
-  // بمفتاح معطّل، وهو قالب نشط ومزروع افتراضياً.
-  if (t.identifierKind == TemplateIdentifierKind.balanceRequestCode) return false;
-  final hasAmount = p.contains('{amount}') || p.contains('%amount');
-  final hasIdentifier = switch (t.identifierKind) {
-    TemplateIdentifierKind.phone => p.contains('{phone}') || p.contains('%phone'),
-    TemplateIdentifierKind.balanceRequestCode => true,
-    _ => p.contains('{account}') || p.contains('%account'),
-  };
-  return !hasAmount || !hasIdentifier;
-}
+/// قاعدة «مسودة» نفسها مستخدمة في المجال
+/// ([isTemplateDraft](package:net_app/domain/template_draft_rules.dart)) حتى لا
+/// تختلف بين الواجهة والخدمات، وفحصها في اختبارات المجال.
 
 class _TemplateCard extends StatelessWidget {
   const _TemplateCard({
@@ -611,7 +598,7 @@ class _TemplateCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = template;
-    final draft = _isTemplateDraft(t);
+    final draft = isTemplateDraft(t);
     final active = t.isActive && !draft;
 
     return Material(

@@ -17,6 +17,7 @@ import '../../domain/entities/transaction.dart' as domain;
 import '../../domain/entities/wallet.dart' as domain;
 import '../../domain/phone_normalizer.dart';
 import '../../domain/repositories/repositories.dart';
+import '../../domain/services/outbound_message_dispatch_guard.dart';
 import '../database/app_database.dart';
 
 part 'local_customer_repository.dart';

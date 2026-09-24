@@ -4,4 +4,4 @@
      `tools/generate_launcher_icons.py` لكل كثافات الشاشة. -->
 <bitmap xmlns:android="http://schemas.android.com/apk/res/android"
     android:src="@drawable/ic_launcher_mono_art"
-    android:gravity="center" />
+    android:gravity="fill" />

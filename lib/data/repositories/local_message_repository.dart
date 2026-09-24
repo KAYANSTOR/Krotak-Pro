@@ -1,9 +1,38 @@
 part of local_repositories;
 
-final class LocalMessageRepository implements MessageRepository {
+final class LocalMessageRepository implements MessageRepository, OutboundMessageStore {
   const LocalMessageRepository(this.database);
 
   final AppDatabase database;
+
+  @override
+  Future<bool> claimForDispatch(
+    String messageId, {
+    required DateTime now,
+    required DateTime staleBefore,
+  }) async {
+    // `parsed` is included alongside pending/failed/sending so a POS order
+    // whose commit audit landed but whose status update to `sending` was
+    // interrupted (app killed mid-commit) can still be claimed by
+    // PosOrderDeliveryWorker instead of being silently skipped forever.
+    final changed = await database.customUpdate(
+      'UPDATE incoming_messages SET status = ?, last_attempt_at = ? '
+      'WHERE id = ? AND status IN (?, ?, ?, ?) '
+      'AND (last_attempt_at IS NULL OR last_attempt_at < ?)',
+      variables: [
+        Variable.withString(domain.MessageProcessingStatus.sending.name),
+        Variable.withDateTime(now),
+        Variable.withString(messageId),
+        Variable.withString(domain.MessageProcessingStatus.pending.name),
+        Variable.withString(domain.MessageProcessingStatus.failed.name),
+        Variable.withString(domain.MessageProcessingStatus.sending.name),
+        Variable.withString(domain.MessageProcessingStatus.parsed.name),
+        Variable.withDateTime(staleBefore),
+      ],
+      updates: {database.incomingMessages},
+    );
+    return changed == 1;
+  }
 
   @override
   Future<Result<void>> save(domain.IncomingMessage message) async {

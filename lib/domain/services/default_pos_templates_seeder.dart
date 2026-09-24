@@ -1,5 +1,6 @@
 import '../../core/result.dart';
 import '../entities/message.dart';
+import '../entities/pos_account.dart';
 import '../repositories/repositories.dart';
 
 /// Seeds the built-in **inbound** parse templates for a single point-of-sale.
@@ -23,6 +24,10 @@ final class DefaultPosTemplatesSeeder {
   /// Number of built-in variants (always 3 for the commercial catalog).
   static int get catalogSize => _specs.length;
 
+  /// Variant id of the balance-inquiry template whose pattern is the per-POS
+  /// balance request code.
+  static const _balanceRequestVariant = 'balance-request';
+
   /// Legacy default variant ids that are no longer part of the commercial
   /// catalog. Existing rows are **deactivated** (not deleted) so custom text
   /// is preserved and audit history stays intact.
@@ -39,9 +44,17 @@ final class DefaultPosTemplatesSeeder {
     'arabic-digits-reversed',
   };
 
+  /// [balanceRequestCode] هو رمز طلب الرصيد الخاص بهذه النقطة (الافتراضي `111`
+  /// عند الفراغ أو عند غياب الرمز).
+  ///
+  /// عند تمرير رمز صريح (مسار الإنشاء/التعديل) يُحدَّث نصّ قالب `balance-request`
+  /// لهذه النقطة إلى الرمز الجديد دون إعادة تفعيل قالب أوقفه المشغّل. وعند عدم
+  /// تمريره (مسار «إضافة الناقص فقط» من الشاشات) يُضاف القالب الناقص فقط
+  /// بالرمز الافتراضي ولا يُلمَس نصّ قالب قائم ولا حالة تشغيله.
   Future<Result<int>> seedForPos({
     required String posId,
     required String posName,
+    String? balanceRequestCode,
     bool overwriteExisting = false,
   }) async {
     final existing = await templates.listAll();
@@ -76,6 +89,11 @@ final class DefaultPosTemplatesSeeder {
       changed++;
     }
 
+    final balanceCode =
+        (balanceRequestCode == null || balanceRequestCode.trim().isEmpty)
+            ? PosAccount.defaultBalanceRequestCode
+            : balanceRequestCode.trim();
+
     for (final spec in _specs) {
       final id = 'tpl-pos-$posId-${spec.variant}';
       final existingTemplate = all.cast<TransferTemplate?>().firstWhere(
@@ -83,23 +101,33 @@ final class DefaultPosTemplatesSeeder {
             orElse: () => null,
           );
 
+      // قالب طلب الرصيد يحمل رمز هذه النقطة؛ يُحدَّث نصّه فقط عند تمرير رمز
+      // صريح من مسار الإنشاء/التعديل، ولا يُلمَس في مسار «إضافة الناقص فقط».
+      final isBalanceRequest = spec.variant == _balanceRequestVariant;
+      final pattern = isBalanceRequest ? balanceCode : spec.pattern;
+      final sampleBody = isBalanceRequest ? balanceCode : spec.sampleBody;
+
       // Only migrate the known broken built-in contract unless an explicit
       // overwrite was requested. This preserves intentional operator changes.
       final shouldRepair =
           existingTemplate != null &&
-          (overwriteExisting || _needsKnownMigration(existingTemplate, spec));
+          (overwriteExisting ||
+              (isBalanceRequest
+                  ? balanceRequestCode != null &&
+                      existingTemplate.pattern.trim() != pattern
+                  : _needsKnownMigration(existingTemplate, spec)));
       if (existingTemplate != null && !shouldRepair) continue;
 
       if (existingTemplate != null) {
         final repaired = TransferTemplate(
           id: id,
           name: spec.name,
-          pattern: spec.pattern,
-          isActive: shouldRepair ? true : existingTemplate.isActive,
+          pattern: pattern,
+          isActive: isBalanceRequest ? existingTemplate.isActive : true,
           priority: spec.priority,
           walletId: existingTemplate.walletId,
           posId: posId,
-          sampleBody: spec.sampleBody,
+          sampleBody: sampleBody,
           senderCode: existingTemplate.senderCode,
           identifierKind: spec.identifierKind,
           senderNameLabel: spec.senderNameLabel,
@@ -129,12 +157,12 @@ final class DefaultPosTemplatesSeeder {
       final tpl = TransferTemplate(
         id: id,
         name: spec.name,
-        pattern: spec.pattern,
+        pattern: pattern,
         isActive: true,
         priority: spec.priority,
         walletId: null,
         posId: posId,
-        sampleBody: spec.sampleBody,
+        sampleBody: sampleBody,
         identifierKind: spec.identifierKind,
         senderNameLabel: spec.senderNameLabel,
         noteLabel: spec.noteLabel,
@@ -148,6 +176,13 @@ final class DefaultPosTemplatesSeeder {
   }
 
   static bool _needsKnownMigration(TransferTemplate existing, _TplSpec spec) {
+    if (spec.variant == 'cards-to-pos') {
+      // نسخة سابقة زُرعت بنوع معرّف `phone` بلا عنصر نائب في النص، فظهرت
+      // "مسودة" واستحال تفعيلها. يُصلَح النوع فقط، وبشرط أن يكون النص هو النص
+      // الافتراضي (لا نلمس نص المشغّل المخصص).
+      return existing.pattern.trim() == '{qty} كرت {amount}' &&
+          existing.identifierKind != TemplateIdentifierKind.senderNameOnly;
+    }
     if (spec.variant != 'cards-to-pos-customer') return false;
     final pattern = existing.pattern.trim();
     return pattern == '{qty} كرت {amount} {dest}' ||
@@ -163,6 +198,9 @@ final class DefaultPosTemplatesSeeder {
       priority: 1,
       pattern: '{qty} كرت {amount}',
       sampleBody: '10 كرت 100',
+      // الهوية تأتي من رقم المرسل (نقطة البيع) لا من نص الرسالة؛ بدون هذا
+      // النوع يُصنَّف القالب "مسودة" في الواجهة ويمتنع تفعيله.
+      identifierKind: TemplateIdentifierKind.senderNameOnly,
       senderNameLabel: 'نقطة البيع',
       noteLabel: 'كروت لنقطة البيع',
       requireReference: false,
@@ -180,11 +218,11 @@ final class DefaultPosTemplatesSeeder {
     ),
     // 3 — استعلام رصيد نقطة البيع
     _TplSpec(
-      variant: 'balance-request',
+      variant: _balanceRequestVariant,
       name: 'استعلام رصيد نقطة البيع',
       priority: 20,
-      pattern: '111',
-      sampleBody: '111',
+      pattern: PosAccount.defaultBalanceRequestCode,
+      sampleBody: PosAccount.defaultBalanceRequestCode,
       identifierKind: TemplateIdentifierKind.balanceRequestCode,
       senderNameLabel: 'نقطة البيع',
       noteLabel: 'طلب رصيد',
