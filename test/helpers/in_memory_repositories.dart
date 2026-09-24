@@ -100,6 +100,28 @@ final class InMemoryAuditLogRepository implements AuditLogRepository {
       logs.where((l) => l.entityType == entityType && l.entityId == entityId).toList(),
     );
   }
+
+  /// Mirrors `LocalAuditLogRepository.search`: case-insensitive `LIKE %query%`
+  /// over entityId/action/payloadJson, newest first, capped by [limit].
+  /// A blank query returns nothing, exactly like the Drift implementation.
+  @override
+  Future<Result<List<AuditLog>>> search({
+    required String query,
+    int limit = 200,
+  }) async {
+    final needle = query.trim().toLowerCase();
+    if (needle.isEmpty) return const Success(<AuditLog>[]);
+    final matched = logs
+        .where(
+          (l) =>
+              l.entityId.toLowerCase().contains(needle) ||
+              l.action.toLowerCase().contains(needle) ||
+              (l.payloadJson ?? '').toLowerCase().contains(needle),
+        )
+        .toList()
+      ..sort((a, b) => b.occurredAt.compareTo(a.occurredAt));
+    return Success(matched.take(limit < 1 ? 0 : limit).toList());
+  }
 }
 
 final class InMemoryUnitOfWork implements UnitOfWork {
@@ -133,6 +155,29 @@ final class InMemoryCustomerRepository implements CustomerRepository {
     return Success(
       _customers.values.where((c) => c.displayName.toLowerCase().contains(q)).toList(),
     );
+  }
+
+  /// Mirrors `LocalCustomerRepository.searchPage`: name *or* identifier match,
+  /// ordered by displayName, then the [offset]/[limit] window is applied.
+  /// A blank query returns the whole book ordered by displayName.
+  @override
+  Future<Result<List<Customer>>> searchPage(
+    String query, {
+    int limit = 80,
+    int offset = 0,
+  }) async {
+    final safeLimit = limit < 1 ? 80 : limit;
+    final safeOffset = offset < 0 ? 0 : offset;
+    final needle = query.trim().toLowerCase();
+    final matches = _customers.values.where((c) {
+      if (needle.isEmpty) return true;
+      if (c.displayName.toLowerCase().contains(needle)) return true;
+      return _identifiers.values.any(
+        (i) => i.customerId == c.id && i.value.toLowerCase().contains(needle),
+      );
+    }).toList()
+      ..sort((a, b) => a.displayName.compareTo(b.displayName));
+    return Success(matches.skip(safeOffset).take(safeLimit).toList());
   }
 
   @override

@@ -97,6 +97,17 @@ kotlin {
     }
 }
 
+// اختبارات JVM حقيقية لمنطق أندرويد (انظر src/test/kotlin): تعمل بـ
+// `./gradlew :app:testDebugUnitTest` بلا جهاز ولا محاكي، وهي الجزء الآلي من
+// تغطية SmsInboxStore. ما تبقّى (SharedPreferences، أذونات SMS، البثّ،
+// Foreground Service) يبقى device-only ويُوثّق في مصفوفة الاختبار.
+dependencies {
+    testImplementation("junit:junit:4.13.2")
+    testImplementation(kotlin("test"))
+    // بديل org.json الحقيقي: نسخة android.jar في اختبارات JVM كلها Stub! ترمي استثناءً.
+    testImplementation("org.json:json:20240303")
+}
+
 flutter {
     source = "../.."
 }

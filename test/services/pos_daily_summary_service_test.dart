@@ -109,6 +109,76 @@ void main() {
     expect(sender.calls, 1);
   });
 
+  test('force sends the summary on demand even after the day marker', () async {
+    final settings = _Settings({
+      SettingKeys.dailyOpsSummaryAutoSend: 'true',
+      SettingKeys.dailyPosSummaryTemplate:
+          'POS={pos}|sales={sales}|transfers={transfers}|balance={balance}',
+      SettingKeys.posAccounts:
+          '[{"posId":"pos-1","customerId":"customer-1","name":"نقطة صنعاء","identifiers":["777123456"],"notifyPhone":"777123456","status":"active","percentageMode":"defaultCategory"}]',
+    });
+    final sender = _Sender();
+    final service = LocalPosDailySummaryService(
+      posRegistry: LocalPosAccountRegistry(settings: settings, clock: FixedClock(DateTime(2026, 9, 21, 8))),
+      transactions: _Transactions(const []),
+      balances: _Balances(const Money(minorUnits: 700, currencyCode: 'YER')),
+      settings: settings,
+      auditLogs: _Audits(),
+      messageSender: sender,
+      clock: FixedClock(DateTime(2026, 9, 21, 8)),
+      ids: SequentialIdGenerator(),
+    );
+
+    await service.sendDue(now: DateTime(2026, 9, 21, 8));
+    final forced = await service.sendDue(
+      now: DateTime(2026, 9, 21, 12),
+      force: true,
+    );
+
+    expect((forced as Success<PosDailySummaryReport>).value.sent, 1);
+    expect(sender.calls, 2);
+  });
+
+  test('a failed send waits for the lock instead of resending every pass',
+      () async {
+    final settings = _Settings({
+      SettingKeys.dailyOpsSummaryAutoSend: 'true',
+      SettingKeys.dailyPosSummaryTemplate:
+          'POS={pos}|sales={sales}|transfers={transfers}|balance={balance}',
+      SettingKeys.posAccounts:
+          '[{"posId":"pos-1","customerId":"customer-1","name":"نقطة صنعاء","identifiers":["777123456"],"notifyPhone":"777123456","status":"active","percentageMode":"defaultCategory"}]',
+    });
+    final sender = _Sender()
+      ..failWith = const AppFailure(
+        code: 'sms_send_failed',
+        message: 'radio rejected SMS',
+      );
+    final service = LocalPosDailySummaryService(
+      posRegistry: LocalPosAccountRegistry(settings: settings, clock: FixedClock(DateTime(2026, 9, 21, 8))),
+      transactions: _Transactions(const []),
+      balances: _Balances(const Money(minorUnits: 700, currencyCode: 'YER')),
+      settings: settings,
+      auditLogs: _Audits(),
+      messageSender: sender,
+      clock: FixedClock(DateTime(2026, 9, 21, 8)),
+      ids: SequentialIdGenerator(),
+    );
+
+    final first = await service.sendDue(now: DateTime(2026, 9, 21, 8));
+    expect((first as Success<PosDailySummaryReport>).value.sent, 0);
+    expect(sender.calls, 1);
+
+    // دورة تالية مباشرة: قفل التنفيذ يمنع إعادة الإرسال الفوري لكل دورة استرداد.
+    await service.sendDue(now: DateTime(2026, 9, 21, 8, 1));
+    expect(sender.calls, 1);
+
+    // بعد انتهاء مدة القفل يُسمح بمحاولة جديدة بدل تجميد الملخص لليوم كاملًا.
+    sender.failWith = null;
+    final retried = await service.sendDue(now: DateTime(2026, 9, 21, 8, 30));
+    expect((retried as Success<PosDailySummaryReport>).value.sent, 1);
+    expect(sender.calls, 2);
+  });
+
   test('skips disabled and non-active POS accounts', () async {
     final settings = _Settings({
       SettingKeys.dailyOpsSummaryAutoSend: 'false',
@@ -247,6 +317,7 @@ final class _Sender implements MessageSender {
   int calls = 0;
   String? lastDestination;
   String? lastBody;
+  AppFailure? failWith;
 
   @override
   Future<Result<void>> send({
@@ -254,6 +325,7 @@ final class _Sender implements MessageSender {
     required String body,
   }) async {
     calls++;
+    if (failWith != null) return Failure(failWith!);
     lastDestination = destination;
     lastBody = body;
     return const Success(null);
@@ -283,4 +355,24 @@ final class _Audits implements AuditLogRepository {
             )
             .toList(),
       );
+
+  @override
+  Future<Result<List<AuditLog>>> search({
+    required String query,
+    int limit = 200,
+  }) async {
+    final needle = query.trim().toLowerCase();
+    if (needle.isEmpty) return const Success(<AuditLog>[]);
+    return Success(
+      entries
+          .where(
+            (entry) =>
+                entry.entityId.toLowerCase().contains(needle) ||
+                entry.action.toLowerCase().contains(needle) ||
+                (entry.payloadJson ?? '').toLowerCase().contains(needle),
+          )
+          .take(limit < 1 ? 0 : limit)
+          .toList(),
+    );
+  }
 }

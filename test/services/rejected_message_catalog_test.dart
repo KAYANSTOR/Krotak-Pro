@@ -216,4 +216,24 @@ final class _FakeAudit implements AuditLogRepository {
     String entityId,
   ) async =>
       Success(logs.where((l) => l.entityId == entityId).toList());
+
+  @override
+  Future<Result<List<AuditLog>>> search({
+    required String query,
+    int limit = 200,
+  }) async {
+    final needle = query.trim().toLowerCase();
+    if (needle.isEmpty) return const Success(<AuditLog>[]);
+    return Success(
+      logs
+          .where(
+            (l) =>
+                l.entityId.toLowerCase().contains(needle) ||
+                l.action.toLowerCase().contains(needle) ||
+                (l.payloadJson ?? '').toLowerCase().contains(needle),
+          )
+          .take(limit < 1 ? 0 : limit)
+          .toList(),
+    );
+  }
 }

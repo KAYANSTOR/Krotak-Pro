@@ -1,7 +1,10 @@
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:net_app/core/result.dart';
-import 'package:net_app/data/database/app_database.dart';
+// Drift generates its own `AuditLog` row class with the same name; this test
+// asserts on the domain entity, so hide the generated one to keep the import
+// unambiguous.
+import 'package:net_app/data/database/app_database.dart' hide AuditLog;
 import 'package:net_app/data/repositories/local_repositories.dart';
 import 'package:net_app/domain/entities/audit.dart';
 import 'package:net_app/domain/services/commercial_operation_trace_service.dart';

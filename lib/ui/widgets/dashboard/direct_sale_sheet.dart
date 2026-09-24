@@ -187,6 +187,10 @@ class _DirectSaleSheetState extends State<DirectSaleSheet> {
     if (!mounted) return;
     setState(() => _busy = false);
     if (r is Success<Sale>) {
+      // تشغيل دورة التسليم فورًا بعد البيع اليدوي بدل انتظار المؤقت (حتى 3
+      // ثوانٍ). الدورة محمية already بمنع التكرار وبمراجع التدقيق، فلا تتكرر
+      // الرسالة بسبب التشغيل الإضافي.
+      unawaited(c.kickDeliveryWorker());
       Navigator.of(context).pop(true);
       return;
     }

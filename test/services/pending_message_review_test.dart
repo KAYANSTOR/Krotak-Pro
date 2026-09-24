@@ -134,6 +134,7 @@ final class _FakeCustomers implements CustomerRepository {
   @override Future<Result<void>> save(Customer customer) async { store[customer.id] = customer; return const Success(null); }
   @override Future<Result<void>> saveIdentifier(CustomerIdentifier identifier) async { byIdentifier[identifier.value] = identifier.customerId; return const Success(null); }
   @override Future<Result<List<Customer>>> search(String query) async => Success(store.values.toList());
+  @override Future<Result<List<Customer>>> searchPage(String query, {int limit = 80, int offset = 0}) async { final needle = query.trim().toLowerCase(); final matches = store.values.where((c) => needle.isEmpty || c.displayName.toLowerCase().contains(needle)).toList()..sort((a, b) => a.displayName.compareTo(b.displayName)); return Success(matches.skip(offset < 0 ? 0 : offset).take(limit < 1 ? 80 : limit).toList()); }
   @override Future<Result<List<CustomerPhoneSuggestion>>> suggestPhonesByPrefix(String prefix, {int limit = 8}) async => const Success([]);
   @override Future<Result<List<CustomerIdentifier>>> listIdentifiers(String customerId) async => const Success([]);
 }
@@ -163,4 +164,5 @@ final class _FakeAudit implements AuditLogRepository {
   final logs = <AuditLog>[];
   @override Future<Result<void>> append(AuditLog log) async { logs.add(log); return const Success(null); }
   @override Future<Result<List<AuditLog>>> findByEntity(String entityType, String entityId) async => Success(logs.where((l) => l.entityId == entityId).toList());
+  @override Future<Result<List<AuditLog>>> search({required String query, int limit = 200}) async { final needle = query.trim().toLowerCase(); if (needle.isEmpty) return const Success(<AuditLog>[]); return Success(logs.where((l) => l.entityId.toLowerCase().contains(needle) || l.action.toLowerCase().contains(needle) || (l.payloadJson ?? '').toLowerCase().contains(needle)).take(limit < 1 ? 0 : limit).toList()); }
 }

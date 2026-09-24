@@ -17,8 +17,12 @@ final class _RecordingSender implements MessageSender {
   final List<({String destination, String body})> sent = [];
   AppFailure? failWith;
 
+  /// عدد محاولات الإرسال فعلًا (ناجحة أو فاشلة).
+  int attempts = 0;
+
   @override
   Future<Result<void>> send({required String destination, required String body}) async {
+    attempts++;
     if (failWith != null) return Failure(failWith!);
     sent.add((destination: destination, body: body));
     return const Success(null);
@@ -166,6 +170,29 @@ void main() {
     final r = (report as Success<DeliveryWorkerReport>).value;
     expect(r.delivered, 0);
     expect(sender.sent, isEmpty);
+  });
+
+  test('non-retryable send failure stops the every-tick resend loop', () async {
+    // رمز الفشل الذي يعيده الجسر الأصلي فعليًا (NativeMessageSender).
+    await seedCommittedFailedMessage();
+    sender.failWith = const AppFailure(
+      code: 'sms_send_failed',
+      message: 'radio rejected SMS',
+    );
+
+    final first = (await worker.tick() as Success<DeliveryWorkerReport>).value;
+    expect(first.attempted, 1);
+    expect(sender.attempts, 1);
+
+    final message =
+        (await messages.findById('m1') as Success<IncomingMessage?>).value!;
+    expect(message.status, MessageProcessingStatus.failedMaxAttempts);
+
+    // قبل الإصلاح: الحالة تبقى `failed` فتُعاد المحاولة في كل دورة (كل 3 ثوان)
+    // فيصل نفس الكرت للعميل مرات متعددة. الآن لا محاولة جديدة.
+    final second = (await worker.tick() as Success<DeliveryWorkerReport>).value;
+    expect(second.attempted, 0);
+    expect(sender.attempts, 1);
   });
 
   test('records failure without releasing card identity', () async {

@@ -129,6 +129,28 @@ final class LocalMessageRetryService implements MessageRetryServicePort {
   @override
   Future<Result<MessageRetryState>> recordFailure({required String messageId, required AppFailure error}) async {
     if (!policy.isRetryableCode(error.code)) {
+      // فشل غير قابل لإعادة المحاولة: تُقفل الرسالة بحالة نهائية بدل تركها في
+      // `failed`. سابقًا لم تتغيّر الحالة إطلاقًا، فكانت كل دورة تسليم (كل 3
+      // ثوان) تعيد محاولة إرسال نفس الرسالة بلا حد — وهو السبب الفعلي لتكرار
+      // الرسائل على العميل. المشغّل يراها الآن في «الرسائل الفاشلة» ويمكنه
+      // إعادة الإرسال يدويًا بقرار صريح.
+      final audit = await auditLogs.append(AuditLog(
+        id: ids.next('audit'),
+        entityType: 'message',
+        entityId: messageId,
+        action: 'message_retry_exhausted',
+        occurredAt: clock.now(),
+        payloadJson: jsonEncode({
+          'attempts': 0,
+          'errorCode': error.code,
+          'retryable': false,
+        }),
+      ));
+      if (audit is Failure<void>) return Failure(audit.error);
+      await messages.updateStatus(
+        messageId,
+        MessageProcessingStatus.failedMaxAttempts,
+      );
       return Success(MessageRetryState(attempts: 0, nextRetryAt: null, lastErrorCode: error.code, exhausted: true));
     }
     final current = await state(messageId);

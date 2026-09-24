@@ -44,7 +44,14 @@ final class LocalPosDailySummaryService {
   /// Both a persisted marker and the audit trail act as idempotency fences.
   /// This prevents a successful SMS from being sent again when one of the
   /// post-send persistence writes fails.
-  Future<Result<PosDailySummaryReport>> sendDue({DateTime? now}) async {
+  ///
+  /// [force] يتجاهل علامة اليوم والمرجع التدقيقي ليتمكّن المشغّل من إرسال
+  /// الملخص عند الطلب في أي وقت (بدل انتظار منتصف الليل فقط). يبقى قفل التنفيذ
+  /// أدناه ساريًا فلا يمكن أن يُرسل مرتين في اللحظة نفسها.
+  Future<Result<PosDailySummaryReport>> sendDue({
+    DateTime? now,
+    bool force = false,
+  }) async {
     final enabledResult = await settings.find(
       SettingKeys.dailyOpsSummaryAutoSend,
     );
@@ -93,44 +100,47 @@ final class LocalPosDailySummaryService {
       }
 
       final markerKey = 'pos_daily_summary:${account.posId}:$dayKey';
-      final markerResult = await settings.find(markerKey);
-      if (markerResult is Failure<AppSetting?>) {
-        failed++;
-        errors.add('${account.posId}:marker_read_failed');
-        continue;
-      }
-      if ((markerResult as Success<AppSetting?>).value != null) {
-        skipped++;
-        continue;
-      }
 
-      // Recovery fence: a successful audit entry means the SMS was already
-      // sent even if the lightweight settings marker was not persisted.
-      final auditResult = await auditLogs.findByEntity(
-        'pos_account',
-        account.posId,
-      );
-      if (auditResult is Failure<List<AuditLog>>) {
-        failed++;
-        errors.add('${account.posId}:audit_read_failed');
-        continue;
-      }
-      final alreadyAudited =
-          (auditResult as Success<List<AuditLog>>).value.any(
-        (log) =>
-            log.action == 'pos_daily_summary_sent' &&
-            (log.payloadJson ?? '').contains('"day":"$summaryDayKey"'),
-      );
-      if (alreadyAudited) {
-        skipped++;
-        await settings.save(
-          AppSetting(
-            key: markerKey,
-            value: 'sent:${ids.next('pos-summary-repair')}',
-            updatedAt: clock.now(),
-          ),
+      if (!force) {
+        final markerResult = await settings.find(markerKey);
+        if (markerResult is Failure<AppSetting?>) {
+          failed++;
+          errors.add('${account.posId}:marker_read_failed');
+          continue;
+        }
+        if ((markerResult as Success<AppSetting?>).value != null) {
+          skipped++;
+          continue;
+        }
+
+        // Recovery fence: a successful audit entry means the SMS was already
+        // sent even if the lightweight settings marker was not persisted.
+        final auditResult = await auditLogs.findByEntity(
+          'pos_account',
+          account.posId,
         );
-        continue;
+        if (auditResult is Failure<List<AuditLog>>) {
+          failed++;
+          errors.add('${account.posId}:audit_read_failed');
+          continue;
+        }
+        final alreadyAudited =
+            (auditResult as Success<List<AuditLog>>).value.any(
+          (log) =>
+              log.action == 'pos_daily_summary_sent' &&
+              (log.payloadJson ?? '').contains('"day":"$summaryDayKey"'),
+        );
+        if (alreadyAudited) {
+          skipped++;
+          await settings.save(
+            AppSetting(
+              key: markerKey,
+              value: 'sent:${ids.next('pos-summary-repair')}',
+              updatedAt: clock.now(),
+            ),
+          );
+          continue;
+        }
       }
 
       dueAccounts.add((account: account, markerKey: markerKey));
@@ -165,6 +175,19 @@ final class LocalPosDailySummaryService {
     for (final due in dueAccounts) {
       final account = due.account;
       final markerKey = due.markerKey;
+
+      // قفل تنفيذ لكل نقطة/يوم: يمنع إرسال ملخصين متوازيين لنفس النقطة عند
+      // فتح البرنامج مرتين أو تشغيل دورتين متداخلتين (سبب تكرار الملخص).
+      final claim = await _claimExecution(account.posId, dayKey, current);
+      if (claim is Failure<bool>) {
+        failed++;
+        errors.add('${account.posId}:lock_failed');
+        continue;
+      }
+      if (!(claim as Success<bool>).value) {
+        skipped++;
+        continue;
+      }
 
       final accountRows = transactionsSnapshot.where(
         (row) =>
@@ -361,6 +384,47 @@ final class LocalPosDailySummaryService {
 
   String _displayMinor(int minorUnits) =>
       (minorUnits / 100).toStringAsFixed(2);
+
+  /// قفل تنفيذ مؤقّت (5 دقائق) لنقطة/يوم واحد.
+  ///
+  /// لا يوجد قيد فريد على جدول الإعدادات يستطيع التعبير عن «من يملك الإرسال»،
+  /// فالقفل يُكتب ثم يُعاد قراءته: إن كان آخر كاتب غيرنا فهناك دورة أخرى تُرسل
+  /// الآن، فلا نرسل. وإن بقي القفل من محاولة انقطعت (أقدم من المدة) يُعتبر
+  /// متروكًا ويُسمح بمحاولة جديدة بدل تجميد ملخص اليوم كاملًا.
+  Future<Result<bool>> _claimExecution(
+    String posId,
+    String dayKey,
+    DateTime now,
+  ) async {
+    final lockKey = 'pos_daily_summary_lock:$posId:$dayKey';
+    final existing = await settings.find(lockKey);
+    if (existing is Failure<AppSetting?>) return Failure(existing.error);
+    final currentValue = (existing as Success<AppSetting?>).value?.value;
+    if (currentValue != null && _lockIsFresh(currentValue, now)) {
+      return const Success(false);
+    }
+
+    final token = '${ids.next('pos-summary-lock')}|${now.toIso8601String()}';
+    final saved = await settings.save(
+      AppSetting(key: lockKey, value: token, updatedAt: now),
+    );
+    if (saved is Failure<void>) return Failure(saved.error);
+
+    final verify = await settings.find(lockKey);
+    if (verify is Failure<AppSetting?>) return Failure(verify.error);
+    final stored = (verify as Success<AppSetting?>).value?.value;
+    return Success(stored == token);
+  }
+
+  static const lockTtl = Duration(minutes: 5);
+
+  static bool _lockIsFresh(String raw, DateTime now) {
+    final parts = raw.split('|');
+    if (parts.length < 2) return true;
+    final at = DateTime.tryParse(parts.last);
+    if (at == null) return true;
+    return now.difference(at) < lockTtl;
+  }
 
   String _dayKey(DateTime value) =>
       '${value.year.toString().padLeft(4, '0')}-'

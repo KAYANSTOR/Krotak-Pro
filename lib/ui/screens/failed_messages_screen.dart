@@ -36,6 +36,9 @@ class _FailedMessagesScreenState extends State<FailedMessagesScreen> {
       _error = null;
     });
     final c = AppScope.of(context);
+    // «فاشلة» تشمل المحاولات المنتهية (`failedMaxAttempts`) أيضًا: مصدر الحقيقة
+    // الوحيد `MessagesFacade` يجمع الحالتين معًا (مع الترتيب والحذف المكرر)،
+    // فلا تختفي رسالة استنفدت محاولاتها أو رُفض إرسالها نهائيًا من هذه الشاشة.
     final result = await MessagesFacade(RepositoryMessagesSource(c.messages))
         .list(MessageListCategory.failed);
     if (!mounted) return;

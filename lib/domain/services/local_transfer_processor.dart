@@ -1154,7 +1154,14 @@ final class LocalTransferProcessor implements TransferProcessor {
       return Failure<Transaction>(posAudit.error);
     }
 
-    final ledger = await transactionRepo.findByReference('sale-op:$operationId');
+    // A batch POS order commits one sale per card and keys each ledger row by
+    // its index (`sale-op:<operationId>:<index>`), so the order-level ledger is
+    // the first committed item's, not `sale-op:<operationId>`. Looking up the
+    // un-indexed reference made every delivered multi-card POS order report
+    // `sale_ledger_missing` and stick in `failed` even though the cards were
+    // sold and both SMS messages had been sent.
+    final ledgerReference = 'sale-op:${items.first.saleOperationId}';
+    final ledger = await transactionRepo.findByReference(ledgerReference);
     if (ledger is Failure<Transaction?>) return Failure<Transaction>(ledger.error);
     final saleLedger = (ledger as Success<Transaction?>).value;
     if (saleLedger == null) {

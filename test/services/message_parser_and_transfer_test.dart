@@ -581,6 +581,25 @@ final class _FakeCustomers implements CustomerRepository {
       const Success([]);
 
   @override
+  Future<Result<List<Customer>>> searchPage(
+    String query, {
+    int limit = 80,
+    int offset = 0,
+  }) async {
+    final safeLimit = limit < 1 ? 80 : limit;
+    final safeOffset = offset < 0 ? 0 : offset;
+    final needle = query.trim().toLowerCase();
+    final matches = byId.values.where((c) {
+      if (needle.isEmpty) return true;
+      if (c.displayName.toLowerCase().contains(needle)) return true;
+      return (identifiers[c.id] ?? const <CustomerIdentifier>[])
+          .any((i) => i.value.toLowerCase().contains(needle));
+    }).toList()
+      ..sort((a, b) => a.displayName.compareTo(b.displayName));
+    return Success(matches.skip(safeOffset).take(safeLimit).toList());
+  }
+
+  @override
   Future<Result<List<CustomerPhoneSuggestion>>> suggestPhonesByPrefix(
     String prefix, {
     int limit = 8,
@@ -665,4 +684,24 @@ final class _FakeAudit implements AuditLogRepository {
     String entityId,
   ) async =>
       const Success([]);
+
+  @override
+  Future<Result<List<AuditLog>>> search({
+    required String query,
+    int limit = 200,
+  }) async {
+    final needle = query.trim().toLowerCase();
+    if (needle.isEmpty) return const Success(<AuditLog>[]);
+    return Success(
+      logs
+          .where(
+            (l) =>
+                l.entityId.toLowerCase().contains(needle) ||
+                l.action.toLowerCase().contains(needle) ||
+                (l.payloadJson ?? '').toLowerCase().contains(needle),
+          )
+          .take(limit < 1 ? 0 : limit)
+          .toList(),
+    );
+  }
 }

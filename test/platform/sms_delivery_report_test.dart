@@ -82,4 +82,24 @@ final class _MemAudit implements AuditLogRepository {
   Future<Result<List<AuditLog>>> findByEntity(String entityType, String entityId) async {
     return Success(items.where((e) => e.entityType == entityType && e.entityId == entityId).toList());
   }
+
+  @override
+  Future<Result<List<AuditLog>>> search({
+    required String query,
+    int limit = 200,
+  }) async {
+    final needle = query.trim().toLowerCase();
+    if (needle.isEmpty) return const Success(<AuditLog>[]);
+    return Success(
+      items
+          .where(
+            (e) =>
+                e.entityId.toLowerCase().contains(needle) ||
+                e.action.toLowerCase().contains(needle) ||
+                (e.payloadJson ?? '').toLowerCase().contains(needle),
+          )
+          .take(limit < 1 ? 0 : limit)
+          .toList(),
+    );
+  }
 }

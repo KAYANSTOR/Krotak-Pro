@@ -5,6 +5,7 @@ import '../../domain/entities/customer.dart';
 import '../../domain/entities/message.dart';
 import '../../domain/entities/pos_account.dart';
 import '../../domain/entities/wallet.dart';
+import '../../domain/services/local_pos_daily_summary_service.dart';
 import '../../domain/services/local_pos_profile_service.dart';
 import '../../domain/services/local_transfer_template_activation_service.dart';
 import '../../platform/contact_picker_bridge.dart';
@@ -40,6 +41,9 @@ class _PosScreenState extends State<PosScreen> {
   String? _error;
   List<PointOfSale> _pos = const [];
   Map<String, PosAccount> _accounts = const {};
+
+  /// إرسال يدوي لملخص أمس — كان الملخص لا يُرسل إلا عند منتصف الليل تلقائيًا.
+  bool _summaryBusy = false;
 
   /// حالة قوالب كل نقطة بيع: (النشط، الإجمالي).
   Map<String, ({int active, int total})> _templateCounts = const {};
@@ -684,6 +688,42 @@ class _PosScreenState extends State<PosScreen> {
     );
   }
 
+  /// إرسال ملخص يوم أمس الآن بطلب صريح من المشغّل.
+  ///
+  /// يستخدم `force: true` فيتجاوز علامة اليوم والمرجع التدقيقي، مع بقاء قفل
+  /// التنفيذ لكل نقطة/يوم فلا يُرسل الملخص مرتين في اللحظة نفسها.
+  Future<void> _sendSummaryNow() async {
+    final c = AppScope.of(context);
+    setState(() => _summaryBusy = true);
+    final result = await c.dailyPosSummary.sendDue(force: true);
+    if (!mounted) return;
+    setState(() => _summaryBusy = false);
+
+    final messenger = ScaffoldMessenger.of(context);
+    if (result is Failure<PosDailySummaryReport>) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            'تعذر إرسال الملخص: ${result.error.message}',
+            style: const TextStyle(fontFamily: 'Tajawal'),
+          ),
+        ),
+      );
+      return;
+    }
+    final report = (result as Success<PosDailySummaryReport>).value;
+    final message = report.sent > 0
+        ? 'تم إرسال ملخص اليوم السابق إلى ${report.sent} نقطة بيع'
+        : report.failed > 0
+            ? 'تعذر إرسال الملخص (${report.failed}) — تحقق من صلاحية الرسائل'
+            : 'لا توجد نقاط بيع نشطة مستحقة الآن';
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(message, style: const TextStyle(fontFamily: 'Tajawal')),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Directionality(
@@ -691,6 +731,19 @@ class _PosScreenState extends State<PosScreen> {
       child: Scaffold(
         backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         appBar: AppBar(
+          actions: [
+            IconButton(
+              tooltip: 'إرسال الملخص اليومي الآن',
+              onPressed: _summaryBusy ? null : _sendSummaryNow,
+              icon: _summaryBusy
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.send_rounded),
+            ),
+          ],
           title: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
