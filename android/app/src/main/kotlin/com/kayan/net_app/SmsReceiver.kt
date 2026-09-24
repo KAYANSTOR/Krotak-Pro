@@ -15,6 +15,17 @@ class SmsReceiver : BroadcastReceiver() {
         if (intent.action != Telephony.Sms.Intents.SMS_RECEIVED_ACTION) return
 
         val messages = Telephony.Sms.Intents.getMessagesFromIntent(intent) ?: return
+        // قد يكون النظام أنشأ عملية جديدة لهذا البثّ وحده. إبقاء عملية التسليم
+        // حيّة يمنع ضياع القسيمة بعد البيع؛ الطلب مُقيَّد زمنياً في
+        // DeliveryKeepAlivePolicy وآمن من الخلفية (يُبتلع الرفض).
+        try {
+            DeliveryKeepAliveService.requestStart(
+                context,
+                DeliveryKeepAliveService.smsPermissionsGranted(context),
+            )
+        } catch (e: Exception) {
+            Log.w(TAG, "keep-alive start after sms failed: ${e.message}")
+        }
         val store = SmsInboxStore(context)
         for (sms in messages) {
             val sender = sms.displayOriginatingAddress ?: continue

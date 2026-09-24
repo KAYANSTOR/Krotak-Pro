@@ -60,7 +60,12 @@ final class LocalSystemHealthService {
     final battery = boolState(p['batteryOptimizationIgnored']);
     final dualSim = boolState(p['dualSimReadable']);
     final contacts = boolState(p['contactsPermission']);
-    final foreground = boolState(p['canScheduleExactAlarms'] ?? p['foregroundOk']);
+    // الحالة الحقيقية لخدمة الخلفية: `foregroundServiceActive` من الفحص
+    // الأصلي، مع توافق خلفي مع `foregroundOk` القديمة.
+    final foreground = boolState(
+      p['foregroundServiceActive'] ?? p['foregroundOk'] ?? p['canScheduleExactAlarms'],
+    );
+    final foregroundKnown = p['foregroundServiceActive'] != null || p['foregroundOk'] != null;
 
     return [
       SystemCapability(
@@ -77,12 +82,16 @@ final class LocalSystemHealthService {
         id: 'foreground_service',
         title: 'تشغيل خدمة الخلفية',
         detail:
-            'يضمن استمرار الاستماع للرسائل حتى عند إغلاق الواجهة.',
+            'يُبقي إرسال الكروت والتحويلات يعمل بعد مغادرة الواجهة أو إغلاقها.',
         severity: CapabilitySeverity.critical,
-        state: foreground == CapabilityState.unknown
-            ? CapabilityState.granted
+        // بلا معلومة من المنصّة (غير أندرويد/منصّة غير مدعومة) لا نَدّعي النجاح
+        // ولا الفشل؛ ومع معلومة حقيقية نُظهرها كما هي.
+        state: !foregroundKnown
+            ? CapabilityState.unknown
             : foreground,
-        actionLabel: null,
+        actionLabel: foreground == CapabilityState.denied
+            ? 'فتح إعدادات التطبيق'
+            : null,
         settingsAction: 'open_app_settings',
       ),
       SystemCapability(

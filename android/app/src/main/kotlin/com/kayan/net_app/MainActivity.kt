@@ -30,6 +30,7 @@ class MainActivity : FlutterActivity(), SmsListener {
     private val notificationEventChannelName = "com.kayan.net/notifications_stream"
     private val diagnosticsChannelName = "com.kayan.net/diagnostics"
     private val alertsChannelName = "com.kayan.net/alerts"
+    private val keepAliveChannelName = "com.kayan.net/keepalive"
     private var eventSink: EventChannel.EventSink? = null
     private var pendingContactResult: MethodChannel.Result? = null
 
@@ -162,6 +163,8 @@ class MainActivity : FlutterActivity(), SmsListener {
             }
         }
 
+        wireKeepAlive(flutterEngine)
+
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, diagnosticsChannelName).setMethodCallHandler { call, result ->
             when (call.method) {
                 "probe" -> result.success(probeCapabilities())
@@ -245,14 +248,55 @@ class MainActivity : FlutterActivity(), SmsListener {
         }
     }
 
+    /**
+     * قناة الحفاظ على التسليم في الخلفية (DeliveryKeepAliveService).
+     *
+     * التشغيل من هنا (واجهة ظاهرة) مسموح دائمًا؛ أما الطلب المتكرر فمُقيَّد في
+     * DeliveryKeepAlivePolicy فلا يُرشّ النظام.
+     */
+    private fun wireKeepAlive(flutterEngine: FlutterEngine) {
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, keepAliveChannelName).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "start" -> result.success(
+                    DeliveryKeepAliveService.requestStart(
+                        applicationContext,
+                        DeliveryKeepAliveService.smsPermissionsGranted(applicationContext),
+                    ),
+                )
+                "stop" -> result.success(DeliveryKeepAliveService.requestStop(applicationContext))
+                "status" -> result.success(
+                    mapOf(
+                        "active" to DeliveryKeepAliveService.isRunning(),
+                        "smsPermissionsGranted" to DeliveryKeepAliveService.smsPermissionsGranted(applicationContext),
+                    ),
+                )
+                else -> result.notImplemented()
+            }
+        }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        // الواجهة في المقدمة: أفضل لحظة لتشغيل الخدمة (مسموح بلا قيود)، فتستمر
+        // حلقة التسليم بعد مغادرة التطبيق.
+        DeliveryKeepAliveService.requestStart(
+            applicationContext,
+            DeliveryKeepAliveService.smsPermissionsGranted(applicationContext),
+        )
+    }
+
     private fun probeCapabilities(): Map<String, Any?> {
+        val keepAliveActive = DeliveryKeepAliveService.isRunning()
         return mapOf(
             "smsPermissions" to hasSmsPermissions(),
             "notificationAccess" to isNotificationAccessGranted(),
             "batteryOptimizationIgnored" to isIgnoringBatteryOptimizations(),
             "dualSimReadable" to canReadSubscriptions(),
             "contactsPermission" to hasContactsPermission(),
-            "foregroundOk" to true,
+            // القيمة الحقيقية لخدمة الخلفية بدل `true` الثابتة سابقًا (كانت
+            // تجعل بوابة «تشغيل خدمة الخلفية» في شاشة صحة النظام تمر دائمًا).
+            "foregroundOk" to keepAliveActive,
+            "foregroundServiceActive" to keepAliveActive,
             "manufacturer" to Build.MANUFACTURER,
             "model" to Build.MODEL,
             "sdk" to Build.VERSION.SDK_INT,
@@ -504,10 +548,9 @@ class MainActivity : FlutterActivity(), SmsListener {
         }
     }
 
+    // شرط الصلاحية الواحد في المشروع (نفس ما تستخدمه خدمة الخلفية).
     private fun hasSmsPermissions(): Boolean =
-        ContextCompat.checkSelfPermission(this, Manifest.permission.RECEIVE_SMS) == PackageManager.PERMISSION_GRANTED &&
-            ContextCompat.checkSelfPermission(this, Manifest.permission.READ_SMS) == PackageManager.PERMISSION_GRANTED &&
-            ContextCompat.checkSelfPermission(this, Manifest.permission.SEND_SMS) == PackageManager.PERMISSION_GRANTED
+        DeliveryKeepAliveService.smsPermissionsGranted(this)
 
     private fun requestSmsPermissions() {
         ActivityCompat.requestPermissions(

@@ -34,6 +34,19 @@ class BootReceiver : BroadcastReceiver() {
             Log.w(TAG, "failed to persist boot recovery hint: ${e.message}")
         }
 
+        // تشغيل خدمة الحفاظ على التسليم مباشرةً: بثّ BOOT_COMPLETED من الحالات
+        // المعفاة من قيود بدء الخدمات الأمامية (Android 12+)، فلا يعود التطبيق
+        // إلى حالة «مخزّن مجمّد» بعد الإقلاع حتى إن منعت واجهة الشركة المصنّعة
+        // بدء الواجهة التلقائي في الفرع التالي.
+        try {
+            DeliveryKeepAliveService.requestStart(
+                context,
+                DeliveryKeepAliveService.smsPermissionsGranted(context),
+            )
+        } catch (e: Exception) {
+            Log.w(TAG, "keep-alive start after boot failed: ${e.message}")
+        }
+
         try {
             val launch = Intent(context, MainActivity::class.java).apply {
                 addFlags(

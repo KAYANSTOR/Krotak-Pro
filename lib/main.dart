@@ -118,6 +118,9 @@ class _NetAppState extends State<NetApp> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    // طلب إبقاء عملية التسليم حيّة: يُعاد تأكيده عند العودة للمقدمة، ولا يُوقف
+    // عند الانتقال للخلفية (الخلفية ليست سببًا لإيقاف التسليم).
+    unawaited(widget.container.handleAppLifecycle(state));
     if (state == AppLifecycleState.resumed) {
       // Phase 5: faster delivery recovery when returning to the app (and after boot open).
       unawaited(widget.container.runRecoveryPass());

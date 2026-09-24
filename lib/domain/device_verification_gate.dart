@@ -40,6 +40,14 @@ abstract final class DeviceVerificationCatalog {
       phaseRef: 'Phase 4',
     ),
     DeviceVerificationItem(
+      id: 'background_delivery',
+      title: 'تسليم بعد مغادرة التطبيق',
+      detail:
+          'بيع مُلتزم (قسيمة معلّقة) ثم إغلاق الواجهة/تطبيق الخلفية: تصل القسيمة '
+          'مرة واحدة، ويظهر إشعار «تسليم الكروت يعمل» المستمر، ولا يتوقف التسليم.',
+      phaseRef: 'QA 2026-09-24 / خدمة الخلفية',
+    ),
+    DeviceVerificationItem(
       id: 'salafni',
       title: 'سلفني على الجهاز',
       detail: 'طلب سلفني عبر SMS، حجز أدنى فئة، ثم تسديد من تحويل لاحق.',

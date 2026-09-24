@@ -51,12 +51,14 @@ import '../domain/services/local_transfer_processor.dart';
 import '../domain/services/payment_source_guard.dart';
 import '../domain/services/unified_payment_event_engine.dart';
 import '../domain/services/services.dart';
+import '../platform/delivery_keep_alive_bridge.dart';
 import '../platform/native_message_sender.dart';
 import '../platform/notification_bridge.dart';
 import '../platform/stock_alert_bridge.dart';
 import '../platform/sms_bridge.dart';
 import '../platform/contact_picker_bridge.dart';
 import '../platform/system_diagnostics_bridge.dart';
+import 'delivery_keep_alive_controller.dart';
 import 'incoming_notification_handler.dart';
 import 'incoming_sms_handler.dart';
 
@@ -73,7 +75,7 @@ final class AppContainer {
     required this.licenseService, required this.backupService, required this.maintenanceService, required this.lowStockAlerts, required this.stockAlertNotifier, required this.dailyPosSummary, required this.mergeService, required this.settlementService,
     required this.recoveryService, required this.deliveryWorker, required this.posOrderDeliveryWorker, required this.retryService, required this.pendingReview, required this.smsBridge,
     required this.smsHandler, required this.notificationBridge, required this.notificationSources,
-    required this.notificationHandler, required this.clock, required this.ids, required this.themeModeNotifier,
+    required this.notificationHandler, required this.deliveryKeepAlive, required this.clock, required this.ids, required this.themeModeNotifier,
   }) : _messageParser = messageParser;
 
   final AppDatabase database;
@@ -126,6 +128,10 @@ final class AppContainer {
   final PendingMessageReviewService pendingReview;
   final SmsBridge smsBridge;
   final IncomingSmsHandler smsHandler;
+
+  /// يطلب من أندرويد إبقاء عملية التسليم حيّة والواجهة في الخلفية
+  /// (DeliveryKeepAliveService) فلا تتوقف حلقة التسليم بعد مغادرة التطبيق.
+  final DeliveryKeepAliveController deliveryKeepAlive;
   final NotificationBridge notificationBridge;
   final LocalPaymentSourceRegistry notificationSources;
   final IncomingNotificationHandler notificationHandler;
@@ -199,6 +205,9 @@ final class AppContainer {
     final live = listed is Success<List<TransferTemplate>> ? listed.value : const <TransferTemplate>[];
     final parser = LocalMessageParser(templates: live.isNotEmpty ? live : templates);
     final smsBridge = SmsBridge();
+    final deliveryKeepAlive = DeliveryKeepAliveController(
+      bridge: DeliveryKeepAliveBridge(),
+    );
     final messageSender = NativeMessageSender(smsBridge);
     final saleService = LocalSaleService(customers: customers, categories: categories, cards: cards, sales: sales, transactions: transactions, balances: balanceService, inventory: inventoryService, auditLogs: auditLogs, unitOfWork: uow, clock: clock, ids: ids, messageSender: messageSender, settings: settings);
         final broadcastJobs = LocalBroadcastRepository(settings: settings);
@@ -305,7 +314,7 @@ final class AppContainer {
       }
     }
 
-    return AppContainer._(database: database, customers: customers, wallets: wallets, pointsOfSale: pointsOfSale, categories: categories, cards: cards, messages: messages, transferTemplates: transferTemplates, transactions: transactions, sales: sales, auditLogs: auditLogs, licenses: licenses, settings: settings, unitOfWork: uow, customerService: customerService, balanceService: balanceService, catalogService: catalogService, walletCatalog: walletCatalog, posCatalog: posCatalog, posRegistry: posRegistry, posProfile: posProfile, inventoryService: inventoryService, saleService: saleService, advanceService: advanceService, broadcastService: broadcastService, promotions: promotions, promotionProgress: promotionProgress, systemHealth: systemHealth, voucherOps: voucherOps, pendingAlarm: pendingAlarm, messageParser: parser, transferProcessor: processor, licenseService: licenseService, backupService: backupService, maintenanceService: maintenanceService, lowStockAlerts: lowStockAlerts, stockAlertNotifier: stockAlertNotifier, dailyPosSummary: dailyPosSummary, mergeService: mergeService, settlementService: settlementService, recoveryService: recoveryService, deliveryWorker: deliveryWorker, posOrderDeliveryWorker: posOrderDeliveryWorker, retryService: retryService, pendingReview: pendingReview, smsBridge: smsBridge, smsHandler: smsHandler, notificationBridge: notificationBridge, notificationSources: notificationSources, notificationHandler: notificationHandler, clock: clock, ids: ids, themeModeNotifier: ValueNotifier<ThemeMode>(theme));
+    return AppContainer._(database: database, customers: customers, wallets: wallets, pointsOfSale: pointsOfSale, categories: categories, cards: cards, messages: messages, transferTemplates: transferTemplates, transactions: transactions, sales: sales, auditLogs: auditLogs, licenses: licenses, settings: settings, unitOfWork: uow, customerService: customerService, balanceService: balanceService, catalogService: catalogService, walletCatalog: walletCatalog, posCatalog: posCatalog, posRegistry: posRegistry, posProfile: posProfile, inventoryService: inventoryService, saleService: saleService, advanceService: advanceService, broadcastService: broadcastService, promotions: promotions, promotionProgress: promotionProgress, systemHealth: systemHealth, voucherOps: voucherOps, pendingAlarm: pendingAlarm, messageParser: parser, transferProcessor: processor, licenseService: licenseService, backupService: backupService, maintenanceService: maintenanceService, lowStockAlerts: lowStockAlerts, stockAlertNotifier: stockAlertNotifier, dailyPosSummary: dailyPosSummary, mergeService: mergeService, settlementService: settlementService, recoveryService: recoveryService, deliveryWorker: deliveryWorker, posOrderDeliveryWorker: posOrderDeliveryWorker, retryService: retryService, pendingReview: pendingReview, smsBridge: smsBridge, smsHandler: smsHandler, deliveryKeepAlive: deliveryKeepAlive, notificationBridge: notificationBridge, notificationSources: notificationSources, notificationHandler: notificationHandler, clock: clock, ids: ids, themeModeNotifier: ValueNotifier<ThemeMode>(theme));
   }
 
   Future<void> startBackgroundHandlers() async {
@@ -313,9 +322,47 @@ final class AppContainer {
     await notificationHandler.start();
     await _runRecovery();
     _recoveryTimer ??= Timer.periodic(const Duration(seconds: 3), (_) => _runRecovery());
+    await syncBackgroundDelivery();
   }
 
   Future<void> runRecoveryPass() => _runRecovery();
+
+  /// يوقف حلقة الاسترداد الدورية (٣ ثوانٍ) دون إغلاق أي شيء آخر.
+  ///
+  /// لا يمسّ خدمة الخلفية: بقاء العملية حيّة مقصود حتى تُسلَّم القسائم.
+  void stopBackgroundHandlers() {
+    _recoveryTimer?.cancel();
+    _recoveryTimer = null;
+  }
+
+  /// يطلب من أندرويد إبقاء عملية التسليم حيّة (خدمة أمامية) بعد مغادرة الواجهة.
+  ///
+  /// لا يجوز أن يُسقط فشله شيئًا: التسليم يعمل أثناء حياة العملية، وهذه أفضلية
+  /// تُطيل عمرها فقط. يُستدعى عند الإقلاع وعند كل عودة للواجهة.
+  Future<DeliveryKeepAliveStatus> syncBackgroundDelivery() async {
+    if (_disposed) return deliveryKeepAlive.status;
+    try {
+      final granted = await smsBridge.hasPermissions();
+      return await deliveryKeepAlive.sync(smsPermissionsGranted: granted);
+    } catch (_) {
+      return deliveryKeepAlive.status;
+    }
+  }
+
+  /// دورة حياة الواجهة: الخلفية **لا** تُوقف التسليم — إن أوقفناه عند `paused`
+  /// لعاد الخلل الأصلي (توقف قسيمة العميل بعد البيع والواجهة مغلقة).
+  Future<void> handleAppLifecycle(AppLifecycleState state) async {
+    if (_disposed) return;
+    try {
+      final granted = await smsBridge.hasPermissions();
+      await deliveryKeepAlive.handleLifecycle(
+        state,
+        smsPermissionsGranted: granted,
+      );
+    } catch (_) {
+      // فحص الصلاحية قد يفشل على منصّة غير أندرويد؛ لا يُوقف ذلك أي شيء.
+    }
+  }
 
   Future<void> kickDeliveryWorker() async {
     if (_disposed) return;
@@ -406,8 +453,7 @@ final class AppContainer {
     _disposed = true;
     // لا نُلغي إشعار المخزون هنا: الإشعار الحي مملوك لنظام أندرويد ويبقى ظاهراً
     // للمستخدم حتى تُعبَّأ الفئات فعلياً — انظر [LocalLowStockAlertService].
-    _recoveryTimer?.cancel();
-    _recoveryTimer = null;
+    stopBackgroundHandlers();
     pendingAlarm.dispose();
     smsHandler.stop();
     await notificationHandler.stop();
