@@ -23,6 +23,13 @@ abstract interface class CustomerRepository {
   });
 
   Future<Result<List<CustomerIdentifier>>> listIdentifiers(String customerId);
+
+  /// قائمة حسابات بلقطة مجمّعة (رصيد + هاتف) بثلاثة استعلامات بدل N+1.
+  Future<Result<List<CustomerAccountSnapshot>>> listAccountSnapshots({
+    String query = '',
+    String currencyCode = 'YER',
+  });
+
   Future<Result<void>> save(Customer customer);
   Future<Result<void>> saveIdentifier(CustomerIdentifier identifier);
 }
