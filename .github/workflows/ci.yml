@@ -144,7 +144,8 @@ jobs:
           set +e
           {
             gcloud firebase test android models list --filter="form=VIRTUAL" --format="value(codename,supportedVersionIds)" | head -20
-            gcloud firebase test android run \
+            gcloud services enable toolresults.googleapis.com testing.googleapis.com --project "$FIREBASE_PROJECT_ID" 2>&1 | tail -3
+            gcloud firebase test android run --quiet \
               --project "$FIREBASE_PROJECT_ID" \
               --type robo \
               --app build/app/outputs/flutter-apk/app-release.apk \
