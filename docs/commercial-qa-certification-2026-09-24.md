@@ -13,9 +13,11 @@ Business Logic إلا لأخطاء مُثبتة باختبار يفشل قبل �
 | البند | القيمة |
 |------|--------|
 | فرع العمل | `development/full-completion` |
-| commit خط الأساس | `bbf285b` — «Merge origin/main into development/full-completion» |
+| نقطة الانطلاق | `bbf285b` — «Merge origin/main into development/full-completion» |
+| **commit الشهادة (خط الأساس النهائي)** | **`684b493`** — «test(qa): certify commercial flows and close SMS/POS release blockers» |
 | علاقة `origin/main` بالفرع | مُحتوى بالكامل (0 behind / 17 ahead) — تغييرات Firebase App Distribution وTest Lab موجودة |
 | `main` | لم يُعدَّل (لا التزامات ولا دمج) |
+| شجرة العمل | نظيفة تمامًا: `git status = clean` على فرع التطوير |
 
 - لا حاجة لأي إعادة دمج إضافية: خط أساس واحد نظيف، ولا تعارضات.
 - المخزونان المحفوظان (`git stash list`) أرشيفيان فقط وليسا مصدرًا للتطوير:
