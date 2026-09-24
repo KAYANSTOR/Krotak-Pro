@@ -94,18 +94,32 @@ jobs:
           name: ${{ steps.stable-signing.outputs.mode == 'stable' && 'krotak-pro-release-apk' || 'krotak-pro-validation-apk' }}
           path: build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
+      - name: Authenticate to Google Cloud (Firebase)
+        if: github.event_name != 'pull_request' && env.FIREBASE_APP_ID != ''
+        id: gcp-auth
+        continue-on-error: true
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_CREDENTIALS }}
       - name: Distribute APK to Firebase App Distribution
         id: fad
-        if: github.event_name != 'pull_request' && env.FIREBASE_APP_ID != ''
+        if: github.event_name != 'pull_request' && env.FIREBASE_APP_ID != '' && steps.gcp-auth.outcome == 'success'
         continue-on-error: true
-        uses: wzieba/Firebase-Distribution-Github-Action@v1
-        with:
-          appId: ${{ secrets.FIREBASE_APP_ID }}
-          serviceCredentialsFileContent: ${{ secrets.FIREBASE_SERVICE_CREDENTIALS }}
-          groups: ${{ secrets.FIREBASE_GROUPS }}
-          testers: ${{ secrets.FIREBASE_TESTERS }}
-          file: build/app/outputs/flutter-apk/app-release.apk
-          releaseNotes: ${{ github.event.head_commit.message }}
+        env:
+          FIREBASE_GROUPS: ${{ secrets.FIREBASE_GROUPS }}
+          FIREBASE_TESTERS: ${{ secrets.FIREBASE_TESTERS }}
+          RELEASE_NOTES: ${{ github.event.head_commit.message }}
+        run: |
+          set +e
+          npm install -g firebase-tools > /tmp/fad.log 2>&1
+          args=(--app "$FIREBASE_APP_ID" --release-notes "$RELEASE_NOTES")
+          [ -n "$FIREBASE_GROUPS" ] && args+=(--groups "$FIREBASE_GROUPS")
+          [ -n "$FIREBASE_TESTERS" ] && args+=(--testers "$FIREBASE_TESTERS")
+          firebase appdistribution:distribute build/app/outputs/flutter-apk/app-release.apk "${args[@]}" >> /tmp/fad.log 2>&1
+          rc=$?
+          msg=$(tail -c 3000 /tmp/fad.log | tr '\n' ' ' | sed 's/%/%25/g')
+          echo "::notice title=AppDistribution exit=$rc::$msg"
+          exit $rc
       - name: Publish GitHub Release
         if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && steps.stable-signing.outputs.mode == 'stable'
         uses: softprops/action-gh-release@v3
@@ -116,13 +130,6 @@ jobs:
           files: build/app/outputs/flutter-apk/app-release.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Authenticate to Google Cloud (Test Lab)
-        if: github.event_name != 'pull_request' && env.FIREBASE_PROJECT_ID != ''
-        id: gcp-auth
-        continue-on-error: true
-        uses: google-github-actions/auth@v2
-        with:
-          credentials_json: ${{ secrets.FIREBASE_SERVICE_CREDENTIALS }}
       - name: Set up gcloud
         if: github.event_name != 'pull_request' && env.FIREBASE_PROJECT_ID != '' && steps.gcp-auth.outcome == 'success'
         continue-on-error: true
