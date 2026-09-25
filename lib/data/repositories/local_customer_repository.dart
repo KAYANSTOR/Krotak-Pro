@@ -182,6 +182,98 @@ final class LocalCustomerRepository implements CustomerRepository {
   }
 
   @override
+  Future<Result<List<domain.CustomerAccountSnapshot>>> listAccountSnapshots({
+    String query = '',
+    String currencyCode = 'YER',
+  }) async {
+    try {
+      final searched = await search(query);
+      if (searched is Failure<List<domain.Customer>>) {
+        return Failure(searched.error);
+      }
+      final customers = (searched as Success<List<domain.Customer>>).value
+          .where((c) => c.status != domain.CustomerStatus.merged)
+          .toList(growable: false);
+      if (customers.isEmpty) {
+        return const Success(<domain.CustomerAccountSnapshot>[]);
+      }
+
+      final ids = customers.map((c) => c.id).toList(growable: false);
+      final identifiers = await (database.select(database.customerIdentifiers)
+            ..where((table) => table.customerId.isIn(ids)))
+          .get();
+
+      final phones = <String, String>{};
+      final altIds = <String, String>{};
+      final altLabels = <String, String>{};
+      for (final row in identifiers) {
+        if (row.type == domain.CustomerIdentifierType.phoneNumber.name) {
+          final current = phones[row.customerId];
+          if (current == null || row.isPrimary) {
+            phones[row.customerId] = row.value;
+          }
+        } else if (!altIds.containsKey(row.customerId) ||
+            row.type == domain.CustomerIdentifierType.externalReference.name) {
+          altIds[row.customerId] = row.value;
+          altLabels[row.customerId] =
+              row.type == domain.CustomerIdentifierType.username.name
+                  ? 'اسم المرسل'
+                  : 'الرقم البديل';
+        }
+      }
+
+      final placeholders = List.filled(ids.length, '?').join(',');
+      final vars = <Variable>[
+        Variable.withString(currencyCode),
+        for (final id in ids) Variable.withString(id),
+      ];
+      final sql =
+          'SELECT customer_id, SUM(CASE type '
+          "WHEN 'deposit' THEN amount_minor_units "
+          "WHEN 'reward' THEN amount_minor_units "
+          "WHEN 'reversal' THEN amount_minor_units "
+          "WHEN 'withdrawal' THEN -amount_minor_units "
+          "WHEN 'sale' THEN -amount_minor_units "
+          "WHEN 'settlement' THEN -amount_minor_units "
+          "WHEN 'advance' THEN -amount_minor_units "
+          'ELSE 0 END) AS balance_minor '
+          "FROM transactions WHERE status = 'completed' "
+          'AND currency_code = ? AND customer_id IN ($placeholders) '
+          'GROUP BY customer_id';
+      final balanceRows = await database.customSelect(
+        sql,
+        variables: vars,
+        readsFrom: {database.transactions},
+      ).get();
+
+      final balances = <String, int>{};
+      for (final row in balanceRows) {
+        final id = row.read<String>('customer_id');
+        final minor = row.read<int?>('balance_minor') ?? 0;
+        balances[id] = minor;
+      }
+
+      return Success(
+        [
+          for (final customer in customers)
+            domain.CustomerAccountSnapshot(
+              customer: customer,
+              balance: Money(
+                minorUnits: balances[customer.id] ?? 0,
+                currencyCode: currencyCode,
+              ),
+              primaryPhone: phones[customer.id],
+              altId: altIds[customer.id],
+              altLabel: altLabels[customer.id],
+            ),
+        ],
+      );
+    } catch (error) {
+      return Failure(_failure('customer_account_snapshots_failed', error));
+    }
+  }
+
+  @override
   Future<Result<void>> save(domain.Customer customer) async {
     try {
       await database.into(database.customers).insertOnConflictUpdate(
