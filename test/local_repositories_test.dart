@@ -142,4 +142,72 @@ void main() {
     final yerOnly = await repository.listCompleted(currencyCode: 'YER');
     expect((yerOnly as Success<List<tx.Transaction>>).value, hasLength(2));
   });
+
+  test('listAccountSnapshots aggregates balance and phone in bulk', () async {
+    final customers = LocalCustomerRepository(database);
+    final txRepo = LocalTransactionRepository(database);
+    final now = DateTime(2026, 9, 24);
+    await customers.save(domain.Customer(
+      id: 'c-a',
+      displayName: 'Ali',
+      status: domain.CustomerStatus.active,
+      createdAt: now,
+      updatedAt: now,
+    ));
+    await customers.save(domain.Customer(
+      id: 'c-b',
+      displayName: 'Basma',
+      status: domain.CustomerStatus.active,
+      createdAt: now,
+      updatedAt: now,
+    ));
+    await customers.save(domain.Customer(
+      id: 'c-merged',
+      displayName: 'Gone',
+      status: domain.CustomerStatus.merged,
+      createdAt: now,
+      updatedAt: now,
+    ));
+    await customers.saveIdentifier(const domain.CustomerIdentifier(
+      id: 'id-a',
+      customerId: 'c-a',
+      type: domain.CustomerIdentifierType.phoneNumber,
+      value: '777000111',
+      isPrimary: true,
+    ));
+    await txRepo.append(tx.Transaction(
+      id: 'tx-a1',
+      type: tx.TransactionType.deposit,
+      status: tx.TransactionStatus.completed,
+      amount: const Money(minorUnits: 1500, currencyCode: 'YER'),
+      createdAt: now,
+      customerId: 'c-a',
+    ));
+    await txRepo.append(tx.Transaction(
+      id: 'tx-a2',
+      type: tx.TransactionType.sale,
+      status: tx.TransactionStatus.completed,
+      amount: const Money(minorUnits: 400, currencyCode: 'YER'),
+      createdAt: now,
+      customerId: 'c-a',
+    ));
+    await txRepo.append(tx.Transaction(
+      id: 'tx-pend',
+      type: tx.TransactionType.deposit,
+      status: tx.TransactionStatus.pending,
+      amount: const Money(minorUnits: 9000, currencyCode: 'YER'),
+      createdAt: now,
+      customerId: 'c-a',
+    ));
+
+    final result = await customers.listAccountSnapshots();
+    expect(result, isA<Success<List<domain.CustomerAccountSnapshot>>>());
+    final rows = (result as Success<List<domain.CustomerAccountSnapshot>>).value;
+    expect(rows.map((r) => r.customer.id), isNot(contains('c-merged')));
+    final ali = rows.firstWhere((r) => r.customer.id == 'c-a');
+    expect(ali.primaryPhone, '777000111');
+    expect(ali.balance?.minorUnits, 1100);
+    final basma = rows.firstWhere((r) => r.customer.id == 'c-b');
+    expect(basma.balance?.minorUnits, 0);
+  });
 }
