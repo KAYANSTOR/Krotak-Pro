@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/app_brand.dart';
 import '../../theme/kayan_palette.dart';
 import '../../theme/net_tokens.dart';
 import 'net_tab_header.dart';
@@ -43,11 +44,9 @@ class NetDashboardHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = KayanPalette.of(context);
-    // اسم الشبكة المحفوظ في الإعدادات هو العنوان الرئيسي. نضيف كلمة «شبكة»
-    // فقط عندما لا تكون جزءًا من الاسم المحفوظ، حتى لا تتكرر.
     final rawName = networkName.trim();
     final displayName = rawName.isEmpty
-        ? 'شبكة NET'
+        ? 'شبكة ${AppBrand.name}'
         : (rawName.startsWith('شبكة') ? rawName : 'شبكة $rawName');
     final greet = greeting ?? _defaultGreeting(DateTime.now());
 
