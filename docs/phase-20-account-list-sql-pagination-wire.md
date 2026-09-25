@@ -2,9 +2,9 @@
 
 **التاريخ:** 2026-09-25  
 **الحالة:** منفّذة في الكود  
-**الأساس:** المرحلتان 18 و19 وُثّقتا كترقيم SQL بينما `LocalCustomerRepository` لم يكن يقبل `limit`/`offset`، و`CustomersScreen` بقيت على مسار N+1 عبر `search` + `_rowFor`.
+**الأساس:** العقد كان يعلن `limit`/`offset` بينما `LocalCustomerRepository` و`CustomersScreen` بقيتا على `search` + كشف N+1.
 
-## النطاق
+## النطاق المنفّذ
 
 - `listAccountSnapshots` في Drift يصفّي `merged` ثم يطبّق `LIMIT/OFFSET` على جدول العملاء عندما يكون البحث فارغاً.
 - الأرصدة والهويات تُقرأ لمعرّفات الصفحة الحالية فقط.
