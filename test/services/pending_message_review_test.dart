@@ -55,8 +55,6 @@ void main() {
     });
 
     test('listPending surfaces pending-status messages too', () async {
-      // حالة `pending` كانت مُخفاة: القائمة كانت تحصر نفسها في `parsed`،
-      // فتظهر شاشة «المعلّقة» فارغة رغم وجود رسائل بانتظار المراجعة.
       messages.store['p1'] = IncomingMessage(id: 'p1', sender: 'bank', body: 'body', receivedAt: DateTime.utc(2026, 9, 12), status: MessageProcessingStatus.pending);
       messages.store['p2'] = IncomingMessage(id: 'p2', sender: 'bank', body: 'body', receivedAt: DateTime.utc(2026, 9, 11), status: MessageProcessingStatus.parsed);
 
@@ -136,6 +134,7 @@ final class _FakeCustomers implements CustomerRepository {
   @override Future<Result<List<Customer>>> search(String query) async => Success(store.values.toList());
   @override Future<Result<List<CustomerPhoneSuggestion>>> suggestPhonesByPrefix(String prefix, {int limit = 8}) async => const Success([]);
   @override Future<Result<List<CustomerIdentifier>>> listIdentifiers(String customerId) async => const Success([]);
+  @override Future<Result<List<CustomerAccountSnapshot>>> listAccountSnapshots({String query = '', String currencyCode = 'YER'}) async => const Success([]);
 }
 final class _FakeCustomerService implements CustomerService {
   _FakeCustomerService(this.customers);
