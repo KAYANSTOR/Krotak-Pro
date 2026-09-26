@@ -6,6 +6,7 @@ import '../entities/customer.dart';
 import '../entities/message.dart';
 import '../entities/payment_event.dart';
 import '../entities/transaction.dart';
+import '../rejection_codes.dart';
 import '../repositories/repositories.dart';
 import '../repositories/unit_of_work.dart';
 import 'local_customer_identity_resolver.dart';
@@ -81,7 +82,70 @@ final class PendingMessageReviewService {
         message.status != MessageProcessingStatus.pending) {
       return const Failure(AppFailure(code: 'message_not_pending', message: 'Message is not pending review'));
     }
+    return _authorizeAndComplete(
+      message,
+      creditPrefix: 'pending-approve',
+      approvedAuditAction: 'pending_message_approved',
+    );
+  }
 
+  /// إعادة محاولة رسالة **مرفوضة بالفعل** بنفس مسار الاعتماد الكامل (تحقق من
+  /// المصدر → تحليل → تحقق من القالب → تحديد العميل → إيداع)، لأجل الحالات
+  /// التي يُصلح فيها المشغّل سبب الرفض لاحقاً (تفعيل محفظة، إضافة مخزون،
+  /// إلخ) فيصبح بإمكان نفس الرسالة أن تُطابق وتُعتمد دون انتظار رسالة جديدة.
+  ///
+  /// تُرفض العمليات المكررة (`RejectionCodes.duplicateTransaction`) صراحةً:
+  /// `credit()` لا يمنع الإيداع المضاعف بنفسه، فإعادة محاولة رسالة رُفضت
+  /// لأنها تكرار لرسالة أخرى سبق اعتمادها قد تُضاعف رصيد العميل خطأً.
+  Future<Result<Transaction>> retryRejected(String messageId) async {
+    final found = await messages.findById(messageId);
+    if (found is Failure<IncomingMessage?>) return Failure(found.error);
+    final message = (found as Success<IncomingMessage?>).value;
+    if (message == null) return const Failure(AppFailure(code: 'message_not_found', message: 'Message was not found'));
+    if (message.status == MessageProcessingStatus.processed) return const Failure(AppFailure(code: 'message_already_processed', message: 'Message was already approved'));
+    if (message.status != MessageProcessingStatus.rejected) return const Failure(AppFailure(code: 'message_not_rejected', message: 'Message is not in the rejected archive'));
+
+    final auditsResult = await auditLogs.findByEntity('message', messageId);
+    if (auditsResult is Success<List<AuditLog>>) {
+      final logs = List<AuditLog>.of(auditsResult.value)
+        ..sort((a, b) => b.occurredAt.compareTo(a.occurredAt));
+      final lastAction = logs.isNotEmpty ? logs.first.action : null;
+      if (lastAction == RejectionCodes.duplicateTransaction) {
+        return const Failure(
+          AppFailure(
+            code: 'retry_blocked_duplicate',
+            message: 'رسالة مكررة — لا يمكن إعادة معالجتها تلقائياً لتفادي إيداع مضاعف',
+          ),
+        );
+      }
+    }
+
+    final result = await _authorizeAndComplete(
+      message,
+      creditPrefix: 'message-retry',
+      approvedAuditAction: 'message_retried_manually',
+    );
+    if (result is Failure<Transaction>) {
+      // سجّل السبب الجديد حتى تعكس شاشة الرسائل المرفوضة آخر محاولة، لا
+      // السبب الأصلي القديم فقط.
+      await auditLogs.append(AuditLog(
+        id: ids.next('audit'),
+        entityType: 'message',
+        entityId: messageId,
+        action: result.error.code,
+        occurredAt: clock.now(),
+        payloadJson: '{"reason":"${result.error.message.replaceAll('"', '\\"')}","retried":true}',
+      ));
+    }
+    return result;
+  }
+
+  Future<Result<Transaction>> _authorizeAndComplete(
+    IncomingMessage message, {
+    required String creditPrefix,
+    required String approvedAuditAction,
+  }) async {
+    final messageId = message.id;
     final event = _eventForMessage(message);
     final sourceAuthorization = await sourceGuard.authorize(event);
     if (sourceAuthorization is Failure<void>) return Failure(sourceAuthorization.error);
@@ -111,12 +175,12 @@ final class PendingMessageReviewService {
     }
 
     final customer = resolution.customer!;
-    final creditRef = transfer.reference.trim().isNotEmpty ? 'pending-approve:${transfer.reference.trim()}' : 'pending-approve:$messageId';
+    final creditRef = transfer.reference.trim().isNotEmpty ? '$creditPrefix:${transfer.reference.trim()}' : '$creditPrefix:$messageId';
     final credit = await balances.credit(customerId: customer.id, amount: transfer.amount, reference: creditRef);
     if (credit is Failure<Transaction>) return Failure(credit.error);
     final tx = (credit as Success<Transaction>).value;
     await messages.updateStatus(messageId, MessageProcessingStatus.processed);
-    await auditLogs.append(AuditLog(id: ids.next('audit'), entityType: 'message', entityId: messageId, action: 'pending_message_approved', occurredAt: clock.now(), payloadJson: '{"transactionId":"${tx.id}","customerId":"${customer.id}","amount":${transfer.amount.minorUnits},"currency":"${transfer.amount.currencyCode}","reference":"${transfer.reference}","sender":"${message.sender}"}'));
+    await auditLogs.append(AuditLog(id: ids.next('audit'), entityType: 'message', entityId: messageId, action: approvedAuditAction, occurredAt: clock.now(), payloadJson: '{"transactionId":"${tx.id}","customerId":"${customer.id}","amount":${transfer.amount.minorUnits},"currency":"${transfer.amount.currencyCode}","reference":"${transfer.reference}","sender":"${message.sender}"}'));
     return Success(tx);
   }
 

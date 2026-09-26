@@ -4,8 +4,10 @@ import '../../core/result.dart';
 import '../../domain/entities/message.dart';
 import '../../domain/entities/money.dart';
 import '../../domain/entities/setting.dart';
+import '../../domain/rejection_codes.dart';
 import '../../domain/services/rejected_message_catalog.dart';
 import '../app_scope.dart';
+import '../routing/app_routes.dart';
 import '../theme/kayan_palette.dart';
 import '../theme/net_semantic_colors.dart';
 import '../widgets/async_views.dart';
@@ -33,6 +35,9 @@ class _RejectedMessagesScreenState extends State<RejectedMessagesScreen> {
   List<RejectedMessageItem> _items = const [];
   String _filter = RejectionCategories.all;
   int _newCount = 0;
+
+  /// معرّف الرسالة قيد إعادة المحاولة حالياً (لتعطيل زرّها فقط أثناء العمل).
+  String? _retryingId;
 
   /// تبويب الأرشيف — الرسائل التي تمت معالجتها/استعادتها بنجاح (قراءة فقط).
   bool _showArchive = false;
@@ -140,6 +145,41 @@ class _RejectedMessagesScreenState extends State<RejectedMessagesScreen> {
         _error = 'تعذر تحميل الرسائل المرفوضة: $error';
       });
     }
+  }
+
+  /// إعادة محاولة رسالة مرفوضة: تعيد تشغيل نفس مسار الاعتماد الكامل الآن
+  /// (تحقق من المصدر ثم القالب ثم إيداع). إن نجحت تُعتمد وتختفي من القائمة؛
+  /// وإن فشلت تُعرض رسالة السبب الجديد فوراً، وتبقى الرسالة في الأرشيف.
+  Future<void> _retry(RejectedMessageItem item) async {
+    final id = item.message.id;
+    setState(() => _retryingId = id);
+    try {
+      final result = await AppScope.of(context).pendingReview.retryRejected(id);
+      if (!mounted) return;
+      if (result is Success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('تمت إعادة المعالجة واعتماد الرسالة بنجاح')),
+        );
+        await _load(markViewed: false);
+      } else if (result is Failure) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('تعذّرت إعادة المعالجة: ${(result as Failure).error.message}')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _retryingId = null);
+    }
+  }
+
+  /// يفتح «بيع مباشر» مع تعبئة الجوال والمبلغ من الرسالة قدر الإمكان، حتى
+  /// يستطيع المشغّل تسليم الكرت يدوياً فوراً دون انتظار إصلاح سبب الرفض.
+  void _manual(RejectedMessageItem item) {
+    final phone = item.phone;
+    AppRoutes.openDirectSalePrefilled(
+      context,
+      phone: phone != null && RegExp(r'^7\d{8}$').hasMatch(phone) ? phone : null,
+      amountMinor: item.amount?.minorUnits,
+    );
   }
 
   List<String> get _availableCategories {
@@ -376,7 +416,14 @@ class _RejectedMessagesScreenState extends State<RejectedMessagesScreen> {
                                       ...dayItems.map(
                                         (item) => Padding(
                                           padding: const EdgeInsets.only(bottom: 10),
-                                          child: _RejectedCard(item: item),
+                                          child: _RejectedCard(
+                                            item: item,
+                                            busy: _retryingId == item.message.id,
+                                            onRetry: item.auditAction == RejectionCodes.duplicateTransaction
+                                                ? null
+                                                : () => _retry(item),
+                                            onManual: () => _manual(item),
+                                          ),
                                         ),
                                       ),
                                     ],
@@ -517,9 +564,22 @@ class _SummaryBanner extends StatelessWidget {
 }
 
 class _RejectedCard extends StatelessWidget {
-  const _RejectedCard({required this.item, this.archived = false});
+  const _RejectedCard({
+    required this.item,
+    this.archived = false,
+    this.busy = false,
+    this.onRetry,
+    this.onManual,
+  });
   final RejectedMessageItem item;
   final bool archived;
+
+  /// أثناء تنفيذ إعادة المحاولة لهذه الرسالة تحديداً (تعطيل زرّيها).
+  final bool busy;
+
+  /// null يعني: إعادة المحاولة غير متاحة لهذه الرسالة (مثل التكرار).
+  final VoidCallback? onRetry;
+  final VoidCallback? onManual;
 
   String _fmtTime(DateTime t) {
     final local = t.toLocal();
@@ -644,6 +704,49 @@ class _RejectedCard extends StatelessWidget {
                   ),
                 ),
               ),
+            ),
+          ],
+          if (!archived) ...[
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: busy ? null : onRetry,
+                    icon: busy
+                        ? const SizedBox(
+                            width: 14,
+                            height: 14,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.refresh_rounded, size: 16),
+                    label: const Text(
+                      'إعادة المحاولة',
+                      style: TextStyle(fontFamily: 'Tajawal', fontSize: 12),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      side: BorderSide(color: context.kayan.primary),
+                      foregroundColor: context.kayan.primary,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: TextButton.icon(
+                    onPressed: busy ? null : onManual,
+                    icon: const Icon(Icons.storefront_outlined, size: 16),
+                    label: const Text(
+                      'معالجة يدوية',
+                      style: TextStyle(fontFamily: 'Tajawal', fontSize: 12),
+                    ),
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      foregroundColor: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ],
         ],

@@ -9,6 +9,7 @@ import 'package:net_app/domain/entities/money.dart';
 import 'package:net_app/domain/entities/transaction.dart';
 import 'package:net_app/domain/repositories/repositories.dart';
 import 'package:net_app/domain/repositories/unit_of_work.dart';
+import 'package:net_app/domain/rejection_codes.dart';
 import 'package:net_app/domain/services/pending_message_review_service.dart';
 import 'package:net_app/domain/services/services.dart';
 
@@ -82,6 +83,47 @@ void main() {
       expect(result, isA<Success<Transaction>>());
       expect(customerService.created, 1);
       expect(messages.store['m3']!.status, MessageProcessingStatus.processed);
+    });
+
+    // إعادة المحاولة: رسالة سبق رفضها (مثلاً بسبب قالب/محفظة كانت معطّلة
+    // وقتها) تتحوّل إلى معتمدة الآن أن أصبح المصدر والقالب سليمين، دون
+    // انتظار رسالة جديدة من العميل.
+    test('retryRejected approves a previously-rejected message once retried', () async {
+      customers.store['c1'] = Customer(id: 'c1', displayName: 'عميل', status: CustomerStatus.active, createdAt: DateTime.utc(2026, 1, 1), updatedAt: DateTime.utc(2026, 1, 1));
+      customers.byIdentifier['770123456'] = 'c1';
+      messages.store['m1'] = IncomingMessage(id: 'm1', sender: 'bank', body: 'body', receivedAt: DateTime.utc(2026, 9, 12), status: MessageProcessingStatus.rejected);
+
+      final result = await service.retryRejected('m1');
+
+      expect(result, isA<Success<Transaction>>());
+      expect(messages.store['m1']!.status, MessageProcessingStatus.processed);
+      expect(balances.credits, 1);
+      expect(audit.logs.any((l) => l.action == 'message_retried_manually'), isTrue);
+    });
+
+    test('retryRejected refuses a message that is not currently rejected', () async {
+      messages.store['m1'] = IncomingMessage(id: 'm1', sender: 'bank', body: 'body', receivedAt: DateTime.utc(2026, 9, 12), status: MessageProcessingStatus.parsed);
+      final result = await service.retryRejected('m1');
+      expect(result, isA<Failure<Transaction>>());
+      expect((result as Failure<Transaction>).error.code, 'message_not_rejected');
+      expect(balances.credits, 0);
+    });
+
+    // حماية من الإيداع المضاعف: رسالة رُفضت أصلاً لأنها تكرار لعملية أخرى
+    // سبق اعتمادها يجب ألا تُقبل عبر إعادة المحاولة، لأن `credit()` لا
+    // يتحقق من التكرار بنفسه.
+    test('retryRejected refuses a message rejected as a duplicate and never credits', () async {
+      customers.store['c1'] = Customer(id: 'c1', displayName: 'عميل', status: CustomerStatus.active, createdAt: DateTime.utc(2026, 1, 1), updatedAt: DateTime.utc(2026, 1, 1));
+      customers.byIdentifier['770123456'] = 'c1';
+      messages.store['m1'] = IncomingMessage(id: 'm1', sender: 'bank', body: 'body', receivedAt: DateTime.utc(2026, 9, 12), status: MessageProcessingStatus.rejected);
+      audit.logs.add(AuditLog(id: 'a1', entityType: 'message', entityId: 'm1', action: RejectionCodes.duplicateTransaction, occurredAt: DateTime.utc(2026, 9, 12, 1)));
+
+      final result = await service.retryRejected('m1');
+
+      expect(result, isA<Failure<Transaction>>());
+      expect((result as Failure<Transaction>).error.code, 'retry_blocked_duplicate');
+      expect(balances.credits, 0);
+      expect(messages.store['m1']!.status, MessageProcessingStatus.rejected);
     });
   });
 }

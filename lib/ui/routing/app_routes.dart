@@ -34,6 +34,20 @@ abstract final class AppRoutes {
   static Future<void> openRejectedMessages(BuildContext context) => push(context, const RejectedMessagesScreen());
   static Future<void> openCustomerDetail(BuildContext context, String customerId) => push(context, CustomerDetailScreen(customerId: customerId));
   static Future<void> openDirectSale(BuildContext context) => push(context, const DirectSaleScreen());
+  static Future<void> openDirectSalePrefilled(
+    BuildContext context, {
+    String? phone,
+    int? amountMinor,
+    String? name,
+  }) =>
+      push(
+        context,
+        DirectSaleScreen(
+          initialPhone: phone,
+          initialAmountMinor: amountMinor,
+          initialName: name,
+        ),
+      );
   static Future<void> openTransactionsLog(BuildContext context) => push(context, const TransactionsLogScreen());
   static Future<void> openWallets(BuildContext context) =>
       push(context, const WalletsScreen());
