@@ -24,9 +24,27 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libsqlite3-dev
       - run: flutter pub get
       - name: Flutter analyze
-        run: flutter analyze --no-fatal-infos
+        run: |
+          set +e
+          flutter analyze --no-fatal-infos > /tmp/analyze.log 2>&1
+          rc=$?
+          if [ $rc -ne 0 ]; then
+            msg=$(tail -c 3500 /tmp/analyze.log | tr '\n' ' ' | sed 's/%/%25/g')
+            echo "::error title=flutter analyze failed::$msg"
+          fi
+          cat /tmp/analyze.log
+          exit $rc
       - name: Test (full suite)
-        run: flutter test
+        run: |
+          set +e
+          flutter test > /tmp/test.log 2>&1
+          rc=$?
+          if [ $rc -ne 0 ]; then
+            msg=$(tail -c 3500 /tmp/test.log | tr '\n' ' ' | sed 's/%/%25/g')
+            echo "::error title=flutter test failed::$msg"
+          fi
+          cat /tmp/test.log
+          exit $rc
 
   build-apk:
     needs: analyze-test
