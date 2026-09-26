@@ -570,6 +570,15 @@ final class _FakeCustomers implements CustomerRepository {
   final identifiers = <String, List<CustomerIdentifier>>{};
 
   @override
+  Future<Result<List<CustomerAccountSnapshot>>> listAccountSnapshots({
+    String query = '',
+    String currencyCode = 'YER',
+    int? limit,
+    int offset = 0,
+  }) async =>
+      const Success(<CustomerAccountSnapshot>[]);
+
+  @override
   Future<Result<Customer?>> findById(String id) async => Success(byId[id]);
 
   @override

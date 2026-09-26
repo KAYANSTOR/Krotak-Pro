@@ -176,7 +176,7 @@ final class _FakeCustomers implements CustomerRepository {
   @override Future<Result<List<Customer>>> search(String query) async => Success(store.values.toList());
   @override Future<Result<List<CustomerPhoneSuggestion>>> suggestPhonesByPrefix(String prefix, {int limit = 8}) async => const Success([]);
   @override Future<Result<List<CustomerIdentifier>>> listIdentifiers(String customerId) async => const Success([]);
-  @override Future<Result<List<CustomerAccountSnapshot>>> listAccountSnapshots({String query = '', String currencyCode = 'YER'}) async => const Success([]);
+  @override Future<Result<List<CustomerAccountSnapshot>>> listAccountSnapshots({String query = '', String currencyCode = 'YER', int? limit, int offset = 0}) async => const Success([]);
 }
 final class _FakeCustomerService implements CustomerService {
   _FakeCustomerService(this.customers);

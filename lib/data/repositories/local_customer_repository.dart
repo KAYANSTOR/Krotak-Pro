@@ -185,15 +185,25 @@ final class LocalCustomerRepository implements CustomerRepository {
   Future<Result<List<domain.CustomerAccountSnapshot>>> listAccountSnapshots({
     String query = '',
     String currencyCode = 'YER',
+    int? limit,
+    int offset = 0,
   }) async {
     try {
       final searched = await search(query);
       if (searched is Failure<List<domain.Customer>>) {
         return Failure(searched.error);
       }
-      final customers = (searched as Success<List<domain.Customer>>).value
+      var customers = (searched as Success<List<domain.Customer>>).value
           .where((c) => c.status != domain.CustomerStatus.merged)
           .toList(growable: false);
+      if (offset > 0 || limit != null) {
+        final total = customers.length;
+        final start = offset < 0 ? 0 : (offset > total ? total : offset);
+        final end = limit == null
+            ? total
+            : (start + limit > total ? total : start + limit);
+        customers = customers.sublist(start, end);
+      }
       if (customers.isEmpty) {
         return const Success(<domain.CustomerAccountSnapshot>[]);
       }
