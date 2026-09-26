@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
+import 'dart:typed_data';
 
 import 'package:cryptography/cryptography.dart';
 import 'package:path/path.dart' as p;
@@ -19,7 +20,11 @@ import '../repositories/repositories.dart';
 /// - Payload: settings snapshot + optional base64 `net.sqlite`
 /// - License rows are never written via settings path; DB restore preserves
 ///   current license table by re-applying license rows after file replace
-///   when [licenseSnapshot] is provided by the caller.
+///   when [reapplyLicenseRows] is provided by the caller.
+///
+/// Phase 20: the embedded database is validated (SQLite magic + minimum
+/// header size) on a temp file before the live DB is replaced. A
+/// `.pre-restore` copy of the live file is kept when one exists.
 ///
 /// Legacy `.znet` / `.json` backups stay restorable.
 final class LocalBackupService {
@@ -50,6 +55,8 @@ final class LocalBackupService {
   static const restorableExtensions = <String>['.krt', '.znet', '.json'];
   static const pbkdf2Iterations = 10000;
   static const minPasswordLength = 4;
+  static const sqliteHeaderPrefix = 'SQLite format 3';
+  static const minSqliteHeaderBytes = 100;
 
   static const List<String> snapshotKeys = [
     SettingKeys.defaultCurrency,
@@ -183,6 +190,7 @@ final class LocalBackupService {
     Future<void> Function()? closeDatabase,
     Future<void> Function()? onDatabaseRestored,
     List<Map<String, dynamic>>? preserveLicenseRows,
+    Future<void> Function(List<Map<String, dynamic>> rows)? reapplyLicenseRows,
   }) async {
     try {
       if (!await file.exists()) {
@@ -237,6 +245,14 @@ final class LocalBackupService {
         final b64 = dbSection['bytes'] as String?;
         if (b64 != null && b64.isNotEmpty) {
           final bytes = base64Decode(b64);
+          if (!_isSqliteDatabase(bytes)) {
+            return const Failure(
+              AppFailure(
+                code: 'backup_database_invalid',
+                message: 'Backup database is not a valid SQLite file',
+              ),
+            );
+          }
           if (closeDatabase != null) {
             await closeDatabase();
           }
@@ -246,11 +262,31 @@ final class LocalBackupService {
           }
           final tmp = File('${target.path}.restore-tmp');
           await tmp.writeAsBytes(bytes, flush: true);
+          final written = await tmp.readAsBytes();
+          if (!_isSqliteDatabase(written)) {
+            await tmp.delete();
+            return const Failure(
+              AppFailure(
+                code: 'backup_database_invalid',
+                message: 'Temp restore file failed SQLite validation',
+              ),
+            );
+          }
           if (await target.exists()) {
+            final safety = File('${target.path}.pre-restore');
+            if (await safety.exists()) {
+              await safety.delete();
+            }
+            await target.copy(safety.path);
             await target.delete();
           }
           await tmp.rename(target.path);
           restoredDb = true;
+          final licenseRows =
+              preserveLicenseRows ?? const <Map<String, dynamic>>[];
+          if (licenseRows.isNotEmpty && reapplyLicenseRows != null) {
+            await reapplyLicenseRows(licenseRows);
+          }
           if (onDatabaseRestored != null) {
             await onDatabaseRestored();
           }
@@ -292,6 +328,20 @@ final class LocalBackupService {
         AppFailure(code: 'list_backups_failed', message: e.toString()),
       );
     }
+  }
+
+  /// SQLite files start with `SQLite format 3\0` and a 100-byte header.
+  static bool isSqliteDatabase(List<int> bytes) =>
+      LocalBackupService._isSqliteDatabase(bytes);
+
+  static bool _isSqliteDatabase(List<int> bytes) {
+    if (bytes.length < minSqliteHeaderBytes) return false;
+    final prefix = utf8.encode(sqliteHeaderPrefix);
+    if (bytes.length < prefix.length + 1) return false;
+    for (var i = 0; i < prefix.length; i++) {
+      if (bytes[i] != prefix[i]) return false;
+    }
+    return bytes[prefix.length] == 0;
   }
 
   Future<Result<Map<String, dynamic>>> _decryptEnvelope(
