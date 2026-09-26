@@ -1,4 +1,6 @@
+import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:net_app/core/clock.dart';
@@ -32,9 +34,20 @@ final class _Clock implements Clock {
   DateTime now() => DateTime.utc(2026, 9, 17, 18, 0);
 }
 
+Uint8List _fakeSqlite({String marker = 'LIVE'}) {
+  final bytes = Uint8List(128);
+  final header = utf8.encode('SQLite format 3');
+  bytes.setRange(0, header.length, header);
+  bytes[header.length] = 0;
+  final mark = utf8.encode(marker);
+  bytes.setRange(20, 20 + mark.length, mark);
+  return bytes;
+}
+
 void main() {
   late Directory dir;
   late _MemSettings settings;
+  late File dbFile;
   late LocalBackupService service;
 
   setUp(() async {
@@ -47,11 +60,14 @@ void main() {
         updatedAt: DateTime.utc(2026, 9, 1),
       ),
     );
+    dbFile = File('${dir.path}/net.sqlite');
+    await dbFile.writeAsBytes(_fakeSqlite());
     service = LocalBackupService(
       settings: settings,
       clock: _Clock(),
       ids: _Ids(),
       backupDirectory: dir,
+      databaseFile: dbFile,
     );
   });
 
@@ -85,5 +101,86 @@ void main() {
     final restored = await service.restoreFromFile(file, password: 'wrong-pass');
     expect(restored, isA<Failure>());
     expect((restored as Failure).error.code, 'backup_wrong_password');
+  });
+
+  test('embedded sqlite is restored and live file kept as pre-restore', () async {
+    final created = await service.createBackup(password: 'secret-pass');
+    final file = (created as Success<File>).value;
+
+    await dbFile.writeAsBytes(_fakeSqlite(marker: 'NEW'));
+    final restored = await service.restoreFromFile(file, password: 'secret-pass');
+    expect(restored, isA<Success<BackupRestoreReport>>());
+    expect((restored as Success<BackupRestoreReport>).value.databaseRestored, isTrue);
+    final live = await dbFile.readAsBytes();
+    expect(utf8.decode(live.sublist(20, 24)), 'LIVE');
+    final safety = File('${dbFile.path}.pre-restore');
+    expect(await safety.exists(), isTrue);
+    expect(utf8.decode((await safety.readAsBytes()).sublist(20, 23)), 'NEW');
+  });
+
+  test('invalid sqlite payload is rejected and live db is untouched', () async {
+    final junkDb = File('${dir.path}/junk.sqlite');
+    await junkDb.writeAsBytes(utf8.encode('not a database payload...........'));
+    final junkService = LocalBackupService(
+      settings: settings,
+      clock: _Clock(),
+      ids: _Ids(),
+      backupDirectory: dir,
+      databaseFile: junkDb,
+    );
+    final junkBackup = await junkService.createBackup(password: 'secret-pass');
+    final junkFile = (junkBackup as Success<File>).value;
+
+    final before = await dbFile.readAsBytes();
+    final restored = await service.restoreFromFile(junkFile, password: 'secret-pass');
+    expect(restored, isA<Failure>());
+    expect((restored as Failure).error.code, 'backup_database_invalid');
+    expect(await dbFile.readAsBytes(), before);
+  });
+
+  test('license settings keys are not written back', () async {
+    await settings.save(
+      AppSetting(
+        key: 'license_token',
+        value: 'should-not-restore',
+        updatedAt: DateTime.utc(2026, 9, 1),
+      ),
+    );
+    final raw = File('${dir.path}/plain.json');
+    await raw.writeAsString(
+      jsonEncode({
+        'settings': {
+          SettingKeys.networkName: 'FROM-BACKUP',
+          'license_secret': 'LEAK',
+        },
+      }),
+    );
+    settings.map.clear();
+    final restored = await service.restoreFromFile(raw);
+    expect(restored, isA<Success>());
+    expect(settings.map[SettingKeys.networkName]?.value, 'FROM-BACKUP');
+    expect(settings.map.containsKey('license_secret'), isFalse);
+  });
+
+  test('reapplyLicenseRows runs after a valid database restore', () async {
+    final created = await service.createBackup(password: 'secret-pass');
+    final file = (created as Success<File>).value;
+    var applied = 0;
+    final restored = await service.restoreFromFile(
+      file,
+      password: 'secret-pass',
+      preserveLicenseRows: [
+        {'id': 'lic-1'},
+      ],
+      reapplyLicenseRows: (rows) async {
+        applied = rows.length;
+      },
+    );
+    expect(restored, isA<Success<BackupRestoreReport>>());
+    expect(applied, 1);
+    expect(
+      (restored as Success<BackupRestoreReport>).value.licenseRowsPreserved,
+      1,
+    );
   });
 }
