@@ -20,6 +20,7 @@ import 'local_customer_identity_resolver.dart';
 import 'contact_directory.dart';
 import 'services.dart';
 import 'local_pos_account_registry.dart';
+import 'local_pos_auto_settlement_service.dart';
 import 'local_category_commission_store.dart';
 import 'pos_wholesale_pricing.dart';
 import 'pos_order_message_renderer.dart';
@@ -50,6 +51,7 @@ final class LocalTransferProcessor implements TransferProcessor {
     this.posRegistry,
     this.categoryCommissionStore,
     this.sales,
+    this.posAutoSettlement,
     this.reservationTtl = const Duration(minutes: 5),
   });
 
@@ -74,6 +76,11 @@ final class LocalTransferProcessor implements TransferProcessor {
   final LocalPosAccountRegistry? posRegistry;
   final LocalCategoryCommissionStore? categoryCommissionStore;
   final SaleRepository? sales;
+
+  /// عند عدم مطابقة المبلغ لأي فئة كرت: إن كان المصدر حساب نقطة بيع، تُستخدم
+  /// هذه الخدمة لإضافة المبلغ إلى رصيده (تسوية الدين القائم إن وُجد) بدل رفض
+  /// الرسالة، وترسل له رسالة التسوية. راجع [_creditWithoutCategory].
+  final LocalPosAutoSettlementService? posAutoSettlement;
   final Duration reservationTtl;
 
   List<CardCategory>? _categoryCache;
@@ -555,6 +562,15 @@ final class LocalTransferProcessor implements TransferProcessor {
     }
     final matches = (matchResult as Success<List<CardCategory>>).value;
     if (matches.isEmpty) {
+      // نقطة بيع: إيداع بلا فئة كرت مطابقة يُسوَّى إلى رصيدها مباشرة (يسدد
+      // ديناً قائماً إن وُجد) مع رسالة تسوية، بصرف النظر عن إعداد «الفئات
+      // المعرّفة فقط» — فهذا تصرف واضح لا يحتاج مراجعة بشرية.
+      final settled = await posAutoSettlement?.trySettle(
+        transfer: transfer,
+        message: message,
+      );
+      if (settled != null) return settled;
+
       final categoryOnly = await _processCategoryAmountsOnly();
       if (categoryOnly) {
         const failure = AppFailure(
@@ -571,19 +587,14 @@ final class LocalTransferProcessor implements TransferProcessor {
         );
         return const Failure<Transaction>(failure);
       }
-      const failure = AppFailure(
-        code: 'unmatched_amount',
-        message: 'No active card category matches the transfer amount',
-      );
-      await _persistTerminalFailure(
-        messageId: message.id,
-        status: MessageProcessingStatus.rejected,
-        action: 'transfer_unmatched_amount',
-        error: failure,
+
+      // خارج وضع «الفئات المعرّفة فقط»: بدل رفض إيداع عميل عادي لا تطابق
+      // قيمته أي فئة كرت نشطة، يُضاف المبلغ إلى رصيده مباشرة.
+      return _creditWithoutMatchingCategory(
+        message: message,
         transfer: transfer,
-        deliveryPhone: destination,
+        customerId: customer.id,
       );
-      return const Failure<Transaction>(failure);
     }
     if (matches.length > 1) {
       const failure = AppFailure(
@@ -1177,6 +1188,46 @@ final class LocalTransferProcessor implements TransferProcessor {
     return Success<Transaction>(saleLedger);
   }
 
+  /// عندما لا تطابق قيمة الإيداع أي فئة كرت نشطة (ولم يكن تسوية نقطة بيع)،
+  /// يُضاف المبلغ مباشرة إلى رصيد العميل بدل رفض الرسالة.
+  Future<Result<Transaction>> _creditWithoutMatchingCategory({
+    required IncomingMessage message,
+    required ParsedTransfer transfer,
+    required String customerId,
+  }) async {
+    final ref = transfer.reference.trim().isNotEmpty
+        ? 'no-category-credit:${transfer.reference.trim()}'
+        : 'no-category-credit:${message.id}';
+    final credit = await balances.credit(
+      customerId: customerId,
+      amount: transfer.amount,
+      reference: ref,
+    );
+    if (credit is Failure<Transaction>) {
+      await _persistTerminalFailure(
+        messageId: message.id,
+        status: MessageProcessingStatus.failed,
+        action: 'transfer_credit_without_category_failed',
+        error: credit.error,
+        transfer: transfer,
+      );
+      return Failure<Transaction>(credit.error);
+    }
+    final tx = (credit as Success<Transaction>).value;
+    await messages.updateStatus(message.id, MessageProcessingStatus.processed);
+    await auditLogs.append(
+      AuditLog(
+        id: ids.next('audit'),
+        entityType: 'message',
+        entityId: message.id,
+        action: 'transfer_credited_no_category',
+        occurredAt: clock.now(),
+        payloadJson:
+            '{"transactionId":"${tx.id}","customerId":"$customerId","minorUnits":${transfer.amount.minorUnits},"currency":"${transfer.amount.currencyCode}"}',
+      ),
+    );
+    return Success<Transaction>(tx);
+  }
 
   Future<Result<List<CardCategory>>> _matchActiveCategory(Money amount) async {
     final categoriesRepo = categories!;

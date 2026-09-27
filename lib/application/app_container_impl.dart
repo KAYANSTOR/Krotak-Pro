@@ -28,6 +28,7 @@ import '../domain/services/local_message_retry_service.dart';
 import '../domain/services/local_promotion_catalog.dart';
 import '../domain/services/local_promotion_progress_service.dart';
 import '../domain/services/local_pos_account_registry.dart';
+import '../domain/services/local_pos_auto_settlement_service.dart';
 import '../domain/services/local_pos_balance_request_service.dart';
 import '../domain/services/local_pos_profile_service.dart';
 import '../domain/services/local_pos_daily_summary_service.dart';
@@ -205,7 +206,20 @@ final class AppContainer {
     final broadcastService = LocalBroadcastService(customers: customers, jobs: broadcastJobs, settings: settings, auditLogs: auditLogs, messageSender: messageSender, clock: clock, ids: ids, transactions: transactions, posRegistry: posRegistry, sendDelay: Duration.zero);
     final advanceService = LocalAdvanceService(advances: advanceRepository, customers: customers, categories: categories, cards: cards, inventory: inventoryService, transactions: transactions, sales: sales, auditLogs: auditLogs, settings: settings, unitOfWork: uow, messageSender: messageSender, clock: clock, ids: ids, posRegistry: posRegistry);
     final contactDirectory = ContactPickerBridge();
-    final processor = LocalTransferProcessor(messages: messages, customers: customers, balances: balanceService, auditLogs: auditLogs, unitOfWork: uow, clock: clock, ids: ids, categories: categories, cards: cards, inventory: inventoryService, transactions: transactions, reservedSales: saleService, messageSender: messageSender, settings: settings, advanceService: advanceService, customerService: customerService, contactDirectory: contactDirectory, posRegistry: posRegistry, categoryCommissionStore: categoryCommissionStore, sales: sales);
+    final posAutoSettlement = LocalPosAutoSettlementService(
+      posRegistry: posRegistry,
+      settings: settings,
+      customers: customers,
+      transactions: transactions,
+      balances: balanceService,
+      messages: messages,
+      auditLogs: auditLogs,
+      clock: clock,
+      ids: ids,
+      templates: transferTemplates,
+      messageSender: messageSender,
+    );
+    final processor = LocalTransferProcessor(messages: messages, customers: customers, balances: balanceService, auditLogs: auditLogs, unitOfWork: uow, clock: clock, ids: ids, categories: categories, cards: cards, inventory: inventoryService, transactions: transactions, reservedSales: saleService, messageSender: messageSender, settings: settings, advanceService: advanceService, customerService: customerService, contactDirectory: contactDirectory, posRegistry: posRegistry, categoryCommissionStore: categoryCommissionStore, sales: sales, posAutoSettlement: posAutoSettlement);
     final licenseService = LocalLicenseService(licenses: licenses, clock: clock);
     final Directory backupDirectory;
     final File? databaseFile;
