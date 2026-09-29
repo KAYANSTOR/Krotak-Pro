@@ -13,7 +13,9 @@ String buildAuditCsv(List<AuditLog> logs) {
         _csv(log.action),
         _csv(log.entityType),
         _csv(log.entityId),
-        _csv(log.payloadJson ?? ''),
+        // payloadJson is persisted as JSON text; remove JSON's escaped quote
+        // marker before applying CSV escaping so Excel receives readable text.
+        _csv((log.payloadJson ?? '').replaceAll(r'\"', '"')),
       ].join(','),
     );
   }
