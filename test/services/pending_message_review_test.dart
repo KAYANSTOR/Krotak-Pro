@@ -203,5 +203,6 @@ final class _FakeBalances implements CustomerBalanceService {
 final class _FakeAudit implements AuditLogRepository {
   final logs = <AuditLog>[];
   @override Future<Result<void>> append(AuditLog log) async { logs.add(log); return const Success(null); }
+  @override Future<Result<List<AuditLog>>> listRecent({int limit = 2000}) async => Success((logs.toList()..sort((a, b) => b.occurredAt.compareTo(a.occurredAt))).take(limit).toList());
   @override Future<Result<List<AuditLog>>> findByEntity(String entityType, String entityId) async => Success(logs.where((l) => l.entityId == entityId).toList());
 }

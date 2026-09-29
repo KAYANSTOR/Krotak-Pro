@@ -211,6 +211,10 @@ final class _FakeAudit implements AuditLogRepository {
   }
 
   @override
+  Future<Result<List<AuditLog>>> listRecent({int limit = 2000}) async =>
+      Success((logs.toList()..sort((a, b) => b.occurredAt.compareTo(a.occurredAt))).take(limit).toList());
+
+  @override
   Future<Result<List<AuditLog>>> findByEntity(
     String entityType,
     String entityId,

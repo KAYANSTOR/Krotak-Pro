@@ -95,6 +95,13 @@ final class InMemoryAuditLogRepository implements AuditLogRepository {
   }
 
   @override
+  Future<Result<List<AuditLog>>> listRecent({int limit = 2000}) async {
+    final list = List<AuditLog>.from(logs)
+      ..sort((a, b) => b.occurredAt.compareTo(a.occurredAt));
+    return Success(list.take(limit).toList());
+  }
+
+  @override
   Future<Result<List<AuditLog>>> findByEntity(String entityType, String entityId) async {
     return Success(
       logs.where((l) => l.entityType == entityType && l.entityId == entityId).toList(),
