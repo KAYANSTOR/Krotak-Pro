@@ -77,11 +77,7 @@ abstract interface class CardRepository {
   Future<Result<void>> releaseReservation(String cardId, String reservationId);
   Future<Result<void>> markSold(String cardId, String saleId);
   Future<Result<void>> restoreAvailable(String cardId);
-
-  /// يحذف كرتاً واحداً نهائياً ويرجع عدد الصفوف المحذوفة (0 إذا لم يوجد).
   Future<Result<int>> delete(String id);
-
-  /// يحذف مجموعة كروت ويرجع عدد الصفوف المحذوفة فعلياً.
   Future<Result<int>> deleteMany(List<String> ids);
 }
 
@@ -114,7 +110,6 @@ abstract interface class MessageRepository {
   Future<Result<List<IncomingMessage>>> pendingProcessing();
   Future<Result<List<IncomingMessage>>> listByStatus(MessageProcessingStatus status);
   Future<Result<int>> countByStatus(MessageProcessingStatus status);
-  /// Live COUNT for a status. Emits immediately then on every table change.
   Stream<int> watchCountByStatus(MessageProcessingStatus status);
   Future<Result<List<IncomingMessage>>> listRecent({int limit = 100});
   Future<Result<void>> updateStatus(String id, MessageProcessingStatus status);
@@ -142,4 +137,5 @@ abstract interface class SettingsRepository {
 abstract interface class AuditLogRepository {
   Future<Result<void>> append(AuditLog log);
   Future<Result<List<AuditLog>>> findByEntity(String entityType, String entityId);
+  Future<Result<List<AuditLog>>> listRecent({int limit = 2000});
 }
