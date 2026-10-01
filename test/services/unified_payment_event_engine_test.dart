@@ -191,7 +191,7 @@ void main() {
       expect(processor.calls, 0);
       expect(
         messages.store.values.single.status,
-        MessageProcessingStatus.parsed,
+        MessageProcessingStatus.pending,
       );
     });
 

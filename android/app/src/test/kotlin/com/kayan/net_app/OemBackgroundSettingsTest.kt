@@ -14,4 +14,12 @@ class OemBackgroundSettingsTest {
             intent.getIntExtra("activity_type", -1),
         )
     }
+
+    @Test
+    fun batterySettingsIntentIsSafeFallback() {
+        assertEquals(
+            OemBackgroundSettings.BATTERY_SETTINGS_ACTION,
+            OemBackgroundSettings.batterySettingsIntent().action,
+        )
+    }
 }

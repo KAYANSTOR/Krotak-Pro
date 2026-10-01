@@ -37,4 +37,38 @@ void main() {
     expect(result, isA<Success<ParsedTransfer>>());
     expect((result as Success<ParsedTransfer>).value.templateId, 'wallet-b-template');
   });
+
+  test('template replacement is picked up without recreating the parser', () {
+    final parser = LocalMessageParser(
+      templates: const [
+        TransferTemplate(
+          id: 'old-template',
+          name: 'Old',
+          pattern: 'OLD {amount} {phone} {ref}',
+          isActive: true,
+        ),
+      ],
+    );
+    final message = IncomingMessage(
+      id: 'm-hot-reload',
+      sender: 'A',
+      body: 'NEW 25 770000001 R2',
+      receivedAt: DateTime.utc(2026, 10, 1),
+      status: MessageProcessingStatus.received,
+    );
+
+    expect(parser.parse(message), isA<Failure<ParsedTransfer>>());
+    parser.replaceTemplates(const [
+      TransferTemplate(
+        id: 'new-template',
+        name: 'New',
+        pattern: 'NEW {amount} {phone} {ref}',
+        isActive: true,
+      ),
+    ]);
+
+    final result = parser.parse(message);
+    expect(result, isA<Success<ParsedTransfer>>());
+    expect((result as Success<ParsedTransfer>).value.templateId, 'new-template');
+  });
 }

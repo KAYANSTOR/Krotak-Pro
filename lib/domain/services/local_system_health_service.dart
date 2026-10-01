@@ -89,10 +89,10 @@ final class LocalSystemHealthService {
         detail:
             'يضمن استمرار الاستماع للرسائل حتى عند إغلاق الواجهة.',
         severity: CapabilitySeverity.critical,
-        state: foreground == CapabilityState.unknown
-            ? CapabilityState.granted
-            : foreground,
-        actionLabel: null,
+        state: foreground,
+        actionLabel: foreground == CapabilityState.granted
+            ? null
+            : 'فتح إعدادات التطبيق',
         settingsAction: 'open_app_settings',
       ),
       SystemCapability(
@@ -100,10 +100,10 @@ final class LocalSystemHealthService {
         title: 'قراءة شرائح الاتصال (Dual SIM)',
         detail: 'التعرف على الشرائح لاختيار شريحة القراءة/الإرسال.',
         severity: CapabilitySeverity.recommended,
-        state: dualSim == CapabilityState.unknown
-            ? CapabilityState.granted
-            : dualSim,
-        actionLabel: 'فتح إعدادات التطبيق',
+        state: dualSim,
+        actionLabel: dualSim == CapabilityState.granted
+            ? null
+            : 'فتح إعدادات التطبيق',
         settingsAction: 'open_app_settings',
       ),
       SystemCapability(
@@ -138,10 +138,10 @@ final class LocalSystemHealthService {
         title: 'الوصول إلى جهات الاتصال',
         detail: 'اختياري — يساعد على عرض أسماء العملاء من دفتر الهاتف.',
         severity: CapabilitySeverity.optional,
-        state: contacts == CapabilityState.unknown
-            ? CapabilityState.denied
-            : contacts,
-        actionLabel: 'فتح إعدادات التطبيق',
+        state: contacts,
+        actionLabel: contacts == CapabilityState.granted
+            ? null
+            : 'فتح إعدادات التطبيق',
         settingsAction: 'open_app_settings',
       ),
       SystemCapability(

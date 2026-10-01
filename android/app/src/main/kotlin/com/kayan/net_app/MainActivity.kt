@@ -543,7 +543,7 @@ class MainActivity : FlutterActivity(), SmsListener {
             } catch (_: Exception) {
             }
         }
-        startActivity(Intent("android.settings.BATTERY_SETTINGS"))
+        startActivity(OemBackgroundSettings.batterySettingsIntent())
     }
 
     private fun oemBackgroundState(): String {
@@ -588,10 +588,12 @@ class MainActivity : FlutterActivity(), SmsListener {
     }
 
     private fun isNotificationAccessGranted(): Boolean {
-        val enabled = Settings.Secure.getString(contentResolver, "enabled_notification_listeners") ?: return false
-        return enabled.split(":").any {
-            ComponentName.unflattenFromString(it) == NotificationListener.component(this)
-        }
+        val enabled = Settings.Secure.getString(contentResolver, "enabled_notification_listeners")
+            ?: return false
+        return NotificationAccessChecker.isGranted(
+            enabled,
+            NotificationListener.component(this),
+        )
     }
 
     private fun hasSmsPermissions(): Boolean =

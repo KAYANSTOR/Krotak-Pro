@@ -248,6 +248,7 @@ final class UnifiedPaymentEventEngine implements PaymentEventEngine {
 
     final auto = await _autoProcessingEnabled();
     if (!auto) {
+      await messages.updateStatus(message.id, MessageProcessingStatus.pending);
       await _persistPipelineDiagnostic(
         event: event,
         messageId: message.id,
