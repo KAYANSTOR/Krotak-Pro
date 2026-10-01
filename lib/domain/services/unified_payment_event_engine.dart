@@ -225,9 +225,24 @@ final class UnifiedPaymentEventEngine implements PaymentEventEngine {
       );
       if (balanceResult is Failure<void>) {
         await messages.updateStatus(message.id, MessageProcessingStatus.failed);
+        await _persistPipelineDiagnostic(
+          event: event,
+          messageId: message.id,
+          stage: 'balance_request_processor',
+          diagnosis: sourceDiagnosis,
+          parsed: boundParse,
+          failure: balanceResult.error,
+        );
         return Failure(balanceResult.error);
       }
       await messages.updateStatus(message.id, MessageProcessingStatus.processed);
+      await _persistPipelineDiagnostic(
+        event: event,
+        messageId: message.id,
+        stage: 'processed',
+        diagnosis: sourceDiagnosis,
+        parsed: boundParse,
+      );
       return const Success(null);
     }
 
@@ -251,6 +266,13 @@ final class UnifiedPaymentEventEngine implements PaymentEventEngine {
         // ignore: discarded_futures
         m.persist(trace);
       }
+      await _persistPipelineDiagnostic(
+        event: event,
+        messageId: message.id,
+        stage: 'processed',
+        diagnosis: sourceDiagnosis,
+        parsed: boundParse,
+      );
       return Success(processResult.value);
     }
     final m = metrics;
@@ -419,12 +441,17 @@ final class UnifiedPaymentEventEngine implements PaymentEventEngine {
       customerIdentifier: event.sourceKey,
     );
     await messages.save(message);
-    return const Failure(
-      AppFailure(
-        code: RejectionCodes.blacklisted,
-        message: 'Blocked number — processing skipped before parse',
-      ),
+    final failure = const AppFailure(
+      code: RejectionCodes.blacklisted,
+      message: 'Blocked number — processing skipped before parse',
     );
+    await _persistPipelineDiagnostic(
+      event: event,
+      messageId: message.id,
+      stage: 'blocked_number',
+      failure: failure,
+    );
+    return Failure(failure);
   }
 
   Future<bool> _autoProcessingEnabled() async {
