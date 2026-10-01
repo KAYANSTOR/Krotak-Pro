@@ -303,7 +303,8 @@ void main() {
       );
       final saved = messages.store.values.single;
       expect(saved.status, MessageProcessingStatus.rejected);
-      expect(audit.logs.single.action, 'no_source_template');
+      expect(audit.logs.any((log) => log.action == 'no_source_template'), isTrue);
+      expect(audit.logs.any((log) => log.action == 'pipeline_diagnostic'), isTrue);
 
       // نفس الرسالة مرة أخرى بنفس البصمة لا تُنشئ صفًا ثانيًا.
       await engine.ingest(event);
