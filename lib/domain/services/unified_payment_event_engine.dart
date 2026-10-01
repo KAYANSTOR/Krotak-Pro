@@ -70,12 +70,12 @@ final class UnifiedPaymentEventEngine implements PaymentEventEngine {
         return Failure(diagnosisResult.error);
       }
       sourceDiagnosis = (diagnosisResult as Success<PaymentSourceDiagnosis>).value;
-      if (!sourceDiagnosis!.authorized) {
+      if (!sourceDiagnosis.authorized) {
         return _rejectUnauthorized(
           event,
           AppFailure(
-            code: sourceDiagnosis!.failureCode ?? RejectionCodes.other,
-            message: sourceDiagnosis!.failureMessage ?? 'Payment source rejected',
+            code: sourceDiagnosis.failureCode ?? RejectionCodes.other,
+            message: sourceDiagnosis.failureMessage ?? 'Payment source rejected',
           ),
           diagnosis: sourceDiagnosis,
         );
@@ -108,12 +108,12 @@ final class UnifiedPaymentEventEngine implements PaymentEventEngine {
       }
       sourceDiagnosis =
           (templateDiagnosis as Success<PaymentSourceDiagnosis>).value;
-      if (!sourceDiagnosis!.authorized) {
+      if (!sourceDiagnosis.authorized) {
         return _rejectUnauthorized(
           event,
           AppFailure(
-            code: sourceDiagnosis!.failureCode ?? RejectionCodes.other,
-            message: sourceDiagnosis!.failureMessage ?? 'Payment source rejected',
+            code: sourceDiagnosis.failureCode ?? RejectionCodes.other,
+            message: sourceDiagnosis.failureMessage ?? 'Payment source rejected',
           ),
           diagnosis: sourceDiagnosis,
         );
