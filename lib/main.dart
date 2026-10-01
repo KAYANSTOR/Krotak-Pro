@@ -7,6 +7,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:sqlite3_flutter_libs/sqlite3_flutter_libs.dart';
 
 import 'application/app_container.dart';
+import 'platform/daily_summary_alarm_bridge.dart';
 import 'core/app_brand.dart';
 import 'core/result.dart';
 import 'domain/entities/message.dart';
@@ -86,6 +87,14 @@ class _NetAppState extends State<NetApp> with WidgetsBindingObserver {
     // أي تحديث لاحق للقيمة المخزنة (من الإعدادات) يعيد الحسم فورًا.
     NetThemeRawCache.onRawChanged = (_) => _applyAutoTheme(DateTime.now());
     NetThemeRawCache.raw = _themeRawAtBoot;
+    unawaited(_syncDailySummaryAlarm());
+  }
+
+  Future<void> _syncDailySummaryAlarm() async {
+    final stored = await widget.container.settings.find(SettingKeys.dailyOpsSummaryAutoSend);
+    final raw = stored is Success<AppSetting?> ? stored.value?.value : null;
+    final enabled = SettingBool.read(raw, defaultValue: SettingDefaults.dailyOpsSummaryAutoSend);
+    await DailySummaryAlarmBridge().setEnabled(enabled);
   }
 
   late final NetThemeAutoTicker _ticker;

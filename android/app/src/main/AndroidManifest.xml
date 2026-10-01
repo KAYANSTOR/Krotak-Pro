@@ -10,6 +10,7 @@
     <uses-permission android:name="android.permission.READ_CONTACTS"/>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
     <uses-permission android:name="android.permission.WAKE_LOCK"/>
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
 
     <!-- Android 11+ needs these so the dialer and SMS apps stay resolvable
          for the contact actions on the customer cards. -->
@@ -56,6 +57,15 @@
             android:permission="android.permission.BROADCAST_SMS">
             <intent-filter android:priority="999">
                 <action android:name="android.provider.Telephony.SMS_RECEIVED"/>
+            </intent-filter>
+        </receiver>
+
+        <receiver
+            android:name=".DailySummaryReceiver"
+            android:exported="false"
+            android:enabled="true">
+            <intent-filter>
+                <action android:name="com.kayan.net_app.DAILY_SUMMARY"/>
             </intent-filter>
         </receiver>
 

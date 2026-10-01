@@ -156,6 +156,11 @@ class MainActivity : FlutterActivity(), SmsListener {
                     StockAlertNotification.clear(applicationContext)
                     result.success(true)
                 }
+                "setDailySummaryAlarm" -> {
+                    val enabled = call.argument<Boolean>("enabled") ?: false
+                    DailySummaryAlarm.setEnabled(applicationContext, enabled)
+                    result.success(true)
+                }
                 "hasNotificationPermission" -> result.success(areNotificationsAllowed())
                 "requestNotificationPermission" -> result.success(requestPostNotificationsPermission())
                 else -> result.notImplemented()

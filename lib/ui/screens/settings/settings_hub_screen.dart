@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/app_brand.dart';
+import '../../../platform/daily_summary_alarm_bridge.dart';
 import '../../../core/result.dart';
 import '../../../domain/entities/setting.dart';
 import '../../app_scope.dart';
@@ -362,7 +363,7 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
                                   SettingsGroupNavRow(icon: Icons.notifications_none_outlined, title: 'إشعارات المحافظ', subtitle: 'مصادر إشعارات التطبيقات ومنح إذن الوصول', searchText: 'إشعارات المحافظ مصادر الوصول', onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const WalletNotificationSettingsScreen()))),
                                   SettingsGroupSwitchRow(icon: Icons.account_balance_outlined, title: 'طلبات رصيد نقاط البيع', subtitle: _posBalanceRequests ? 'مفعّل — يتم الرد تلقائياً على طلب رصيد نقطة البيع برسالة تحتوي الرصيد والدين' : 'متوقف — طلبات رصيد نقاط البيع تُترك للمراجعة اليدوية', value: _posBalanceRequests, onChanged: (v) async { setState(() => _posBalanceRequests = v); await _saveBool(SettingKeys.posBalanceRequestsEnabled, v); }),
                                   SettingsGroupNavRow(icon: Icons.pin_outlined, title: 'الحد اليومي لطلبات رصيد نقاط البيع', subtitle: 'الحد الحالي: '+_posBalanceLimit.toString()+' طلب يومياً لكل نقطة بيع', searchText: 'حد يومي طلبات رصيد نقاط البيع', onTap: _openPosBalanceLimit),
-                                  SettingsGroupSwitchRow(icon: Icons.summarize_outlined, title: 'ملخص العمليات اليومي', subtitle: _dailySummary ? 'مفعّل — سيتم إرسال ملخص يومي الساعة 12 ليلاً لكل عملاء نقاط البيع' : 'متوقف — لن تُرسل ملخصات يومية لعملاء نقاط البيع', value: _dailySummary, onChanged: (v) async { setState(() => _dailySummary = v); await _saveBool(SettingKeys.dailyOpsSummaryAutoSend, v); }),
+                                  SettingsGroupSwitchRow(icon: Icons.summarize_outlined, title: 'ملخص العمليات اليومي', subtitle: _dailySummary ? 'مفعّل — منبّه محلي عند 12:05 ليلاً، مع إعادة المحاولة من دورة الاسترداد إن منع النظام الإيقاظ' : 'متوقف — لن تُرسل ملخصات يومية لعملاء نقاط البيع', value: _dailySummary, onChanged: (v) async { setState(() => _dailySummary = v); await _saveBool(SettingKeys.dailyOpsSummaryAutoSend, v); await DailySummaryAlarmBridge().setEnabled(v); }),
                                   SettingsGroupSwitchRow(icon: Icons.handshake_outlined, title: 'التسوية التلقائية', subtitle: _autoPosSettlement ? 'مفعّل — سيتم التسوية التلقائية لنقاط البيع عند استلام حوالة عبر المحافظ إلى النظام' : 'متوقف — تُسجَّل الحوالات دون تسوية تلقائية لحسابات نقاط البيع', value: _autoPosSettlement, onChanged: (v) async { setState(() => _autoPosSettlement = v); await _saveBool(SettingKeys.autoPosSettlementEnabled, v); }),
                                 ]),
                               if (_sectionVisible(_themeKeywords)) const SettingsSectionHeader(title: 'المظهر'),
