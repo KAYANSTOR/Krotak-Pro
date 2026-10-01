@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import '../../core/result.dart';
 import '../entities/audit.dart';
 import '../entities/message.dart';
@@ -107,6 +109,7 @@ final class RejectedMessageItem {
     this.phone,
     this.reference,
     this.auditAction,
+    this.diagnostic,
   });
 
   final IncomingMessage message;
@@ -117,6 +120,7 @@ final class RejectedMessageItem {
   final String? phone;
   final String? reference;
   final String? auditAction;
+  final Map<String, dynamic>? diagnostic;
 }
 
 final class RejectedMessageCatalog {
@@ -184,6 +188,7 @@ final class RejectedMessageCatalog {
 
     String? action;
     String? payloadReason;
+    Map<String, dynamic>? diagnostic;
     final audits = await auditLogs.findByEntity('message', m.id).timeout(
       const Duration(seconds: 10),
       onTimeout: () => const Failure(
@@ -195,6 +200,35 @@ final class RejectedMessageCatalog {
     );
     if (audits is Success<List<AuditLog>>) {
       final logs = audits.value;
+      final diagnosticLogs = logs.where((l) => l.action == 'pipeline_diagnostic').toList()
+        ..sort((a, b) => b.occurredAt.compareTo(a.occurredAt));
+      if (diagnosticLogs.isNotEmpty) {
+        try {
+          final raw = diagnosticLogs.first.payloadJson;
+          if (raw != null && raw.isNotEmpty) {
+            final decoded = jsonDecode(raw);
+            if (decoded is Map) {
+              diagnostic = Map<String, dynamic>.from(decoded);
+              final code = diagnostic?['failureCode']?.toString().trim();
+              if (code != null && code.isNotEmpty) action = code;
+              final reason = diagnostic?['reason']?.toString().trim();
+              if (reason != null && reason.isNotEmpty) payloadReason = reason;
+              final parsed = diagnostic?['parser'];
+              if (parsed is Map) {
+                final amountMinor = (parsed['amountMinorUnits'] as num?)?.toInt();
+                final currency = parsed['currency']?.toString();
+                if (amountMinor != null && currency != null && currency.isNotEmpty) {
+                  amount = Money(minorUnits: amountMinor, currencyCode: currency);
+                }
+                final identifier = parsed['customerIdentifier']?.toString();
+                if (identifier != null && identifier.isNotEmpty) phone = identifier;
+                final parsedReference = parsed['reference']?.toString();
+                if (parsedReference != null && parsedReference.isNotEmpty) reference = parsedReference;
+              }
+            }
+          }
+        } catch (_) {}
+      }
       final relevant = logs.where((l) => _rejectActions.contains(l.action)).toList()
         ..sort((a, b) => b.occurredAt.compareTo(a.occurredAt));
       if (relevant.isNotEmpty) {
