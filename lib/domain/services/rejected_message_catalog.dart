@@ -267,6 +267,7 @@ final class RejectedMessageCatalog {
       phone: phone ?? m.customerIdentifier,
       reference: reference,
       auditAction: action,
+      diagnostic: diagnostic,
     );
   }
 
