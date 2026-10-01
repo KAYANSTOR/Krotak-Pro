@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 
 import '../../../core/result.dart';
+import '../../../domain/services/cloud_backup_copy.dart';
 import '../../../domain/services/local_backup_service.dart';
 import '../../app_scope.dart';
 import '../../theme/kayan_palette.dart';
@@ -78,6 +79,28 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen> {
     final file = (r as Success<File>).value;
     setState(() => _status = 'تم إنشاء النسخة: ${p.basename(file.path)}');
     await _load();
+  }
+
+  Future<void> _copyToCloud(File file) async {
+    final name = p.basename(file.path);
+    if (!CloudBackupCopy.isEncryptedPackage(name)) {
+      setState(() => _status = 'النسخ السحابي يقبل ملف .krt المشفّر فقط');
+      return;
+    }
+    final bytes = await file.readAsBytes();
+    final saved = await FilePicker.platform.saveFile(
+      dialogTitle: CloudBackupCopy.dialogTitle,
+      fileName: CloudBackupCopy.suggestedFileName(name),
+      bytes: bytes,
+      type: FileType.custom,
+      allowedExtensions: const ['krt'],
+    );
+    if (!mounted) return;
+    if (saved == null) {
+      setState(() => _status = 'بقيت النسخة على الجهاز. لم يُختر موقع سحابي.');
+      return;
+    }
+    setState(() => _status = 'نُسخت النسخة المشفّرة إلى الموقع الذي اخترته.');
   }
 
   Future<void> _restoreFromListed(File file) async {
@@ -418,7 +441,12 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen> {
                                     ],
                                   ),
                                 ),
-                                Icon(Icons.restore_rounded, color: palette.primary, size: 20),
+                                IconButton(
+                                  tooltip: 'نسخ إلى السحابة',
+                                  onPressed: busy ? null : () => _copyToCloud(f),
+                                  icon: Icon(Icons.cloud_upload_rounded, color: palette.primary, size: 20),
+                                ),
+                                Icon(Icons.restore_rounded, color: palette.textTertiary, size: 20),
                               ],
                             ),
                           );
