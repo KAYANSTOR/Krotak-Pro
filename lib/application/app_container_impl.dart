@@ -296,7 +296,7 @@ final class AppContainer {
     final recoveryService = LocalMessageRecoveryService(messages: messages, parser: parser, processor: processor, sourceGuard: sourceGuard, retryService: retryService, settings: settings, auditLogs: auditLogs);
     final deliveryWorker = MessageDeliveryWorker(messages: messages, auditLogs: auditLogs, cards: cards, messageSender: messageSender, retryService: retryService, clock: clock, ids: ids, metrics: pipelineMetrics);
     final posOrderDeliveryWorker = PosOrderDeliveryWorker(messages: messages, auditLogs: auditLogs, cards: cards, settings: settings, posRegistry: posRegistry, messageSender: messageSender, retryService: retryService, clock: clock, ids: ids);
-    final pendingReview = PendingMessageReviewService(messages: messages, parser: parser, customers: customers, customerService: customerService, balances: balanceService, auditLogs: auditLogs, unitOfWork: uow, clock: clock, ids: ids, sourceGuard: sourceGuard);
+    final pendingReview = PendingMessageReviewService(messages: messages, parser: parser, customers: customers, customerService: customerService, balances: balanceService, auditLogs: auditLogs, unitOfWork: uow, clock: clock, ids: ids, sourceGuard: sourceGuard, transactions: transactions);
     final smsHandler = IncomingSmsHandler(
       bridge: smsBridge,
       messages: messages,
