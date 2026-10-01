@@ -88,6 +88,95 @@ final class LocalCustomerRepository implements CustomerRepository {
   }
 
   @override
+  Future<Result<List<domain.Customer>>> searchFilteredPage(
+    String query, {
+    required domain.AccountSqlFilter filter,
+    String currencyCode = 'YER',
+    int limit = 80,
+    int offset = 0,
+  }) async {
+    try {
+      final safeLimit = limit < 1 ? 1 : limit;
+      final safeOffset = offset < 0 ? 0 : offset;
+      final trimmed = query.trim();
+      final like = '%$trimmed%';
+      final rows = await database.customSelect(
+        '''
+        SELECT c.id AS id
+        FROM customers c
+        LEFT JOIN (
+          SELECT customer_id,
+            SUM(CASE
+              WHEN type IN ('deposit', 'reward', 'reversal') THEN amount_minor_units
+              ELSE -amount_minor_units
+            END) AS signed_balance
+          FROM transactions
+          WHERE status = 'completed'
+            AND currency_code = ?
+            AND customer_id IS NOT NULL
+          GROUP BY customer_id
+        ) bal ON bal.customer_id = c.id
+        WHERE c.status != 'merged'
+          AND (
+            ? = 'all'
+            OR (? = 'debtor' AND COALESCE(bal.signed_balance, 0) < 0)
+            OR (? = 'creditor' AND COALESCE(bal.signed_balance, 0) > 0)
+            OR (? = 'zero' AND COALESCE(bal.signed_balance, 0) = 0)
+            OR (? = 'provisional' AND c.status = 'provisional')
+            OR (? = 'unlinked' AND NOT EXISTS (
+              SELECT 1 FROM customer_identifiers i
+              WHERE i.customer_id = c.id
+                AND i.type = 'phoneNumber'
+                AND TRIM(i.value) != ''
+            ))
+          )
+          AND (
+            ? = ''
+            OR c.display_name LIKE ?
+            OR EXISTS (
+              SELECT 1 FROM customer_identifiers i2
+              WHERE i2.customer_id = c.id AND i2.value LIKE ?
+            )
+          )
+        ORDER BY c.display_name
+        LIMIT ? OFFSET ?
+        ''',
+        variables: [
+          Variable.withString(currencyCode),
+          Variable.withString(filter.name),
+          Variable.withString(filter.name),
+          Variable.withString(filter.name),
+          Variable.withString(filter.name),
+          Variable.withString(filter.name),
+          Variable.withString(filter.name),
+          Variable.withString(trimmed),
+          Variable.withString(like),
+          Variable.withString(like),
+          Variable.withInt(safeLimit),
+          Variable.withInt(safeOffset),
+        ],
+        readsFrom: {
+          database.customers,
+          database.transactions,
+          database.customerIdentifiers,
+        },
+      ).get();
+      if (rows.isEmpty) return const Success(<domain.Customer>[]);
+      final ids = rows.map((row) => row.read<String>('id')).toList();
+      final customers = await (database.select(database.customers)
+            ..where((table) => table.id.isIn(ids)))
+          .get();
+      final byId = {for (final row in customers) row.id: _toCustomer(row)};
+      return Success([
+        for (final id in ids)
+          if (byId[id] != null) byId[id]!,
+      ]);
+    } catch (error) {
+      return Failure(_failure('customer_filtered_page_failed', error));
+    }
+  }
+
+  @override
   Future<Result<List<domain.CustomerPhoneSuggestion>>> suggestPhonesByPrefix(
     String prefix, {
     int limit = 8,

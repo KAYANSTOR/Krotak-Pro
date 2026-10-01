@@ -6,6 +6,7 @@ import 'package:drift/drift.dart';
 
 import '../../core/result.dart';
 import '../../domain/entities/audit.dart' as domain;
+import '../../domain/entities/account_sql_filter.dart' as domain;
 import '../../domain/entities/advance.dart' as domain;
 import '../../domain/entities/card.dart' as domain;
 import '../../domain/entities/customer.dart' as domain;

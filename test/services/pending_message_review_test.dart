@@ -1,3 +1,4 @@
+import 'package:net_app/domain/entities/account_sql_filter.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:net_app/core/clock.dart';
 import 'package:net_app/core/id_generator.dart';
@@ -113,6 +114,15 @@ final class _FakeCustomers implements CustomerRepository {
   @override Future<Result<void>> save(Customer customer) async { store[customer.id] = customer; return const Success(null); }
   @override Future<Result<void>> saveIdentifier(CustomerIdentifier identifier) async { byIdentifier[identifier.value] = identifier.customerId; return const Success(null); }
   @override Future<Result<List<Customer>>> search(String query) async => Success(store.values.toList());
+  @override
+  Future<Result<List<Customer>>> searchFilteredPage(
+    String query, {
+    required AccountSqlFilter filter,
+    String currencyCode = 'YER',
+    int limit = 80,
+    int offset = 0,
+  }) async => const Success([]);
+
   @override Future<Result<List<CustomerPhoneSuggestion>>> suggestPhonesByPrefix(String prefix, {int limit = 8}) async => const Success([]);
   @override Future<Result<List<CustomerIdentifier>>> listIdentifiers(String customerId) async => const Success([]);
 }

@@ -1,4 +1,5 @@
 import '../../core/result.dart';
+import '../entities/account_sql_filter.dart';
 import '../entities/advance.dart';
 import '../entities/audit.dart';
 import '../entities/card.dart';
@@ -18,6 +19,16 @@ abstract interface class CustomerRepository {
   /// [offset] صفوف تُتخطى بعد الترتيب بالاسم.
   Future<Result<List<Customer>>> searchPage(
     String query, {
+    int limit = 80,
+    int offset = 0,
+  });
+
+  /// صفحة مطابقة لفلتر الرصيد/الحالة داخل SQL.
+  /// الرصيد = حركات مكتملة فقط بعملة [currencyCode]، والمدمج مستبعد.
+  Future<Result<List<Customer>>> searchFilteredPage(
+    String query, {
+    required AccountSqlFilter filter,
+    String currencyCode = 'YER',
     int limit = 80,
     int offset = 0,
   });

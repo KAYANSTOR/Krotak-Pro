@@ -11,6 +11,7 @@ import '../../core/result.dart';
 import '../../domain/entities/customer.dart';
 import '../../domain/entities/money.dart';
 import '../../domain/entities/setting.dart';
+import '../../domain/entities/account_sql_filter.dart';
 import '../../domain/services/account_list_export.dart';
 import '../../domain/services/report_pdf_service.dart';
 import '../app_scope.dart';
@@ -136,7 +137,14 @@ class _CustomersScreenState extends State<CustomersScreen> {
       _error = null;
     });
     final c = AppScope.of(context);
-    final result = await c.customers.search(query);
+    final result = _filter == _AccountFilter.all
+        ? await c.customers.search(query)
+        : await c.customers.searchFilteredPage(
+            query,
+            filter: _sqlFilter,
+            limit: 2000,
+            offset: 0,
+          );
     if (!mounted) return;
     if (result is Failure<List<Customer>>) {
       setState(() {
@@ -303,6 +311,15 @@ class _CustomersScreenState extends State<CustomersScreen> {
         CustomerStatus.archived => 'مؤرشف',
       };
 
+  AccountSqlFilter get _sqlFilter => switch (_filter) {
+        _AccountFilter.all => AccountSqlFilter.all,
+        _AccountFilter.debtor => AccountSqlFilter.debtor,
+        _AccountFilter.creditor => AccountSqlFilter.creditor,
+        _AccountFilter.zero => AccountSqlFilter.zero,
+        _AccountFilter.provisional => AccountSqlFilter.provisional,
+        _AccountFilter.unlinked => AccountSqlFilter.unlinked,
+      };
+
   AccountExportFilter get _exportFilter => switch (_filter) {
         _AccountFilter.all => AccountExportFilter.all,
         _AccountFilter.debtor => AccountExportFilter.debtor,
@@ -317,8 +334,9 @@ class _CustomersScreenState extends State<CustomersScreen> {
     final result = await loadFilteredAccountExport(
       filter: _exportFilter,
       page: (limit, offset) async {
-        final page = await c.customers.searchPage(
+        final page = await c.customers.searchFilteredPage(
           _searchCtrl.text,
+          filter: _sqlFilter,
           limit: limit,
           offset: offset,
         );
@@ -750,7 +768,10 @@ class _CustomersScreenState extends State<CustomersScreen> {
         backgroundColor: palette.surface,
         side: BorderSide(color: selected ? palette.primary : palette.border),
         shape: RoundedRectangleBorder(borderRadius: NetRadii.pillAll),
-        onSelected: (_) => setState(() { _filter = value; _visibleLimit = _pageSize; }),
+        onSelected: (_) {
+          setState(() { _filter = value; _visibleLimit = _pageSize; });
+          _load(_searchCtrl.text);
+        },
       ),
     );
   }
