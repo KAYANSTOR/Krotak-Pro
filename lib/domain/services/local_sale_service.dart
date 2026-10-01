@@ -63,7 +63,7 @@ final class LocalSaleService implements SaleService, ReservedSaleService {
     required String customerId,
     required String categoryId,
     String? operationId,
-  }) {
+  }) async {
     final stableOperationId = operationId?.trim();
     if (stableOperationId != null && stableOperationId.isEmpty) {
       return Future.value(
@@ -76,7 +76,7 @@ final class LocalSaleService implements SaleService, ReservedSaleService {
       );
     }
 
-    final result = await unitOfWork.run(() async {
+    final result = await unitOfWork.run<Result<Sale>>(() async {
       if (stableOperationId != null) {
         final existingSale = await sales.findById(stableOperationId);
         if (existingSale is Failure<Sale?>) return Failure(existingSale.error);
@@ -223,7 +223,7 @@ final class LocalSaleService implements SaleService, ReservedSaleService {
     required String operationId,
     Money? saleAmount,
     bool allowNegativeBalance = false,
-  }) {
+  }) async {
     final stableOperationId = operationId.trim();
     if (stableOperationId.isEmpty) {
       return Future.value(
@@ -236,7 +236,7 @@ final class LocalSaleService implements SaleService, ReservedSaleService {
       );
     }
 
-    final result = await unitOfWork.run(() async {
+    final result = await unitOfWork.run<Result<Sale>>(() async {
       final existingSale = await sales.findById(stableOperationId);
       if (existingSale is Failure<Sale?>) return Failure(existingSale.error);
       if ((existingSale as Success<Sale?>).value != null) {

@@ -26,7 +26,7 @@ final class ManualSaleRunner {
     required Money amount,
     required ManualSaleMethod method,
     String? operationId,
-  }) {
+  }) async {
     final phoneTrim = phone.trim();
     final nameTrim = displayName.trim();
     if (phoneTrim.isEmpty) {
@@ -56,7 +56,7 @@ final class ManualSaleRunner {
       );
     }
 
-    final result = await host.unitOfWork.run(() async {
+    final result = await host.unitOfWork.run<Result<Sale>>(() async {
       if (stableOperationId != null) {
         final existingSale = await host.sales.findById(stableOperationId);
         if (existingSale is Failure<Sale?>) return Failure(existingSale.error);
