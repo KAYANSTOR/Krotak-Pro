@@ -13,6 +13,7 @@ import '../data/database/drift_unit_of_work.dart';
 import '../data/repositories/local_repositories.dart';
 import '../domain/entities/message.dart';
 import '../domain/entities/setting.dart';
+import '../domain/entities/wallet.dart';
 import '../domain/services/local_account_merge_service.dart';
 import '../data/repositories/local_broadcast_repository.dart';
 import '../domain/services/local_advance_service.dart';
@@ -273,6 +274,10 @@ final class AppContainer {
       templates: transferTemplates,
     );
     final notificationSources = LocalPaymentSourceRegistry(settings: settings, clock: clock);
+    final enrichedWallets = await walletCatalog.listEnriched();
+    if (enrichedWallets is Success<List<Wallet>>) {
+      await notificationSources.ensureWalletSources(enrichedWallets.value);
+    }
     final sourceGuard = PaymentSourceGuard(wallets: wallets, templates: transferTemplates, notificationSources: notificationSources, posAccounts: posRegistry);
     final posBalanceRequests = LocalPosBalanceRequestService(posRegistry: posRegistry, balances: balanceService, settings: settings, auditLogs: auditLogs, messageSender: messageSender, clock: clock, ids: ids);
     final dailyPosSummary = LocalPosDailySummaryService(

@@ -3,6 +3,7 @@ import '../../core/clock.dart';
 import '../../core/result.dart';
 import '../entities/payment_event.dart';
 import '../entities/setting.dart';
+import '../entities/wallet.dart';
 import '../repositories/repositories.dart';
 
 final class LocalPaymentSourceRegistry {
@@ -35,6 +36,28 @@ final class LocalPaymentSourceRegistry {
     final source = PaymentSource(id: 'notification:$package', displayName: name, channel: PaymentChannel.notification, packageName: package, enabled: enabled);
     final next = [...(current as Success<List<PaymentSource>>).value]..removeWhere((s) => s.id == source.id)..add(source);
     return _save(next);
+  }
+
+  /// Ensures every notification-mode wallet is present in Android's allow-list.
+  /// Existing operator choices are preserved; only missing sources are added.
+  Future<Result<void>> ensureWalletSources(Iterable<Wallet> wallets) async {
+    final current = await list();
+    if (current is Failure<List<PaymentSource>>) return Failure(current.error);
+    final sources = (current as Success<List<PaymentSource>>).value;
+    for (final wallet in wallets) {
+      final packageName = wallet.packageName?.trim() ?? '';
+      if (wallet.sourceMode != WalletSourceMode.notification || packageName.isEmpty) {
+        continue;
+      }
+      if (sources.any((source) => source.packageName == packageName)) continue;
+      final saved = await upsert(
+        displayName: wallet.name,
+        packageName: packageName,
+        enabled: wallet.status == WalletStatus.active,
+      );
+      if (saved is Failure<void>) return saved;
+    }
+    return const Success(null);
   }
 
   Future<Result<void>> setEnabled(String packageName, bool enabled) async {
