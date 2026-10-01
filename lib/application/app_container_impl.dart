@@ -7,7 +7,7 @@ import '../core/app_brand.dart';
 import '../core/clock.dart';
 import '../core/id_generator.dart';
 import '../core/result.dart';
-import '../data/database/app_database.dart' hide Customer, Card, Sale, TransferTemplate, AppSetting;
+import '../data/database/app_database.dart' hide Customer, Card, Sale, TransferTemplate, AppSetting, Wallet;
 import '../data/database/database_provider.dart';
 import '../data/database/drift_unit_of_work.dart';
 import '../data/repositories/local_repositories.dart';
