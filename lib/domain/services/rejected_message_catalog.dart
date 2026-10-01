@@ -243,6 +243,13 @@ final class RejectedMessageCatalog {
       }
     }
 
+    if (diagnostic != null) {
+      final code = diagnostic?['failureCode']?.toString().trim();
+      final reason = diagnostic?['reason']?.toString().trim();
+      if (code != null && code.isNotEmpty) action = code;
+      if (reason != null && reason.isNotEmpty) payloadReason = reason;
+    }
+
     if (action == null && parse is Failure<ParsedTransfer>) {
       action = 'message_parse_failed';
     }
