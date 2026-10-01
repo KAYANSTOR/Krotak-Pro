@@ -111,6 +111,24 @@ final class ReportPdfService {
     );
   }
 
+  /// قائمة الحسابات بعد الفلتر والبحث. الصفوف من الواجهة ولا تُختلق.
+  Future<Uint8List> buildAccountList({
+    required String networkName,
+    required DateTime generatedAt,
+    required List<PdfTableRow> rows,
+    required String totalLabel,
+  }) {
+    return _build(
+      title: 'الحسابات المفلترة',
+      subtitle: 'نتيجة الفلتر والبحث الحالية',
+      networkName: networkName,
+      generatedAt: generatedAt,
+      headers: const ['الاسم', 'الحالة', 'الجوال', 'الرصيد'],
+      rows: rows,
+      footerNote: totalLabel,
+    );
+  }
+
   /// ملخص تشغيلي من OpsSnapshot.
   Future<Uint8List> buildOpsSnapshot({
     required String networkName,

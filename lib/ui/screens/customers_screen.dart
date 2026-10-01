@@ -10,7 +10,11 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../core/result.dart';
 import '../../domain/entities/customer.dart';
 import '../../domain/entities/money.dart';
+import '../../domain/entities/setting.dart';
+import '../../domain/services/account_list_export.dart';
+import '../../domain/services/report_pdf_service.dart';
 import '../app_scope.dart';
+import '../services/report_pdf_export.dart';
 import '../routing/app_routes.dart';
 import '../theme/kayan_palette.dart';
 import '../theme/net_semantic_colors.dart';
@@ -282,31 +286,81 @@ class _CustomersScreenState extends State<CustomersScreen> {
       .where((v) => v > 0)
       .fold<int>(0, (a, b) => a + b);
 
+  String get _filterLabel => switch (_filter) {
+        _AccountFilter.all => 'الكل',
+        _AccountFilter.debtor => 'مدين',
+        _AccountFilter.creditor => 'دائن',
+        _AccountFilter.zero => 'رصيد صفر',
+        _AccountFilter.provisional => 'مؤقت',
+        _AccountFilter.unlinked => 'بلا رقم',
+      };
+
+  String _statusLabel(CustomerStatus status) => switch (status) {
+        CustomerStatus.active => 'نشط',
+        CustomerStatus.provisional => 'مؤقت',
+        CustomerStatus.blacklisted => 'محظور',
+        CustomerStatus.merged => 'مدمج',
+        CustomerStatus.archived => 'مؤرشف',
+      };
+
+  List<AccountExportRow> get _exportRows => [
+        for (final r in _visible)
+          AccountExportRow(
+            id: r.customer.id,
+            name: r.customer.displayName,
+            statusLabel: _statusLabel(r.customer.status),
+            phone: r.phone ?? '',
+            balanceYer:
+                ((r.balance?.minorUnits ?? 0) / 100).toStringAsFixed(2),
+            provisional: r.isProvisional,
+          ),
+      ];
+
   Future<void> _exportFilteredCsv() async {
-    final rows = _visible;
+    final rows = _exportRows;
     if (rows.isEmpty) {
       _toast('لا توجد حسابات لتصديرها');
       return;
     }
-    final buf = StringBuffer();
-    buf.writeln('id,name,status,phone,balance_yer,provisional');
-    for (final r in rows) {
-      final bal = ((r.balance?.minorUnits ?? 0) / 100).toStringAsFixed(2);
-      final phone = (r.phone ?? '').replaceAll(',', ' ');
-      final name = r.customer.displayName.replaceAll(',', ' ');
-      buf.writeln(
-        '${r.customer.id},$name,${r.customer.status.name},$phone,$bal,${r.customer.status == CustomerStatus.provisional}',
-      );
-    }
+    final csv = buildAccountListCsv(filterLabel: _filterLabel, rows: rows);
     final dir = await getTemporaryDirectory();
     final file = File(
       '${dir.path}/accounts_export_${DateTime.now().millisecondsSinceEpoch}.csv',
     );
-    await file.writeAsString(buf.toString(), encoding: utf8);
+    await file.writeAsString(csv, encoding: utf8);
     await Share.shareXFiles(
       [XFile(file.path, mimeType: 'text/csv')],
       subject: 'تصدير الحسابات المفلترة',
-      text: 'عدد الصفوف: ${rows.length}',
+      text: 'الفلتر: $_filterLabel — عدد الصفوف: ${rows.length}',
+    );
+  }
+
+  Future<void> _exportFilteredPdf() async {
+    final rows = _exportRows;
+    if (rows.isEmpty) {
+      _toast('لا توجد حسابات لتصديرها');
+      return;
+    }
+    final container = AppScope.of(context);
+    final setting = await container.settings.find(SettingKeys.networkName);
+    final network = setting is Success<AppSetting?>
+        ? (setting.value?.value ?? 'كروتك برو')
+        : 'كروتك برو';
+    final pdf = await ReportPdfService.instance();
+    final bytes = await pdf.buildAccountList(
+      networkName: network,
+      generatedAt: container.clock.now(),
+      totalLabel: 'الفلتر: $_filterLabel — عدد الصفوف: ${rows.length}',
+      rows: [
+        for (final row in rows)
+          PdfTableRow([row.name, row.statusLabel, row.phone, row.balanceYer]),
+      ],
+    );
+    if (!mounted) return;
+    await saveReportPdf(
+      context: context,
+      bytes: bytes,
+      fileStem: 'accounts_filtered',
     );
   }
 
@@ -335,10 +389,17 @@ class _CustomersScreenState extends State<CustomersScreen> {
               tooltip: 'إرسال رسالة للعملاء',
               onPressed: () => BroadcastSheet.show(context),
             ),
-            NetHeaderAction(
-              icon: Icons.file_download_outlined,
-              tooltip: 'تصدير CSV للنتائج المفلترة',
-              onPressed: _exportFilteredCsv,
+            PopupMenuButton<String>(
+              tooltip: 'تصدير النتائج المفلترة',
+              icon: Icon(Icons.file_download_outlined, color: palette.textSecondary),
+              onSelected: (value) {
+                if (value == 'csv') _exportFilteredCsv();
+                if (value == 'pdf') _exportFilteredPdf();
+              },
+              itemBuilder: (_) => const [
+                PopupMenuItem(value: 'csv', child: Text('تصدير CSV')),
+                PopupMenuItem(value: 'pdf', child: Text('تصدير PDF')),
+              ],
             ),
             PopupMenuButton<_AccountSort>(
               tooltip: 'ترتيب القائمة',
