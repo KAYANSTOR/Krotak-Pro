@@ -83,6 +83,52 @@ final class LocalMaintenanceService {
     );
   }
 
+  static const int defaultWarningThresholdBytes = 80 * 1024 * 1024;
+
+  /// Reads live SQLite page stats. Does not touch ledger or inventory rows.
+  Future<Result<SqliteStorageSnapshot>> measureStorage({
+    int warningThresholdBytes = defaultWarningThresholdBytes,
+  }) async {
+    final db = database;
+    if (db == null) {
+      return const Failure(
+        AppFailure(
+          code: 'storage_measure_unavailable',
+          message: 'Database not available',
+        ),
+      );
+    }
+    try {
+      final pageCount = await _pragmaInt(db, 'page_count');
+      final pageSize = await _pragmaInt(db, 'page_size');
+      final freelist = await _pragmaInt(db, 'freelist_count');
+      final usedBytes = pageCount * pageSize;
+      final reclaimableBytes = freelist * pageSize;
+      return Success(
+        SqliteStorageSnapshot(
+          pageCount: pageCount,
+          pageSize: pageSize,
+          usedBytes: usedBytes,
+          reclaimableBytes: reclaimableBytes,
+          warning: usedBytes >= warningThresholdBytes,
+        ),
+      );
+    } catch (e) {
+      return Failure(
+        AppFailure(code: 'storage_measure_failed', message: e.toString()),
+      );
+    }
+  }
+
+  Future<int> _pragmaInt(AppDatabase db, String name) async {
+    final rows = await db.customSelect('PRAGMA $name').get();
+    if (rows.isEmpty) return 0;
+    final raw = rows.first.data.values.first;
+    if (raw is int) return raw;
+    if (raw is num) return raw.toInt();
+    return int.tryParse('$raw') ?? 0;
+  }
+
   /// Rebuilds SQLite indexes / statistics (VACUUM + ANALYZE + PRAGMA optimize).
   Future<Result<DeepCleanReport>> runDeepClean() async {
     final db = database;
@@ -124,4 +170,29 @@ final class MaintenanceReport {
 final class DeepCleanReport {
   const DeepCleanReport({required this.durationMs});
   final int durationMs;
+}
+
+final class SqliteStorageSnapshot {
+  const SqliteStorageSnapshot({
+    required this.pageCount,
+    required this.pageSize,
+    required this.usedBytes,
+    required this.reclaimableBytes,
+    required this.warning,
+  });
+
+  final int pageCount;
+  final int pageSize;
+  final int usedBytes;
+  final int reclaimableBytes;
+  final bool warning;
+}
+
+String formatStorageBytes(int bytes) {
+  if (bytes < 0) bytes = 0;
+  if (bytes < 1024) return '$bytes بايت';
+  if (bytes < 1024 * 1024) {
+    return '${(bytes / 1024).toStringAsFixed(1)} ك.ب';
+  }
+  return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} م.ب';
 }
