@@ -110,4 +110,31 @@ void main() {
     );
     expect((ascPage as Success<List<Customer>>).value.map((c) => c.id), ['mid']);
   });
+
+  test('all filter pages after SQL balance order', () async {
+    await seedCustomer('low', 'منخفض', phone: '777300001');
+    await seedCustomer('mid', 'متوسط', phone: '777300002');
+    await seedCustomer('high', 'مرتفع', phone: '777300003');
+    await ledger('p1', 'low', TransactionType.sale, 900);
+    await ledger('p2', 'mid', TransactionType.deposit, 100);
+    await ledger('p3', 'high', TransactionType.deposit, 2500);
+
+    final first = await customers.searchFilteredPage(
+      '',
+      filter: AccountSqlFilter.all,
+      sort: AccountSqlSort.balanceDesc,
+      limit: 2,
+      offset: 0,
+    );
+    expect((first as Success<List<Customer>>).value.map((c) => c.id), ['high', 'mid']);
+
+    final second = await customers.searchFilteredPage(
+      '',
+      filter: AccountSqlFilter.all,
+      sort: AccountSqlSort.balanceDesc,
+      limit: 2,
+      offset: 2,
+    );
+    expect((second as Success<List<Customer>>).value.map((c) => c.id), ['low']);
+  });
 }

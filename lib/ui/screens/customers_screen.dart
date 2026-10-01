@@ -52,12 +52,13 @@ class CustomersScreen extends StatefulWidget {
 class _CustomersScreenState extends State<CustomersScreen> {
   final _searchCtrl = TextEditingController();
   bool _loading = true;
+  bool _loadingMore = false;
+  bool _hasMore = false;
   String? _error;
   List<_AccountRow> _allRows = const [];
   _AccountFilter _filter = _AccountFilter.all;
   _AccountSort _sort = _AccountSort.balanceDesc;
   static const _pageSize = 80;
-  int _visibleLimit = _pageSize;
   final ScrollController _listScroll = ScrollController();
 
   /// نص البحث المكتوب الآن — يُصفّي الصفوف المحمّلة فوراً بلا استعلام جديد،
@@ -78,88 +79,81 @@ class _CustomersScreenState extends State<CustomersScreen> {
   }
 
   void _onScroll() {
-    if (!_listScroll.hasClients || _visibleLimit >= _visible.length) return;
+    if (!_listScroll.hasClients || _loading || _loadingMore || !_hasMore) return;
     if (_listScroll.position.pixels >= _listScroll.position.maxScrollExtent - 400) {
-      setState(() {
-        _visibleLimit = (_visibleLimit + _pageSize).clamp(0, _visible.length).toInt();
-      });
+      _loadMore();
     }
   }
 
   @override
   void dispose() {
     widget.refreshSignal?.removeListener(_onExternalRefresh);
+    _listScroll.dispose();
     _searchCtrl.dispose();
     super.dispose();
   }
 
   List<_AccountRow> get _visible {
-    final filtered = switch (_filter) {
-      _AccountFilter.all => List<_AccountRow>.of(_allRows),
-      _AccountFilter.debtor =>
-        _allRows.where((r) => (r.balance?.minorUnits ?? 0) < 0).toList(),
-      _AccountFilter.creditor =>
-        _allRows.where((r) => (r.balance?.minorUnits ?? 0) > 0).toList(),
-      _AccountFilter.unlinked => _allRows.where((r) => !r.hasPhone).toList(),
-      _AccountFilter.provisional => _allRows.where((r) => r.isProvisional).toList(),
-      _AccountFilter.zero =>
-        _allRows.where((r) => (r.balance?.minorUnits ?? 0) == 0).toList(),
-    };
-
     final query = _query.trim().toLowerCase();
-    final matched = query.isEmpty
-        ? filtered
-        : filtered
-            .where((r) =>
-                r.customer.displayName.toLowerCase().contains(query) ||
-                (r.phone ?? '').toLowerCase().contains(query) ||
-                (r.altId ?? '').toLowerCase().contains(query))
-            .toList();
-
-    final Comparator<_AccountRow> comparator = switch (_sort) {
-      _AccountSort.balanceDesc => (a, b) =>
-          (b.balance?.minorUnits ?? 0).compareTo(a.balance?.minorUnits ?? 0),
-      _AccountSort.balanceAsc => (a, b) =>
-          (a.balance?.minorUnits ?? 0).compareTo(b.balance?.minorUnits ?? 0),
-      _AccountSort.name => (a, b) =>
-          a.customer.displayName.compareTo(b.customer.displayName),
-      _AccountSort.newest => (a, b) => b.customer.createdAt
-          .compareTo(a.customer.createdAt),
-    };
-    matched.sort(comparator);
-    return matched;
+    if (query.isEmpty) return _allRows;
+    return _allRows
+        .where((r) =>
+            r.customer.displayName.toLowerCase().contains(query) ||
+            (r.phone ?? '').toLowerCase().contains(query) ||
+            (r.altId ?? '').toLowerCase().contains(query))
+        .toList();
   }
 
   Future<void> _load([String query = '']) async {
     setState(() {
       _loading = true;
+      _loadingMore = false;
+      _hasMore = false;
       _error = null;
     });
+    final rows = await _fetchPage(query, 0);
+    if (!mounted || rows == null) return;
+    setState(() {
+      _loading = false;
+      _allRows = rows;
+      _hasMore = rows.length >= _pageSize;
+    });
+  }
+
+  Future<void> _loadMore() async {
+    if (_loading || _loadingMore || !_hasMore) return;
+    setState(() => _loadingMore = true);
+    final rows = await _fetchPage(_searchCtrl.text, _allRows.length);
+    if (!mounted || rows == null) return;
+    setState(() {
+      _loadingMore = false;
+      _allRows = [..._allRows, ...rows];
+      _hasMore = rows.length >= _pageSize;
+    });
+  }
+
+  Future<List<_AccountRow>?> _fetchPage(String query, int offset) async {
     final c = AppScope.of(context);
-    final result = _filter == _AccountFilter.all
-        ? await c.customers.search(query)
-        : await c.customers.searchFilteredPage(
-            query,
-            filter: _sqlFilter,
-            sort: _sqlSort,
-            limit: 2000,
-            offset: 0,
-          );
-    if (!mounted) return;
+    final result = await c.customers.searchFilteredPage(
+      query,
+      filter: _sqlFilter,
+      sort: _sqlSort,
+      limit: _pageSize,
+      offset: offset,
+    );
+    if (!mounted) return null;
     if (result is Failure<List<Customer>>) {
       setState(() {
         _loading = false;
+        _loadingMore = false;
         _error = result.error.message;
-        _allRows = const [];
+        if (offset == 0) _allRows = const [];
       });
-      return;
+      return null;
     }
     final customers = (result as Success<List<Customer>>).value
         .where((e) => e.status != CustomerStatus.merged)
         .toList(growable: false);
-
-    // قراءة متوازية على دفعات: كان كشف كل حساب (رصيد + هويات) تسلسلياً
-    // فيستغرق ثواني مع مئات الحسابات — الآن كل دفعة من 20 حساباً معاً.
     final rows = <_AccountRow>[];
     const batchSize = 20;
     for (var start = 0; start < customers.length; start += batchSize) {
@@ -169,16 +163,10 @@ class _CustomersScreenState extends State<CustomersScreen> {
       final batch = await Future.wait(
         customers.sublist(start, end).map(_rowFor),
       );
-      if (!mounted) return;
+      if (!mounted) return null;
       rows.addAll(batch);
     }
-
-    if (!mounted) return;
-    setState(() {
-      _loading = false;
-      _allRows = rows;
-      _visibleLimit = _pageSize;
-    });
+    return rows;
   }
 
   /// صف حساب واحد: الرصيد + رقم الجوال + المعرّف البديل (يُستدعى بالتوازي).
@@ -704,37 +692,30 @@ class _CustomersScreenState extends State<CustomersScreen> {
                               top: NetSpacing.xs,
                               bottom: 88,
                             ),
-                            itemCount: () {
-                              final page = visible.length < _visibleLimit
-                                  ? visible.length
-                                  : _visibleLimit;
-                              final hasMore = page < visible.length;
-                              return page + (hasMore ? 1 : 0);
-                            }(),
+                            itemCount: visible.length + (_hasMore ? 1 : 0),
                             separatorBuilder: (_, __) =>
                                 const SizedBox(height: NetSpacing.sm),
                             itemBuilder: (_, i) {
-                              final page = visible.length < _visibleLimit
-                                  ? visible.length
-                                  : _visibleLimit;
-                              if (i >= page) {
+                              if (i >= visible.length) {
                                 return Padding(
                                   padding: const EdgeInsets.all(NetSpacing.md),
                                   child: Center(
-                                    child: TextButton(
-                                      onPressed: () => setState(() {
-                                        _visibleLimit =
-                                            (_visibleLimit + _pageSize)
-                                                .clamp(0, visible.length);
-                                      }),
-                                      child: Text(
-                                        'عرض المزيد (${visible.length - page} متبقي)',
-                                        style: const TextStyle(
-                                          fontFamily: NetTypography.family,
-                                          fontWeight: FontWeight.w700,
-                                        ),
-                                      ),
-                                    ),
+                                    child: _loadingMore
+                                        ? const SizedBox(
+                                            width: 22,
+                                            height: 22,
+                                            child: CircularProgressIndicator(strokeWidth: 2),
+                                          )
+                                        : TextButton(
+                                            onPressed: _loadMore,
+                                            child: const Text(
+                                              'عرض المزيد من قاعدة البيانات',
+                                              style: TextStyle(
+                                                fontFamily: NetTypography.family,
+                                                fontWeight: FontWeight.w700,
+                                              ),
+                                            ),
+                                          ),
                                   ),
                                 );
                               }
@@ -780,7 +761,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
         side: BorderSide(color: selected ? palette.primary : palette.border),
         shape: RoundedRectangleBorder(borderRadius: NetRadii.pillAll),
         onSelected: (_) {
-          setState(() { _filter = value; _visibleLimit = _pageSize; });
+          setState(() { _filter = value; });
           _load(_searchCtrl.text);
         },
       ),
