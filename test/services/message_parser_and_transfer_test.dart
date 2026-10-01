@@ -146,7 +146,7 @@ void main() {
       expect(result, isA<Failure<ParsedTransfer>>());
       expect(
         (result as Failure<ParsedTransfer>).error.code,
-        'no_active_template',
+        'message_not_matched',
       );
     });
 
