@@ -25,6 +25,7 @@ final class PendingMessageReviewService {
     required this.clock,
     required this.ids,
     required this.sourceGuard,
+    this.transactions,
     this.identityResolver,
   });
 
@@ -38,6 +39,7 @@ final class PendingMessageReviewService {
   final Clock clock;
   final IdGenerator ids;
   final PaymentSourceGuard sourceGuard;
+  final TransactionRepository? transactions;
   final LocalCustomerIdentityResolver? identityResolver;
   LocalCustomerIdentityResolver get _resolver => identityResolver ?? LocalCustomerIdentityResolver(customers: customers);
 
@@ -147,17 +149,40 @@ final class PendingMessageReviewService {
   }) async {
     final messageId = message.id;
     final event = _eventForMessage(message);
-    final sourceAuthorization = await sourceGuard.authorize(event);
-    if (sourceAuthorization is Failure<void>) return Failure(sourceAuthorization.error);
+    final sourceDiagnosisResult = await sourceGuard.diagnose(event);
+    if (sourceDiagnosisResult is Failure<PaymentSourceDiagnosis>) {
+      return Failure(sourceDiagnosisResult.error);
+    }
+    var diagnosis = (sourceDiagnosisResult as Success<PaymentSourceDiagnosis>).value;
+    if (!diagnosis.authorized) {
+      return Failure(AppFailure(
+        code: diagnosis.failureCode ?? RejectionCodes.other,
+        message: diagnosis.failureMessage ?? 'Payment source rejected',
+      ));
+    }
 
-    final parseResult = parser.parse(message);
+    final parseResult = parser is SourceScopedMessageParser
+        ? (parser as SourceScopedMessageParser).parseForSource(
+            message,
+            templateIds: diagnosis.activeTemplateIds.toSet(),
+          )
+        : parser.parse(message);
     if (parseResult is Failure<ParsedTransfer>) return Failure(parseResult.error);
     final transfer = (parseResult as Success<ParsedTransfer>).value;
-    final templateAuthorization = await sourceGuard.authorize(
+    final templateDiagnosis = await sourceGuard.diagnose(
       event,
       matchedTemplateId: transfer.templateId,
     );
-    if (templateAuthorization is Failure<void>) return Failure(templateAuthorization.error);
+    if (templateDiagnosis is Failure<PaymentSourceDiagnosis>) {
+      return Failure(templateDiagnosis.error);
+    }
+    diagnosis = (templateDiagnosis as Success<PaymentSourceDiagnosis>).value;
+    if (!diagnosis.authorized) {
+      return Failure(AppFailure(
+        code: diagnosis.failureCode ?? RejectionCodes.other,
+        message: diagnosis.failureMessage ?? 'Payment source rejected',
+      ));
+    }
 
     final resolutionResult = await _resolver.resolve(identifierValue: transfer.customerIdentifier, identifierType: transfer.identifierType);
     if (resolutionResult is Failure<CustomerIdentityResolution>) return Failure(resolutionResult.error);
@@ -175,8 +200,24 @@ final class PendingMessageReviewService {
     }
 
     final customer = resolution.customer!;
-    final creditRef = transfer.reference.trim().isNotEmpty ? '$creditPrefix:${transfer.reference.trim()}' : '$creditPrefix:$messageId';
-    final credit = await balances.credit(customerId: customer.id, amount: transfer.amount, reference: creditRef);
+    final creditRef = transfer.reference.trim().isNotEmpty
+        ? creditPrefix + ':' + transfer.reference.trim()
+        : creditPrefix + ':' + messageId;
+    final txRepo = transactions;
+    if (txRepo != null) {
+      final existing = await txRepo.findByReference(creditRef);
+      if (existing is Failure<Transaction?>) return Failure(existing.error);
+      final existingTx = (existing as Success<Transaction?>).value;
+      if (existingTx != null) {
+        await messages.updateStatus(messageId, MessageProcessingStatus.processed);
+        return Success(existingTx);
+      }
+    }
+    final credit = await balances.credit(
+      customerId: customer.id,
+      amount: transfer.amount,
+      reference: creditRef,
+    );
     if (credit is Failure<Transaction>) return Failure(credit.error);
     final tx = (credit as Success<Transaction>).value;
     await messages.updateStatus(messageId, MessageProcessingStatus.processed);
