@@ -146,8 +146,61 @@ void main() {
       expect(result, isA<Failure<ParsedTransfer>>());
       expect(
         (result as Failure<ParsedTransfer>).error.code,
-        'message_not_matched',
+        'no_active_template',
       );
+    });
+
+    test('matches the built-in Jaib and Jawali receipt samples', () {
+      final sampleParser = LocalMessageParser(templates: [
+        const TransferTemplate(
+          id: 'jaib-shared',
+          name: 'Jaib shared',
+          pattern: 'اضيف {amount} ر.ي تحويل مشترك رص:{ref} ر.ي من {account}-{phone}',
+          isActive: true,
+        ),
+        const TransferTemplate(
+          id: 'jaib-phone',
+          name: 'Jaib phone',
+          pattern: 'اضيف {amount} ر.ي تحويل مشترك رص:{ref} ر.ي من {phone}',
+          isActive: true,
+        ),
+        const TransferTemplate(
+          id: 'jaib-shared-space',
+          name: 'Jaib shared space',
+          pattern: 'اضيف {amount} ر.ي تحويل مشترك رص:{ref} ر.ي من {account} {phone}',
+          isActive: true,
+        ),
+        const TransferTemplate(
+          id: 'jaib-name',
+          name: 'Jaib sender name',
+          pattern: 'اضيف {amount} ر.ي مقابل تحويل مشترك رص:{ref} ر.ي من {account}',
+          isActive: true,
+        ),
+        const TransferTemplate(
+          id: 'jawali-received',
+          name: 'Jawali received',
+          pattern: 'استلمت مبلغ {amount} YER من {phone} رصيدك هو {ref}',
+          isActive: true,
+        ),
+      ]);
+      const bodies = <String>[
+        'اضيف 1000ر.ي تحويل مشترك رص:1008.36ر.ي من علي العتبي 734442681',
+        'اضيف 10ر.ي تحويل مشترك رص:1022ر.ي من 687471',
+        'اضيف 100ر.ي مقابل تحويل مشترك رص:9702ر.ي من احمد احمد',
+        'اضيف 200ر.ي تحويل مشترك رص:4350ر.ي من د**** ع****** ح** م******-6557728',
+        'استلمت مبلغ 500 YER من 737725368 رصيدك هو 99150',
+      ];
+
+      for (final body in bodies) {
+        final result = sampleParser.parse(IncomingMessage(
+          id: body,
+          sender: 'JAIB',
+          body: body,
+          receivedAt: DateTime.utc(2026, 10, 1),
+          status: MessageProcessingStatus.received,
+        ));
+        expect(result, isA<Success<ParsedTransfer>>(), reason: body);
+      }
     });
   });
 

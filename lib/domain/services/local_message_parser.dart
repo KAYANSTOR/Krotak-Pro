@@ -307,11 +307,11 @@ final class LocalMessageParser implements MessageParser, SourceScopedMessagePars
     final s = raw.trim();
     if (s.startsWith('+')) {
       final rest = s.substring(1).replaceAll(RegExp(r'\D'), '');
-      if (rest.length < 7 || rest.length > 15) return null;
+      if (rest.length < 6 || rest.length > 15) return null;
       return '+$rest';
     }
     final digits = s.replaceAll(RegExp(r'\D'), '');
-    if (digits.length < 7 || digits.length > 15) return null;
+    if (digits.length < 6 || digits.length > 15) return null;
     return digits;
   }
 
@@ -344,7 +344,9 @@ final class LocalMessageParser implements MessageParser, SourceScopedMessagePars
         continue;
       }
       if (unified.startsWith('{phone}', i)) {
-        buf.write(r'(?<phone>\+?[\d]{7,15})');
+        // Some wallet receipts use six-digit subscriber identifiers (e.g.
+        // Jaib's built-in sample 687471), so do not reject that valid form.
+        buf.write(r'(?<phone>\+?[\d]{6,15})');
         i += '{phone}'.length;
         continue;
       }
@@ -364,7 +366,7 @@ final class LocalMessageParser implements MessageParser, SourceScopedMessagePars
         continue;
       }
       if (unified.startsWith('{dest}', i)) {
-        buf.write(r'(?<dest>\+?[\d]{7,15})');
+        buf.write(r'(?<dest>\+?[\d]{6,15})');
         i += '{dest}'.length;
         continue;
       }

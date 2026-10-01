@@ -67,8 +67,9 @@ final class DefaultWalletTemplatesSeeder {
     };
 
     var changed = 0;
-    if (!alreadySeeded) {
-      for (final spec in _specs) {
+    // The pass is idempotent by stable template id, so it must also run after
+    // v2 was seeded; otherwise newly added built-ins never reach existing apps.
+    for (final spec in _specs) {
         final wallet = bySender[spec.senderCode.toUpperCase()];
         final id =
             'tpl-default-${spec.senderCode.toLowerCase().replaceAll(' ', '-')}-${spec.variant}';
@@ -88,7 +89,6 @@ final class DefaultWalletTemplatesSeeder {
         final saved = await templates.save(tpl);
         if (saved is Failure<void>) return Failure(saved.error);
         changed += 1;
-      }
     }
 
     // إصلاح الربط: قالب بمرسل معروف لكنه بلا محفظة (أو محفظة محذوفة) = رسائل
@@ -136,6 +136,22 @@ final class DefaultWalletTemplatesSeeder {
     ),
     _TplSpec(
       senderCode: 'JAIB',
+      variant: 'ar-shared-space',
+      name: 'جيب — تحويل مشترك (اسم ورقم بمسافة)',
+      priority: 11,
+      pattern: 'اضيف {amount} ر.ي تحويل مشترك رص:{ref} ر.ي من {account} {phone}',
+      sampleBody: 'اضيف 1000 ر.ي تحويل مشترك رص:1008.36 ر.ي من علي العتبي 734442681',
+    ),
+    _TplSpec(
+      senderCode: 'JAIB',
+      variant: 'ar-name-only',
+      name: 'جيب — اسم المرسل فقط',
+      priority: 15,
+      pattern: 'اضيف {amount} ر.ي مقابل تحويل مشترك رص:{ref} ر.ي من {account}',
+      sampleBody: 'اضيف 100 ر.ي مقابل تحويل مشترك رص:9702 ر.ي من احمد احمد',
+    ),
+    _TplSpec(
+      senderCode: 'JAIB',
       variant: 'en-received',
       name: 'JAIB — received (EN)',
       priority: 30,
@@ -167,6 +183,14 @@ final class DefaultWalletTemplatesSeeder {
       priority: 30,
       pattern: 'You have received {amount} YER from {phone} your balance {ref}',
       sampleBody: 'You have received 50 YER from 773303455 your balance 100',
+    ),
+    _TplSpec(
+      senderCode: 'JAWALI',
+      variant: 'ar-received',
+      name: 'جوالي — استلمت مبلغ',
+      priority: 30,
+      pattern: 'استلمت مبلغ {amount} YER من {phone} رصيدك هو {ref}',
+      sampleBody: 'استلمت مبلغ 500 YER من 737725368 رصيدك هو 99150',
     ),
     _TplSpec(
       senderCode: 'ONE CASH',
