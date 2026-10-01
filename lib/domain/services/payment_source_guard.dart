@@ -102,13 +102,29 @@ final class PaymentSourceGuard {
     String? matchedTemplateId,
   }) async {
     final auth = await authorize(event, matchedTemplateId: matchedTemplateId);
-    if (auth is Failure<void> && auth.error.code == 'repository_error') {
-      return Failure(auth.error);
-    }
-
     final configured = await templates.listAll();
     if (configured is Failure<List<TransferTemplate>>) return Failure(configured.error);
     final allTemplates = (configured as Success<List<TransferTemplate>>).value;
+
+    if (event.channel == PaymentChannel.manual) {
+      return Success(PaymentSourceDiagnosis(
+        channel: event.channel,
+        rawSource: event.sourceKey,
+        normalizedSource: _normalize(event.sourceKey),
+        packageName: event.packageName?.trim(),
+        authorized: true,
+        activeTemplateIds: allTemplates
+            .where((t) => t.isActive)
+            .map((t) => t.id)
+            .toList(growable: false),
+        sourceEnabled: true,
+        matchedTemplateId: matchedTemplateId,
+        matchedTemplateName: matchedTemplateId == null
+            ? null
+            : allTemplates.where((t) => t.id == matchedTemplateId).firstOrNull?.name,
+      ));
+    }
+
     Wallet? wallet;
     PosAccount? pos;
     var sourceEnabled = true;
