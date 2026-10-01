@@ -298,9 +298,8 @@ final class UnifiedPaymentEventEngine implements PaymentEventEngine {
     Set<String>? templateIds,
   ) {
     if (templateIds == null) return parser.parse(message);
-    final scopedParser = parser;
-    if (scopedParser is SourceScopedMessageParser) {
-      return scopedParser.parseForSource(
+    if (parser is SourceScopedMessageParser) {
+      return (parser as SourceScopedMessageParser).parseForSource(
         message,
         templateIds: templateIds,
       );
