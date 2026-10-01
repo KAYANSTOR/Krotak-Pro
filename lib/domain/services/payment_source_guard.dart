@@ -275,7 +275,7 @@ final class PaymentSourceGuard {
     }
 
     final liveTemplates = (configuredTemplates as Success<List<TransferTemplate>>).value
-        .where((t) => t.isActive && _belongsToWallet(t, wallet))
+        .where((t) => t.isActive && _belongsToWallet(t, wallet!))
         .toList(growable: false);
     if (liveTemplates.isEmpty) {
       return const Failure(AppFailure(
