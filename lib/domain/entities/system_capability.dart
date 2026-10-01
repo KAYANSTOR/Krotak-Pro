@@ -1,7 +1,14 @@
 /// تصنيف إمكانيات جاهزية النظام — مطابق دليل 1.0.9.
 enum CapabilitySeverity { critical, recommended, optional }
 
-enum CapabilityState { granted, denied, unknown, unavailable }
+enum CapabilityState {
+  granted,
+  denied,
+  unknown,
+  unavailable,
+  manualRequired,
+  configuredByUser,
+}
 
 final class SystemCapability {
   const SystemCapability({
@@ -27,7 +34,8 @@ final class SystemCapability {
   /// open_battery_optimization | open_app_settings | open_sim_settings
   final String? settingsAction;
 
-  bool get isOk => state == CapabilityState.granted;
+  bool get isOk =>
+      state == CapabilityState.granted || state == CapabilityState.configuredByUser;
   bool get isBlocking => severity == CapabilitySeverity.critical && !isOk;
 
   SystemCapability copyWith({CapabilityState? state}) => SystemCapability(
