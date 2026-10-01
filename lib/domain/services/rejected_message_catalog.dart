@@ -19,6 +19,7 @@ abstract final class RejectionCategories {
   static const ambiguousCategory = 'أكثر من فئة تطابق المبلغ';
   static const unmatchedAmount = 'المبلغ لا يطابق أي فئة كرت نشطة';
   static const other = 'سبب آخر';
+  static const untrustedSource = 'مرسل غير معتمد كمحفظة';
 
   static String fromAuditAction(String? action) {
     switch (action) {
@@ -50,6 +51,8 @@ abstract final class RejectionCategories {
       case RejectionCodes.other:
       case 'transfer_rejected':
         return other;
+      case 'payment_source_untrusted':
+        return untrustedSource;
       case 'pending_message_rejected':
         return rejectedFromPending;
       case 'transfer_ambiguous_category':
@@ -82,6 +85,8 @@ abstract final class RejectionCategories {
         return 'فشل حجز الكرت من المخزون';
       case 'transfer_rejected':
         return 'رُفضت الرسالة أثناء المعالجة';
+      case 'payment_source_untrusted':
+        return untrustedSource;
       default:
         return templateMismatch;
     }
@@ -134,6 +139,7 @@ final class RejectedMessageCatalog {
     'message_parse_failed',
     'transfer_parse_failed',
     'transfer_unmatched_amount_pending',
+    'payment_source_untrusted',
   };
 
   Future<Result<List<RejectedMessageItem>>> listRejected({

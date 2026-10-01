@@ -50,6 +50,7 @@ class _RejectedMessagesScreenState extends State<RejectedMessagesScreen> {
     RejectionCategories.ambiguousCategory: 'فئة غامضة',
     RejectionCategories.unmatchedAmount: 'مبلغ بلا فئة',
     RejectionCategories.other: 'أخرى',
+    RejectionCategories.untrustedSource: 'مرسل غير معتمد',
   };
 
   @override
@@ -200,6 +201,26 @@ class _RejectedMessagesScreenState extends State<RejectedMessagesScreen> {
   }
 
   String _chipLabel(String cat) => _chipShort[cat] ?? cat;
+
+  Future<void> _approveSource(RejectedMessageItem item) async {
+    final c = AppScope.of(context);
+    final result = await c.trustSources.approve(message: item.message);
+    if (!mounted) return;
+    if (result is Failure) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(result.error.message)),
+      );
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'اعتُمد المرسل كمحفظة. فعّل القالب الأولي من شاشة المحافظ قبل وصول رسالة جديدة.',
+        ),
+      ),
+    );
+    await _load(markViewed: false);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -376,7 +397,7 @@ class _RejectedMessagesScreenState extends State<RejectedMessagesScreen> {
                                       ...dayItems.map(
                                         (item) => Padding(
                                           padding: const EdgeInsets.only(bottom: 10),
-                                          child: _RejectedCard(item: item),
+                                          child: _RejectedCard(item: item, onApproveSource: _approveSource),
                                         ),
                                       ),
                                     ],
@@ -517,9 +538,14 @@ class _SummaryBanner extends StatelessWidget {
 }
 
 class _RejectedCard extends StatelessWidget {
-  const _RejectedCard({required this.item, this.archived = false});
+  const _RejectedCard({
+    required this.item,
+    this.archived = false,
+    this.onApproveSource,
+  });
   final RejectedMessageItem item;
   final bool archived;
+  final Future<void> Function(RejectedMessageItem item)? onApproveSource;
 
   String _fmtTime(DateTime t) {
     final local = t.toLocal();
@@ -643,6 +669,18 @@ class _RejectedCard extends StatelessWidget {
                     color: context.netColors.success,
                   ),
                 ),
+              ),
+            ),
+          ],
+          if (!archived &&
+              item.auditAction == 'payment_source_untrusted' &&
+              onApproveSource != null) ...[
+            const SizedBox(height: 10),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: FilledButton(
+                onPressed: () => onApproveSource!(item),
+                child: const Text('اعتماد كمحفظة'),
               ),
             ),
           ],

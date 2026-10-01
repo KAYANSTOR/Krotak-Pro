@@ -30,6 +30,7 @@ import '../domain/services/local_promotion_progress_service.dart';
 import '../domain/services/local_pos_account_registry.dart';
 import '../domain/services/local_pos_balance_request_service.dart';
 import '../domain/services/local_pos_profile_service.dart';
+import '../domain/services/trust_unknown_payment_source_service.dart';
 import '../domain/services/local_pos_daily_summary_service.dart';
 import '../domain/services/local_system_health_service.dart';
 import '../domain/services/local_voucher_ops_service.dart';
@@ -71,7 +72,7 @@ final class AppContainer {
     required this.promotions, required this.promotionProgress, required this.systemHealth, required this.voucherOps,
     required this.pendingAlarm, required LocalMessageParser messageParser, required this.transferProcessor,
     required this.licenseService, required this.backupService, required this.maintenanceService, required this.lowStockAlerts, required this.stockAlertNotifier, required this.dailyPosSummary, required this.mergeService, required this.settlementService,
-    required this.recoveryService, required this.deliveryWorker, required this.posOrderDeliveryWorker, required this.retryService, required this.pendingReview, required this.smsBridge,
+    required this.recoveryService, required this.deliveryWorker, required this.posOrderDeliveryWorker, required this.retryService, required this.pendingReview, required this.trustSources, required this.smsBridge,
     required this.smsHandler, required this.notificationBridge, required this.notificationSources,
     required this.notificationHandler, required this.clock, required this.ids, required this.themeModeNotifier,
   }) : _messageParser = messageParser;
@@ -124,6 +125,7 @@ final class AppContainer {
   final PosOrderDeliveryWorker posOrderDeliveryWorker;
   final LocalMessageRetryService retryService;
   final PendingMessageReviewService pendingReview;
+  final TrustUnknownPaymentSourceService trustSources;
   final SmsBridge smsBridge;
   final IncomingSmsHandler smsHandler;
   final NotificationBridge notificationBridge;
@@ -277,6 +279,15 @@ final class AppContainer {
     final deliveryWorker = MessageDeliveryWorker(messages: messages, auditLogs: auditLogs, cards: cards, messageSender: messageSender, retryService: retryService, clock: clock, ids: ids, metrics: pipelineMetrics);
     final posOrderDeliveryWorker = PosOrderDeliveryWorker(messages: messages, auditLogs: auditLogs, cards: cards, settings: settings, posRegistry: posRegistry, messageSender: messageSender, retryService: retryService, clock: clock, ids: ids);
     final pendingReview = PendingMessageReviewService(messages: messages, parser: parser, customers: customers, customerService: customerService, balances: balanceService, auditLogs: auditLogs, unitOfWork: uow, clock: clock, ids: ids, sourceGuard: sourceGuard);
+    final trustSources = TrustUnknownPaymentSourceService(
+      walletCatalog: walletCatalog,
+      wallets: wallets,
+      templates: transferTemplates,
+      messages: messages,
+      auditLogs: auditLogs,
+      clock: clock,
+      ids: ids,
+    );
     final smsHandler = IncomingSmsHandler(
       bridge: smsBridge,
       messages: messages,
@@ -287,6 +298,7 @@ final class AppContainer {
       advanceService: advanceService,
       engine: smsEngine,
       sourceGuard: sourceGuard,
+      trustSources: trustSources,
       onAfterPayment: () => Future.wait([
         deliveryWorker.tick(),
         posOrderDeliveryWorker.tick(),
@@ -304,7 +316,7 @@ final class AppContainer {
       }
     }
 
-    return AppContainer._(database: database, customers: customers, wallets: wallets, pointsOfSale: pointsOfSale, categories: categories, cards: cards, messages: messages, transferTemplates: transferTemplates, transactions: transactions, sales: sales, auditLogs: auditLogs, licenses: licenses, settings: settings, unitOfWork: uow, customerService: customerService, balanceService: balanceService, catalogService: catalogService, walletCatalog: walletCatalog, posCatalog: posCatalog, posRegistry: posRegistry, posProfile: posProfile, inventoryService: inventoryService, saleService: saleService, advanceService: advanceService, broadcastService: broadcastService, promotions: promotions, promotionProgress: promotionProgress, systemHealth: systemHealth, voucherOps: voucherOps, pendingAlarm: pendingAlarm, messageParser: parser, transferProcessor: processor, licenseService: licenseService, backupService: backupService, maintenanceService: maintenanceService, lowStockAlerts: lowStockAlerts, stockAlertNotifier: stockAlertNotifier, dailyPosSummary: dailyPosSummary, mergeService: mergeService, settlementService: settlementService, recoveryService: recoveryService, deliveryWorker: deliveryWorker, posOrderDeliveryWorker: posOrderDeliveryWorker, retryService: retryService, pendingReview: pendingReview, smsBridge: smsBridge, smsHandler: smsHandler, notificationBridge: notificationBridge, notificationSources: notificationSources, notificationHandler: notificationHandler, clock: clock, ids: ids, themeModeNotifier: ValueNotifier<ThemeMode>(theme));
+    return AppContainer._(database: database, customers: customers, wallets: wallets, pointsOfSale: pointsOfSale, categories: categories, cards: cards, messages: messages, transferTemplates: transferTemplates, transactions: transactions, sales: sales, auditLogs: auditLogs, licenses: licenses, settings: settings, unitOfWork: uow, customerService: customerService, balanceService: balanceService, catalogService: catalogService, walletCatalog: walletCatalog, posCatalog: posCatalog, posRegistry: posRegistry, posProfile: posProfile, inventoryService: inventoryService, saleService: saleService, advanceService: advanceService, broadcastService: broadcastService, promotions: promotions, promotionProgress: promotionProgress, systemHealth: systemHealth, voucherOps: voucherOps, pendingAlarm: pendingAlarm, messageParser: parser, transferProcessor: processor, licenseService: licenseService, backupService: backupService, maintenanceService: maintenanceService, lowStockAlerts: lowStockAlerts, stockAlertNotifier: stockAlertNotifier, dailyPosSummary: dailyPosSummary, mergeService: mergeService, settlementService: settlementService, recoveryService: recoveryService, deliveryWorker: deliveryWorker, posOrderDeliveryWorker: posOrderDeliveryWorker, retryService: retryService, pendingReview: pendingReview, trustSources: trustSources, smsBridge: smsBridge, smsHandler: smsHandler, notificationBridge: notificationBridge, notificationSources: notificationSources, notificationHandler: notificationHandler, clock: clock, ids: ids, themeModeNotifier: ValueNotifier<ThemeMode>(theme));
   }
 
   Future<void> startBackgroundHandlers() async {

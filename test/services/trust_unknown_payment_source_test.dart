@@ -125,3 +125,38 @@ final class _MemSettings implements SettingsRepository {
     return const Success(null);
   }
 }
+
+  test('recordUntrusted stores a rejected message and audit reason', () async {
+    final wallets = _MemWallets();
+    final settings = _MemSettings();
+    final templates = InMemoryTransferTemplateRepository();
+    final messages = InMemoryMessageRepository();
+    final audit = InMemoryAuditLogRepository();
+    final service = TrustUnknownPaymentSourceService(
+      walletCatalog: LocalWalletCatalogService(
+        wallets: wallets,
+        auditLogs: audit,
+        settings: settings,
+        clock: SystemClock(),
+        ids: SequentialIdGenerator(),
+      ),
+      wallets: wallets,
+      templates: templates,
+      messages: messages,
+      auditLogs: audit,
+      clock: SystemClock(),
+      ids: SequentialIdGenerator(),
+    );
+    final saved = await service.recordUntrusted(
+      sender: 'NEW-WALLET',
+      body: 'تم تحويل 500',
+      receivedAt: DateTime.utc(2026, 10, 1),
+    );
+    expect(saved, isA<Success<IncomingMessage>>());
+    final listed = await messages.listByStatus(MessageProcessingStatus.rejected);
+    expect((listed as Success<List<IncomingMessage>>).value, hasLength(1));
+    expect(
+      audit.logs.any((l) => l.action == 'payment_source_untrusted'),
+      isTrue,
+    );
+  });

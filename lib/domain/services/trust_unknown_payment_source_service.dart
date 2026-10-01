@@ -31,6 +31,35 @@ final class TrustUnknownPaymentSourceService {
   final Clock clock;
   final IdGenerator ids;
 
+  /// Persists an inbound SMS the guard refused, so the operator can approve
+  /// the sender from the rejected screen instead of losing the message.
+  Future<Result<IncomingMessage>> recordUntrusted({
+    required String sender,
+    required String body,
+    required DateTime receivedAt,
+  }) async {
+    final message = IncomingMessage(
+      id: ids.next('msg'),
+      sender: sender.trim(),
+      body: body,
+      receivedAt: receivedAt.toUtc(),
+      status: MessageProcessingStatus.rejected,
+    );
+    final saved = await messages.save(message);
+    if (saved is Failure<void>) return Failure(saved.error);
+    await auditLogs.append(
+      AuditLog(
+        id: ids.next('audit'),
+        entityType: 'message',
+        entityId: message.id,
+        action: 'payment_source_untrusted',
+        occurredAt: clock.now(),
+        payloadJson: '{"reason":"مرسل غير معتمد كمحفظة"}',
+      ),
+    );
+    return Success(message);
+  }
+
   Future<Result<Wallet>> approve({
     required IncomingMessage message,
     String? walletName,

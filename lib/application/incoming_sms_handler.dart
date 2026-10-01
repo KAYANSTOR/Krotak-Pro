@@ -9,6 +9,7 @@ import '../domain/entities/transaction.dart';
 import '../domain/repositories/repositories.dart';
 import '../domain/services/payment_source_guard.dart';
 import '../domain/services/services.dart';
+import '../domain/services/trust_unknown_payment_source_service.dart';
 import '../domain/services/unified_payment_event_engine.dart';
 import '../domain/services/template_performance_service.dart';
 import '../platform/sms_bridge.dart';
@@ -23,6 +24,7 @@ final class IncomingSmsHandler {
     required this.sourceGuard,
     this.settings,
     this.advanceService,
+    this.trustSources,
     this.onAfterPayment,
     UnifiedPaymentEventEngine? engine,
   }) : engine = engine ??
@@ -46,6 +48,7 @@ final class IncomingSmsHandler {
   final PaymentSourceGuard sourceGuard;
   final SettingsRepository? settings;
   final AdvanceService? advanceService;
+  final TrustUnknownPaymentSourceService? trustSources;
   final Future<void> Function()? onAfterPayment;
   final UnifiedPaymentEventEngine engine;
   StreamSubscription<IncomingSmsEvent>? _sub;
@@ -121,7 +124,7 @@ final class IncomingSmsHandler {
         );
         return;
       }
-      await engine.ingest(
+      final ingest = await engine.ingest(
         PaymentEvent(
           channel: PaymentChannel.sms,
           sourceKey: event.sender,
@@ -129,6 +132,17 @@ final class IncomingSmsHandler {
           receivedAt: event.receivedAt,
         ),
       );
+      if (ingest is Failure<Transaction?> &&
+          ingest.error.code == 'untrusted_payment_source') {
+        final recorder = trustSources;
+        if (recorder != null) {
+          await recorder.recordUntrusted(
+            sender: event.sender,
+            body: event.body,
+            receivedAt: event.receivedAt,
+          );
+        }
+      }
     } finally {
       final hook = onAfterPayment;
       if (hook != null) {
