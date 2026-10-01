@@ -137,8 +137,13 @@ abstract final class PermissionsOnboarding {
             'افتح الإعدادات وفعّل NET في القائمة، ثم ارجع هنا واضغط متابعة. '
             'لا يمكن لأندرويد التحقق برمجياً من كل الشركات — التأكيد منك.',
         actionLabel: 'فتح إعدادات التشغيل التلقائي (OEM)',
-        verify: () async => false,
+        verify: () async {
+          final probe = await diag.probe();
+          return probe['oemBackgroundState'] == 'configured_by_user' ||
+              probe['oemBackgroundState'] == 'granted';
+        },
         onAllow: () => diag.openAutoStartSettings(),
+        onManualConfirm: diag.confirmAutoStartReviewed,
         specialAccess: true,
         optionalAfterOpen: true,
       ),
@@ -190,6 +195,7 @@ final class _PermStep {
     this.icon = Icons.check_circle_outline_rounded,
     this.specialAccess = false,
     this.optionalAfterOpen = false,
+    this.onManualConfirm,
   });
 
   final IconData icon;
@@ -200,6 +206,7 @@ final class _PermStep {
   final Future<void> Function() onAllow;
   final bool specialAccess;
   final bool optionalAfterOpen;
+  final Future<void> Function()? onManualConfirm;
 }
 
 /// ورقة أذونات سفلية مطابقة الفيديو: خطوة بخطوة فوق الواجهة (ليست شاشة كاملة).
@@ -455,6 +462,26 @@ class _PermissionsSheetState extends State<_PermissionsSheet>
                                   color: palette.textSecondary,
                                 ),
                               ),
+                              if (_step.onManualConfirm != null) ...[
+                                const SizedBox(height: 8),
+                                OutlinedButton.icon(
+                                  onPressed: _checking
+                                      ? null
+                                      : () async {
+                                          setState(() => _checking = true);
+                                          await _step.onManualConfirm!.call();
+                                          await _recheck();
+                                        },
+                                  icon: const Icon(Icons.check_circle_outline_rounded, size: 18),
+                                  label: const Text(
+                                    'تمت الإضافة يدويًا — تأكيد',
+                                    style: TextStyle(
+                                      fontFamily: NetTypography.family,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ),
+                              ],
                               if (_step.specialAccess) ...[
                                 const SizedBox(height: 10),
                                 Container(
