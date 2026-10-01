@@ -543,7 +543,7 @@ class MainActivity : FlutterActivity(), SmsListener {
             } catch (_: Exception) {
             }
         }
-        startActivity(Intent(Settings.ACTION_BATTERY_SETTINGS))
+        startActivity(Intent("android.settings.BATTERY_SETTINGS"))
     }
 
     private fun oemBackgroundState(): String {
