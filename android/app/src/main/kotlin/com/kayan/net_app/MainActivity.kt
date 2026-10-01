@@ -310,6 +310,15 @@ class MainActivity : FlutterActivity(), SmsListener {
     }
 
     private fun openBatteryOptimizationSettings() {
+        // Samsung لا يعرض التطبيق عادةً في شاشة REQUEST_IGNORE... العامة؛
+        // المسار الصحيح لإبقائه عاملاً هو قائمة Never sleeping apps.
+        if (Build.MANUFACTURER.equals("samsung", ignoreCase = true)) {
+            val samsungIntent = OemBackgroundSettings.samsungNeverSleepingIntent()
+            if (packageManager.resolveActivity(samsungIntent, PackageManager.MATCH_DEFAULT_ONLY) != null) {
+                startActivity(samsungIntent)
+                return
+            }
+        }
         try {
             val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
                 data = Uri.parse("package:$packageName")

@@ -165,7 +165,9 @@ final class PaymentSourceGuard {
         }
       }
       if (wallet != null && sourceEnabled) {
-        sourceTemplates = allTemplates.where((t) => t.isActive && t.walletId == wallet!.id).toList(growable: false);
+        sourceTemplates = allTemplates
+            .where((t) => t.isActive && _belongsToWallet(t, wallet!))
+            .toList(growable: false);
       }
     }
 
@@ -272,9 +274,8 @@ final class PaymentSourceGuard {
       ));
     }
 
-    final walletId = wallet.id;
     final liveTemplates = (configuredTemplates as Success<List<TransferTemplate>>).value
-        .where((t) => t.isActive && t.walletId == walletId)
+        .where((t) => t.isActive && _belongsToWallet(t, wallet))
         .toList(growable: false);
     if (liveTemplates.isEmpty) {
       return const Failure(AppFailure(
@@ -305,6 +306,20 @@ final class PaymentSourceGuard {
       }
     }
     return false;
+  }
+
+  /// Older installations stored wallet templates with only senderCode. Keep
+  /// those templates source-scoped, but allow them to follow the verified SMS
+  /// sender instead of treating an active, valid template as unrelated.
+  bool _belongsToWallet(TransferTemplate template, Wallet wallet) {
+    if (template.walletId?.trim() == wallet.id) return true;
+    if (wallet.sourceMode != WalletSourceMode.sms) return false;
+    final senderCode = template.senderCode?.trim();
+    final senderId = wallet.senderId?.trim();
+    if (senderCode == null || senderCode.isEmpty || senderId == null || senderId.isEmpty) {
+      return false;
+    }
+    return _senderMatches(_normalize(senderCode), _normalize(senderId));
   }
 
   String _normalize(String raw) =>
