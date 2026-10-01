@@ -109,10 +109,11 @@ final class PendingMessageReviewService {
 
     final auditsResult = await auditLogs.findByEntity('message', messageId);
     if (auditsResult is Success<List<AuditLog>>) {
-      final logs = List<AuditLog>.of(auditsResult.value)
-        ..sort((a, b) => b.occurredAt.compareTo(a.occurredAt));
-      final lastAction = logs.isNotEmpty ? logs.first.action : null;
-      if (lastAction == RejectionCodes.duplicateTransaction) {
+      final logs = auditsResult.value;
+      final wasDuplicate = logs.any(
+        (log) => log.action == RejectionCodes.duplicateTransaction,
+      );
+      if (wasDuplicate) {
         return const Failure(
           AppFailure(
             code: 'retry_blocked_duplicate',
