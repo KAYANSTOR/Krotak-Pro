@@ -56,7 +56,7 @@ final class ManualSaleRunner {
       );
     }
 
-    final result = await host.unitOfWork.run<Result<Sale>>(() async {
+    final result = await host.unitOfWork.run<Sale>(() async {
       if (stableOperationId != null) {
         final existingSale = await host.sales.findById(stableOperationId);
         if (existingSale is Failure<Sale?>) return Failure(existingSale.error);

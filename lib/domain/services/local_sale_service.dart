@@ -76,7 +76,7 @@ final class LocalSaleService implements SaleService, ReservedSaleService {
       );
     }
 
-    final result = await unitOfWork.run<Result<Sale>>(() async {
+    final result = await unitOfWork.run<Sale>(() async {
       if (stableOperationId != null) {
         final existingSale = await sales.findById(stableOperationId);
         if (existingSale is Failure<Sale?>) return Failure(existingSale.error);
@@ -236,7 +236,7 @@ final class LocalSaleService implements SaleService, ReservedSaleService {
       );
     }
 
-    final result = await unitOfWork.run<Result<Sale>>(() async {
+    final result = await unitOfWork.run<Sale>(() async {
       final existingSale = await sales.findById(stableOperationId);
       if (existingSale is Failure<Sale?>) return Failure(existingSale.error);
       if ((existingSale as Success<Sale?>).value != null) {

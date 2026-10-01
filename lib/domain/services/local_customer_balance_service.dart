@@ -221,7 +221,7 @@ final class LocalCustomerBalanceService implements CustomerBalanceService {
     final note = (reason ?? '').trim();
     var notifyDebtPayment = false;
 
-    final result = await unitOfWork.run<Result<Transaction>>(() async {
+    final result = await unitOfWork.run<Transaction>(() async {
       if (reference != null && reference.isNotEmpty) {
         final existing = await transactions.findByReference(reference);
         if (existing is Failure<Transaction?>) return Failure(existing.error);
