@@ -303,26 +303,70 @@ class _CustomersScreenState extends State<CustomersScreen> {
         CustomerStatus.archived => 'مؤرشف',
       };
 
-  List<AccountExportRow> get _exportRows => [
-        for (final r in _visible)
-          AccountExportRow(
-            id: r.customer.id,
-            name: r.customer.displayName,
-            statusLabel: _statusLabel(r.customer.status),
-            phone: r.phone ?? '',
-            balanceYer:
-                ((r.balance?.minorUnits ?? 0) / 100).toStringAsFixed(2),
-            provisional: r.isProvisional,
-          ),
-      ];
+  AccountExportFilter get _exportFilter => switch (_filter) {
+        _AccountFilter.all => AccountExportFilter.all,
+        _AccountFilter.debtor => AccountExportFilter.debtor,
+        _AccountFilter.creditor => AccountExportFilter.creditor,
+        _AccountFilter.zero => AccountExportFilter.zero,
+        _AccountFilter.provisional => AccountExportFilter.provisional,
+        _AccountFilter.unlinked => AccountExportFilter.unlinked,
+      };
+
+  Future<AccountExportLoadResult?> _loadExportRows() async {
+    final c = AppScope.of(context);
+    final result = await loadFilteredAccountExport(
+      filter: _exportFilter,
+      page: (limit, offset) async {
+        final page = await c.customers.searchPage(
+          _searchCtrl.text,
+          limit: limit,
+          offset: offset,
+        );
+        if (page is Failure<List<Customer>>) {
+          throw StateError(page.error.message);
+        }
+        final customers = (page as Success<List<Customer>>).value;
+        final rows = <AccountExportCandidate>[];
+        for (final customer in customers) {
+          final hydrated = await _rowFor(customer);
+          rows.add(
+            AccountExportCandidate(
+              id: customer.id,
+              name: customer.displayName,
+              statusLabel: _statusLabel(customer.status),
+              phone: hydrated.phone ?? '',
+              balanceMinor: hydrated.balance?.minorUnits ?? 0,
+              provisional: hydrated.isProvisional,
+              merged: customer.status == CustomerStatus.merged,
+            ),
+          );
+        }
+        return rows;
+      },
+    );
+    return result;
+  }
 
   Future<void> _exportFilteredCsv() async {
-    final rows = _exportRows;
+    final AccountExportLoadResult loaded;
+    try {
+      final value = await _loadExportRows();
+      if (!mounted || value == null) return;
+      loaded = value;
+    } catch (error) {
+      if (mounted) _toast('تعذر تصدير الحسابات');
+      return;
+    }
+    final rows = loaded.rows;
     if (rows.isEmpty) {
       _toast('لا توجد حسابات لتصديرها');
       return;
     }
-    final csv = buildAccountListCsv(filterLabel: _filterLabel, rows: rows);
+    final csv = buildAccountListCsv(
+      filterLabel: _filterLabel,
+      rows: rows,
+      truncated: loaded.truncated,
+    );
     final dir = await getTemporaryDirectory();
     final file = File(
       '${dir.path}/accounts_export_${DateTime.now().millisecondsSinceEpoch}.csv',
@@ -336,7 +380,16 @@ class _CustomersScreenState extends State<CustomersScreen> {
   }
 
   Future<void> _exportFilteredPdf() async {
-    final rows = _exportRows;
+    final AccountExportLoadResult loaded;
+    try {
+      final value = await _loadExportRows();
+      if (!mounted || value == null) return;
+      loaded = value;
+    } catch (error) {
+      if (mounted) _toast('تعذر تصدير الحسابات');
+      return;
+    }
+    final rows = loaded.rows;
     if (rows.isEmpty) {
       _toast('لا توجد حسابات لتصديرها');
       return;
@@ -350,7 +403,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
     final bytes = await pdf.buildAccountList(
       networkName: network,
       generatedAt: container.clock.now(),
-      totalLabel: 'الفلتر: $_filterLabel — عدد الصفوف: ${rows.length}',
+      totalLabel: 'الفلتر: $_filterLabel — عدد الصفوف: ${rows.length}${loaded.truncated ? ' (وصل الحد)' : ''}',
       rows: [
         for (final row in rows)
           PdfTableRow([row.name, row.statusLabel, row.phone, row.balanceYer]),
