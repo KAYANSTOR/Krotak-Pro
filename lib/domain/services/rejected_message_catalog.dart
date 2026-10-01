@@ -209,11 +209,11 @@ final class RejectedMessageCatalog {
             final decoded = jsonDecode(raw);
             if (decoded is Map) {
               diagnostic = Map<String, dynamic>.from(decoded);
-              final code = diagnostic?['failureCode']?.toString().trim();
+              final code = diagnostic['failureCode']?.toString().trim();
               if (code != null && code.isNotEmpty) action = code;
-              final reason = diagnostic?['reason']?.toString().trim();
+              final reason = diagnostic['reason']?.toString().trim();
               if (reason != null && reason.isNotEmpty) payloadReason = reason;
-              final parsed = diagnostic?['parser'];
+              final parsed = diagnostic['parser'];
               if (parsed is Map) {
                 final amountMinor = (parsed['amountMinorUnits'] as num?)?.toInt();
                 final currency = parsed['currency']?.toString();
@@ -244,8 +244,8 @@ final class RejectedMessageCatalog {
     }
 
     if (diagnostic != null) {
-      final code = diagnostic?['failureCode']?.toString().trim();
-      final reason = diagnostic?['reason']?.toString().trim();
+      final code = diagnostic['failureCode']?.toString().trim();
+      final reason = diagnostic['reason']?.toString().trim();
       if (code != null && code.isNotEmpty) action = code;
       if (reason != null && reason.isNotEmpty) payloadReason = reason;
     }
