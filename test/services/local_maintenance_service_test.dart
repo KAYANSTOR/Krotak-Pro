@@ -3,7 +3,7 @@ import 'package:net_app/core/clock.dart';
 import 'package:net_app/core/result.dart';
 import 'package:net_app/domain/entities/message.dart';
 import 'package:drift/native.dart';
-import 'package:net_app/data/database/app_database.dart';
+import 'package:net_app/data/database/app_database.dart' show AppDatabase;
 import 'package:net_app/domain/services/local_maintenance_service.dart';
 
 import '../helpers/in_memory_repositories.dart';
