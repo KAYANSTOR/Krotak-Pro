@@ -350,6 +350,7 @@ void main() {
       // customer was created
       final found = await customers.findByIdentifier('777999888');
       expect((found as Success).value, isNotNull);
+      expect((found as Success).value.status, CustomerStatus.active);
     });
 
     test('rejects account identifier when customer missing (no auto-provision)', () async {

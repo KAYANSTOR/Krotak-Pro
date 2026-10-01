@@ -48,6 +48,7 @@ final class LocalTransferProcessor implements TransferProcessor {
     this.advanceService,
     this.customerService,
     this.contactDirectory,
+    this.contactWriter,
     this.posRegistry,
     this.categoryCommissionStore,
     this.sales,
@@ -73,6 +74,7 @@ final class LocalTransferProcessor implements TransferProcessor {
   final AdvanceService? advanceService;
   final CustomerService? customerService;
   final ContactDirectory? contactDirectory;
+  final ContactWriter? contactWriter;
   final LocalPosAccountRegistry? posRegistry;
   final LocalCategoryCommissionStore? categoryCommissionStore;
   final SaleRepository? sales;
@@ -325,25 +327,26 @@ final class LocalTransferProcessor implements TransferProcessor {
       return Failure<Transaction>(failure);
     }
 
-    // If account was provisional but the phone is now in contacts, promote
-    // to a full customer and adopt the contact display name.
+    // A depositor is always a full active customer. The device phone book is
+    // only a convenience for naming and synchronization, never an eligibility
+    // gate for deposits or Salafni.
     final liveCustomer = resolution.customer;
     if (!isPosOrder &&
         liveCustomer != null &&
         liveCustomer.status == CustomerStatus.provisional &&
-        customerService != null &&
-        contactDirectory != null) {
-      final match = await contactDirectory!.findByPhone(
-        transfer.customerIdentifier,
-      );
-      if (match != null && match.displayName.trim().isNotEmpty) {
+        customerService != null) {
         final promoted = await customerService!.promoteToActive(liveCustomer.id);
         if (promoted is Success<Customer>) {
-          final named = promoted.value.copyWith(
-            displayName: match.displayName.trim(),
-            updatedAt: clock.now(),
-          );
-          await customers.save(named);
+          final match = await contactDirectory?.findByPhone(transfer.customerIdentifier);
+          final named = match != null && match.displayName.trim().isNotEmpty
+              ? promoted.value.copyWith(
+                  displayName: match.displayName.trim(),
+                  updatedAt: clock.now(),
+                )
+              : promoted.value;
+          if (named.displayName != promoted.value.displayName) {
+            await customers.save(named);
+          }
           resolutionResult = await _resolver.resolve(
             identifierValue: transfer.customerIdentifier,
             identifierType: transfer.identifierType,
@@ -357,13 +360,33 @@ final class LocalTransferProcessor implements TransferProcessor {
               id: ids.next('audit'),
               entityType: 'customer',
               entityId: named.id,
-              action: 'promoted_from_contacts',
+              action: 'promoted_to_active_on_deposit',
               occurredAt: clock.now(),
               payloadJson:
-                  '{\"phone\":\"${transfer.customerIdentifier}\",\"displayName\":\"${match.displayName.trim()}\"}',
+                  '{\"phone\":\"${transfer.customerIdentifier}\"}',
             ),
           );
         }
+    }
+
+    final activeCustomer = resolution.customer;
+    if (!isPosOrder && activeCustomer != null && contactWriter != null) {
+      final contactResult = await contactWriter!.upsertPhone(
+        phone: transfer.customerIdentifier,
+        displayName: activeCustomer.displayName,
+      );
+      if (contactResult is Failure<void>) {
+        await auditLogs.append(
+          AuditLog(
+            id: ids.next('audit'),
+            entityType: 'customer',
+            entityId: activeCustomer.id,
+            action: 'device_contact_sync_failed',
+            occurredAt: clock.now(),
+            payloadJson:
+                '{\"phone\":\"${transfer.customerIdentifier}\",\"error\":\"${contactResult.error.code}\"}',
+          ),
+        );
       }
     }
 
@@ -1269,20 +1292,18 @@ final class LocalTransferProcessor implements TransferProcessor {
       );
     }
     final phone = transfer.customerIdentifier.trim();
-    // Contacts decide identity: in phonebook => full customer with name;
-    // otherwise provisional ledger-only account.
+    // The first deposit is sufficient to register and approve the customer.
+    // Phone-book lookup can improve the display name but never changes status.
     var displayName = phone;
-    var status = CustomerStatus.provisional;
     final match = await contactDirectory?.findByPhone(phone);
     if (match != null && match.displayName.trim().isNotEmpty) {
       displayName = match.displayName.trim();
-      status = CustomerStatus.active;
     }
     final created = await service.create(
       displayName: displayName,
       identifierType: CustomerIdentifierType.phoneNumber,
       identifierValue: phone,
-      status: status,
+      status: CustomerStatus.active,
     );
     if (created is Success<Customer>) return created;
     if (created is Failure<Customer> &&

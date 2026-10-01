@@ -219,7 +219,7 @@ final class AppContainer {
       templates: transferTemplates,
       messageSender: messageSender,
     );
-    final processor = LocalTransferProcessor(messages: messages, customers: customers, balances: balanceService, auditLogs: auditLogs, unitOfWork: uow, clock: clock, ids: ids, categories: categories, cards: cards, inventory: inventoryService, transactions: transactions, reservedSales: saleService, messageSender: messageSender, settings: settings, advanceService: advanceService, customerService: customerService, contactDirectory: contactDirectory, posRegistry: posRegistry, categoryCommissionStore: categoryCommissionStore, sales: sales, posAutoSettlement: posAutoSettlement);
+    final processor = LocalTransferProcessor(messages: messages, customers: customers, balances: balanceService, auditLogs: auditLogs, unitOfWork: uow, clock: clock, ids: ids, categories: categories, cards: cards, inventory: inventoryService, transactions: transactions, reservedSales: saleService, messageSender: messageSender, settings: settings, advanceService: advanceService, customerService: customerService, contactDirectory: contactDirectory, contactWriter: contactDirectory, posRegistry: posRegistry, categoryCommissionStore: categoryCommissionStore, sales: sales, posAutoSettlement: posAutoSettlement);
     final licenseService = LocalLicenseService(licenses: licenses, clock: clock);
     final Directory backupDirectory;
     final File? databaseFile;

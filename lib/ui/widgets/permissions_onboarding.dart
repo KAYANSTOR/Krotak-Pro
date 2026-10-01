@@ -19,7 +19,7 @@ import 'net/net_surface_card.dart';
 /// بهوية NET (بطاقة + تقدم + خطوة واحدة) فوق لوحة التحكم دون شاشة كاملة.
 abstract final class PermissionsOnboarding {
   /// تغيير الإصدار يعيد التحقق بعد تحديث متطلبات الصلاحيات.
-  static const doneKey = 'permissions_onboarding_done_v7';
+  static const doneKey = 'permissions_onboarding_done_v8';
 
   static Future<void> maybeRun(BuildContext context) async {
     if (!Platform.isAndroid) return;
@@ -94,7 +94,7 @@ abstract final class PermissionsOnboarding {
         icon: Icons.contacts_rounded,
         title: 'جهات الاتصال',
         body:
-            'يحتاج NET إلى قراءة جهات الاتصال لربط أرقام العملاء بالأسماء المعروفة وتسهيل التعرف على التحويلات.',
+            'يستخدم NET جهات الاتصال لتسمية العملاء الجدد وتسجيل كل مودع تلقائيًا في دفتر الهاتف. لا تتوقف معالجة الإيداع إذا تعذر الوصول إلى دفتر الهاتف.',
         actionLabel: 'منح صلاحية جهات الاتصال',
         verify: () async => (await Permission.contacts.status).isGranted,
         onAllow: () async {

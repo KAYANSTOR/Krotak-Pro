@@ -2,6 +2,7 @@ package com.kayan.net_app
 
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
+import android.content.ContentValues
 import android.content.Context
 import android.content.IntentFilter
 import android.Manifest
@@ -208,6 +209,21 @@ class MainActivity : FlutterActivity(), SmsListener {
                         }
                     }
                 }
+                "upsertContactByPhone" -> {
+                    val phone = call.argument<String>("phone")
+                    val displayName = call.argument<String>("displayName")
+                    if (phone.isNullOrBlank()) {
+                        result.success(false)
+                    } else if (!hasContactsWritePermission()) {
+                        result.success(false)
+                    } else {
+                        try {
+                            result.success(upsertContactByPhone(phone, displayName ?: phone))
+                        } catch (e: Exception) {
+                            result.error("contact_write_failed", e.message, null)
+                        }
+                    }
+                }
                 "pickContact" -> try {
                     val intent = Intent(Intent.ACTION_PICK, ContactsContract.Contacts.CONTENT_URI)
                     pendingContactResult = result
@@ -306,6 +322,33 @@ class MainActivity : FlutterActivity(), SmsListener {
 
     private fun hasContactsPermission(): Boolean =
         ContextCompat.checkSelfPermission(this, Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED
+
+    private fun hasContactsWritePermission(): Boolean =
+        hasContactsPermission() &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_CONTACTS) == PackageManager.PERMISSION_GRANTED
+
+    private fun upsertContactByPhone(rawPhone: String, rawName: String): Boolean {
+        val phone = rawPhone.trim()
+        val name = rawName.trim().ifEmpty { phone }
+        if (lookupContactByPhone(phone) != null) return true
+        val resolver = contentResolver
+        val rawContact = resolver.insert(ContactsContract.RawContacts.CONTENT_URI, ContentValues())
+            ?: return false
+        val rawContactId = rawContact.lastPathSegment ?: return false
+        val nameValues = ContentValues().apply {
+            put(ContactsContract.Data.RAW_CONTACT_ID, rawContactId)
+            put(ContactsContract.Data.MIMETYPE, ContactsContract.CommonDataKinds.StructuredName.CONTENT_ITEM_TYPE)
+            put(ContactsContract.CommonDataKinds.StructuredName.DISPLAY_NAME, name)
+        }
+        if (resolver.insert(ContactsContract.Data.CONTENT_URI, nameValues) == null) return false
+        val phoneValues = ContentValues().apply {
+            put(ContactsContract.Data.RAW_CONTACT_ID, rawContactId)
+            put(ContactsContract.Data.MIMETYPE, ContactsContract.CommonDataKinds.Phone.CONTENT_ITEM_TYPE)
+            put(ContactsContract.CommonDataKinds.Phone.NUMBER, phone)
+            put(ContactsContract.CommonDataKinds.Phone.TYPE, ContactsContract.CommonDataKinds.Phone.TYPE_MOBILE)
+        }
+        return resolver.insert(ContactsContract.Data.CONTENT_URI, phoneValues) != null
+    }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         if (requestCode == REQUEST_PICK_CONTACT) {
@@ -554,11 +597,15 @@ class MainActivity : FlutterActivity(), SmsListener {
         val granted = ContextCompat.checkSelfPermission(
             this,
             Manifest.permission.READ_CONTACTS,
-        ) == PackageManager.PERMISSION_GRANTED
+        ) == PackageManager.PERMISSION_GRANTED &&
+            ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.WRITE_CONTACTS,
+            ) == PackageManager.PERMISSION_GRANTED
         if (granted) return true
         ActivityCompat.requestPermissions(
             this,
-            arrayOf(Manifest.permission.READ_CONTACTS),
+            arrayOf(Manifest.permission.READ_CONTACTS, Manifest.permission.WRITE_CONTACTS),
             REQUEST_CONTACTS,
         )
         return false
