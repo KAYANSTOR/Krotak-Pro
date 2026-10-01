@@ -98,6 +98,13 @@ class MainActivity : FlutterActivity(), SmsListener {
 
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, notificationMethodChannelName).setMethodCallHandler { call, result ->
             when (call.method) {
+                "isAccessGranted" -> result.success(isNotificationAccessGranted())
+                "openAccessSettings" -> try {
+                    startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+                    result.success(true)
+                } catch (e: Exception) {
+                    result.error("settings_failed", e.message, null)
+                }
                 "setAllowedPackages" -> {
                     val packages = call.argument<List<String>>("packages")?.toSet() ?: emptySet()
                     getSharedPreferences(NotificationListener.PREFS, MODE_PRIVATE)
@@ -241,6 +248,13 @@ class MainActivity : FlutterActivity(), SmsListener {
                 } catch (e: Exception) {
                     result.error("settings_failed", e.message, null)
                 }
+                "confirmAutoStartReviewed" -> {
+                    getSharedPreferences(OEM_PREFS, MODE_PRIVATE)
+                        .edit()
+                        .putBoolean(autoStartReviewKey(), true)
+                        .apply()
+                    result.success(true)
+                }
                 "openAutoStartSettings" -> try {
                     openOemAutostartSettings()
                     result.success(true)
@@ -272,6 +286,7 @@ class MainActivity : FlutterActivity(), SmsListener {
             "manufacturer" to Build.MANUFACTURER,
             "model" to Build.MODEL,
             "sdk" to Build.VERSION.SDK_INT,
+            "oemBackgroundState" to oemBackgroundState(),
         )
     }
 
@@ -500,6 +515,14 @@ class MainActivity : FlutterActivity(), SmsListener {
     }
 
     private fun openOemAutostartSettings() {
+        if (Build.MANUFACTURER.equals("samsung", ignoreCase = true)) {
+            val intent = OemBackgroundSettings.samsungNeverSleepingIntent()
+            if (packageManager.resolveActivity(intent, PackageManager.MATCH_DEFAULT_ONLY) != null) {
+                startActivity(intent)
+                return
+            }
+        }
+
         val intents = listOf(
             Intent().setComponent(ComponentName("com.miui.securitycenter", "com.miui.permcenter.autostart.AutoStartManagementActivity")),
             Intent().setComponent(ComponentName("com.letv.android.letvsafe", "com.letv.android.letvsafe.AutobootManageActivity")),
@@ -510,19 +533,43 @@ class MainActivity : FlutterActivity(), SmsListener {
             Intent().setComponent(ComponentName("com.vivo.permissionmanager", "com.vivo.permissionmanager.activity.BgStartUpManagerActivity")),
             Intent().setComponent(ComponentName("com.iqoo.secure", "com.iqoo.secure.ui.phoneoptimize.AddWhiteListActivity")),
             Intent().setComponent(ComponentName("com.iqoo.secure", "com.iqoo.secure.ui.phoneoptimize.BgStartUpManager")),
-            Intent().setComponent(ComponentName("com.samsung.android.lool", "com.samsung.android.sm.ui.battery.BatteryActivity")),
             Intent().setComponent(ComponentName("com.asus.mobilemanager", "com.asus.mobilemanager.autostart.AutoStartActivity")),
         )
         for (intent in intents) {
             try {
-                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 packageManager.resolveActivity(intent, PackageManager.MATCH_DEFAULT_ONLY) ?: continue
                 startActivity(intent)
                 return
             } catch (_: Exception) {
             }
         }
-        throw Exception("No OEM autostart settings found")
+        startActivity(Intent(Settings.ACTION_BATTERY_SETTINGS))
+    }
+
+    private fun oemBackgroundState(): String {
+        if (Build.MANUFACTURER.equals("samsung", ignoreCase = true)) {
+            return if (getSharedPreferences(OEM_PREFS, MODE_PRIVATE)
+                    .getBoolean(autoStartReviewKey(), false)) {
+                "configured_by_user"
+            } else {
+                "manual_required"
+            }
+        }
+        return "manual_required"
+    }
+
+    private fun autoStartReviewKey(): String {
+        val versionCode = try {
+            val info = packageManager.getPackageInfo(packageName, 0)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                info.longVersionCode
+            } else {
+                @Suppress("DEPRECATION") info.versionCode.toLong()
+            }
+        } catch (_: Exception) {
+            0L
+        }
+        return "autostart_reviewed_v1_$versionCode"
     }
 
     override fun onSmsReceived(sender: String, body: String, timestampMillis: Long) {
@@ -612,6 +659,7 @@ class MainActivity : FlutterActivity(), SmsListener {
     }
 
     companion object {
+        private const val OEM_PREFS = "net_oem_diagnostics"
         private const val REQUEST_SMS = 1001
         private const val REQUEST_POST_NOTIFICATIONS = 1002
         private const val REQUEST_PHONE_STATE = 1003
