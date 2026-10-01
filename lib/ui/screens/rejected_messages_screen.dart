@@ -684,6 +684,10 @@ class _RejectedCard extends StatelessWidget {
               ],
             ],
           ),
+          if (item.diagnostic != null) ...[
+            const SizedBox(height: 10),
+            _DiagnosticPanel(diagnostic: item.diagnostic!),
+          ],
           if (archived) ...[
             const SizedBox(height: 8),
             Align(
@@ -749,6 +753,96 @@ class _RejectedCard extends StatelessWidget {
               ],
             ),
           ],
+        ],
+      ),
+    );
+  }
+}
+
+
+class _DiagnosticPanel extends StatelessWidget {
+  const _DiagnosticPanel({required this.diagnostic});
+  final Map<String, dynamic> diagnostic;
+
+  @override
+  Widget build(BuildContext context) {
+    final source = diagnostic['source'] is Map
+        ? Map<String, dynamic>.from(diagnostic['source'] as Map)
+        : const <String, dynamic>{};
+    final parser = diagnostic['parser'] is Map
+        ? Map<String, dynamic>.from(diagnostic['parser'] as Map)
+        : const <String, dynamic>{};
+
+    String display(Object? raw) {
+      final value = raw?.toString().trim() ?? '';
+      return value.isEmpty ? '—' : value;
+    }
+
+    final rows = <(String, String)>[
+      ('القناة', display(diagnostic['channel'])),
+      ('المصدر', display(diagnostic['rawSource'])),
+      ('المصدر بعد التطبيع', display(diagnostic['normalizedSource'])),
+      ('المحفظة المطابقة', display(source['walletName'])),
+      ('حالة المحفظة', display(source['walletStatus'])),
+      ('حالة المصدر', source['sourceEnabled'] == true ? 'مفعّل' : 'غير مفعّل'),
+      ('القالب المطابق', display(source['matchedTemplateName'] ?? parser['templateId'])),
+      ('معرّف القالب', display(source['matchedTemplateId'] ?? parser['templateId'])),
+      ('المبلغ', display(parser['amountMinorUnits'])),
+      ('رقم العميل', display(parser['customerIdentifier'])),
+      ('المرجع', display(parser['reference'])),
+      ('المرحلة الأخيرة', display(diagnostic['stage'])),
+      ('السبب النهائي', display(diagnostic['reason'] ?? diagnostic['failureCode'])),
+    ];
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.45),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'تشخيص مسار الرسالة',
+            style: TextStyle(
+              fontFamily: 'Tajawal',
+              fontWeight: FontWeight.w800,
+              fontSize: 12.5,
+              color: Theme.of(context).colorScheme.onSurface,
+            ),
+          ),
+          const SizedBox(height: 6),
+          for (final row in rows)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 2),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(
+                    width: 105,
+                    child: Text(
+                      row.$1,
+                      style: TextStyle(
+                        fontFamily: 'Tajawal',
+                        fontSize: 11,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: Text(
+                      row.$2,
+                      style: const TextStyle(
+                        fontFamily: 'Tajawal',
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
         ],
       ),
     );
