@@ -91,6 +91,7 @@ final class LocalCustomerRepository implements CustomerRepository {
   Future<Result<List<domain.Customer>>> searchFilteredPage(
     String query, {
     required domain.AccountSqlFilter filter,
+    domain.AccountSqlSort sort = domain.AccountSqlSort.name,
     String currencyCode = 'YER',
     int limit = 80,
     int offset = 0,
@@ -138,7 +139,7 @@ final class LocalCustomerRepository implements CustomerRepository {
               WHERE i2.customer_id = c.id AND i2.value LIKE ?
             )
           )
-        ORDER BY c.display_name
+        ORDER BY ${domain.accountSqlOrderBy(sort)}
         LIMIT ? OFFSET ?
         ''',
         variables: [

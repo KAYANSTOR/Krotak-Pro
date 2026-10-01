@@ -1,4 +1,5 @@
 import 'package:net_app/domain/entities/account_sql_filter.dart';
+import 'package:net_app/domain/entities/account_sql_sort.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:net_app/core/clock.dart';
 import 'package:net_app/core/id_generator.dart';
@@ -581,6 +582,7 @@ final class _FakeCustomers implements CustomerRepository {
   Future<Result<List<Customer>>> searchFilteredPage(
     String query, {
     required AccountSqlFilter filter,
+    AccountSqlSort sort = AccountSqlSort.name,
     String currencyCode = 'YER',
     int limit = 80,
     int offset = 0,

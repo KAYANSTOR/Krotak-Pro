@@ -1,5 +1,6 @@
 import '../../core/result.dart';
 import '../entities/account_sql_filter.dart';
+import '../entities/account_sql_sort.dart';
 import '../entities/advance.dart';
 import '../entities/audit.dart';
 import '../entities/card.dart';
@@ -28,6 +29,7 @@ abstract interface class CustomerRepository {
   Future<Result<List<Customer>>> searchFilteredPage(
     String query, {
     required AccountSqlFilter filter,
+    AccountSqlSort sort = AccountSqlSort.name,
     String currencyCode = 'YER',
     int limit = 80,
     int offset = 0,

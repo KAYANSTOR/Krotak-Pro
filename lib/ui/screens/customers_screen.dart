@@ -12,6 +12,7 @@ import '../../domain/entities/customer.dart';
 import '../../domain/entities/money.dart';
 import '../../domain/entities/setting.dart';
 import '../../domain/entities/account_sql_filter.dart';
+import '../../domain/entities/account_sql_sort.dart';
 import '../../domain/services/account_list_export.dart';
 import '../../domain/services/report_pdf_service.dart';
 import '../app_scope.dart';
@@ -116,12 +117,10 @@ class _CustomersScreenState extends State<CustomersScreen> {
             .toList();
 
     final Comparator<_AccountRow> comparator = switch (_sort) {
-      _AccountSort.balanceDesc => (a, b) => (b.balance?.minorUnits ?? 0)
-          .abs()
-          .compareTo((a.balance?.minorUnits ?? 0).abs()),
-      _AccountSort.balanceAsc => (a, b) => (a.balance?.minorUnits ?? 0)
-          .abs()
-          .compareTo((b.balance?.minorUnits ?? 0).abs()),
+      _AccountSort.balanceDesc => (a, b) =>
+          (b.balance?.minorUnits ?? 0).compareTo(a.balance?.minorUnits ?? 0),
+      _AccountSort.balanceAsc => (a, b) =>
+          (a.balance?.minorUnits ?? 0).compareTo(b.balance?.minorUnits ?? 0),
       _AccountSort.name => (a, b) =>
           a.customer.displayName.compareTo(b.customer.displayName),
       _AccountSort.newest => (a, b) => b.customer.createdAt
@@ -142,6 +141,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
         : await c.customers.searchFilteredPage(
             query,
             filter: _sqlFilter,
+            sort: _sqlSort,
             limit: 2000,
             offset: 0,
           );
@@ -311,6 +311,13 @@ class _CustomersScreenState extends State<CustomersScreen> {
         CustomerStatus.archived => 'مؤرشف',
       };
 
+  AccountSqlSort get _sqlSort => switch (_sort) {
+        _AccountSort.balanceDesc => AccountSqlSort.balanceDesc,
+        _AccountSort.balanceAsc => AccountSqlSort.balanceAsc,
+        _AccountSort.name => AccountSqlSort.name,
+        _AccountSort.newest => AccountSqlSort.newest,
+      };
+
   AccountSqlFilter get _sqlFilter => switch (_filter) {
         _AccountFilter.all => AccountSqlFilter.all,
         _AccountFilter.debtor => AccountSqlFilter.debtor,
@@ -337,6 +344,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
         final page = await c.customers.searchFilteredPage(
           _searchCtrl.text,
           filter: _sqlFilter,
+          sort: _sqlSort,
           limit: limit,
           offset: offset,
         );
@@ -475,7 +483,10 @@ class _CustomersScreenState extends State<CustomersScreen> {
             PopupMenuButton<_AccountSort>(
               tooltip: 'ترتيب القائمة',
               icon: Icon(Icons.sort_rounded, color: palette.textSecondary),
-              onSelected: (value) => setState(() => _sort = value),
+              onSelected: (value) {
+                setState(() => _sort = value);
+                _load(_searchCtrl.text);
+              },
               itemBuilder: (_) => const [
                 PopupMenuItem(
                   value: _AccountSort.balanceDesc,

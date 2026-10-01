@@ -4,6 +4,7 @@ import 'package:net_app/core/result.dart';
 import 'package:net_app/data/database/app_database.dart' hide Customer;
 import 'package:net_app/data/repositories/local_repositories.dart';
 import 'package:net_app/domain/entities/account_sql_filter.dart';
+import 'package:net_app/domain/entities/account_sql_sort.dart';
 import 'package:net_app/domain/entities/customer.dart';
 import 'package:net_app/domain/entities/money.dart';
 import 'package:net_app/domain/entities/transaction.dart';
@@ -83,5 +84,30 @@ void main() {
     await seedCustomer('plain', 'بلا');
     final page = await customers.searchFilteredPage('', filter: AccountSqlFilter.unlinked);
     expect((page as Success<List<Customer>>).value.map((c) => c.id), ['plain']);
+  });
+
+  test('balance sort is applied in SQL before limit and offset', () async {
+    await seedCustomer('low', 'منخفض', phone: '777200001');
+    await seedCustomer('mid', 'متوسط', phone: '777200002');
+    await seedCustomer('high', 'مرتفع', phone: '777200003');
+    await ledger('s1', 'low', TransactionType.sale, 900);
+    await ledger('s2', 'mid', TransactionType.deposit, 100);
+    await ledger('s3', 'high', TransactionType.deposit, 2500);
+
+    final desc = await customers.searchFilteredPage(
+      '',
+      filter: AccountSqlFilter.all,
+      sort: AccountSqlSort.balanceDesc,
+    );
+    expect((desc as Success<List<Customer>>).value.map((c) => c.id), ['high', 'mid', 'low']);
+
+    final ascPage = await customers.searchFilteredPage(
+      '',
+      filter: AccountSqlFilter.all,
+      sort: AccountSqlSort.balanceAsc,
+      limit: 1,
+      offset: 1,
+    );
+    expect((ascPage as Success<List<Customer>>).value.map((c) => c.id), ['mid']);
   });
 }
