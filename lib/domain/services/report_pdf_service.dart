@@ -92,6 +92,25 @@ final class ReportPdfService {
     );
   }
 
+
+  /// سجل تدقيق قابل للمشاركة. لا يختلق قيوداً.
+  Future<Uint8List> buildAuditLog({
+    required String networkName,
+    required DateTime generatedAt,
+    required List<PdfTableRow> rows,
+    required String totalLabel,
+  }) {
+    return _build(
+      title: 'سجل التدقيق',
+      subtitle: 'قيود حقيقية من قاعدة الجهاز',
+      networkName: networkName,
+      generatedAt: generatedAt,
+      headers: const ['التاريخ', 'الإجراء', 'النوع', 'المعرّف'],
+      rows: rows,
+      footerNote: totalLabel,
+    );
+  }
+
   /// ملخص تشغيلي من OpsSnapshot.
   Future<Uint8List> buildOpsSnapshot({
     required String networkName,

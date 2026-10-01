@@ -76,6 +76,26 @@ final class LocalAuditLogRepository implements AuditLogRepository {
     }
   }
 
+
+  @override
+  Future<Result<List<domain.AuditLog>>> listRecent({int limit = 500}) async {
+    final capped = limit.clamp(1, 2000);
+    try {
+      final rows = await (database.select(database.auditLogs)
+            ..orderBy([
+              (table) => OrderingTerm(
+                    expression: table.occurredAt,
+                    mode: OrderingMode.desc,
+                  ),
+            ])
+            ..limit(capped))
+          .get();
+      return Success(rows.map(_toAudit).toList(growable: false));
+    } catch (error) {
+      return Failure(_failure('audit_list_failed', error));
+    }
+  }
+
   domain.AuditLog _toAudit(AuditLog row) {
     return domain.AuditLog(
       id: row.id,
