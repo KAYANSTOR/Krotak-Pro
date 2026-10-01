@@ -28,6 +28,7 @@ import '../domain/services/local_low_stock_alert_service.dart';
 import '../domain/services/local_message_retry_service.dart';
 import '../domain/services/local_promotion_catalog.dart';
 import '../domain/services/local_promotion_progress_service.dart';
+import '../domain/services/local_promotion_fulfillment_service.dart';
 import '../domain/services/local_pos_account_registry.dart';
 import '../domain/services/local_pos_auto_settlement_service.dart';
 import '../domain/services/local_pos_balance_request_service.dart';
@@ -171,7 +172,19 @@ final class AppContainer {
     final licenses = LocalLicenseRepository(database);
     final settings = LocalSettingsRepository(database);
     final advanceRepository = LocalAdvanceRepository(transactions: transactions, sales: sales);
-    final balanceService = LocalCustomerBalanceService(customers: customers, transactions: transactions, auditLogs: auditLogs, unitOfWork: uow, clock: clock, ids: ids, advances: advanceRepository);
+    final smsBridge = SmsBridge();
+    final messageSender = NativeMessageSender(smsBridge);
+    final balanceService = LocalCustomerBalanceService(
+      customers: customers,
+      transactions: transactions,
+      auditLogs: auditLogs,
+      unitOfWork: uow,
+      clock: clock,
+      ids: ids,
+      advances: advanceRepository,
+      messageSender: messageSender,
+      settings: settings,
+    );
     final customerService = LocalCustomerService(customers: customers, auditLogs: auditLogs, unitOfWork: uow, clock: clock, ids: ids);
     final walletCatalog = LocalWalletCatalogService(wallets: wallets, auditLogs: auditLogs, settings: settings, clock: clock, ids: ids);
     final posCatalog = LocalPointOfSaleCatalogService(pointsOfSale: pointsOfSale, auditLogs: auditLogs, clock: clock, ids: ids);
@@ -200,9 +213,16 @@ final class AppContainer {
     final listed = await transferTemplates.listAll();
     final live = listed is Success<List<TransferTemplate>> ? listed.value : const <TransferTemplate>[];
     final parser = LocalMessageParser(templates: live.isNotEmpty ? live : templates);
-    final smsBridge = SmsBridge();
-    final messageSender = NativeMessageSender(smsBridge);
-    final saleService = LocalSaleService(customers: customers, categories: categories, cards: cards, sales: sales, transactions: transactions, balances: balanceService, inventory: inventoryService, auditLogs: auditLogs, unitOfWork: uow, clock: clock, ids: ids, messageSender: messageSender, settings: settings);
+    final promotionFulfillment = LocalPromotionFulfillmentService(
+      progress: promotionProgress, promotions: promotions, categories: categories,
+      cards: cards, inventory: inventoryService, sales: sales, transactions: transactions,
+      auditLogs: auditLogs, unitOfWork: uow, clock: clock, ids: ids, customers: customers,
+      settings: settings, messageSender: messageSender,
+    );
+    final saleService = LocalSaleService(customers: customers, categories: categories, cards: cards, sales: sales, transactions: transactions, balances: balanceService, inventory: inventoryService, auditLogs: auditLogs, unitOfWork: uow, clock: clock, ids: ids, messageSender: messageSender, settings: settings,
+      onSaleCompleted: (customerId) async {
+        await promotionFulfillment.fulfillQualified(customerId: customerId);
+      });
         final broadcastJobs = LocalBroadcastRepository(settings: settings);
     final broadcastService = LocalBroadcastService(customers: customers, jobs: broadcastJobs, settings: settings, auditLogs: auditLogs, messageSender: messageSender, clock: clock, ids: ids, transactions: transactions, posRegistry: posRegistry, sendDelay: Duration.zero);
     final advanceService = LocalAdvanceService(advances: advanceRepository, customers: customers, categories: categories, cards: cards, inventory: inventoryService, transactions: transactions, sales: sales, auditLogs: auditLogs, settings: settings, unitOfWork: uow, messageSender: messageSender, clock: clock, ids: ids, posRegistry: posRegistry);
@@ -259,6 +279,7 @@ final class AppContainer {
       categories: categories,
       cards: cards,
       clock: clock,
+      messageSender: messageSender,
       notifier: stockAlertNotifier,
     );
     final mergeService = LocalAccountMergeService(customers: customers, transactions: transactions, auditLogs: auditLogs, unitOfWork: uow, clock: clock, ids: ids);

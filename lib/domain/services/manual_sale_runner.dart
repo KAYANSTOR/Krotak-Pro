@@ -56,7 +56,7 @@ final class ManualSaleRunner {
       );
     }
 
-    return host.unitOfWork.run(() async {
+    final result = await host.unitOfWork.run(() async {
       if (stableOperationId != null) {
         final existingSale = await host.sales.findById(stableOperationId);
         if (existingSale is Failure<Sale?>) return Failure(existingSale.error);
@@ -256,5 +256,6 @@ final class ManualSaleRunner {
 
       return Success(sale);
     });
+    return result;
   }
 }

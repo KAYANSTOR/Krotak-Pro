@@ -26,6 +26,7 @@ final class LocalSaleService implements SaleService, ReservedSaleService {
     required this.ids,
     this.messageSender,
     this.settings,
+    this.onSaleCompleted,
     this.reservationTtl = const Duration(minutes: 5),
   });
 
@@ -42,7 +43,20 @@ final class LocalSaleService implements SaleService, ReservedSaleService {
   final IdGenerator ids;
   final MessageSender? messageSender;
   final SettingsRepository? settings;
+  /// Runs after the sale transaction commits; delivery failures never roll back a sale.
+  final Future<void> Function(String customerId)? onSaleCompleted;
   final Duration reservationTtl;
+
+  Future<Result<Sale>> _afterSale(Result<Sale> result) async {
+    if (result is Success<Sale>) {
+      try {
+        await onSaleCompleted?.call(result.value.customerId);
+      } catch (_) {
+        // Promotion fulfillment is best-effort and independently idempotent.
+      }
+    }
+    return result;
+  }
 
   @override
   Future<Result<Sale>> sellFromBalance({
@@ -62,7 +76,7 @@ final class LocalSaleService implements SaleService, ReservedSaleService {
       );
     }
 
-    return unitOfWork.run(() async {
+    final result = await unitOfWork.run(() async {
       if (stableOperationId != null) {
         final existingSale = await sales.findById(stableOperationId);
         if (existingSale is Failure<Sale?>) return Failure(existingSale.error);
@@ -181,6 +195,7 @@ final class LocalSaleService implements SaleService, ReservedSaleService {
       if (audited is Failure<void>) return Failure(audited.error);
       return Success(sale);
     });
+    return _afterSale(result);
   }
 
   @override
@@ -197,7 +212,7 @@ final class LocalSaleService implements SaleService, ReservedSaleService {
       amount: amount,
       method: method,
       operationId: operationId,
-    );
+    ).then(_afterSale);
   }
 
   @override
@@ -221,7 +236,7 @@ final class LocalSaleService implements SaleService, ReservedSaleService {
       );
     }
 
-    return unitOfWork.run(() async {
+    final result = await unitOfWork.run(() async {
       final existingSale = await sales.findById(stableOperationId);
       if (existingSale is Failure<Sale?>) return Failure(existingSale.error);
       if ((existingSale as Success<Sale?>).value != null) {
@@ -345,6 +360,7 @@ final class LocalSaleService implements SaleService, ReservedSaleService {
       if (audited is Failure<void>) return Failure(audited.error);
       return Success(sale);
     });
+    return _afterSale(result);
   }
 
   @override

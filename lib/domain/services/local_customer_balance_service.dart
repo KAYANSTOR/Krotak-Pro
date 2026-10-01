@@ -5,11 +5,13 @@ import '../entities/advance.dart';
 import '../entities/audit.dart';
 import '../entities/customer.dart';
 import '../entities/money.dart';
+import '../entities/setting.dart';
 import '../entities/transaction.dart';
 import '../ledger.dart';
 import '../repositories/repositories.dart';
 import '../repositories/unit_of_work.dart';
 import 'services.dart';
+import 'outbound_template_renderer.dart';
 
 final class LocalCustomerBalanceService implements CustomerBalanceService {
   const LocalCustomerBalanceService({
@@ -20,6 +22,8 @@ final class LocalCustomerBalanceService implements CustomerBalanceService {
     required this.clock,
     required this.ids,
     this.advances,
+    this.messageSender,
+    this.settings,
   });
 
   final CustomerRepository customers;
@@ -29,6 +33,8 @@ final class LocalCustomerBalanceService implements CustomerBalanceService {
   final Clock clock;
   final IdGenerator ids;
   final AdvanceRepository? advances;
+  final MessageSender? messageSender;
+  final SettingsRepository? settings;
 
   static const _sellableStatuses = {
     CustomerStatus.active,
@@ -200,7 +206,7 @@ final class LocalCustomerBalanceService implements CustomerBalanceService {
     required String auditAction,
     String? reference,
     String? reason,
-  }) {
+  }) async {
     if (amount.minorUnits <= 0) {
       return Future.value(
         const Failure(
@@ -213,8 +219,9 @@ final class LocalCustomerBalanceService implements CustomerBalanceService {
     }
 
     final note = (reason ?? '').trim();
+    var notifyDebtPayment = false;
 
-    return unitOfWork.run(() async {
+    final result = await unitOfWork.run(() async {
       if (reference != null && reference.isNotEmpty) {
         final existing = await transactions.findByReference(reference);
         if (existing is Failure<Transaction?>) return Failure(existing.error);
@@ -232,6 +239,15 @@ final class LocalCustomerBalanceService implements CustomerBalanceService {
             ),
           );
         }
+      }
+
+      if (type == TransactionType.deposit) {
+        final before = await getBalance(
+          customerId: customerId,
+          currencyCode: amount.currencyCode,
+        );
+        notifyDebtPayment =
+            before is Success<Money> && before.value.minorUnits < 0;
       }
 
       final found = await customers.findById(customerId);
@@ -284,7 +300,71 @@ final class LocalCustomerBalanceService implements CustomerBalanceService {
       if (audited is Failure<void>) return Failure(audited.error);
       return Success(transaction);
     });
+    if (notifyDebtPayment && result is Success<Transaction>) {
+      await _notifyDebtPayment(customerId: customerId, amount: amount);
+    }
+    return result;
   }
+
+  Future<void> _notifyDebtPayment({
+    required String customerId,
+    required Money amount,
+  }) async {
+    final sender = messageSender;
+    if (sender == null) return;
+    final idsResult = await customers.listIdentifiers(customerId);
+    if (idsResult is! Success<List<CustomerIdentifier>>) return;
+    final phone = idsResult.value
+        .where((i) => i.type == CustomerIdentifierType.phoneNumber)
+        .map((i) => i.value.trim())
+        .firstWhere((v) => v.isNotEmpty, orElse: () => '');
+    if (phone.isEmpty) return;
+    final balance = await getBalance(
+      customerId: customerId,
+      currencyCode: amount.currencyCode,
+    );
+    if (balance is! Success<Money>) return;
+    final found = await settings?.find(SettingKeys.customerDebtPaymentTemplate);
+    final raw = found is Success<AppSetting?> ? found.value?.value : null;
+    final rendered = OutboundTemplateRenderer.renderStrict(
+      template: raw?.trim().isNotEmpty == true
+          ? raw!
+          : SettingDefaults.customerDebtPaymentTemplate,
+      values: {
+        'amount': _money(amount),
+        'balance': _money(balance.value),
+        'CURRENCY': amount.currencyCode,
+        'currency': amount.currencyCode,
+      },
+    );
+    if (rendered is Failure<String>) {
+      await auditLogs.append(AuditLog(
+        id: ids.next('audit'),
+        entityType: 'customer',
+        entityId: customerId,
+        action: 'debt_payment_sms_template_failed',
+        payloadJson: '{"error":"${_escape(rendered.error.message)}"}',
+        occurredAt: clock.now(),
+      ));
+      return;
+    }
+    final sent = await sender.send(
+      destination: phone,
+      body: (rendered as Success<String>).value,
+    );
+    await auditLogs.append(AuditLog(
+      id: ids.next('audit'),
+      entityType: 'customer',
+      entityId: customerId,
+      action: sent is Success<void>
+          ? 'debt_payment_sms_sent'
+          : 'debt_payment_sms_failed',
+      payloadJson: '{"destination":"${_escape(phone)}"}',
+      occurredAt: clock.now(),
+    ));
+  }
+
+  String _money(Money money) => (money.minorUnits / 100).toStringAsFixed(2);
 
   static String _escape(String s) =>
       s.replaceAll('\\', '\\\\').replaceAll('"', '\\"');

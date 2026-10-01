@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:net_app/core/result.dart';
+import 'package:net_app/domain/entities/setting.dart';
 import 'package:net_app/domain/services/outbound_template_renderer.dart';
 
 void main() {
@@ -28,5 +29,9 @@ void main() {
       'hello {a} and {b} and {a}',
     );
     expect(left.toSet(), {'a', 'b'});
+  });
+
+  test('Salafni is enabled by default for new installations', () {
+    expect(SettingDefaults.salafniEnabled, isTrue);
   });
 }

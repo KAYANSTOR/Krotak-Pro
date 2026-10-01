@@ -11,6 +11,7 @@ import '../repositories/repositories.dart';
 import '../repositories/unit_of_work.dart';
 import 'local_promotion_catalog.dart';
 import 'local_promotion_progress_service.dart';
+import 'outbound_template_renderer.dart';
 import 'services.dart';
 
 /// صرف مكافأة العرض عند بلوغ العتبة — دورة لكل مضاعف للعتبة.
@@ -219,14 +220,28 @@ final class LocalPromotionFulfillmentService {
       );
       return;
     }
-    final body = await _renderTemplate({
+    final rendered = await _renderTemplate({
       'title': promotionTitle,
       'serial': card.serialNumber,
       'secret': card.secretCode,
       'code': card.secretCode,
       'amount': (amountMinor / 100).toStringAsFixed(2),
     });
-    final sent = await sender.send(destination: destination, body: body);
+    if (rendered is Failure<String>) {
+      await auditLogs.append(AuditLog(
+        id: ids.next('audit'),
+        entityType: 'promotion',
+        entityId: promotionId,
+        action: 'reward_sms_template_failed',
+        payloadJson: '{"customerId":"$customerId","error":"${rendered.error.code}"}',
+        occurredAt: clock.now(),
+      ));
+      return;
+    }
+    final sent = await sender.send(
+      destination: destination,
+      body: (rendered as Success<String>).value,
+    );
     await auditLogs.append(
       AuditLog(
         id: ids.next('audit'),
@@ -253,15 +268,14 @@ final class LocalPromotionFulfillmentService {
     return PhoneNormalizer.canonicalize(primary.value) ?? primary.value;
   }
 
-  Future<String> _renderTemplate(Map<String, String> values) async {
+  Future<Result<String>> _renderTemplate(Map<String, String> values) async {
     final result = await settings.find(SettingKeys.promotionRewardSmsTemplate);
     final raw = result is Success<AppSetting?> ? result.value?.value : null;
-    var output = (raw != null && raw.trim().isNotEmpty)
-        ? raw
-        : defaultRewardSmsTemplate;
-    values.forEach((name, value) {
-      output = output.replaceAll('{$name}', value);
-    });
-    return output;
+    return OutboundTemplateRenderer.renderStrict(
+      template: raw != null && raw.trim().isNotEmpty
+          ? raw
+          : defaultRewardSmsTemplate,
+      values: values,
+    );
   }
 }

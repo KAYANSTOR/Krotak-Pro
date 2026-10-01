@@ -109,7 +109,7 @@ void main() {
       expect(notifier.shows, 1);
       expect(notifier.clears, 0);
       expect(notifier.lastTitle, contains('تنبيه المخزون'));
-      expect(notifier.lastBody, contains('كرت 100 (0)'));
+      expect(notifier.lastBody, contains('فئة 100'));
 
       // تعبئة جزئية (ما دون العتبة): يبقى الإشعار ويُحدَّث نصه بالعدد الجديد.
       await cards.save(
@@ -124,7 +124,7 @@ void main() {
       await synced.syncDeviceAlert();
       expect(notifier.shows, 2);
       expect(notifier.clears, 0);
-      expect(notifier.lastBody, contains('كرت 100 (1)'));
+      expect(notifier.lastBody, contains('المتبقي: 1'));
 
       await settings.save(
         AppSetting(
