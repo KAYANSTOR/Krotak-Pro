@@ -72,7 +72,7 @@ abstract final class SettingDefaults {
   static const autoRetryFailedMessages = true;
   static const retryMaxAttempts = 5;
   static const retryBaseDelaySeconds = 30;
-  static const salafniEnabled = false;
+  static const salafniEnabled = true;
   static const autoPosSettlementEnabled = true;
   static const broadcastMaxAttempts = 3;
   static const broadcastRateDelayMs = 800;

@@ -156,4 +156,40 @@ void main() {
     );
     expect(blocked, isA<Failure>());
   });
+
+  test('legacy active senderCode template remains linked to an SMS wallet', () async {
+    final wallets = _MemWallets();
+    final templates = _MemTemplates();
+    final saved = await wallets.save(
+      Wallet(
+        id: 'wallet-jaib',
+        name: 'Jaib',
+        status: WalletStatus.active,
+        createdAt: DateTime.utc(2026, 9, 17),
+        senderId: 'JAIB',
+        sourceMode: WalletSourceMode.sms,
+      ),
+    );
+    expect(saved, isA<Success<void>>());
+    await templates.save(const TransferTemplate(
+      id: 'legacy-jaib-template',
+      name: 'Jaib legacy',
+      pattern: 'تم تحويل {amount} ريال الى {phone} برقم العملية {ref}',
+      isActive: true,
+      senderCode: 'JAIB',
+    ));
+
+    final result = await PaymentSourceGuard(
+      wallets: wallets,
+      templates: templates,
+    ).authorize(
+      PaymentEvent(
+        channel: PaymentChannel.sms,
+        sourceKey: 'Jaib',
+        body: 'ignored',
+        receivedAt: DateTime.utc(2026, 9, 17),
+      ),
+    );
+    expect(result, isA<Success<void>>());
+  });
 }

@@ -87,11 +87,15 @@ final class LocalLowStockAlertService {
   }
 
   /// نص الإشعار الحي: قائمة الفئات التي بلغت العتبة أو أقل.
-  String renderDeviceBody(List<LowStockAlert> alerts) {
+  String renderDeviceBody(List<LowStockAlert> alerts, {String? template}) {
     final parts = alerts
-        .map((a) => 'كرت ${a.categoryName} (${a.available})')
+        .map((a) => renderCustomerMessage(
+              categoryName: a.categoryName,
+              available: a.available,
+              template: template,
+            ))
         .join('، ');
-    return 'تنبيه: الكروت التالية أوشكت على النفاد: $parts';
+    return parts;
   }
 
   /// يزامن إشعار أندرويد الحي مع المخزون الفعلي ويرجع التنبيهات النشطة.
@@ -107,7 +111,11 @@ final class LocalLowStockAlertService {
       await target.clear();
       return alerts;
     }
-    await target.show(title: deviceAlertTitle, body: renderDeviceBody(alerts));
+    final template = await loadCustomerTemplate();
+    await target.show(
+      title: deviceAlertTitle,
+      body: renderDeviceBody(alerts, template: template),
+    );
     return alerts;
   }
 
