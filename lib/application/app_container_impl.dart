@@ -338,6 +338,7 @@ final class AppContainer {
         await posOrderDeliveryWorker.tick();
       } catch (_) {}
       await _runDailyPosSummary();
+      await _runDailyRetention();
       return;
     }
     _recoveryBusy = true;
@@ -346,6 +347,7 @@ final class AppContainer {
       await deliveryWorker.tick();
       await posOrderDeliveryWorker.tick();
       await _runDailyPosSummary();
+      await _runDailyRetention();
     } finally {
       _recoveryBusy = false;
       try {
@@ -371,6 +373,34 @@ final class AppContainer {
       await lowStockAlerts.syncDeviceAlert();
     } catch (_) {
       // مزامنة التنبيه لا يجوز أن تُسقط دورة الاسترداد أو معالجة الرسائل.
+    }
+  }
+
+
+  bool _retentionBusy = false;
+
+  /// Applies the existing message retention policy once per day.
+  /// Does not touch the ledger, cards, or audit rows.
+  Future<void> _runDailyRetention() async {
+    if (_disposed || _retentionBusy) return;
+    final stored = await settings.find(SettingKeys.lastMessageRetentionAt);
+    final raw = stored is Success<AppSetting?> ? stored.value?.value : null;
+    if (!isRetentionDue(now: clock.now(), lastRunIso: raw)) return;
+    _retentionBusy = true;
+    try {
+      await maintenanceService.purgeExpiredMessages();
+      final now = clock.now();
+      await settings.save(
+        AppSetting(
+          key: SettingKeys.lastMessageRetentionAt,
+          value: now.toUtc().toIso8601String(),
+          updatedAt: now,
+        ),
+      );
+    } catch (_) {
+      // Retention must not interrupt SMS recovery.
+    } finally {
+      _retentionBusy = false;
     }
   }
 

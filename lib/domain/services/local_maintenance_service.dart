@@ -188,6 +188,17 @@ final class SqliteStorageSnapshot {
   final bool warning;
 }
 
+
+/// Retention runs at most once per day from the background cycle.
+/// A missing or unreadable stamp means the pass is due.
+bool isRetentionDue({required DateTime now, String? lastRunIso}) {
+  final raw = lastRunIso?.trim();
+  if (raw == null || raw.isEmpty) return true;
+  final last = DateTime.tryParse(raw);
+  if (last == null) return true;
+  return now.toUtc().difference(last.toUtc()) >= const Duration(hours: 20);
+}
+
 String formatStorageBytes(int bytes) {
   if (bytes < 0) bytes = 0;
   if (bytes < 1024) return '$bytes بايت';
