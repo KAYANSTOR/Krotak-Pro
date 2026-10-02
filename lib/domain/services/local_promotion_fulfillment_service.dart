@@ -10,6 +10,7 @@ import '../phone_normalizer.dart';
 import '../repositories/repositories.dart';
 import '../repositories/unit_of_work.dart';
 import 'local_promotion_catalog.dart';
+import 'promotion_reward_template.dart';
 import 'local_promotion_progress_service.dart';
 import 'services.dart';
 
@@ -219,12 +220,15 @@ final class LocalPromotionFulfillmentService {
       );
       return;
     }
-    final body = await _renderTemplate({
+    final amount = (amountMinor / 100).toStringAsFixed(2);
+    final body = await _renderTemplate(promotionId, {
       'title': promotionTitle,
+      'promotion_name': promotionTitle,
       'serial': card.serialNumber,
       'secret': card.secretCode,
       'code': card.secretCode,
-      'amount': (amountMinor / 100).toStringAsFixed(2),
+      'amount': amount,
+      'reward_value': amount,
     });
     final sent = await sender.send(destination: destination, body: body);
     await auditLogs.append(
@@ -253,12 +257,19 @@ final class LocalPromotionFulfillmentService {
     return PhoneNormalizer.canonicalize(primary.value) ?? primary.value;
   }
 
-  Future<String> _renderTemplate(Map<String, String> values) async {
-    final result = await settings.find(SettingKeys.promotionRewardSmsTemplate);
-    final raw = result is Success<AppSetting?> ? result.value?.value : null;
-    var output = (raw != null && raw.trim().isNotEmpty)
-        ? raw
-        : defaultRewardSmsTemplate;
+  Future<String> _renderTemplate(
+    String promotionId,
+    Map<String, String> values,
+  ) async {
+    final global = await settings.find(SettingKeys.promotionRewardSmsTemplate);
+    final perOffer = await settings.find(SettingKeys.promotionRewardSmsTemplates);
+    final globalRaw = global is Success<AppSetting?> ? global.value?.value : null;
+    final mapRaw = perOffer is Success<AppSetting?> ? perOffer.value?.value : null;
+    var output = PromotionRewardTemplate.resolve(
+      perOffer: PromotionRewardTemplate.lookup(mapRaw, promotionId),
+      global: globalRaw,
+      fallback: defaultRewardSmsTemplate,
+    );
     values.forEach((name, value) {
       output = output.replaceAll('{$name}', value);
     });

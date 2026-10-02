@@ -9,17 +9,29 @@ import '../theme/net_tokens.dart';
 import '../widgets/net/net_surface_card.dart';
 
 /// تحرير قالب رسالة المكافأة من شاشة العروض مع تتبّع الكتابة قبل الحفظ.
-Future<bool?> showOffersRewardTemplateSheet(BuildContext context) {
+///
+/// بدون [promotionId] يُحفظ القالب العام. مع معرّف العرض يُحفظ تخصيص هذا العرض فقط.
+Future<bool?> showOffersRewardTemplateSheet(
+  BuildContext context, {
+  String? promotionId,
+  String? promotionTitle,
+}) {
   return showModalBottomSheet<bool>(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
-    builder: (ctx) => const _OffersRewardTemplateSheet(),
+    builder: (ctx) => _OffersRewardTemplateSheet(
+      promotionId: promotionId,
+      promotionTitle: promotionTitle,
+    ),
   );
 }
 
 class _OffersRewardTemplateSheet extends StatefulWidget {
-  const _OffersRewardTemplateSheet();
+  const _OffersRewardTemplateSheet({this.promotionId, this.promotionTitle});
+
+  final String? promotionId;
+  final String? promotionTitle;
 
   @override
   State<_OffersRewardTemplateSheet> createState() =>
@@ -54,11 +66,19 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
     });
   }
 
+  bool get _perOffer => widget.promotionId != null && widget.promotionId!.isNotEmpty;
+
   Future<void> _load() async {
     final c = AppScope.of(context);
-    final result = await c.settings.find(SettingKeys.promotionRewardSmsTemplate);
-    final stored = result is Success<AppSetting?> ? result.value?.value : null;
-    final text = PromotionRewardTemplate.normalize(stored, fallback: _fallback);
+    final global = await c.settings.find(SettingKeys.promotionRewardSmsTemplate);
+    final stored = global is Success<AppSetting?> ? global.value?.value : null;
+    var text = PromotionRewardTemplate.normalize(stored, fallback: _fallback);
+    if (_perOffer) {
+      final map = await c.settings.find(SettingKeys.promotionRewardSmsTemplates);
+      final raw = map is Success<AppSetting?> ? map.value?.value : null;
+      final specific = PromotionRewardTemplate.lookup(raw, widget.promotionId!);
+      if (specific != null) text = specific;
+    }
     _body.removeListener(_onTyped);
     _body.text = text;
     _body.addListener(_onTyped);
@@ -71,18 +91,33 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
   }
 
   Future<void> _save() async {
-    final body = PromotionRewardTemplate.normalize(_draft, fallback: _fallback);
+    final c = AppScope.of(context);
+    late final AppSetting setting;
+    if (_perOffer) {
+      final map = await c.settings.find(SettingKeys.promotionRewardSmsTemplates);
+      final raw = map is Success<AppSetting?> ? map.value?.value : null;
+      setting = AppSetting(
+        key: SettingKeys.promotionRewardSmsTemplates,
+        value: PromotionRewardTemplate.encodeMap(
+          raw,
+          promotionId: widget.promotionId!,
+          body: _draft.trim(),
+        ),
+        updatedAt: c.clock.now(),
+      );
+    } else {
+      setting = AppSetting(
+        key: SettingKeys.promotionRewardSmsTemplate,
+        value: PromotionRewardTemplate.normalize(_draft, fallback: _fallback),
+        updatedAt: c.clock.now(),
+      );
+    }
     setState(() {
       _busy = true;
       _status = null;
     });
-    final c = AppScope.of(context);
     final result = await c.settings.save(
-      AppSetting(
-        key: SettingKeys.promotionRewardSmsTemplate,
-        value: body,
-        updatedAt: c.clock.now(),
-      ),
+      setting,
     );
     if (!mounted) return;
     if (result is Failure) {
@@ -123,7 +158,9 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Text(
-                      'قالب رسالة المكافأة',
+                      _perOffer
+                          ? 'قالب مكافأة: ${widget.promotionTitle ?? 'هذا العرض'}'
+                          : 'قالب رسالة المكافأة',
                       style: TextStyle(
                         fontFamily: NetTypography.family,
                         fontWeight: FontWeight.w800,
@@ -132,7 +169,9 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      'يُحفظ في إعدادات الرسائل ويُستخدم عند صرف كرت العرض. المتغيرات: {title} {serial} {secret} {code} {promotion_name} {reward_value}',
+                      _perOffer
+                          ? 'يُستخدم لهذا العرض فقط. امسح النص واحفظ للعودة إلى القالب العام. المتغيرات: {title} {serial} {secret} {code} {amount} {promotion_name} {reward_value}'
+                          : 'القالب العام لكل العروض التي بلا قالب خاص. المتغيرات: {title} {serial} {secret} {code} {amount} {promotion_name} {reward_value}',
                       style: TextStyle(
                         fontFamily: NetTypography.family,
                         fontSize: 13,

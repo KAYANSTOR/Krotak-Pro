@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../core/result.dart';
 import '../../domain/entities/card.dart';
 import '../../domain/entities/promotion.dart';
+import '../../domain/entities/setting.dart';
+import '../../domain/services/promotion_reward_template.dart';
 import '../app_scope.dart';
 import '../theme/kayan_palette.dart';
 import '../theme/net_semantic_colors.dart';
@@ -31,6 +33,7 @@ class _OffersScreenState extends State<OffersScreen>
   String? _error;
   List<Promotion> _items = const [];
   Map<String, String> _categoryNames = const {};
+  Set<String> _customTemplateIds = const {};
 
   @override
   void initState() {
@@ -67,10 +70,14 @@ class _OffersScreenState extends State<OffersScreen>
       });
       return;
     }
+    final templates = await c.settings.find(SettingKeys.promotionRewardSmsTemplates);
+    final raw = templates is Success<AppSetting?> ? templates.value?.value : null;
+    if (!mounted) return;
     setState(() {
       _loading = false;
       _items = (listed as Success<List<Promotion>>).value;
       _categoryNames = names;
+      _customTemplateIds = PromotionRewardTemplate.decodeMap(raw).keys.toSet();
     });
   }
 
@@ -104,6 +111,19 @@ class _OffersScreenState extends State<OffersScreen>
       existing: existing,
     );
     if (saved == true) await _load();
+  }
+
+  Future<void> _editTemplate(Promotion p) async {
+    final saved = await showOffersRewardTemplateSheet(
+      context,
+      promotionId: p.id,
+      promotionTitle: p.title,
+    );
+    if (!mounted || saved != true) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('تم حفظ قالب مكافأة «${p.title}»')),
+    );
+    await _load();
   }
 
   Future<void> _toggle(Promotion p) async {
@@ -175,9 +195,11 @@ class _OffersScreenState extends State<OffersScreen>
         return _PromotionCard(
           promotion: p,
           rewardName: reward,
+          hasCustomTemplate: _customTemplateIds.contains(p.id),
           onEdit: () => _openForm(p),
           onToggle: () => _toggle(p),
           onDelete: () => _delete(p),
+          onTemplate: () => _editTemplate(p),
         );
       },
     );
@@ -268,16 +290,20 @@ class _PromotionCard extends StatelessWidget {
   const _PromotionCard({
     required this.promotion,
     required this.rewardName,
+    required this.hasCustomTemplate,
     required this.onEdit,
     required this.onToggle,
     required this.onDelete,
+    required this.onTemplate,
   });
 
   final Promotion promotion;
   final String rewardName;
+  final bool hasCustomTemplate;
   final VoidCallback onEdit;
   final VoidCallback onToggle;
   final VoidCallback onDelete;
+  final VoidCallback onTemplate;
 
   @override
   Widget build(BuildContext context) {
@@ -359,11 +385,13 @@ class _PromotionCard extends StatelessWidget {
                 icon: Icon(Icons.more_vert_rounded, color: palette.textSecondary),
                 onSelected: (v) {
                   if (v == 'edit') onEdit();
+                  if (v == 'template') onTemplate();
                   if (v == 'toggle') onToggle();
                   if (v == 'delete') onDelete();
                 },
                 itemBuilder: (ctx) => [
                   const PopupMenuItem(value: 'edit', child: Text('تعديل')),
+                  const PopupMenuItem(value: 'template', child: Text('قالب المكافأة')),
                   PopupMenuItem(
                     value: 'toggle',
                     child: Text(isActive ? 'تعطيل' : 'تفعيل'),
@@ -375,7 +403,7 @@ class _PromotionCard extends StatelessWidget {
           ),
           const SizedBox(height: NetSpacing.sm),
           Text(
-            'مكافأة: $rewardName',
+            hasCustomTemplate ? 'مكافأة: $rewardName · قالب خاص' : 'مكافأة: $rewardName',
             style: TextStyle(
               fontFamily: NetTypography.family,
               fontSize: 12.5,
