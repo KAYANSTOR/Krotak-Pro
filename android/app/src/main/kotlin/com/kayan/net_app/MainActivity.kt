@@ -255,6 +255,14 @@ class MainActivity : FlutterActivity(), SmsListener {
                         .apply()
                     result.success(true)
                 }
+                "scheduleDailySummary" -> {
+                    DailySummaryScheduler.schedule(applicationContext)
+                    result.success(true)
+                }
+                "cancelDailySummary" -> {
+                    DailySummaryScheduler.cancel(applicationContext)
+                    result.success(true)
+                }
                 "openAutoStartSettings" -> try {
                     openOemAutostartSettings()
                     result.success(true)

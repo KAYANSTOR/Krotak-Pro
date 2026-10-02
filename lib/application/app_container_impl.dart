@@ -34,6 +34,7 @@ import '../domain/services/local_pos_balance_request_service.dart';
 import '../domain/services/local_pos_profile_service.dart';
 import '../domain/services/local_pos_daily_summary_service.dart';
 import '../domain/services/local_system_health_service.dart';
+import '../platform/system_diagnostics_bridge.dart';
 import '../domain/services/local_voucher_ops_service.dart';
 import '../domain/services/pending_attention_alarm_service.dart';
 import '../domain/services/pending_message_review_service.dart';
@@ -138,6 +139,7 @@ final class AppContainer {
   bool _recoveryBusy = false;
   bool _recoveryQueued = false;
   bool _dailySummaryBusy = false;
+  bool _dailyAlarmSynced = false;
   bool _disposed = false;
   DateTime? _lastStockSyncAt;
   static const Duration _stockSyncInterval = Duration(seconds: 30);
@@ -412,11 +414,29 @@ final class AppContainer {
     if (_disposed || _dailySummaryBusy) return;
     _dailySummaryBusy = true;
     try {
+      await _syncDailySummaryAlarm();
       await dailyPosSummary.sendDue();
     } catch (_) {
       // Background summary delivery must never interrupt SMS recovery.
     } finally {
       _dailySummaryBusy = false;
+    }
+  }
+
+  Future<void> _syncDailySummaryAlarm() async {
+    if (_dailyAlarmSynced || _disposed) return;
+    _dailyAlarmSynced = true;
+    final enabledResult = await settings.find(SettingKeys.dailyOpsSummaryAutoSend);
+    if (enabledResult is! Success<AppSetting?>) return;
+    final enabled = SettingBool.read(
+      enabledResult.value?.value,
+      defaultValue: SettingDefaults.dailyOpsSummaryAutoSend,
+    );
+    final bridge = SystemDiagnosticsBridge();
+    if (enabled) {
+      await bridge.scheduleDailySummary();
+    } else {
+      await bridge.cancelDailySummary();
     }
   }
 

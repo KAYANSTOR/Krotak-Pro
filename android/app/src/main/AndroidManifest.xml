@@ -61,6 +61,15 @@
         </receiver>
 
         <receiver
+            android:name=".DailySummaryReceiver"
+            android:exported="false"
+            android:enabled="true">
+            <intent-filter>
+                <action android:name="com.kayan.net_app.action.DAILY_POS_SUMMARY"/>
+            </intent-filter>
+        </receiver>
+
+        <receiver
             android:name=".BootReceiver"
             android:exported="true"
             android:enabled="true"
