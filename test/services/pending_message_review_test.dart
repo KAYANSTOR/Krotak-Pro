@@ -148,6 +148,7 @@ final class _FakeCustomers implements CustomerRepository {
   @override
   Future<Result<AccountLedgerTotals>> sumLedgerSides(
     String query, {
+    AccountSqlFilter filter = AccountSqlFilter.all,
     String currencyCode = 'YER',
   }) async => const Success(AccountLedgerTotals(
         debtorMinorUnits: 0,

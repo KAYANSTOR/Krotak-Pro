@@ -131,7 +131,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
     final rows = await _fetchPage(query, 0);
     final count = await _fetchMatchCount(query);
     final buckets = await _fetchBuckets(query);
-    final ledger = await _fetchLedgerTotals(query);
+    final ledger = await _fetchLedgerTotals(query, _sqlFilter);
     if (!mounted || rows == null) return;
     setState(() {
       _loading = false;
@@ -143,9 +143,12 @@ class _CustomersScreenState extends State<CustomersScreen> {
     });
   }
 
-  Future<AccountLedgerTotals?> _fetchLedgerTotals(String query) async {
+  Future<AccountLedgerTotals?> _fetchLedgerTotals(
+    String query,
+    AccountSqlFilter filter,
+  ) async {
     final c = AppScope.of(context);
-    final result = await c.customers.sumLedgerSides(query);
+    final result = await c.customers.sumLedgerSides(query, filter: filter);
     if (!mounted || result is! Success<AccountLedgerTotals>) return null;
     return result.value;
   }
@@ -316,7 +319,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
     );
   }
 
-  /// إجمالي الدفتر من SQL لنفس البحث. السقوط للصفوف المحمّلة إن فشل الاستعلام.
+  /// إجمالي الشريحة الحالية من SQL. السقوط للصفوف المحمّلة إن فشل الاستعلام.
   int get _debtorTotalMinor => _ledgerTotals?.debtorMinorUnits ?? _allRows
       .map((r) => r.balance?.minorUnits ?? 0)
       .where((v) => v < 0)

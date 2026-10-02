@@ -49,9 +49,11 @@ abstract interface class CustomerRepository {
     String currencyCode = 'YER',
   });
 
-  /// إجمالي المدين والدائن لنفس البحث، مستقلاً عن الصفحة المحمّلة.
+  /// إجمالي المدين والدائن لنفس البحث والشريحة، مستقلاً عن الصفحة المحمّلة.
+  /// [filter] يقيّد الحسابات قبل الجمع. الافتراضي كل الحسابات غير المدمجة.
   Future<Result<AccountLedgerTotals>> sumLedgerSides(
     String query, {
+    AccountSqlFilter filter = AccountSqlFilter.all,
     String currencyCode = 'YER',
   });
 

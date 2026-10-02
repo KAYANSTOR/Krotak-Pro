@@ -203,5 +203,40 @@ void main() {
     expect(namedValue.debtorMinorUnits, 0);
     expect(namedValue.creditorMinorUnits, 700);
   });
+
+  test('sumLedgerSides respects the active filter chip', () async {
+    await seedCustomer('debt', 'مدين', phone: '777700001');
+    await seedCustomer('credit', 'دائن', phone: '777700002');
+    await seedCustomer('temp', 'مؤقت مدين', status: CustomerStatus.provisional);
+    await seedCustomer('plain', 'بلا رقم');
+    await ledger('f1', 'debt', TransactionType.sale, 500);
+    await ledger('f2', 'credit', TransactionType.deposit, 700);
+    await ledger('f3', 'temp', TransactionType.sale, 200);
+    await ledger('f4', 'plain', TransactionType.deposit, 50);
+
+    final debtors = await customers.sumLedgerSides(
+      '',
+      filter: AccountSqlFilter.debtor,
+    );
+    final debtorTotals = (debtors as Success<AccountLedgerTotals>).value;
+    expect(debtorTotals.debtorMinorUnits, 700);
+    expect(debtorTotals.creditorMinorUnits, 0);
+
+    final provisional = await customers.sumLedgerSides(
+      '',
+      filter: AccountSqlFilter.provisional,
+    );
+    final provisionalTotals = (provisional as Success<AccountLedgerTotals>).value;
+    expect(provisionalTotals.debtorMinorUnits, 200);
+    expect(provisionalTotals.creditorMinorUnits, 0);
+
+    final unlinked = await customers.sumLedgerSides(
+      '',
+      filter: AccountSqlFilter.unlinked,
+    );
+    final unlinkedTotals = (unlinked as Success<AccountLedgerTotals>).value;
+    expect(unlinkedTotals.debtorMinorUnits, 200);
+    expect(unlinkedTotals.creditorMinorUnits, 50);
+  });
 }
 

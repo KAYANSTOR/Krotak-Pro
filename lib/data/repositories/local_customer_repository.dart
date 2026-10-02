@@ -324,13 +324,15 @@ final class LocalCustomerRepository implements CustomerRepository {
   @override
   Future<Result<domain.AccountLedgerTotals>> sumLedgerSides(
     String query, {
+    domain.AccountSqlFilter filter = domain.AccountSqlFilter.all,
     String currencyCode = 'YER',
   }) async {
     try {
       final trimmed = query.trim();
       final like = '%$trimmed%';
+      final filterName = filter.name;
       final row = await database.customSelect(
-        '''
+        """
         SELECT
           COALESCE(SUM(CASE
             WHEN COALESCE(bal.signed_balance, 0) < 0 THEN -bal.signed_balance
@@ -355,6 +357,19 @@ final class LocalCustomerRepository implements CustomerRepository {
         ) bal ON bal.customer_id = c.id
         WHERE c.status != 'merged'
           AND (
+            ? = 'all'
+            OR (? = 'debtor' AND COALESCE(bal.signed_balance, 0) < 0)
+            OR (? = 'creditor' AND COALESCE(bal.signed_balance, 0) > 0)
+            OR (? = 'zero' AND COALESCE(bal.signed_balance, 0) = 0)
+            OR (? = 'provisional' AND c.status = 'provisional')
+            OR (? = 'unlinked' AND NOT EXISTS (
+              SELECT 1 FROM customer_identifiers i
+              WHERE i.customer_id = c.id
+                AND i.type = 'phoneNumber'
+                AND TRIM(i.value) != ''
+            ))
+          )
+          AND (
             ? = ''
             OR c.display_name LIKE ?
             OR EXISTS (
@@ -362,9 +377,15 @@ final class LocalCustomerRepository implements CustomerRepository {
               WHERE i2.customer_id = c.id AND i2.value LIKE ?
             )
           )
-        ''',
+        """,
         variables: [
           Variable.withString(currencyCode),
+          Variable.withString(filterName),
+          Variable.withString(filterName),
+          Variable.withString(filterName),
+          Variable.withString(filterName),
+          Variable.withString(filterName),
+          Variable.withString(filterName),
           Variable.withString(trimmed),
           Variable.withString(like),
           Variable.withString(like),
@@ -392,7 +413,6 @@ final class LocalCustomerRepository implements CustomerRepository {
   }
 
 
-  @override
   Future<Result<List<domain.CustomerPhoneSuggestion>>> suggestPhonesByPrefix(
     String prefix, {
     int limit = 8,
