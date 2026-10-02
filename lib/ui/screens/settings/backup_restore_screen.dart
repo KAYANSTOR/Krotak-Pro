@@ -3,7 +3,6 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
-import 'package:share_plus/share_plus.dart';
 
 import '../../../core/result.dart';
 import '../../../domain/services/local_backup_service.dart';
@@ -79,40 +78,6 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen> {
     final file = (r as Success<File>).value;
     setState(() => _status = 'تم إنشاء النسخة: ${p.basename(file.path)}');
     await _load();
-    if (!mounted) return;
-    final share = await _askShareToDrive(file);
-    if (share == true) await _shareToDrive(file);
-  }
-
-  Future<bool?> _askShareToDrive(File file) {
-    return showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('حفظ في Google Drive؟'),
-        content: Text(
-          'النسخة مشفّرة بكلمة المرور. يمكنك حفظ ${p.basename(file.path)} '
-          'في Google Drive أو أي حساب سحابي عبر ورقة المشاركة، دون رفعها من الخادم.',
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('لاحقاً')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('مشاركة الآن')),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _shareToDrive(File file) async {
-    if (!file.existsSync()) {
-      setState(() => _status = 'ملف النسخة غير موجود');
-      return;
-    }
-    await Share.shareXFiles(
-      [XFile(file.path, mimeType: 'application/octet-stream', name: p.basename(file.path))],
-      subject: 'نسخة كروتك الاحتياطية',
-      text: 'نسخة مشفّرة. احفظها في Google Drive بحسابك. لا تفتحها إلا من داخل كروتك.',
-    );
-    if (!mounted) return;
-    setState(() => _status = 'فُتحت ورقة المشاركة — اختر Google Drive بحسابك');
   }
 
   Future<void> _restoreFromListed(File file) async {
@@ -393,7 +358,7 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen> {
                       if (_backups.isEmpty)
                         AsyncEmptyView(
                           message: 'لا توجد نسخ محفوظة بعد',
-                          hint: 'أنشئ نسخة أو اختر ملف .krt. أيقونة السحابة تحفظها في Drive بحسابك',
+                          hint: 'أنشئ نسخة أو اختر ملف .krt للاستعادة',
                           icon: Icons.inventory_2_outlined,
                           compact: true,
                         )
@@ -452,11 +417,6 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen> {
                                       ),
                                     ],
                                   ),
-                                ),
-                                IconButton(
-                                  tooltip: 'حفظ في Drive',
-                                  onPressed: busy ? null : () => _shareToDrive(f),
-                                  icon: Icon(Icons.cloud_upload_rounded, color: palette.primary, size: 20),
                                 ),
                                 Icon(Icons.restore_rounded, color: palette.primary, size: 20),
                               ],
