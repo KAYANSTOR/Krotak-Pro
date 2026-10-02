@@ -21,10 +21,11 @@ class PromotionRewardTemplate {
     return trimmed.isEmpty ? fallback.trim() : trimmed;
   }
 
-  /// قالب العرض إن وُجد، وإلا القالب العام، وإلا الافتراضي.
+  /// العميل داخل العرض، ثم قالب العرض، ثم قالب العميل العام، ثم العام، ثم الافتراضي.
   static String resolve({
     String? perCustomer,
     required String? perOffer,
+    String? perCustomerGlobal,
     required String? global,
     required String fallback,
   }) {
@@ -32,6 +33,8 @@ class PromotionRewardTemplate {
     if (customer.isNotEmpty) return customer;
     final specific = perOffer?.trim() ?? '';
     if (specific.isNotEmpty) return specific;
+    final generalCustomer = perCustomerGlobal?.trim() ?? '';
+    if (generalCustomer.isNotEmpty) return generalCustomer;
     return normalize(global, fallback: fallback);
   }
 
@@ -44,6 +47,17 @@ class PromotionRewardTemplate {
     String customerId,
   ) =>
       lookup(raw, customerKey(promotionId, customerId));
+
+  static String? lookupGlobalCustomer(String? raw, String customerId) =>
+      lookup(raw, customerId.trim());
+
+  /// النص الفارغ يحذف قالب العميل العام ويعيده إلى قالب العرض أو العام.
+  static String encodeGlobalCustomerMap(
+    String? raw, {
+    required String customerId,
+    required String? body,
+  }) =>
+      encodeMap(raw, promotionId: customerId.trim(), body: body);
 
   /// النص الفارغ يحذف تخصيص العميل ويعيد العرض إلى قالب العرض/العام.
   static String encodeCustomerMap(

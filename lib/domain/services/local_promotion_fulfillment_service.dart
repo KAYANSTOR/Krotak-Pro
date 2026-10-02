@@ -271,10 +271,16 @@ final class LocalPromotionFulfillmentService {
     final perOffer = await settings.find(SettingKeys.promotionRewardSmsTemplates);
     final perCustomer =
         await settings.find(SettingKeys.promotionRewardCustomerSmsTemplates);
+    final perCustomerGlobal = await settings.find(
+      SettingKeys.promotionRewardCustomerGlobalSmsTemplates,
+    );
     final globalRaw = global is Success<AppSetting?> ? global.value?.value : null;
     final mapRaw = perOffer is Success<AppSetting?> ? perOffer.value?.value : null;
     final customerRaw =
         perCustomer is Success<AppSetting?> ? perCustomer.value?.value : null;
+    final customerGlobalRaw = perCustomerGlobal is Success<AppSetting?>
+        ? perCustomerGlobal.value?.value
+        : null;
     var output = PromotionRewardTemplate.resolve(
       perCustomer: PromotionRewardTemplate.lookupCustomer(
         customerRaw,
@@ -282,6 +288,10 @@ final class LocalPromotionFulfillmentService {
         customerId,
       ),
       perOffer: PromotionRewardTemplate.lookup(mapRaw, promotionId),
+      perCustomerGlobal: PromotionRewardTemplate.lookupGlobalCustomer(
+        customerGlobalRaw,
+        customerId,
+      ),
       global: globalRaw,
       fallback: defaultRewardSmsTemplate,
     );

@@ -19,6 +19,7 @@ import '../widgets/async_views.dart';
 import '../widgets/customer_promotion_progress.dart';
 import '../widgets/customer_statement_export.dart';
 import '../widgets/net/net_app_bar_title.dart';
+import 'offers_reward_template_sheet.dart';
 
 /// مركز العميل الكامل: هوية + رصيد + دفتر + تعديل رصيد + عروض.
 class CustomerDetailScreen extends StatefulWidget {
@@ -377,6 +378,22 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
               onPressed: _loading ? null : _load,
               icon: const Icon(Icons.refresh_rounded),
             ),
+            if (_customer != null)
+              IconButton(
+                tooltip: 'قالب مكافأة العميل',
+                onPressed: () async {
+                  final saved = await showOffersRewardTemplateSheet(
+                    context,
+                    customerId: widget.customerId,
+                    customerLabel: _customer!.displayName,
+                  );
+                  if (!mounted || saved != true) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('تم حفظ قالب مكافأة العميل')),
+                  );
+                },
+                icon: const Icon(Icons.sms_outlined),
+              ),
             if (_customer != null)
               IconButton(
                 tooltip: 'تصدير PDF',

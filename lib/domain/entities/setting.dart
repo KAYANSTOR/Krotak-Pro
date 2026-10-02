@@ -43,6 +43,8 @@ abstract final class SettingKeys {
   static const promotionRewardSmsTemplates = 'promotion_reward_sms_templates';
   static const promotionRewardCustomerSmsTemplates =
       'promotion_reward_customer_sms_templates';
+  static const promotionRewardCustomerGlobalSmsTemplates =
+      'promotion_reward_customer_global_sms_templates';
 
   static const voucherDeliverySmsTemplate = 'voucher_delivery_sms_template';
   static const posCustomerCardDeliveryTemplate = 'pos_customer_card_delivery_template';

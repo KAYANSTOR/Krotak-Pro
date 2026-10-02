@@ -11,7 +11,8 @@ import '../widgets/net/net_surface_card.dart';
 /// تحرير قالب رسالة المكافأة من شاشة العروض مع تتبّع الكتابة قبل الحفظ.
 ///
 /// بدون [promotionId] يُحفظ القالب العام. مع معرّف العرض يُحفظ تخصيص هذا العرض فقط.
-/// مع [customerId] يُحفظ تخصيص هذا العميل داخل العرض دون تغيير بقية العملاء.
+/// مع [customerId] ومعرّف العرض يُحفظ تخصيص هذا العميل داخل العرض.
+/// مع [customerId] دون عرض يُحفظ قالب العميل العام لكل العروض.
 Future<bool?> showOffersRewardTemplateSheet(
   BuildContext context, {
   String? promotionId,
@@ -83,6 +84,9 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
   bool get _perCustomer =>
       _perOffer && widget.customerId != null && widget.customerId!.isNotEmpty;
 
+  bool get _perCustomerGlobal =>
+      !_perOffer && widget.customerId != null && widget.customerId!.isNotEmpty;
+
   Future<void> _load() async {
     final c = AppScope.of(context);
     final global = await c.settings.find(SettingKeys.promotionRewardSmsTemplate);
@@ -102,6 +106,17 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
       final specific = PromotionRewardTemplate.lookupCustomer(
         raw,
         widget.promotionId!,
+        widget.customerId!,
+      );
+      if (specific != null) text = specific;
+    }
+    if (_perCustomerGlobal) {
+      final map = await c.settings.find(
+        SettingKeys.promotionRewardCustomerGlobalSmsTemplates,
+      );
+      final raw = map is Success<AppSetting?> ? map.value?.value : null;
+      final specific = PromotionRewardTemplate.lookupGlobalCustomer(
+        raw,
         widget.customerId!,
       );
       if (specific != null) text = specific;
@@ -130,6 +145,20 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
         value: PromotionRewardTemplate.encodeCustomerMap(
           raw,
           promotionId: widget.promotionId!,
+          customerId: widget.customerId!,
+          body: _draft.trim(),
+        ),
+        updatedAt: c.clock.now(),
+      );
+    } else if (_perCustomerGlobal) {
+      final map = await c.settings.find(
+        SettingKeys.promotionRewardCustomerGlobalSmsTemplates,
+      );
+      final raw = map is Success<AppSetting?> ? map.value?.value : null;
+      setting = AppSetting(
+        key: SettingKeys.promotionRewardCustomerGlobalSmsTemplates,
+        value: PromotionRewardTemplate.encodeGlobalCustomerMap(
+          raw,
           customerId: widget.customerId!,
           body: _draft.trim(),
         ),
@@ -202,6 +231,8 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
                     Text(
                       _perCustomer
                           ? 'قالب العميل: ${widget.customerLabel ?? 'عميل العرض'}'
+                          : _perCustomerGlobal
+                          ? 'قالب العميل العام: ${widget.customerLabel ?? 'العميل'}'
                           : _perOffer
                           ? 'قالب مكافأة: ${widget.promotionTitle ?? 'هذا العرض'}'
                           : 'قالب رسالة المكافأة',
@@ -213,9 +244,13 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      _perOffer
-                          ? 'يُستخدم لهذا العرض فقط. امسح النص واحفظ للعودة إلى القالب العام. المتغيرات: {title} {serial} {secret} {code} {amount} {promotion_name} {reward_value}'
-                          : 'القالب العام لكل العروض التي بلا قالب خاص. المتغيرات: {title} {serial} {secret} {code} {amount} {promotion_name} {reward_value}',
+                      _perCustomer
+                          ? 'يُستخدم لهذا العميل داخل العرض فقط، ويتقدّم على قالب العرض. امسح النص واحفظ للعودة إلى قالب العرض. المتغيرات: {customer_name} {title} {serial} {secret} {code} {amount} {promotion_name} {reward_value}'
+                          : _perCustomerGlobal
+                          ? 'يُستخدم لكل عروض هذا العميل ما لم يوجد قالب للعرض أو تخصيص داخل العرض. امسح النص واحفظ للعودة إلى قالب العرض أو العام. المتغيرات: {customer_name} {title} {serial} {secret} {code} {amount} {promotion_name} {reward_value}'
+                          : _perOffer
+                          ? 'يُستخدم لهذا العرض فقط ويتقدّم على قالب العميل العام. امسح النص واحفظ للعودة إلى قالب العميل العام ثم العام. المتغيرات: {title} {serial} {secret} {code} {amount} {promotion_name} {reward_value} {customer_name}'
+                          : 'القالب العام لكل العروض التي بلا قالب خاص. المتغيرات: {title} {serial} {secret} {code} {amount} {promotion_name} {reward_value} {customer_name}',
                       style: TextStyle(
                         fontFamily: NetTypography.family,
                         fontSize: 13,

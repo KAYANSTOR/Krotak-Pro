@@ -111,4 +111,57 @@ void main() {
     );
     expect(PromotionRewardTemplate.lookupCustomer(cleared, 'p1', 'c1'), isNull);
   });
+
+  test('global customer template is used only after the offer template', () {
+    const offer = 'عرض {title}';
+    const global = 'عام {title}';
+    expect(
+      PromotionRewardTemplate.resolve(
+        perCustomer: null,
+        perOffer: offer,
+        perCustomerGlobal: 'عميل عام {customer_name}',
+        global: global,
+        fallback: 'افتراضي',
+      ),
+      offer,
+    );
+    expect(
+      PromotionRewardTemplate.resolve(
+        perCustomer: null,
+        perOffer: '   ',
+        perCustomerGlobal: '  عميل عام {customer_name}  ',
+        global: global,
+        fallback: 'افتراضي',
+      ),
+      'عميل عام {customer_name}',
+    );
+    expect(
+      PromotionRewardTemplate.resolve(
+        perCustomer: 'داخل العرض',
+        perOffer: offer,
+        perCustomerGlobal: 'عميل عام',
+        global: global,
+        fallback: 'افتراضي',
+      ),
+      'داخل العرض',
+    );
+
+    final encoded = PromotionRewardTemplate.encodeGlobalCustomerMap(
+      null,
+      customerId: 'c1',
+      body: 'قالب العميل العام',
+    );
+    expect(
+      PromotionRewardTemplate.lookupGlobalCustomer(encoded, 'c1'),
+      'قالب العميل العام',
+    );
+    expect(PromotionRewardTemplate.lookupGlobalCustomer(encoded, 'c2'), isNull);
+    final cleared = PromotionRewardTemplate.encodeGlobalCustomerMap(
+      encoded,
+      customerId: 'c1',
+      body: '',
+    );
+    expect(PromotionRewardTemplate.lookupGlobalCustomer(cleared, 'c1'), isNull);
+  });
 }
+
