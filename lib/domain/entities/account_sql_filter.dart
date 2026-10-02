@@ -43,3 +43,41 @@ final class AccountLedgerTotals {
   final int debtorMinorUnits;
   final int creditorMinorUnits;
 }
+
+/// إجمالي المدين والدائن لعملة واحدة ضمن نفس شريحة الحسابات.
+/// عضوية الشريحة تُحسب من رصيد الريال اليمني حتى تبقى البطاقات مطابقة للقائمة.
+final class AccountCurrencyLedgerTotals {
+  const AccountCurrencyLedgerTotals({
+    required this.currencyCode,
+    required this.debtorMinorUnits,
+    required this.creditorMinorUnits,
+  });
+
+  final String currencyCode;
+  final int debtorMinorUnits;
+  final int creditorMinorUnits;
+}
+
+String _minorLabel(int minorUnits) {
+  final negative = minorUnits < 0;
+  final absUnits = minorUnits.abs();
+  final whole = absUnits ~/ 100;
+  final fraction = (absUnits % 100).toString().padLeft(2, '0');
+  return '${negative ? '-' : ''}$whole.$fraction';
+}
+
+/// سطر العملات غير الريال اليمني. فارغ إن لم توجد حركة مكتملة بغير YER.
+String otherCurrencyTotalsLabel(List<AccountCurrencyLedgerTotals> rows) {
+  final others = rows.where(
+    (row) =>
+        row.currencyCode != 'YER' &&
+        (row.debtorMinorUnits != 0 || row.creditorMinorUnits != 0),
+  );
+  if (others.isEmpty) return '';
+  return others
+      .map(
+        (row) =>
+            '${row.currencyCode}: مدين ${_minorLabel(row.debtorMinorUnits)} / دائن ${_minorLabel(row.creditorMinorUnits)}',
+      )
+      .join(' · ');
+}

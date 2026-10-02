@@ -58,6 +58,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
   int? _matchCount;
   AccountFilterCounts? _buckets;
   AccountLedgerTotals? _ledgerTotals;
+  List<AccountCurrencyLedgerTotals> _currencyTotals = const [];
   List<_AccountRow> _allRows = const [];
   _AccountFilter _filter = _AccountFilter.all;
   _AccountSort _sort = _AccountSort.balanceDesc;
@@ -132,6 +133,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
     final count = await _fetchMatchCount(query);
     final buckets = await _fetchBuckets(query);
     final ledger = await _fetchLedgerTotals(query, _sqlFilter);
+    final currencies = await _fetchCurrencyTotals(query, _sqlFilter);
     if (!mounted || rows == null) return;
     setState(() {
       _loading = false;
@@ -139,6 +141,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
       _matchCount = count;
       _buckets = buckets;
       _ledgerTotals = ledger;
+      _currencyTotals = currencies;
       _hasMore = rows.length >= _pageSize;
     });
   }
@@ -150,6 +153,19 @@ class _CustomersScreenState extends State<CustomersScreen> {
     final c = AppScope.of(context);
     final result = await c.customers.sumLedgerSides(query, filter: filter);
     if (!mounted || result is! Success<AccountLedgerTotals>) return null;
+    return result.value;
+  }
+
+
+  Future<List<AccountCurrencyLedgerTotals>> _fetchCurrencyTotals(
+    String query,
+    AccountSqlFilter filter,
+  ) async {
+    final c = AppScope.of(context);
+    final result = await c.customers.sumLedgerSidesByCurrency(query, filter: filter);
+    if (!mounted || result is! Success<List<AccountCurrencyLedgerTotals>>) {
+      return const [];
+    }
     return result.value;
   }
 
@@ -594,6 +610,18 @@ class _CustomersScreenState extends State<CustomersScreen> {
                     ),
                   ],
                 ),
+                if (otherCurrencyTotalsLabel(_currencyTotals).isNotEmpty) ...[
+                  const SizedBox(height: NetSpacing.sm),
+                  Text(
+                    otherCurrencyTotalsLabel(_currencyTotals),
+                    style: TextStyle(
+                      fontFamily: NetTypography.family,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: palette.textSecondary,
+                    ),
+                  ),
+                ],
                 const SizedBox(height: NetSpacing.sm),
                 Row(
                   children: [

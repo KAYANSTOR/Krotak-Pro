@@ -44,12 +44,12 @@ void main() {
     }
   }
 
-  Future<void> ledger(String id, String customerId, TransactionType type, int minor, {TransactionStatus status = TransactionStatus.completed}) async {
+  Future<void> ledger(String id, String customerId, TransactionType type, int minor, {TransactionStatus status = TransactionStatus.completed, String currencyCode = 'YER'}) async {
     await transactions.append(Transaction(
       id: id,
       type: type,
       status: status,
-      amount: Money(minorUnits: minor, currencyCode: 'YER'),
+      amount: Money(minorUnits: minor, currencyCode: currencyCode),
       createdAt: DateTime.utc(2026, 10, 1),
       customerId: customerId,
     ));
@@ -240,3 +240,32 @@ void main() {
   });
 }
 
+
+  test('sumLedgerSidesByCurrency keeps YER chip membership and sums other currencies', () async {
+    await seedCustomer('debt', 'مدين', phone: '777800001');
+    await seedCustomer('credit', 'دائن', phone: '777800002');
+    await seedCustomer('merged', 'مدمج', status: CustomerStatus.merged, phone: '777800003');
+    await ledger('y1', 'debt', TransactionType.sale, 500);
+    await ledger('u1', 'debt', TransactionType.deposit, 250, currencyCode: 'USD');
+    await ledger('y2', 'credit', TransactionType.deposit, 700);
+    await ledger('u2', 'credit', TransactionType.sale, 100, currencyCode: 'USD');
+    await ledger('ym', 'merged', TransactionType.sale, 9000, currencyCode: 'USD');
+
+    final all = await customers.sumLedgerSidesByCurrency('');
+    final rows = (all as Success<List<AccountCurrencyLedgerTotals>>).value;
+    expect(rows.map((row) => row.currencyCode), ['YER', 'USD']);
+    expect(rows.first.debtorMinorUnits, 500);
+    expect(rows.first.creditorMinorUnits, 700);
+    expect(rows.last.debtorMinorUnits, 100);
+    expect(rows.last.creditorMinorUnits, 250);
+    expect(otherCurrencyTotalsLabel(rows), 'USD: مدين 1.00 / دائن 2.50');
+
+    final debtors = await customers.sumLedgerSidesByCurrency(
+      '',
+      filter: AccountSqlFilter.debtor,
+    );
+    final debtorRows = (debtors as Success<List<AccountCurrencyLedgerTotals>>).value;
+    final usd = debtorRows.singleWhere((row) => row.currencyCode == 'USD');
+    expect(usd.creditorMinorUnits, 250);
+    expect(usd.debtorMinorUnits, 0);
+  });

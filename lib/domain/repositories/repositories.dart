@@ -57,6 +57,13 @@ abstract interface class CustomerRepository {
     String currencyCode = 'YER',
   });
 
+  /// إجمالي كل عملة للحسابات المطابقة للشريحة. الشريحة تُحدَّد برصيد YER.
+  Future<Result<List<AccountCurrencyLedgerTotals>>> sumLedgerSidesByCurrency(
+    String query, {
+    AccountSqlFilter filter = AccountSqlFilter.all,
+    String membershipCurrencyCode = 'YER',
+  });
+
   /// اقتراح أرقام جوال بالبادئة أثناء الكتابة (بيع مباشر).
   /// يعيد أرقاماً مطبّعة مع الاسم والحالة، مرتبة بالأحدث، بدون حسابات موقوفة/مدمجة/مؤرشفة.
   /// [limit] يمنع N+1 واستعلامات ثقيلة.

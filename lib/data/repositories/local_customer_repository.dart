@@ -412,6 +412,118 @@ final class LocalCustomerRepository implements CustomerRepository {
     }
   }
 
+  @override
+  Future<Result<List<domain.AccountCurrencyLedgerTotals>>> sumLedgerSidesByCurrency(
+    String query, {
+    domain.AccountSqlFilter filter = domain.AccountSqlFilter.all,
+    String membershipCurrencyCode = 'YER',
+  }) async {
+    try {
+      final trimmed = query.trim();
+      final like = '%$trimmed%';
+      final filterName = filter.name;
+      final rows = await database.customSelect(
+        """
+        SELECT
+          cur.currency_code AS currency_code,
+          COALESCE(SUM(CASE
+            WHEN COALESCE(cur.signed_balance, 0) < 0 THEN -cur.signed_balance
+            ELSE 0
+          END), 0) AS debtor_minor,
+          COALESCE(SUM(CASE
+            WHEN COALESCE(cur.signed_balance, 0) > 0 THEN cur.signed_balance
+            ELSE 0
+          END), 0) AS creditor_minor
+        FROM customers c
+        LEFT JOIN (
+          SELECT
+            customer_id,
+            SUM(CASE
+              WHEN type IN ('deposit', 'reward', 'reversal') THEN amount_minor_units
+              ELSE -amount_minor_units
+            END) AS signed_balance
+          FROM transactions
+          WHERE status = 'completed'
+            AND currency_code = ?
+            AND customer_id IS NOT NULL
+          GROUP BY customer_id
+        ) mem ON mem.customer_id = c.id
+        JOIN (
+          SELECT
+            customer_id,
+            currency_code,
+            SUM(CASE
+              WHEN type IN ('deposit', 'reward', 'reversal') THEN amount_minor_units
+              ELSE -amount_minor_units
+            END) AS signed_balance
+          FROM transactions
+          WHERE status = 'completed'
+            AND customer_id IS NOT NULL
+          GROUP BY customer_id, currency_code
+        ) cur ON cur.customer_id = c.id
+        WHERE c.status != 'merged'
+          AND (
+            ? = 'all'
+            OR (? = 'debtor' AND COALESCE(mem.signed_balance, 0) < 0)
+            OR (? = 'creditor' AND COALESCE(mem.signed_balance, 0) > 0)
+            OR (? = 'zero' AND COALESCE(mem.signed_balance, 0) = 0)
+            OR (? = 'provisional' AND c.status = 'provisional')
+            OR (? = 'unlinked' AND NOT EXISTS (
+              SELECT 1 FROM customer_identifiers i
+              WHERE i.customer_id = c.id
+                AND i.type = 'phoneNumber'
+                AND TRIM(i.value) != ''
+            ))
+          )
+          AND (
+            ? = ''
+            OR c.display_name LIKE ?
+            OR EXISTS (
+              SELECT 1 FROM customer_identifiers i2
+              WHERE i2.customer_id = c.id AND i2.value LIKE ?
+            )
+          )
+        GROUP BY cur.currency_code
+        ORDER BY CASE WHEN cur.currency_code = 'YER' THEN 0 ELSE 1 END, cur.currency_code
+        """,
+        variables: [
+          Variable.withString(membershipCurrencyCode),
+          Variable.withString(filterName),
+          Variable.withString(filterName),
+          Variable.withString(filterName),
+          Variable.withString(filterName),
+          Variable.withString(filterName),
+          Variable.withString(filterName),
+          Variable.withString(trimmed),
+          Variable.withString(like),
+          Variable.withString(like),
+        ],
+        readsFrom: {
+          database.customers,
+          database.transactions,
+          database.customerIdentifiers,
+        },
+      ).get();
+      int readSum(QueryRow row, String name) {
+        final value = row.data[name];
+        if (value is int) return value;
+        if (value is BigInt) return value.toInt();
+        if (value is num) return value.toInt();
+        return 0;
+      }
+      return Success([
+        for (final row in rows)
+          domain.AccountCurrencyLedgerTotals(
+            currencyCode: row.read<String>('currency_code'),
+            debtorMinorUnits: readSum(row, 'debtor_minor'),
+            creditorMinorUnits: readSum(row, 'creditor_minor'),
+          ),
+      ]);
+    } catch (error) {
+      return Failure(_failure('customer_ledger_currency_totals_failed', error));
+    }
+  }
+
 
   Future<Result<List<domain.CustomerPhoneSuggestion>>> suggestPhonesByPrefix(
     String prefix, {

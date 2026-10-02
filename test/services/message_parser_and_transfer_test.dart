@@ -619,6 +619,14 @@ final class _FakeCustomers implements CustomerRepository {
       ));
 
 
+
+  @override
+  Future<Result<List<AccountCurrencyLedgerTotals>>> sumLedgerSidesByCurrency(
+    String query, {
+    AccountSqlFilter filter = AccountSqlFilter.all,
+    String membershipCurrencyCode = 'YER',
+  }) async => const Success([]);
+
   Future<Result<List<CustomerPhoneSuggestion>>> suggestPhonesByPrefix(
     String prefix, {
     int limit = 8,
