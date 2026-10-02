@@ -651,6 +651,9 @@ class _PosLedgerSheet extends StatelessWidget {
 
 
   Future<void> _exportStatementPdf(BuildContext context) async {
+    final acc = row.account;
+    if (acc == null) return;
+    final name = row.customerName ?? row.pos.name;
     final c = AppScope.of(context);
     final network = await c.settings.find(SettingKeys.networkName);
     var networkName = 'Krotak Pro';
@@ -660,23 +663,20 @@ class _PosLedgerSheet extends StatelessWidget {
         networkName = setting.value.trim();
       }
     }
+    final ledger = await c.transactions.findByCustomer(acc.customerId);
+    if (!context.mounted) return;
+    if (ledger is! Success<List<Transaction>>) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('تعذّر قراءة دفتر نقطة البيع')),
+      );
+      return;
+    }
     final phone = acc.notifyPhone ?? acc.identifiers.firstOrNull ?? '';
     final rows = buildPosStatementPdfRows(
       balanceMinor: balanceMinor,
       creditLimitMinor: acc.creditLimitMinorUnits,
       phone: phone,
-      lines: [
-        for (final s in settlements)
-          PosStatementPdfLine(
-            occurredAt: s.txn.createdAt,
-            kind: s.label,
-            description: s.txn.reference?.trim().isNotEmpty == true
-                ? s.txn.reference!.trim()
-                : s.label,
-            amountMinor: s.txn.amount.minorUnits,
-            status: s.txn.status.name,
-          ),
-      ],
+      lines: posStatementLinesFromLedger(ledger.value),
     );
     final bytes = await (await ReportPdfService.instance()).buildLedgerStatement(
       title: '$name — كشف حساب نقطة البيع',
@@ -785,7 +785,7 @@ class _PosLedgerSheet extends StatelessWidget {
           onPressed: () => _exportStatementPdf(context),
           icon: const Icon(Icons.picture_as_pdf_outlined, size: 20),
           label: const Text(
-            'تصدير كشف PDF ومشاركته',
+            'تصدير كشف الدفتر PDF ومشاركته',
             style: TextStyle(fontFamily: NetTypography.family),
           ),
         ),

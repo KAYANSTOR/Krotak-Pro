@@ -1,4 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:net_app/domain/entities/money.dart';
+import 'package:net_app/domain/entities/transaction.dart';
 import 'package:net_app/domain/services/pos_statement_pdf_rows.dart';
 
 void main() {
@@ -40,5 +42,40 @@ void main() {
     expect(rows[1].cells[1], 'رصيد دائن');
     expect(rows[2].cells[2], 'غير محدد');
     expect(rows[2].cells[4], 'غير مفعّل');
+  });
+
+  test('ledger export includes every movement, oldest first', () {
+    final lines = posStatementLinesFromLedger([
+      Transaction(
+        id: 'sale-1',
+        type: TransactionType.sale,
+        status: TransactionStatus.completed,
+        amount: const Money(minorUnits: 20000, currencyCode: 'YER'),
+        createdAt: DateTime.utc(2026, 10, 2, 8),
+        reference: 'كرت 200',
+      ),
+      Transaction(
+        id: 'set-1',
+        type: TransactionType.settlement,
+        status: TransactionStatus.completed,
+        amount: const Money(minorUnits: 5000, currencyCode: 'YER'),
+        createdAt: DateTime.utc(2026, 9, 1, 12),
+      ),
+      Transaction(
+        id: 'adv-1',
+        type: TransactionType.advance,
+        status: TransactionStatus.rejected,
+        amount: const Money(minorUnits: 1000, currencyCode: 'YER'),
+        createdAt: DateTime.utc(2026, 9, 15),
+        reference: '   ',
+      ),
+    ]);
+
+    expect(lines.map((line) => line.kind).toList(), ['تسوية', 'سلفة', 'بيع']);
+    expect(lines[0].description, 'تسوية');
+    expect(lines[1].status, 'مرفوضة');
+    expect(lines[1].description, 'سلفة');
+    expect(lines[2].description, 'كرت 200');
+    expect(lines[2].status, 'مكتملة');
   });
 }

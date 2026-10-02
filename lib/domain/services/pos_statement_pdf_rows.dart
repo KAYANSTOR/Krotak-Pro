@@ -1,3 +1,4 @@
+import '../entities/transaction.dart';
 import 'report_pdf_service.dart';
 
 /// صف حركة لكشف نقطة البيع قبل تحويله إلى جدول PDF.
@@ -15,6 +16,49 @@ final class PosStatementPdfLine {
   final String description;
   final int amountMinor;
   final String status;
+}
+
+/// اسم النوع العربي كما يظهر في كشف نقطة البيع.
+String posStatementKindLabel(TransactionType type) {
+  return switch (type) {
+    TransactionType.deposit => 'إيداع',
+    TransactionType.withdrawal => 'سحب',
+    TransactionType.sale => 'بيع',
+    TransactionType.settlement => 'تسوية',
+    TransactionType.reversal => 'عكس',
+    TransactionType.advance => 'سلفة',
+    TransactionType.reward => 'مكافأة',
+  };
+}
+
+/// اسم الحالة العربي. لا يُكتب اسم التعداد الإنجليزي في الملف.
+String posStatementStatusLabel(TransactionStatus status) {
+  return switch (status) {
+    TransactionStatus.pending => 'معلّقة',
+    TransactionStatus.completed => 'مكتملة',
+    TransactionStatus.reversed => 'معكوسة',
+    TransactionStatus.rejected => 'مرفوضة',
+  };
+}
+
+/// كل حركات دفتر العميل المرتبط بالنقطة منذ الإنشاء، الأقدم أولاً.
+/// لا يقرأ قاعدة البيانات ولا يستبعد التسويات المعروضة في الورقة.
+List<PosStatementPdfLine> posStatementLinesFromLedger(
+  Iterable<Transaction> transactions,
+) {
+  final lines = [
+    for (final txn in transactions)
+      PosStatementPdfLine(
+        occurredAt: txn.createdAt,
+        kind: posStatementKindLabel(txn.type),
+        description: txn.reference?.trim().isNotEmpty == true
+            ? txn.reference!.trim()
+            : posStatementKindLabel(txn.type),
+        amountMinor: txn.amount.minorUnits,
+        status: posStatementStatusLabel(txn.status),
+      ),
+  ]..sort((a, b) => a.occurredAt.compareTo(b.occurredAt));
+  return lines;
 }
 
 /// يبني صفوف كشف نقطة بيع واحدة: الرصيد والسقف ثم الحركات.
