@@ -6,6 +6,7 @@ import '../services/report_pdf_export.dart';
 import 'package:flutter/services.dart';
 
 import '../../core/result.dart';
+import '../../domain/customer_file_currency.dart';
 import '../../domain/entities/customer.dart';
 import '../../domain/entities/money.dart';
 import '../../domain/entities/pos_account.dart';
@@ -38,6 +39,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
   List<Transaction> _ledger = const [];
   List<PromotionProgress> _promos = const [];
   PosAccount? _posLink;
+  String _displayCurrency = CustomerFileCurrency.defaultCode;
 
   @override
   void initState() {
@@ -72,7 +74,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
     final idsR = await c.customers.listIdentifiers(widget.customerId);
     final summaryR = await c.balanceService.getAccountSummary(
       customerId: widget.customerId,
-      currencyCode: 'YER',
+      currencyCode: _displayCurrency,
     );
     final txR = await c.transactions.findByCustomer(widget.customerId);
     final promoR = await c.promotionProgress.forCustomer(widget.customerId);
@@ -87,12 +89,25 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
     final sorted = List<Transaction>.from(txs)
       ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
+    final codes = CustomerFileCurrency.availableCodes(sorted);
+    final selected = CustomerFileCurrency.keepOrDefault(_displayCurrency, codes);
+    var summary = summaryR is Success<CustomerAccountSummary>
+        ? summaryR.value
+        : null;
+    if (selected != _displayCurrency) {
+      final again = await c.balanceService.getAccountSummary(
+        customerId: widget.customerId,
+        currencyCode: selected,
+      );
+      summary = again is Success<CustomerAccountSummary> ? again.value : null;
+    }
+    if (!mounted) return;
     setState(() {
       _loading = false;
       _customer = customer;
       _ids = idsR is Success<List<CustomerIdentifier>> ? idsR.value : const [];
-      _summary =
-          summaryR is Success<CustomerAccountSummary> ? summaryR.value : null;
+      _displayCurrency = selected;
+      _summary = summary;
       _ledger = sorted;
       _promos =
           promoR is Success<List<PromotionProgress>> ? promoR.value : const [];
@@ -137,6 +152,30 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
         TransactionStatus.rejected => 'مرفوض',
       };
 
+  List<String> get _currencyCodes =>
+      CustomerFileCurrency.availableCodes(_ledger);
+
+  List<Transaction> get _visibleLedger =>
+      CustomerFileCurrency.rowsFor(_ledger, _displayCurrency);
+
+  String get _currencyLabel => CustomerFileCurrency.label(_displayCurrency);
+
+  Future<void> _setDisplayCurrency(String code) async {
+    if (code == _displayCurrency) return;
+    setState(() => _displayCurrency = code);
+    final c = AppScope.of(context);
+    final summaryR = await c.balanceService.getAccountSummary(
+      customerId: widget.customerId,
+      currencyCode: code,
+    );
+    if (!mounted) return;
+    setState(() {
+      _summary = summaryR is Success<CustomerAccountSummary>
+          ? summaryR.value
+          : null;
+    });
+  }
+
   String _fmtMoney(int minor) {
     final major = minor / 100.0;
     return major == major.roundToDouble()
@@ -166,7 +205,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
       }
     }
     final rows = <PdfTableRow>[
-      for (final tx in _ledger)
+      for (final tx in _visibleLedger)
         PdfTableRow([
           tx.createdAt.toLocal().toString().split('.').first,
           tx.type.name,
@@ -181,7 +220,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
       accountLabel: '${_customer!.displayName} · $_primaryPhone',
       networkName: name,
       generatedAt: c.clock.now(),
-      balanceLabel: 'الرصيد الحالي: ${(bal / 100).toStringAsFixed(2)} ر.ي · ${_ledger.length} حركة',
+      balanceLabel: 'الرصيد الحالي: ${(bal / 100).toStringAsFixed(2)} $_currencyLabel · ${_visibleLedger.length} حركة',
       rows: rows,
     );
     if (!mounted) return;
@@ -273,7 +312,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                           FilteringTextInputFormatter.allow(RegExp(r'[\d,.]')),
                         ],
                         decoration: InputDecoration(
-                          labelText: 'المبلغ (ر.ي)',
+                          labelText: 'المبلغ ($_currencyLabel)',
                           border: OutlineInputBorder(borderRadius: NetRadii.mdAll),
                         ),
                         style: const TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w700),
@@ -313,7 +352,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
     final raw = amountCtrl.text.trim().replaceAll(',', '');
     final major = num.tryParse(raw);
     if (major == null || major <= 0) return;
-    final amount = Money(minorUnits: (major * 100).round(), currencyCode: 'YER');
+    final amount = Money(minorUnits: (major * 100).round(), currencyCode: _displayCurrency);
     final reason = reasonCtrl.text.trim();
     final c = AppScope.of(context);
     final ref = isCredit
@@ -372,6 +411,22 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
             icon: Icons.person_rounded,
           ),
           actions: [
+            if (_currencyCodes.length > 1)
+              PopupMenuButton<String>(
+                tooltip: 'عملة ملف العميل',
+                icon: Icon(Icons.currency_exchange_rounded, color: scheme.onSurface),
+                onSelected: _setDisplayCurrency,
+                itemBuilder: (context) => [
+                  for (final code in _currencyCodes)
+                    PopupMenuItem(
+                      value: code,
+                      child: Text(
+                        code == _displayCurrency ? '$code — المعروضة' : code,
+                        style: const TextStyle(fontFamily: 'Tajawal'),
+                      ),
+                    ),
+                ],
+              ),
             IconButton(
               tooltip: 'تحديث',
               onPressed: _loading ? null : _load,
@@ -391,8 +446,8 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                     customer: _customer!,
                     identifiers: _ids,
                     balance: _summary?.balance,
-                    recent: _ledger.take(50).toList(),
-                    formatMoney: (m) => m == null ? '—' : '${_fmtMoney(m.minorUnits)} ر.ي',
+                    recent: _visibleLedger.take(50).toList(),
+                    formatMoney: (m) => m == null ? '—' : '${_fmtMoney(m.minorUnits)} $_currencyLabel',
                     formatTime: _fmtTime,
                   );
                   showCustomerStatementExportSheet(
@@ -457,7 +512,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                             ),
                             const SizedBox(height: 16),
                             Text(
-                              'سجل العمليات (${_ledger.length})',
+                              'سجل العمليات (${_visibleLedger.length}) · $_currencyLabel',
                               style: TextStyle(
                                 fontFamily: NetTypography.family,
                                 fontWeight: FontWeight.w800,
@@ -466,11 +521,13 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                               ),
                             ),
                             const SizedBox(height: 8),
-                            if (_ledger.isEmpty)
+                            if (_visibleLedger.isEmpty)
                               Padding(
                                 padding: const EdgeInsets.symmetric(vertical: 24),
                                 child: Text(
-                                  'لا توجد حركات على هذا الحساب بعد',
+                                  _ledger.isEmpty
+                                      ? 'لا توجد حركات على هذا الحساب بعد'
+                                      : 'لا توجد حركات بعملة $_currencyLabel',
                                   textAlign: TextAlign.center,
                                   style: TextStyle(
                                     fontFamily: NetTypography.family,
@@ -479,7 +536,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                                 ),
                               )
                             else
-                              ..._ledger.map((tx) => _txTile(tx, scheme, net)),
+                              ..._visibleLedger.map((tx) => _txTile(tx, scheme, net)),
                           ],
                         ),
                       ),
@@ -669,7 +726,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
             Expanded(
               child: cell(
                 'الرصيد الحالي',
-                '${_fmtMoney(bal)} ر.ي',
+                '${_fmtMoney(bal)} $_currencyLabel',
                 valueColor: balColor,
               ),
             ),
@@ -677,7 +734,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
             Expanded(
               child: cell(
                 'الدين الحالي',
-                '${_fmtMoney(s.currentDebtMinor)} ر.ي',
+                '${_fmtMoney(s.currentDebtMinor)} $_currencyLabel',
                 valueColor: s.currentDebtMinor > 0 ? net.rejected : null,
               ),
             ),
@@ -686,22 +743,22 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
         const SizedBox(height: 8),
         Row(
           children: [
-            Expanded(child: cell('إجمالي المبيعات', '${_fmtMoney(s.totalSalesMinor)} ر.ي')),
+            Expanded(child: cell('إجمالي المبيعات', '${_fmtMoney(s.totalSalesMinor)} $_currencyLabel')),
             const SizedBox(width: 8),
-            Expanded(child: cell('إجمالي الدفعات', '${_fmtMoney(s.totalDepositsMinor)} ر.ي')),
+            Expanded(child: cell('إجمالي الدفعات', '${_fmtMoney(s.totalDepositsMinor)} $_currencyLabel')),
           ],
         ),
         const SizedBox(height: 8),
         Row(
           children: [
-            Expanded(child: cell('الخصومات/التسويات', '${_fmtMoney(s.totalWithdrawalsMinor + s.totalSettlementsMinor)} ر.ي')),
+            Expanded(child: cell('الخصومات/التسويات', '${_fmtMoney(s.totalWithdrawalsMinor + s.totalSettlementsMinor)} $_currencyLabel')),
             const SizedBox(width: 8),
             Expanded(
               child: cell(
                 'سلف مفتوحة',
                 s.openAdvancesCount == 0
                     ? 'لا يوجد'
-                    : '${s.openAdvancesCount} · ${_fmtMoney(s.openAdvancesMinor)} ر.ي',
+                    : '${s.openAdvancesCount} · ${_fmtMoney(s.openAdvancesMinor)} $_currencyLabel',
               ),
             ),
           ],
@@ -767,7 +824,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
             ),
           ),
           Text(
-            '${isCredit ? '+' : '-'}$amt ر.ي',
+            '${isCredit ? '+' : '-'}$amt $_currencyLabel',
             style: TextStyle(
               fontFamily: NetTypography.family,
               fontWeight: FontWeight.w800,
