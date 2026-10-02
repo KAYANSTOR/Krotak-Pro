@@ -79,3 +79,53 @@ void main() {
     expect(lines[2].status, 'مكتملة');
   });
 }
+
+  test('prior customer movements stay out of the POS statement', () {
+    final linkedAt = DateTime.utc(2026, 10, 1, 0);
+    final slice = slicePosStatementLedger(
+      [
+        Transaction(
+          id: 'old-sale',
+          type: TransactionType.sale,
+          status: TransactionStatus.completed,
+          amount: const Money(minorUnits: 30000, currencyCode: 'YER'),
+          createdAt: DateTime.utc(2026, 9, 20),
+          reference: 'بيع قبل الربط',
+        ),
+        Transaction(
+          id: 'old-deposit',
+          type: TransactionType.deposit,
+          status: TransactionStatus.completed,
+          amount: const Money(minorUnits: 10000, currencyCode: 'YER'),
+          createdAt: DateTime.utc(2026, 9, 21),
+        ),
+        Transaction(
+          id: 'at-link',
+          type: TransactionType.sale,
+          status: TransactionStatus.completed,
+          amount: const Money(minorUnits: 4000, currencyCode: 'YER'),
+          createdAt: linkedAt,
+          reference: 'أول بيع للنقطة',
+        ),
+      ],
+      linkedAt: linkedAt,
+    );
+
+    expect(slice.excludedCount, 2);
+    expect(slice.openingBalanceMinor, -20000);
+    expect(slice.lines, hasLength(1));
+    expect(slice.lines.single.description, 'أول بيع للنقطة');
+
+    final rows = buildPosStatementPdfRows(
+      balanceMinor: -24000,
+      creditLimitMinor: 100000,
+      phone: '777',
+      lines: slice.lines,
+      openingBalanceMinor: slice.openingBalanceMinor,
+      excludedCount: slice.excludedCount,
+    );
+    expect(rows[3].cells[1], 'رصيد مرحّل');
+    expect(rows[3].cells[3], '200.00');
+    expect(rows[3].cells[4], 'مديونية قبل الربط');
+    expect(rows[4].cells[2], 'أول بيع للنقطة');
+  });

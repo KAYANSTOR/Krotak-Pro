@@ -1,4 +1,5 @@
 import '../entities/transaction.dart';
+import '../ledger.dart';
 import 'report_pdf_service.dart';
 
 /// صف حركة لكشف نقطة البيع قبل تحويله إلى جدول PDF.
@@ -41,14 +42,17 @@ String posStatementStatusLabel(TransactionStatus status) {
   };
 }
 
-/// كل حركات دفتر العميل المرتبط بالنقطة منذ الإنشاء، الأقدم أولاً.
+/// حركات دفتر نقطة البيع بعد لحظة الربط، الأقدم أولاً.
+/// [linkedAt] فارغ يبقي كل الحركات (توافق المرحلة 50).
 /// لا يقرأ قاعدة البيانات ولا يستبعد التسويات المعروضة في الورقة.
 List<PosStatementPdfLine> posStatementLinesFromLedger(
-  Iterable<Transaction> transactions,
-) {
+  Iterable<Transaction> transactions, {
+  DateTime? linkedAt,
+}) {
   final lines = [
     for (final txn in transactions)
-      PosStatementPdfLine(
+      if (linkedAt == null || !txn.createdAt.isBefore(linkedAt))
+        PosStatementPdfLine(
         occurredAt: txn.createdAt,
         kind: posStatementKindLabel(txn.type),
         description: txn.reference?.trim().isNotEmpty == true
@@ -61,6 +65,47 @@ List<PosStatementPdfLine> posStatementLinesFromLedger(
   return lines;
 }
 
+/// يفصل حركات العميل قبل ربط النقطة عن كشف نقطة البيع.
+/// الرصيد المرحّل هو أثر الحركات المكتملة قبل الربط حتى يبقى الرصيد الحالي قابلاً للمطابقة.
+PosStatementLedgerSlice slicePosStatementLedger(
+  Iterable<Transaction> transactions, {
+  DateTime? linkedAt,
+  String currencyCode = 'YER',
+}) {
+  final prior = <Transaction>[];
+  final owned = <Transaction>[];
+  for (final txn in transactions) {
+    if (linkedAt != null && txn.createdAt.isBefore(linkedAt)) {
+      prior.add(txn);
+    } else {
+      owned.add(txn);
+    }
+  }
+  final opening = linkedAt == null
+      ? 0
+      : sumCompletedLedger(
+          transactions: prior,
+          currencyCode: currencyCode,
+        ).minorUnits;
+  return PosStatementLedgerSlice(
+    lines: posStatementLinesFromLedger(owned),
+    openingBalanceMinor: opening,
+    excludedCount: prior.length,
+  );
+}
+
+final class PosStatementLedgerSlice {
+  const PosStatementLedgerSlice({
+    required this.lines,
+    required this.openingBalanceMinor,
+    required this.excludedCount,
+  });
+
+  final List<PosStatementPdfLine> lines;
+  final int openingBalanceMinor;
+  final int excludedCount;
+}
+
 /// يبني صفوف كشف نقطة بيع واحدة: الرصيد والسقف ثم الحركات.
 /// لا يقرأ قاعدة البيانات ولا يغيّر الدفتر.
 List<PdfTableRow> buildPosStatementPdfRows({
@@ -68,6 +113,8 @@ List<PdfTableRow> buildPosStatementPdfRows({
   required int? creditLimitMinor,
   required String phone,
   required List<PosStatementPdfLine> lines,
+  int openingBalanceMinor = 0,
+  int excludedCount = 0,
 }) {
   String money(int minor) => (minor / 100).toStringAsFixed(2);
   String when(DateTime value) {
@@ -102,6 +149,14 @@ List<PdfTableRow> buildPosStatementPdfRows({
       creditLimitMinor == null ? '—' : money(creditLimitMinor),
       creditLimitMinor == null ? 'غير مفعّل' : 'مفعّل',
     ]),
+    if (excludedCount > 0)
+      PdfTableRow([
+        '—',
+        'رصيد مرحّل',
+        'حركات العميل قبل ربط النقطة ($excludedCount) غير مضمّنة',
+        money(openingBalanceMinor.abs()),
+        openingBalanceMinor < 0 ? 'مديونية قبل الربط' : 'دائن قبل الربط',
+      ]),
     for (final line in lines)
       PdfTableRow([
         when(line.occurredAt),
