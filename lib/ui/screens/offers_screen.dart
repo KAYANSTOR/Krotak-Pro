@@ -10,6 +10,7 @@ import '../theme/net_tokens.dart';
 import '../widgets/async_views.dart';
 import '../widgets/net/net_surface_card.dart';
 import '../widgets/net/net_tab_header.dart';
+import 'offers_reward_template_sheet.dart';
 import 'offers_wizard_sheet.dart';
 
 /// إدارة العروض والمكافآت — مطابق فيديو Z Net (نشطة / معطّلة + عرض جديد).
@@ -193,6 +194,17 @@ class _OffersScreenState extends State<OffersScreen>
           subtitle: 'إدارة وتتبع حملات الترويج التراكمية',
           icon: Icons.local_offer_rounded,
           actions: [
+            NetHeaderAction(
+              icon: Icons.sms_outlined,
+              tooltip: 'قالب رسالة المكافأة',
+              onPressed: () async {
+                final saved = await showOffersRewardTemplateSheet(context);
+                if (!mounted || saved != true) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('تم حفظ قالب مكافأة العرض')),
+                );
+              },
+            ),
             NetHeaderAction(
               icon: Icons.add_rounded,
               tooltip: 'عرض جديد',
