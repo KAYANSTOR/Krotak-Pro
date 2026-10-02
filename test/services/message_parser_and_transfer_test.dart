@@ -588,6 +588,14 @@ final class _FakeCustomers implements CustomerRepository {
     int offset = 0,
   }) async => const Success([]);
 
+  @override
+  Future<Result<int>> countFiltered(
+    String query, {
+    required AccountSqlFilter filter,
+    String currencyCode = 'YER',
+  }) async => const Success(0);
+
+
   Future<Result<List<CustomerPhoneSuggestion>>> suggestPhonesByPrefix(
     String prefix, {
     int limit = 8,

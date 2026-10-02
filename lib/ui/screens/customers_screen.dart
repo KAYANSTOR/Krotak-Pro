@@ -55,6 +55,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
   bool _loadingMore = false;
   bool _hasMore = false;
   String? _error;
+  int? _matchCount;
   List<_AccountRow> _allRows = const [];
   _AccountFilter _filter = _AccountFilter.all;
   _AccountSort _sort = _AccountSort.balanceDesc;
@@ -93,6 +94,18 @@ class _CustomersScreenState extends State<CustomersScreen> {
     super.dispose();
   }
 
+
+  String _chipCount(_AccountFilter filter) {
+    if (filter == _filter && _matchCount != null) return '$_matchCount';
+    return switch (filter) {
+      _AccountFilter.provisional =>
+        '${_allRows.where((r) => r.isProvisional).length}',
+      _AccountFilter.unlinked =>
+        '${_allRows.where((r) => !r.hasPhone).length}',
+      _ => '${_allRows.length}',
+    };
+  }
+
   List<_AccountRow> get _visible {
     final query = _query.trim().toLowerCase();
     if (query.isEmpty) return _allRows;
@@ -112,12 +125,21 @@ class _CustomersScreenState extends State<CustomersScreen> {
       _error = null;
     });
     final rows = await _fetchPage(query, 0);
+    final count = await _fetchMatchCount(query);
     if (!mounted || rows == null) return;
     setState(() {
       _loading = false;
       _allRows = rows;
+      _matchCount = count;
       _hasMore = rows.length >= _pageSize;
     });
+  }
+
+  Future<int?> _fetchMatchCount(String query) async {
+    final c = AppScope.of(context);
+    final result = await c.customers.countFiltered(query, filter: _sqlFilter);
+    if (!mounted || result is! Success<int>) return null;
+    return result.value;
   }
 
   Future<void> _loadMore() async {
@@ -514,9 +536,9 @@ class _CustomersScreenState extends State<CustomersScreen> {
                   indicators: [
                     NetIndicatorTile(
                       label: 'الحسابات',
-                      value: _filter == _AccountFilter.all && _searchCtrl.text.isEmpty
+                      value: _matchCount == null
                           ? '${_allRows.length}'
-                          : '${_visible.length}/${_allRows.length}',
+                          : '${_allRows.length}/$_matchCount',
                       icon: Icons.groups_rounded,
                     ),
                     NetIndicatorTile(
@@ -647,16 +669,16 @@ class _CustomersScreenState extends State<CustomersScreen> {
             scrollDirection: Axis.horizontal,
             padding: NetSpacing.pageH,
             children: [
-              _chip('الكل (${_allRows.length})', _AccountFilter.all),
+              _chip('الكل (${_chipCount(_AccountFilter.all)})', _AccountFilter.all),
               _chip('مدين', _AccountFilter.debtor),
               _chip('دائن', _AccountFilter.creditor),
               _chip('رصيد صفر', _AccountFilter.zero),
               _chip(
-                'دفتر مؤقت (${_allRows.where((r) => r.isProvisional).length})',
+                'دفتر مؤقت (${_chipCount(_AccountFilter.provisional)})',
                 _AccountFilter.provisional,
               ),
               _chip(
-                'غير مربوط (${_allRows.where((r) => !r.hasPhone).length})',
+                'غير مربوط (${_chipCount(_AccountFilter.unlinked)})',
                 _AccountFilter.unlinked,
               ),
             ],

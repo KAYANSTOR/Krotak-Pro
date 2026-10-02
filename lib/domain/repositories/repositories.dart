@@ -35,6 +35,14 @@ abstract interface class CustomerRepository {
     int offset = 0,
   });
 
+  /// عدد الحسابات المطابقة للفلتر والبحث، مستقلاً عن الصفحة المحمّلة.
+  /// يستبعد المدمج ويحسب الرصيد من الحركات المكتملة فقط.
+  Future<Result<int>> countFiltered(
+    String query, {
+    required AccountSqlFilter filter,
+    String currencyCode = 'YER',
+  });
+
   /// اقتراح أرقام جوال بالبادئة أثناء الكتابة (بيع مباشر).
   /// يعيد أرقاماً مطبّعة مع الاسم والحالة، مرتبة بالأحدث، بدون حسابات موقوفة/مدمجة/مؤرشفة.
   /// [limit] يمنع N+1 واستعلامات ثقيلة.

@@ -137,4 +137,30 @@ void main() {
     );
     expect((second as Success<List<Customer>>).value.map((c) => c.id), ['low']);
   });
+
+  test('countFiltered ignores page size and skips merged', () async {
+    await seedCustomer('debt', 'مدين', phone: '777400001');
+    await seedCustomer('credit', 'دائن', phone: '777400002');
+    await seedCustomer('merged', 'مدمج', status: CustomerStatus.merged, phone: '777400003');
+    await ledger('c1', 'debt', TransactionType.sale, 500);
+    await ledger('c2', 'credit', TransactionType.deposit, 700);
+
+    final all = await customers.countFiltered('', filter: AccountSqlFilter.all);
+    expect((all as Success<int>).value, 2);
+
+    final page = await customers.searchFilteredPage(
+      '',
+      filter: AccountSqlFilter.all,
+      limit: 1,
+      offset: 0,
+    );
+    expect((page as Success<List<Customer>>).value, hasLength(1));
+
+    final debtors = await customers.countFiltered('', filter: AccountSqlFilter.debtor);
+    expect((debtors as Success<int>).value, 1);
+
+    final named = await customers.countFiltered('دائن', filter: AccountSqlFilter.all);
+    expect((named as Success<int>).value, 1);
+  });
 }
+

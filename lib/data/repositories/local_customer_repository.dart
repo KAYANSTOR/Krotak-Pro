@@ -177,6 +177,80 @@ final class LocalCustomerRepository implements CustomerRepository {
     }
   }
 
+
+  @override
+  Future<Result<int>> countFiltered(
+    String query, {
+    required domain.AccountSqlFilter filter,
+    String currencyCode = 'YER',
+  }) async {
+    try {
+      final trimmed = query.trim();
+      final like = '%$trimmed%';
+      final row = await database.customSelect(
+        '''
+        SELECT COUNT(*) AS match_count
+        FROM customers c
+        LEFT JOIN (
+          SELECT customer_id,
+            SUM(CASE
+              WHEN type IN ('deposit', 'reward', 'reversal') THEN amount_minor_units
+              ELSE -amount_minor_units
+            END) AS signed_balance
+          FROM transactions
+          WHERE status = 'completed'
+            AND currency_code = ?
+            AND customer_id IS NOT NULL
+          GROUP BY customer_id
+        ) bal ON bal.customer_id = c.id
+        WHERE c.status != 'merged'
+          AND (
+            ? = 'all'
+            OR (? = 'debtor' AND COALESCE(bal.signed_balance, 0) < 0)
+            OR (? = 'creditor' AND COALESCE(bal.signed_balance, 0) > 0)
+            OR (? = 'zero' AND COALESCE(bal.signed_balance, 0) = 0)
+            OR (? = 'provisional' AND c.status = 'provisional')
+            OR (? = 'unlinked' AND NOT EXISTS (
+              SELECT 1 FROM customer_identifiers i
+              WHERE i.customer_id = c.id
+                AND i.type = 'phoneNumber'
+                AND TRIM(i.value) != ''
+            ))
+          )
+          AND (
+            ? = ''
+            OR c.display_name LIKE ?
+            OR EXISTS (
+              SELECT 1 FROM customer_identifiers i2
+              WHERE i2.customer_id = c.id AND i2.value LIKE ?
+            )
+          )
+        ''',
+        variables: [
+          Variable.withString(currencyCode),
+          Variable.withString(filter.name),
+          Variable.withString(filter.name),
+          Variable.withString(filter.name),
+          Variable.withString(filter.name),
+          Variable.withString(filter.name),
+          Variable.withString(filter.name),
+          Variable.withString(trimmed),
+          Variable.withString(like),
+          Variable.withString(like),
+        ],
+        readsFrom: {
+          database.customers,
+          database.transactions,
+          database.customerIdentifiers,
+        },
+      ).getSingle();
+      return Success(row.read<int>('match_count'));
+    } catch (error) {
+      return Failure(_failure('customer_filtered_count_failed', error));
+    }
+  }
+
+
   @override
   Future<Result<List<domain.CustomerPhoneSuggestion>>> suggestPhonesByPrefix(
     String prefix, {
