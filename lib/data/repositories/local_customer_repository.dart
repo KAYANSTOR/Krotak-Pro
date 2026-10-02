@@ -250,6 +250,77 @@ final class LocalCustomerRepository implements CustomerRepository {
     }
   }
 
+  @override
+  Future<Result<domain.AccountFilterCounts>> countFilterBuckets(
+    String query, {
+    String currencyCode = 'YER',
+  }) async {
+    try {
+      final trimmed = query.trim();
+      final like = '%$trimmed%';
+      final row = await database.customSelect(
+        '''
+        SELECT
+          COUNT(*) AS all_count,
+          SUM(CASE WHEN COALESCE(bal.signed_balance, 0) < 0 THEN 1 ELSE 0 END) AS debtor_count,
+          SUM(CASE WHEN COALESCE(bal.signed_balance, 0) > 0 THEN 1 ELSE 0 END) AS creditor_count,
+          SUM(CASE WHEN COALESCE(bal.signed_balance, 0) = 0 THEN 1 ELSE 0 END) AS zero_count,
+          SUM(CASE WHEN c.status = 'provisional' THEN 1 ELSE 0 END) AS provisional_count,
+          SUM(CASE WHEN NOT EXISTS (
+            SELECT 1 FROM customer_identifiers i
+            WHERE i.customer_id = c.id
+              AND i.type = 'phoneNumber'
+              AND TRIM(i.value) != ''
+          ) THEN 1 ELSE 0 END) AS unlinked_count
+        FROM customers c
+        LEFT JOIN (
+          SELECT customer_id,
+            SUM(CASE
+              WHEN type IN ('deposit', 'reward', 'reversal') THEN amount_minor_units
+              ELSE -amount_minor_units
+            END) AS signed_balance
+          FROM transactions
+          WHERE status = 'completed'
+            AND currency_code = ?
+            AND customer_id IS NOT NULL
+          GROUP BY customer_id
+        ) bal ON bal.customer_id = c.id
+        WHERE c.status != 'merged'
+          AND (
+            ? = ''
+            OR c.display_name LIKE ?
+            OR EXISTS (
+              SELECT 1 FROM customer_identifiers i2
+              WHERE i2.customer_id = c.id AND i2.value LIKE ?
+            )
+          )
+        ''',
+        variables: [
+          Variable.withString(currencyCode),
+          Variable.withString(trimmed),
+          Variable.withString(like),
+          Variable.withString(like),
+        ],
+        readsFrom: {
+          database.customers,
+          database.transactions,
+          database.customerIdentifiers,
+        },
+      ).getSingle();
+      int read(String name) => row.read<int?>(name) ?? 0;
+      return Success(domain.AccountFilterCounts(
+        all: read('all_count'),
+        debtor: read('debtor_count'),
+        creditor: read('creditor_count'),
+        zero: read('zero_count'),
+        provisional: read('provisional_count'),
+        unlinked: read('unlinked_count'),
+      ));
+    } catch (error) {
+      return Failure(_failure('customer_filter_buckets_failed', error));
+    }
+  }
+
 
   @override
   Future<Result<List<domain.CustomerPhoneSuggestion>>> suggestPhonesByPrefix(

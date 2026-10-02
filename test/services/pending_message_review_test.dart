@@ -132,6 +132,19 @@ final class _FakeCustomers implements CustomerRepository {
     String currencyCode = 'YER',
   }) async => const Success(0);
 
+  @override
+  Future<Result<AccountFilterCounts>> countFilterBuckets(
+    String query, {
+    String currencyCode = 'YER',
+  }) async => const Success(AccountFilterCounts(
+        all: 0,
+        debtor: 0,
+        creditor: 0,
+        zero: 0,
+        provisional: 0,
+        unlinked: 0,
+      ));
+
 
   @override Future<Result<List<CustomerPhoneSuggestion>>> suggestPhonesByPrefix(String prefix, {int limit = 8}) async => const Success([]);
   @override Future<Result<List<CustomerIdentifier>>> listIdentifiers(String customerId) async => const Success([]);

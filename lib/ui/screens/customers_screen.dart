@@ -56,6 +56,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
   bool _hasMore = false;
   String? _error;
   int? _matchCount;
+  AccountFilterCounts? _buckets;
   List<_AccountRow> _allRows = const [];
   _AccountFilter _filter = _AccountFilter.all;
   _AccountSort _sort = _AccountSort.balanceDesc;
@@ -96,6 +97,8 @@ class _CustomersScreenState extends State<CustomersScreen> {
 
 
   String _chipCount(_AccountFilter filter) {
+    final buckets = _buckets;
+    if (buckets != null) return '${buckets[_sqlFilterOf(filter)]}';
     if (filter == _filter && _matchCount != null) return '$_matchCount';
     return switch (filter) {
       _AccountFilter.provisional =>
@@ -126,13 +129,22 @@ class _CustomersScreenState extends State<CustomersScreen> {
     });
     final rows = await _fetchPage(query, 0);
     final count = await _fetchMatchCount(query);
+    final buckets = await _fetchBuckets(query);
     if (!mounted || rows == null) return;
     setState(() {
       _loading = false;
       _allRows = rows;
       _matchCount = count;
+      _buckets = buckets;
       _hasMore = rows.length >= _pageSize;
     });
+  }
+
+  Future<AccountFilterCounts?> _fetchBuckets(String query) async {
+    final c = AppScope.of(context);
+    final result = await c.customers.countFilterBuckets(query);
+    if (!mounted || result is! Success<AccountFilterCounts>) return null;
+    return result.value;
   }
 
   Future<int?> _fetchMatchCount(String query) async {
@@ -328,7 +340,9 @@ class _CustomersScreenState extends State<CustomersScreen> {
         _AccountSort.newest => AccountSqlSort.newest,
       };
 
-  AccountSqlFilter get _sqlFilter => switch (_filter) {
+  AccountSqlFilter get _sqlFilter => _sqlFilterOf(_filter);
+
+  AccountSqlFilter _sqlFilterOf(_AccountFilter filter) => switch (filter) {
         _AccountFilter.all => AccountSqlFilter.all,
         _AccountFilter.debtor => AccountSqlFilter.debtor,
         _AccountFilter.creditor => AccountSqlFilter.creditor,
@@ -670,9 +684,9 @@ class _CustomersScreenState extends State<CustomersScreen> {
             padding: NetSpacing.pageH,
             children: [
               _chip('الكل (${_chipCount(_AccountFilter.all)})', _AccountFilter.all),
-              _chip('مدين', _AccountFilter.debtor),
-              _chip('دائن', _AccountFilter.creditor),
-              _chip('رصيد صفر', _AccountFilter.zero),
+              _chip('مدين (${_chipCount(_AccountFilter.debtor)})', _AccountFilter.debtor),
+              _chip('دائن (${_chipCount(_AccountFilter.creditor)})', _AccountFilter.creditor),
+              _chip('رصيد صفر (${_chipCount(_AccountFilter.zero)})', _AccountFilter.zero),
               _chip(
                 'دفتر مؤقت (${_chipCount(_AccountFilter.provisional)})',
                 _AccountFilter.provisional,

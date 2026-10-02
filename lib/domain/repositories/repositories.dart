@@ -43,6 +43,12 @@ abstract interface class CustomerRepository {
     String currencyCode = 'YER',
   });
 
+  /// عدّادات كل الشرائح لنفس البحث في استعلام واحد، بلا حد الصفحة.
+  Future<Result<AccountFilterCounts>> countFilterBuckets(
+    String query, {
+    String currencyCode = 'YER',
+  });
+
   /// اقتراح أرقام جوال بالبادئة أثناء الكتابة (بيع مباشر).
   /// يعيد أرقاماً مطبّعة مع الاسم والحالة، مرتبة بالأحدث، بدون حسابات موقوفة/مدمجة/مؤرشفة.
   /// [limit] يمنع N+1 واستعلامات ثقيلة.

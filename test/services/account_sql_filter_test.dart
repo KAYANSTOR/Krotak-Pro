@@ -162,5 +162,25 @@ void main() {
     final named = await customers.countFiltered('دائن', filter: AccountSqlFilter.all);
     expect((named as Success<int>).value, 1);
   });
+
+  test('countFilterBuckets returns every chip from one query', () async {
+    await seedCustomer('debt', 'مدين', phone: '777500001');
+    await seedCustomer('credit', 'دائن', phone: '777500002');
+    await seedCustomer('zero', 'صفر', phone: '777500003');
+    await seedCustomer('temp', 'مؤقت', status: CustomerStatus.provisional);
+    await seedCustomer('merged', 'مدمج', status: CustomerStatus.merged, phone: '777500004');
+    await ledger('b1', 'debt', TransactionType.sale, 500);
+    await ledger('b2', 'credit', TransactionType.deposit, 700);
+
+    final buckets = await customers.countFilterBuckets('');
+    final counts = (buckets as Success<AccountFilterCounts>).value;
+    expect(counts.all, 4);
+    expect(counts.debtor, 1);
+    expect(counts.creditor, 1);
+    expect(counts.zero, 2);
+    expect(counts.provisional, 1);
+    expect(counts.unlinked, 1);
+    expect(counts[AccountSqlFilter.all], counts.all);
+  });
 }
 
