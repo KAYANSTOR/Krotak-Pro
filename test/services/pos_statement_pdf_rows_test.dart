@@ -1,0 +1,44 @@
+import 'package:flutter_test/flutter_test.dart';
+import 'package:net_app/domain/services/pos_statement_pdf_rows.dart';
+
+void main() {
+  test('POS statement PDF rows keep balance, limit, and movements', () {
+    final rows = buildPosStatementPdfRows(
+      balanceMinor: -150000,
+      creditLimitMinor: 500000,
+      phone: '777000111',
+      lines: [
+        PosStatementPdfLine(
+          occurredAt: DateTime.utc(2026, 10, 1, 9, 30),
+          kind: 'تسوية',
+          description: 'حوالة',
+          amountMinor: 50000,
+          status: 'مكتملة',
+        ),
+      ],
+    );
+
+    expect(rows, hasLength(4));
+    expect(rows[0].cells[2], '777000111');
+    expect(rows[1].cells[1], 'مديونية');
+    expect(rows[1].cells[3], '1500.00');
+    expect(rows[2].cells[3], '5000.00');
+    expect(rows[3].cells[1], 'تسوية');
+    expect(rows[3].cells[2], 'حوالة');
+    expect(rows[3].cells[3], '500.00');
+  });
+
+  test('missing credit limit stays unmarked instead of zero', () {
+    final rows = buildPosStatementPdfRows(
+      balanceMinor: 0,
+      creditLimitMinor: null,
+      phone: ' ',
+      lines: const [],
+    );
+
+    expect(rows[0].cells[2], '—');
+    expect(rows[1].cells[1], 'رصيد دائن');
+    expect(rows[2].cells[2], 'غير محدد');
+    expect(rows[2].cells[4], 'غير مفعّل');
+  });
+}

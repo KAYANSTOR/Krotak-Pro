@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../domain/entities/setting.dart';
+import '../../../domain/services/pos_statement_pdf_rows.dart';
 import '../../../domain/services/report_pdf_service.dart';
 import '../../services/report_pdf_export.dart';
 import 'package:flutter/services.dart';
@@ -648,6 +649,53 @@ class _PosLedgerSheet extends StatelessWidget {
   final List<_SettlementRow> settlements;
   final VoidCallback onSettle;
 
+
+  Future<void> _exportStatementPdf(BuildContext context) async {
+    final c = AppScope.of(context);
+    final network = await c.settings.find(SettingKeys.networkName);
+    var networkName = 'Krotak Pro';
+    if (network is Success<AppSetting?>) {
+      final setting = network.value;
+      if (setting != null && setting.value.trim().isNotEmpty) {
+        networkName = setting.value.trim();
+      }
+    }
+    final phone = acc.notifyPhone ?? acc.identifiers.firstOrNull ?? '';
+    final rows = buildPosStatementPdfRows(
+      balanceMinor: balanceMinor,
+      creditLimitMinor: acc.creditLimitMinorUnits,
+      phone: phone,
+      lines: [
+        for (final s in settlements)
+          PosStatementPdfLine(
+            occurredAt: s.txn.createdAt,
+            kind: s.label,
+            description: s.txn.reference?.trim().isNotEmpty == true
+                ? s.txn.reference!.trim()
+                : s.label,
+            amountMinor: s.txn.amount.minorUnits,
+            status: s.txn.status.name,
+          ),
+      ],
+    );
+    final bytes = await (await ReportPdfService.instance()).buildLedgerStatement(
+      title: '$name — كشف حساب نقطة البيع',
+      accountLabel: phone.isEmpty ? name : '$name · $phone',
+      networkName: networkName,
+      generatedAt: c.clock.now(),
+      balanceLabel: balanceMinor < 0
+          ? 'المديونية الحالية ${(balanceMinor.abs() / 100).toStringAsFixed(2)}'
+          : 'الرصيد الدائن الحالي ${(balanceMinor / 100).toStringAsFixed(2)}',
+      rows: rows,
+    );
+    if (!context.mounted) return;
+    await saveReportPdf(
+      context: context,
+      bytes: bytes,
+      fileStem: 'pos_statement_${row.pos.id}',
+    );
+  }
+
   String _fmt(DateTime t) {
     final l = t.toLocal();
     final hh = l.hour.toString().padLeft(2, '0');
@@ -729,7 +777,19 @@ class _PosLedgerSheet extends StatelessWidget {
             ),
           ],
         ),
-        const SizedBox(height: NetSpacing.lg),
+        const SizedBox(height: NetSpacing.md),
+        OutlinedButton.icon(
+          style: OutlinedButton.styleFrom(
+            minimumSize: const Size.fromHeight(50),
+          ),
+          onPressed: () => _exportStatementPdf(context),
+          icon: const Icon(Icons.picture_as_pdf_outlined, size: 20),
+          label: const Text(
+            'تصدير كشف PDF ومشاركته',
+            style: TextStyle(fontFamily: NetTypography.family),
+          ),
+        ),
+        const SizedBox(height: NetSpacing.sm),
         FilledButton.icon(
           style: FilledButton.styleFrom(
             minimumSize: const Size.fromHeight(50),
