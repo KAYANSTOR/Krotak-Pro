@@ -182,5 +182,26 @@ void main() {
     expect(counts.unlinked, 1);
     expect(counts[AccountSqlFilter.all], counts.all);
   });
+
+  test('sumLedgerSides totals debtor and creditor without page limit', () async {
+    await seedCustomer('debt', 'مدين', phone: '777600001');
+    await seedCustomer('debt2', 'مدين ثان', phone: '777600002');
+    await seedCustomer('credit', 'دائن', phone: '777600003');
+    await seedCustomer('merged', 'مدمج', status: CustomerStatus.merged, phone: '777600004');
+    await ledger('t1', 'debt', TransactionType.sale, 500);
+    await ledger('t2', 'debt2', TransactionType.sale, 300);
+    await ledger('t3', 'credit', TransactionType.deposit, 700);
+    await ledger('t4', 'merged', TransactionType.sale, 9000);
+
+    final totals = await customers.sumLedgerSides('');
+    final value = (totals as Success<AccountLedgerTotals>).value;
+    expect(value.debtorMinorUnits, 800);
+    expect(value.creditorMinorUnits, 700);
+
+    final named = await customers.sumLedgerSides('دائن');
+    final namedValue = (named as Success<AccountLedgerTotals>).value;
+    expect(namedValue.debtorMinorUnits, 0);
+    expect(namedValue.creditorMinorUnits, 700);
+  });
 }
 

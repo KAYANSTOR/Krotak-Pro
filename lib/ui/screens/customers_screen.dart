@@ -57,6 +57,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
   String? _error;
   int? _matchCount;
   AccountFilterCounts? _buckets;
+  AccountLedgerTotals? _ledgerTotals;
   List<_AccountRow> _allRows = const [];
   _AccountFilter _filter = _AccountFilter.all;
   _AccountSort _sort = _AccountSort.balanceDesc;
@@ -130,14 +131,23 @@ class _CustomersScreenState extends State<CustomersScreen> {
     final rows = await _fetchPage(query, 0);
     final count = await _fetchMatchCount(query);
     final buckets = await _fetchBuckets(query);
+    final ledger = await _fetchLedgerTotals(query);
     if (!mounted || rows == null) return;
     setState(() {
       _loading = false;
       _allRows = rows;
       _matchCount = count;
       _buckets = buckets;
+      _ledgerTotals = ledger;
       _hasMore = rows.length >= _pageSize;
     });
+  }
+
+  Future<AccountLedgerTotals?> _fetchLedgerTotals(String query) async {
+    final c = AppScope.of(context);
+    final result = await c.customers.sumLedgerSides(query);
+    if (!mounted || result is! Success<AccountLedgerTotals>) return null;
+    return result.value;
   }
 
   Future<AccountFilterCounts?> _fetchBuckets(String query) async {
@@ -284,7 +294,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
     if (created != null) await _load(_searchCtrl.text);
   }
 
-  /// مؤشرات + رسم بياني أفقي لأعلى الأرصدة (عرض فقط، من الصفوف المحمّلة).
+  /// مؤشرات الدفتر من SQL، والرسم من الصفوف المحمّلة فقط.
   Future<void> _showDistributionSheet() async {
     final rows = _allRows
         .where((r) => (r.balance?.minorUnits ?? 0) != 0)
@@ -298,7 +308,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
       context,
       builder: (_) => _BalancesDistributionSheet(
         rows: rows.take(8).toList(growable: false),
-        accountsCount: _allRows.length,
+        accountsCount: _matchCount ?? _allRows.length,
         debtorTotalMinor: _debtorTotalMinor,
         creditorTotalMinor: _creditorTotalMinor,
         unlinkedCount: _allRows.where((r) => !r.hasPhone).length,
@@ -306,12 +316,12 @@ class _CustomersScreenState extends State<CustomersScreen> {
     );
   }
 
-  /// Display-only aggregates over the already-loaded rows (no extra queries).
-  int get _debtorTotalMinor => _allRows
+  /// إجمالي الدفتر من SQL لنفس البحث. السقوط للصفوف المحمّلة إن فشل الاستعلام.
+  int get _debtorTotalMinor => _ledgerTotals?.debtorMinorUnits ?? _allRows
       .map((r) => r.balance?.minorUnits ?? 0)
       .where((v) => v < 0)
       .fold<int>(0, (a, b) => a + b.abs());
-  int get _creditorTotalMinor => _allRows
+  int get _creditorTotalMinor => _ledgerTotals?.creditorMinorUnits ?? _allRows
       .map((r) => r.balance?.minorUnits ?? 0)
       .where((v) => v > 0)
       .fold<int>(0, (a, b) => a + b);
@@ -698,7 +708,6 @@ class _CustomersScreenState extends State<CustomersScreen> {
             ],
           ),
         ),
-
         Expanded(
           child: _loading
               ? const AsyncLoadingView(skeleton: true, skeletonCount: 5)
@@ -826,7 +835,7 @@ class _BalancesDistributionSheet extends StatelessWidget {
     final net = context.netColors;
     return NetSheet(
       title: 'توزيع أرصدة الحسابات',
-      subtitle: 'مؤشرات عامة وأعلى الأرصدة المسجّلة — عرض فقط',
+      subtitle: 'إجمالي الدفتر من SQL، والرسم لأعلى الأرصدة المحمّلة',
       icon: Icons.bar_chart_rounded,
       children: [
         NetIndicatorGrid(

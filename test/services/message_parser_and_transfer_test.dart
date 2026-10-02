@@ -608,6 +608,15 @@ final class _FakeCustomers implements CustomerRepository {
         unlinked: 0,
       ));
 
+  @override
+  Future<Result<AccountLedgerTotals>> sumLedgerSides(
+    String query, {
+    String currencyCode = 'YER',
+  }) async => const Success(AccountLedgerTotals(
+        debtorMinorUnits: 0,
+        creditorMinorUnits: 0,
+      ));
+
 
   Future<Result<List<CustomerPhoneSuggestion>>> suggestPhonesByPrefix(
     String prefix, {

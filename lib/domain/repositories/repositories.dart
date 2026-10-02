@@ -49,6 +49,12 @@ abstract interface class CustomerRepository {
     String currencyCode = 'YER',
   });
 
+  /// إجمالي المدين والدائن لنفس البحث، مستقلاً عن الصفحة المحمّلة.
+  Future<Result<AccountLedgerTotals>> sumLedgerSides(
+    String query, {
+    String currencyCode = 'YER',
+  });
+
   /// اقتراح أرقام جوال بالبادئة أثناء الكتابة (بيع مباشر).
   /// يعيد أرقاماً مطبّعة مع الاسم والحالة، مرتبة بالأحدث، بدون حسابات موقوفة/مدمجة/مؤرشفة.
   /// [limit] يمنع N+1 واستعلامات ثقيلة.

@@ -29,3 +29,17 @@ final class AccountFilterCounts {
       };
 }
 
+
+
+/// إجمالي الأرصدة المدينة والدائنة لنفس البحث، بلا حد الصفحة.
+/// المدين = مجموع الأرصدة السالبة بالقيمة المطلقة. الدائن = مجموع الموجبة.
+/// يستبعد المدمج ويتجاهل الحركات غير المكتملة.
+final class AccountLedgerTotals {
+  const AccountLedgerTotals({
+    required this.debtorMinorUnits,
+    required this.creditorMinorUnits,
+  });
+
+  final int debtorMinorUnits;
+  final int creditorMinorUnits;
+}
