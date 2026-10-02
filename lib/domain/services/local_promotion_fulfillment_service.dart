@@ -221,7 +221,11 @@ final class LocalPromotionFulfillmentService {
       return;
     }
     final amount = (amountMinor / 100).toStringAsFixed(2);
-    final body = await _renderTemplate(promotionId, {
+    final customer = await customers.findById(customerId);
+    final customerName = customer is Success<Customer?>
+        ? (customer.value?.displayName ?? '')
+        : '';
+    final body = await _renderTemplate(promotionId, customerId, {
       'title': promotionTitle,
       'promotion_name': promotionTitle,
       'serial': card.serialNumber,
@@ -229,6 +233,7 @@ final class LocalPromotionFulfillmentService {
       'code': card.secretCode,
       'amount': amount,
       'reward_value': amount,
+      'customer_name': customerName,
     });
     final sent = await sender.send(destination: destination, body: body);
     await auditLogs.append(
@@ -259,13 +264,23 @@ final class LocalPromotionFulfillmentService {
 
   Future<String> _renderTemplate(
     String promotionId,
+    String customerId,
     Map<String, String> values,
   ) async {
     final global = await settings.find(SettingKeys.promotionRewardSmsTemplate);
     final perOffer = await settings.find(SettingKeys.promotionRewardSmsTemplates);
+    final perCustomer =
+        await settings.find(SettingKeys.promotionRewardCustomerSmsTemplates);
     final globalRaw = global is Success<AppSetting?> ? global.value?.value : null;
     final mapRaw = perOffer is Success<AppSetting?> ? perOffer.value?.value : null;
+    final customerRaw =
+        perCustomer is Success<AppSetting?> ? perCustomer.value?.value : null;
     var output = PromotionRewardTemplate.resolve(
+      perCustomer: PromotionRewardTemplate.lookupCustomer(
+        customerRaw,
+        promotionId,
+        customerId,
+      ),
       perOffer: PromotionRewardTemplate.lookup(mapRaw, promotionId),
       global: globalRaw,
       fallback: defaultRewardSmsTemplate,

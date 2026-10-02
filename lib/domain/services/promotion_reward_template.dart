@@ -12,6 +12,7 @@ class PromotionRewardTemplate {
     'amount',
     'promotion_name',
     'reward_value',
+    'customer_name',
   ];
 
   /// النص الفارغ يعود للافتراضي حتى لا يُحفظ قالب بلا رسالة.
@@ -22,14 +23,40 @@ class PromotionRewardTemplate {
 
   /// قالب العرض إن وُجد، وإلا القالب العام، وإلا الافتراضي.
   static String resolve({
+    String? perCustomer,
     required String? perOffer,
     required String? global,
     required String fallback,
   }) {
+    final customer = perCustomer?.trim() ?? '';
+    if (customer.isNotEmpty) return customer;
     final specific = perOffer?.trim() ?? '';
     if (specific.isNotEmpty) return specific;
     return normalize(global, fallback: fallback);
   }
+
+  static String customerKey(String promotionId, String customerId) =>
+      '${promotionId.trim()}|${customerId.trim()}';
+
+  static String? lookupCustomer(
+    String? raw,
+    String promotionId,
+    String customerId,
+  ) =>
+      lookup(raw, customerKey(promotionId, customerId));
+
+  /// النص الفارغ يحذف تخصيص العميل ويعيد العرض إلى قالب العرض/العام.
+  static String encodeCustomerMap(
+    String? raw, {
+    required String promotionId,
+    required String customerId,
+    required String? body,
+  }) =>
+      encodeMap(
+        raw,
+        promotionId: customerKey(promotionId, customerId),
+        body: body,
+      );
 
   static Map<String, String> decodeMap(String? raw) {
     if (raw == null || raw.trim().isEmpty) return const {};

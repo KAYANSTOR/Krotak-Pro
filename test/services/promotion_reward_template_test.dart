@@ -28,7 +28,6 @@ void main() {
       ['serial_number'],
     );
   });
-}
 
   test('per-offer template wins and empty clears back to global', () {
     const global = 'عام {title}';
@@ -69,3 +68,47 @@ void main() {
     expect(PromotionRewardTemplate.decodeMap('{'), isEmpty);
     expect(PromotionRewardTemplate.lookup('not-json', 'p1'), isNull);
   });
+
+  test('per-customer template wins then falls back to the offer', () {
+    const offer = 'عرض {title}';
+    const global = 'عام {title}';
+    expect(
+      PromotionRewardTemplate.resolve(
+        perCustomer: '  عميل {customer_name}  ',
+        perOffer: offer,
+        global: global,
+        fallback: 'افتراضي',
+      ),
+      'عميل {customer_name}',
+    );
+    expect(
+      PromotionRewardTemplate.resolve(
+        perCustomer: '   ',
+        perOffer: offer,
+        global: global,
+        fallback: 'افتراضي',
+      ),
+      offer,
+    );
+
+    final encoded = PromotionRewardTemplate.encodeCustomerMap(
+      null,
+      promotionId: 'p1',
+      customerId: 'c1',
+      body: 'خاص بالعميل',
+    );
+    expect(
+      PromotionRewardTemplate.lookupCustomer(encoded, 'p1', 'c1'),
+      'خاص بالعميل',
+    );
+    expect(PromotionRewardTemplate.lookupCustomer(encoded, 'p1', 'c2'), isNull);
+    expect(PromotionRewardTemplate.lookup(encoded, 'p1'), isNull);
+    final cleared = PromotionRewardTemplate.encodeCustomerMap(
+      encoded,
+      promotionId: 'p1',
+      customerId: 'c1',
+      body: '',
+    );
+    expect(PromotionRewardTemplate.lookupCustomer(cleared, 'p1', 'c1'), isNull);
+  });
+}

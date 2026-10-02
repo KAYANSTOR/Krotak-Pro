@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/result.dart';
 import '../../domain/entities/card.dart';
+import '../../domain/entities/customer.dart';
 import '../../domain/entities/promotion.dart';
 import '../../domain/entities/setting.dart';
 import '../../domain/services/promotion_reward_template.dart';
@@ -126,6 +127,58 @@ class _OffersScreenState extends State<OffersScreen>
     await _load();
   }
 
+  Future<void> _editCustomerTemplate(Promotion p) async {
+    final phone = await showDialog<String>(
+      context: context,
+      builder: (ctx) => const _CustomerTemplatePhoneDialog(),
+    );
+    if (!mounted || phone == null || phone.trim().isEmpty) return;
+    final found = await AppScope.of(context).customers.search(phone.trim());
+    if (!mounted) return;
+    if (found is Failure<List<Customer>>) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(found.error.message)),
+      );
+      return;
+    }
+    final matches = (found as Success<List<Customer>>).value;
+    if (matches.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('لا يوجد عميل بهذا الرقم')),
+      );
+      return;
+    }
+    final customer = matches.length == 1
+        ? matches.first
+        : await showDialog<Customer>(
+            context: context,
+            builder: (ctx) => SimpleDialog(
+              title: const Text('اختر العميل'),
+              children: [
+                for (final item in matches)
+                  SimpleDialogOption(
+                    onPressed: () => Navigator.pop(ctx, item),
+                    child: Text(item.displayName),
+                  ),
+              ],
+            ),
+          );
+    if (!mounted || customer == null) return;
+    final saved = await showOffersRewardTemplateSheet(
+      context,
+      promotionId: p.id,
+      promotionTitle: p.title,
+      customerId: customer.id,
+      customerLabel: customer.displayName,
+    );
+    if (!mounted || saved != true) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('تم حفظ قالب «${customer.displayName}» في «${p.title}»'),
+      ),
+    );
+  }
+
   Future<void> _toggle(Promotion p) async {
     final next = p.isActive ? PromotionStatus.disabled : PromotionStatus.active;
     final r = await AppScope.of(context).promotions.setStatus(p.id, next);
@@ -200,6 +253,7 @@ class _OffersScreenState extends State<OffersScreen>
           onToggle: () => _toggle(p),
           onDelete: () => _delete(p),
           onTemplate: () => _editTemplate(p),
+          onCustomerTemplate: () => _editCustomerTemplate(p),
         );
       },
     );
@@ -295,6 +349,7 @@ class _PromotionCard extends StatelessWidget {
     required this.onToggle,
     required this.onDelete,
     required this.onTemplate,
+    required this.onCustomerTemplate,
   });
 
   final Promotion promotion;
@@ -304,6 +359,7 @@ class _PromotionCard extends StatelessWidget {
   final VoidCallback onToggle;
   final VoidCallback onDelete;
   final VoidCallback onTemplate;
+  final VoidCallback onCustomerTemplate;
 
   @override
   Widget build(BuildContext context) {
@@ -386,12 +442,17 @@ class _PromotionCard extends StatelessWidget {
                 onSelected: (v) {
                   if (v == 'edit') onEdit();
                   if (v == 'template') onTemplate();
+                  if (v == 'customer_template') onCustomerTemplate();
                   if (v == 'toggle') onToggle();
                   if (v == 'delete') onDelete();
                 },
                 itemBuilder: (ctx) => [
                   const PopupMenuItem(value: 'edit', child: Text('تعديل')),
                   const PopupMenuItem(value: 'template', child: Text('قالب المكافأة')),
+                  const PopupMenuItem(
+                    value: 'customer_template',
+                    child: Text('قالب لعميل'),
+                  ),
                   PopupMenuItem(
                     value: 'toggle',
                     child: Text(isActive ? 'تعطيل' : 'تفعيل'),
@@ -428,3 +489,50 @@ class _PromotionCard extends StatelessWidget {
     );
   }
 }
+
+class _CustomerTemplatePhoneDialog extends StatefulWidget {
+  const _CustomerTemplatePhoneDialog();
+
+  @override
+  State<_CustomerTemplatePhoneDialog> createState() =>
+      _CustomerTemplatePhoneDialogState();
+}
+
+class _CustomerTemplatePhoneDialogState
+    extends State<_CustomerTemplatePhoneDialog> {
+  final _phone = TextEditingController();
+
+  @override
+  void dispose() {
+    _phone.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('قالب مكافأة لعميل'),
+      content: TextField(
+        controller: _phone,
+        autofocus: true,
+        keyboardType: TextInputType.phone,
+        decoration: const InputDecoration(
+          labelText: 'رقم الجوال أو الاسم',
+          hintText: 'يُحفظ لهذا العميل داخل العرض فقط',
+        ),
+        onSubmitted: (value) => Navigator.pop(context, value.trim()),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('إلغاء'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(context, _phone.text.trim()),
+          child: const Text('متابعة'),
+        ),
+      ],
+    );
+  }
+}
+

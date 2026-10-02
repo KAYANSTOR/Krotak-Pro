@@ -11,10 +11,13 @@ import '../widgets/net/net_surface_card.dart';
 /// تحرير قالب رسالة المكافأة من شاشة العروض مع تتبّع الكتابة قبل الحفظ.
 ///
 /// بدون [promotionId] يُحفظ القالب العام. مع معرّف العرض يُحفظ تخصيص هذا العرض فقط.
+/// مع [customerId] يُحفظ تخصيص هذا العميل داخل العرض دون تغيير بقية العملاء.
 Future<bool?> showOffersRewardTemplateSheet(
   BuildContext context, {
   String? promotionId,
   String? promotionTitle,
+  String? customerId,
+  String? customerLabel,
 }) {
   return showModalBottomSheet<bool>(
     context: context,
@@ -23,15 +26,24 @@ Future<bool?> showOffersRewardTemplateSheet(
     builder: (ctx) => _OffersRewardTemplateSheet(
       promotionId: promotionId,
       promotionTitle: promotionTitle,
+      customerId: customerId,
+      customerLabel: customerLabel,
     ),
   );
 }
 
 class _OffersRewardTemplateSheet extends StatefulWidget {
-  const _OffersRewardTemplateSheet({this.promotionId, this.promotionTitle});
+  const _OffersRewardTemplateSheet({
+    this.promotionId,
+    this.promotionTitle,
+    this.customerId,
+    this.customerLabel,
+  });
 
   final String? promotionId;
   final String? promotionTitle;
+  final String? customerId;
+  final String? customerLabel;
 
   @override
   State<_OffersRewardTemplateSheet> createState() =>
@@ -68,6 +80,9 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
 
   bool get _perOffer => widget.promotionId != null && widget.promotionId!.isNotEmpty;
 
+  bool get _perCustomer =>
+      _perOffer && widget.customerId != null && widget.customerId!.isNotEmpty;
+
   Future<void> _load() async {
     final c = AppScope.of(context);
     final global = await c.settings.find(SettingKeys.promotionRewardSmsTemplate);
@@ -77,6 +92,18 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
       final map = await c.settings.find(SettingKeys.promotionRewardSmsTemplates);
       final raw = map is Success<AppSetting?> ? map.value?.value : null;
       final specific = PromotionRewardTemplate.lookup(raw, widget.promotionId!);
+      if (specific != null) text = specific;
+    }
+    if (_perCustomer) {
+      final map = await c.settings.find(
+        SettingKeys.promotionRewardCustomerSmsTemplates,
+      );
+      final raw = map is Success<AppSetting?> ? map.value?.value : null;
+      final specific = PromotionRewardTemplate.lookupCustomer(
+        raw,
+        widget.promotionId!,
+        widget.customerId!,
+      );
       if (specific != null) text = specific;
     }
     _body.removeListener(_onTyped);
@@ -93,7 +120,22 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
   Future<void> _save() async {
     final c = AppScope.of(context);
     late final AppSetting setting;
-    if (_perOffer) {
+    if (_perCustomer) {
+      final map = await c.settings.find(
+        SettingKeys.promotionRewardCustomerSmsTemplates,
+      );
+      final raw = map is Success<AppSetting?> ? map.value?.value : null;
+      setting = AppSetting(
+        key: SettingKeys.promotionRewardCustomerSmsTemplates,
+        value: PromotionRewardTemplate.encodeCustomerMap(
+          raw,
+          promotionId: widget.promotionId!,
+          customerId: widget.customerId!,
+          body: _draft.trim(),
+        ),
+        updatedAt: c.clock.now(),
+      );
+    } else if (_perOffer) {
       final map = await c.settings.find(SettingKeys.promotionRewardSmsTemplates);
       final raw = map is Success<AppSetting?> ? map.value?.value : null;
       setting = AppSetting(
@@ -158,7 +200,9 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Text(
-                      _perOffer
+                      _perCustomer
+                          ? 'قالب العميل: ${widget.customerLabel ?? 'عميل العرض'}'
+                          : _perOffer
                           ? 'قالب مكافأة: ${widget.promotionTitle ?? 'هذا العرض'}'
                           : 'قالب رسالة المكافأة',
                       style: TextStyle(
