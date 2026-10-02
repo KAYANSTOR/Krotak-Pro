@@ -59,6 +59,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
   AccountFilterCounts? _buckets;
   AccountLedgerTotals? _ledgerTotals;
   List<AccountCurrencyLedgerTotals> _currencyTotals = const [];
+  String _displayCurrency = 'YER';
   List<_AccountRow> _allRows = const [];
   _AccountFilter _filter = _AccountFilter.all;
   _AccountSort _sort = _AccountSort.balanceDesc;
@@ -201,6 +202,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
       query,
       filter: _sqlFilter,
       sort: _sqlSort,
+      displayCurrencyCode: _displayCurrency,
       limit: _pageSize,
       offset: offset,
     );
@@ -238,7 +240,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
     Money? balance;
     final bal = await c.balanceService.getBalance(
       customerId: customer.id,
-      currencyCode: 'YER',
+      currencyCode: _displayCurrency,
     );
     if (bal is Success<Money>) balance = bal.value;
 
@@ -285,6 +287,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
       context,
       builder: (_) => _AccountActionsSheet(
         row: row,
+        currencyLabel: _displayCurrencyLabel,
         onOpen: () => AppRoutes.openCustomerDetail(context, row.customer.id)
             .then((_) => _load(_searchCtrl.text)),
         onCopy: (phone) async {
@@ -330,20 +333,56 @@ class _CustomersScreenState extends State<CustomersScreen> {
         accountsCount: _matchCount ?? _allRows.length,
         debtorTotalMinor: _debtorTotalMinor,
         creditorTotalMinor: _creditorTotalMinor,
+        currencyLabel: _displayCurrencyLabel,
         unlinkedCount: _allRows.where((r) => !r.hasPhone).length,
       ),
     );
   }
 
   /// إجمالي الشريحة الحالية من SQL. السقوط للصفوف المحمّلة إن فشل الاستعلام.
-  int get _debtorTotalMinor => _ledgerTotals?.debtorMinorUnits ?? _allRows
-      .map((r) => r.balance?.minorUnits ?? 0)
-      .where((v) => v < 0)
-      .fold<int>(0, (a, b) => a + b.abs());
-  int get _creditorTotalMinor => _ledgerTotals?.creditorMinorUnits ?? _allRows
-      .map((r) => r.balance?.minorUnits ?? 0)
-      .where((v) => v > 0)
-      .fold<int>(0, (a, b) => a + b);
+  AccountCurrencyLedgerTotals? get _selectedCurrencyTotals {
+    if (_displayCurrency == 'YER') return null;
+    for (final row in _currencyTotals) {
+      if (row.currencyCode == _displayCurrency) return row;
+    }
+    return const AccountCurrencyLedgerTotals(
+      currencyCode: 'YER',
+      debtorMinorUnits: 0,
+      creditorMinorUnits: 0,
+    );
+  }
+
+  int get _debtorTotalMinor =>
+      _selectedCurrencyTotals?.debtorMinorUnits ??
+      _ledgerTotals?.debtorMinorUnits ??
+      _allRows
+          .map((r) => r.balance?.minorUnits ?? 0)
+          .where((v) => v < 0)
+          .fold<int>(0, (a, b) => a + b.abs());
+  int get _creditorTotalMinor =>
+      _selectedCurrencyTotals?.creditorMinorUnits ??
+      _ledgerTotals?.creditorMinorUnits ??
+      _allRows
+          .map((r) => r.balance?.minorUnits ?? 0)
+          .where((v) => v > 0)
+          .fold<int>(0, (a, b) => a + b);
+
+  String get _displayCurrencyLabel =>
+      _displayCurrency == 'YER' ? 'ر.ي' : _displayCurrency;
+
+  List<String> get _displayCurrencies {
+    final codes = <String>{'YER'};
+    for (final row in _currencyTotals) {
+      if (row.currencyCode.trim().isNotEmpty) codes.add(row.currencyCode);
+    }
+    final list = codes.toList();
+    list.sort((a, b) {
+      if (a == 'YER') return -1;
+      if (b == 'YER') return 1;
+      return a.compareTo(b);
+    });
+    return list;
+  }
 
   String get _filterLabel => switch (_filter) {
         _AccountFilter.all => 'الكل',
@@ -398,6 +437,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
           _searchCtrl.text,
           filter: _sqlFilter,
           sort: _sqlSort,
+          displayCurrencyCode: _displayCurrency,
           limit: limit,
           offset: offset,
         );
@@ -533,6 +573,26 @@ class _CustomersScreenState extends State<CustomersScreen> {
                 PopupMenuItem(value: 'pdf', child: Text('تصدير PDF')),
               ],
             ),
+            if (_displayCurrencies.length > 1)
+              PopupMenuButton<String>(
+                tooltip: 'عملة عرض القائمة',
+                icon: Icon(Icons.currency_exchange_rounded, color: palette.textSecondary),
+                onSelected: (value) {
+                  if (value == _displayCurrency) return;
+                  setState(() => _displayCurrency = value);
+                  _load(_searchCtrl.text);
+                },
+                itemBuilder: (_) => [
+                  for (final code in _displayCurrencies)
+                    PopupMenuItem(
+                      value: code,
+                      child: Text(
+                        code == _displayCurrency ? '$code — المعروضة' : code,
+                        style: const TextStyle(fontFamily: NetTypography.family),
+                      ),
+                    ),
+                ],
+              ),
             PopupMenuButton<_AccountSort>(
               tooltip: 'ترتيب القائمة',
               icon: Icon(Icons.sort_rounded, color: palette.textSecondary),
@@ -598,13 +658,13 @@ class _CustomersScreenState extends State<CustomersScreen> {
                     ),
                     NetIndicatorTile(
                       label: 'إجمالي المدين',
-                      value: formatMoneyMinor(_debtorTotalMinor),
+                      value: formatMoneyMinor(_debtorTotalMinor, currency: _displayCurrencyLabel),
                       icon: Icons.south_west_rounded,
                       tint: net.error,
                     ),
                     NetIndicatorTile(
                       label: 'إجمالي الدائن',
-                      value: formatMoneyMinor(_creditorTotalMinor),
+                      value: formatMoneyMinor(_creditorTotalMinor, currency: _displayCurrencyLabel),
                       icon: Icons.north_east_rounded,
                       tint: net.success,
                     ),
@@ -804,6 +864,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
                               }
                               return _AccountCard(
                                 row: row,
+                                currencyLabel: _displayCurrencyLabel,
                                 onTap: open,
                                 onLongPress: () => _accountActions(row),
                               );
@@ -853,6 +914,7 @@ class _BalancesDistributionSheet extends StatelessWidget {
     required this.debtorTotalMinor,
     required this.creditorTotalMinor,
     required this.unlinkedCount,
+    this.currencyLabel = 'ر.ي',
   });
 
   final List<_AccountRow> rows;
@@ -860,6 +922,7 @@ class _BalancesDistributionSheet extends StatelessWidget {
   final int debtorTotalMinor;
   final int creditorTotalMinor;
   final int unlinkedCount;
+  final String currencyLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -884,13 +947,13 @@ class _BalancesDistributionSheet extends StatelessWidget {
             ),
             NetIndicatorTile(
               label: 'إجمالي المدين',
-              value: formatMoneyMinor(debtorTotalMinor),
+              value: formatMoneyMinor(debtorTotalMinor, currency: currencyLabel),
               icon: Icons.south_west_rounded,
               tint: net.error,
             ),
             NetIndicatorTile(
               label: 'إجمالي الدائن',
-              value: formatMoneyMinor(creditorTotalMinor),
+              value: formatMoneyMinor(creditorTotalMinor, currency: currencyLabel),
               icon: Icons.north_east_rounded,
               tint: net.success,
             ),
@@ -910,6 +973,7 @@ class _BalancesDistributionSheet extends StatelessWidget {
                     : net.success,
                 valueLabel: formatMoneyMinor(
                   (row.balance?.minorUnits ?? 0).abs(),
+                  currency: currencyLabel,
                 ),
               ),
           ],
@@ -1022,11 +1086,13 @@ class _AccountCard extends StatelessWidget {
     required this.row,
     required this.onTap,
     required this.onLongPress,
+    this.currencyLabel = 'ر.ي',
   });
 
   final _AccountRow row;
   final VoidCallback onTap;
   final VoidCallback onLongPress;
+  final String currencyLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -1098,7 +1164,7 @@ class _AccountCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: NetSpacing.sm),
-              NetBalancePill(amountMinor: row.balance?.minorUnits ?? 0),
+              NetBalancePill(amountMinor: row.balance?.minorUnits ?? 0, currency: currencyLabel),
             ],
           ),
           if (row.hasPhone) ...[
@@ -1215,12 +1281,14 @@ class _AccountActionsSheet extends StatelessWidget {
     required this.onOpen,
     required this.onCopy,
     required this.onBroadcast,
+    this.currencyLabel = 'ر.ي',
   });
 
   final _AccountRow row;
   final VoidCallback onOpen;
   final ValueChanged<String> onCopy;
   final VoidCallback onBroadcast;
+  final String currencyLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -1298,8 +1366,8 @@ class _AccountActionsSheet extends StatelessWidget {
                 Expanded(
                   child: Text(
                     balance.minorUnits < 0
-                        ? 'على الحساب دين: ${formatMoneyMinor(balance.minorUnits.abs())}'
-                        : 'رصيد دائن: ${formatMoneyMinor(balance.minorUnits)}',
+                        ? 'على الحساب دين: ${formatMoneyMinor(balance.minorUnits.abs(), currency: currencyLabel)}'
+                        : 'رصيد دائن: ${formatMoneyMinor(balance.minorUnits, currency: currencyLabel)}',
                     style: TextStyle(
                       fontFamily: NetTypography.family,
                       fontSize: 12,

@@ -121,6 +121,7 @@ final class _FakeCustomers implements CustomerRepository {
     required AccountSqlFilter filter,
     AccountSqlSort sort = AccountSqlSort.name,
     String currencyCode = 'YER',
+    String? displayCurrencyCode,
     int limit = 80,
     int offset = 0,
   }) async => const Success([]);

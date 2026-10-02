@@ -269,3 +269,30 @@ void main() {
     expect(usd.creditorMinorUnits, 250);
     expect(usd.debtorMinorUnits, 0);
   });
+
+  test('display currency sorts the list without changing YER chip membership', () async {
+    await seedCustomer('alpha', 'ألف', phone: '777900001');
+    await seedCustomer('beta', 'باء', phone: '777900002');
+    await ledger('y1', 'alpha', TransactionType.deposit, 100);
+    await ledger('u1', 'alpha', TransactionType.deposit, 5000, currencyCode: 'USD');
+    await ledger('y2', 'beta', TransactionType.deposit, 9000);
+    await ledger('u2', 'beta', TransactionType.deposit, 100, currencyCode: 'USD');
+
+    final debtors = await customers.searchFilteredPage(
+      '',
+      filter: AccountSqlFilter.debtor,
+      displayCurrencyCode: 'USD',
+    );
+    expect((debtors as Success<List<Customer>>).value, isEmpty);
+
+    final page = await customers.searchFilteredPage(
+      '',
+      filter: AccountSqlFilter.creditor,
+      sort: AccountSqlSort.balanceDesc,
+      displayCurrencyCode: 'USD',
+    );
+    expect(
+      (page as Success<List<Customer>>).value.map((row) => row.id),
+      ['alpha', 'beta'],
+    );
+  });

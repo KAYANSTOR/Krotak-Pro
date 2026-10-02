@@ -93,6 +93,7 @@ final class LocalCustomerRepository implements CustomerRepository {
     required domain.AccountSqlFilter filter,
     domain.AccountSqlSort sort = domain.AccountSqlSort.name,
     String currencyCode = 'YER',
+    String? displayCurrencyCode,
     int limit = 80,
     int offset = 0,
   }) async {
@@ -101,11 +102,12 @@ final class LocalCustomerRepository implements CustomerRepository {
       final safeOffset = offset < 0 ? 0 : offset;
       final trimmed = query.trim();
       final like = '%$trimmed%';
-      final rows = await database.customSelect(
-        '''
-        SELECT c.id AS id
-        FROM customers c
-        LEFT JOIN (
+      final membership = currencyCode.trim().isEmpty ? 'YER' : currencyCode.trim();
+      final display = (displayCurrencyCode == null || displayCurrencyCode.trim().isEmpty)
+          ? membership
+          : displayCurrencyCode.trim();
+      final split = display != membership;
+      const balanceJoin = '''
           SELECT customer_id,
             SUM(CASE
               WHEN type IN ('deposit', 'reward', 'reversal') THEN amount_minor_units
@@ -116,7 +118,15 @@ final class LocalCustomerRepository implements CustomerRepository {
             AND currency_code = ?
             AND customer_id IS NOT NULL
           GROUP BY customer_id
+''';
+      final rows = await database.customSelect(
+        '''
+        SELECT c.id AS id
+        FROM customers c
+        LEFT JOIN (
+          $balanceJoin
         ) bal ON bal.customer_id = c.id
+        ${split ? 'LEFT JOIN ($balanceJoin) disp ON disp.customer_id = c.id' : ''}
         WHERE c.status != 'merged'
           AND (
             ? = 'all'
@@ -139,11 +149,12 @@ final class LocalCustomerRepository implements CustomerRepository {
               WHERE i2.customer_id = c.id AND i2.value LIKE ?
             )
           )
-        ORDER BY ${domain.accountSqlOrderBy(sort)}
+        ORDER BY ${domain.accountSqlOrderBy(sort, balanceAlias: split ? 'disp' : 'bal')}
         LIMIT ? OFFSET ?
         ''',
         variables: [
-          Variable.withString(currencyCode),
+          Variable.withString(membership),
+          if (split) Variable.withString(display),
           Variable.withString(filter.name),
           Variable.withString(filter.name),
           Variable.withString(filter.name),
@@ -177,8 +188,6 @@ final class LocalCustomerRepository implements CustomerRepository {
     }
   }
 
-
-  @override
   Future<Result<int>> countFiltered(
     String query, {
     required domain.AccountSqlFilter filter,
