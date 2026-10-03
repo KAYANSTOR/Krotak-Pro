@@ -93,6 +93,30 @@ class PromotionRewardTemplate {
     'customer_name': 'عميل تجريبي',
   };
 
+  /// قيم المعاينة. الكرت المتاح يستبدل حقول الكرت فقط، بلا حجز أو خصم.
+  static Map<String, String> probeValues({
+    RewardProbeCardSnapshot? card,
+    String? promotionName,
+    String? customerName,
+  }) {
+    final values = Map<String, String>.from(sampleValues);
+    final offer = promotionName?.trim() ?? '';
+    if (offer.isNotEmpty) {
+      values['promotion_name'] = offer;
+      values['title'] = offer;
+    }
+    final customer = customerName?.trim() ?? '';
+    if (customer.isNotEmpty) values['customer_name'] = customer;
+    if (card != null) {
+      values['title'] = card.title;
+      values['serial'] = card.serial;
+      values['secret'] = card.secret;
+      values['code'] = card.secret;
+      values['amount'] = card.amount;
+    }
+    return values;
+  }
+
   /// يستبدل المتغيرات المعروفة بقيم تجريبية ويبقي المجهولة كما هي.
   static String renderPreview(String template, {Map<String, String>? values}) {
     final source = values ?? sampleValues;
@@ -108,8 +132,11 @@ class PromotionRewardTemplate {
       'رسالة تجريبية من كروتك — ليست كرتاً صادراً ولا تُخصم من المخزون';
 
   /// يبني نص الإرسال التجريبي من القالب الظاهر، دون لمس المخزون أو الدفتر.
-  static Result<String> probeBody(String template) {
-    final rendered = renderPreview(template).trim();
+  static Result<String> probeBody(
+    String template, {
+    Map<String, String>? values,
+  }) {
+    final rendered = renderPreview(template, values: values).trim();
     if (rendered.isEmpty) {
       return const Failure(
         AppFailure(
@@ -356,6 +383,22 @@ class PromotionRewardResolution {
 }
 
 /// آخر نتيجة رسالة تجريبية لنطاق قالب واحد. ليست حركة مالية.
+class RewardProbeCardSnapshot {
+  const RewardProbeCardSnapshot({
+    required this.cardId,
+    required this.title,
+    required this.serial,
+    required this.secret,
+    required this.amount,
+  });
+
+  final String cardId;
+  final String title;
+  final String serial;
+  final String secret;
+  final String amount;
+}
+
 class RewardProbeReceipt {
   const RewardProbeReceipt({
     required this.scope,

@@ -344,4 +344,39 @@ void main() {
       sent.body,
     );
   });
+
+  test('probe can show an available card without reserving it', () {
+    const card = RewardProbeCardSnapshot(
+      cardId: 'card-1',
+      title: 'كرت 200',
+      serial: '999111',
+      secret: '4455',
+      amount: '200.00',
+    );
+    final values = PromotionRewardTemplate.probeValues(
+      card: card,
+      promotionName: 'عرض رمضان',
+      customerName: 'سالم',
+    );
+    expect(values['serial'], '999111');
+    expect(values['secret'], '4455');
+    expect(values['code'], '4455');
+    expect(values['amount'], '200.00');
+    expect(values['title'], 'كرت 200');
+    expect(values['promotion_name'], 'عرض رمضان');
+    expect(values['customer_name'], 'سالم');
+
+    final body = PromotionRewardTemplate.probeBody(
+      'سري {serial} كود {secret}',
+      values: values,
+    );
+    expect(body, isA<Success<String>>());
+    final text = (body as Success<String>).value;
+    expect(text, contains(PromotionRewardTemplate.probePrefix));
+    expect(text, contains('999111'));
+    expect(text, isNot(contains('123456789012')));
+
+    final samples = PromotionRewardTemplate.probeValues();
+    expect(samples['serial'], PromotionRewardTemplate.sampleValues['serial']);
+  });
 }

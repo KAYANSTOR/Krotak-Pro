@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/result.dart';
 import '../../domain/entities/audit.dart';
+import '../../domain/entities/card.dart';
 import '../../domain/entities/setting.dart';
 import '../../domain/services/local_promotion_fulfillment_service.dart';
 import '../../domain/services/promotion_reward_template.dart';
@@ -72,6 +73,8 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
   String? _storedCustomer;
   String? _storedCustomerGlobal;
   RewardProbeReceipt? _probeReceipt;
+  var _useLiveCard = false;
+  RewardProbeCardSnapshot? _liveCard;
 
   String get _fallback =>
       LocalPromotionFulfillmentService.defaultRewardSmsTemplate;
@@ -101,8 +104,66 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
   }
 
   String? _currentProbeBody() {
-    final rendered = PromotionRewardTemplate.probeBody(_body.text);
+    final rendered = PromotionRewardTemplate.probeBody(
+      _body.text,
+      values: _probeValues,
+    );
     return rendered is Success<String> ? rendered.value : null;
+  }
+
+  Map<String, String> get _probeValues => PromotionRewardTemplate.probeValues(
+        card: _useLiveCard ? _liveCard : null,
+        promotionName: widget.promotionTitle,
+        customerName: widget.customerLabel,
+      );
+
+  Future<void> _toggleLiveCard(bool enabled) async {
+    if (!enabled) {
+      setState(() {
+        _useLiveCard = false;
+        _liveCard = null;
+        final receipt = _probeReceipt;
+        _status = receipt?.labelFor(_currentProbeBody());
+        _statusIsError = receipt == null ||
+            receipt.isError ||
+            !receipt.matchesBody(_currentProbeBody() ?? '');
+      });
+      return;
+    }
+    final c = AppScope.of(context);
+    final listed = await c.cards.listByStatus(CardStatus.available);
+    if (!mounted) return;
+    if (listed is! Success<List<Card>> || listed.value.isEmpty) {
+      setState(() {
+        _useLiveCard = false;
+        _liveCard = null;
+        _status = 'لا يوجد كرت متاح. بقيت المعاينة على القيم التجريبية';
+        _statusIsError = true;
+      });
+      return;
+    }
+    final card = listed.value.first;
+    final category = await c.categories.findById(card.categoryId);
+    if (!mounted) return;
+    final found = category is Success<CardCategory?> ? category.value : null;
+    final title = found?.name.trim().isNotEmpty == true
+        ? found!.name.trim()
+        : 'كرت متاح';
+    final amount = found == null
+        ? PromotionRewardTemplate.sampleValues['amount']!
+        : (found.faceValue.minorUnits / 100).toStringAsFixed(2);
+    setState(() {
+      _useLiveCard = true;
+      _liveCard = RewardProbeCardSnapshot(
+        cardId: card.id,
+        title: title,
+        serial: card.serialNumber,
+        secret: card.secretCode,
+        amount: amount,
+      );
+      _status = 'المعاينة تعرض كرتاً متاحاً دون حجز أو خصم';
+      _statusIsError = false;
+    });
   }
 
   bool get _perOffer => widget.promotionId != null && widget.promotionId!.isNotEmpty;
@@ -294,7 +355,7 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
       });
       return;
     }
-    final body = PromotionRewardTemplate.probeBody(_resolution.template);
+    final body = PromotionRewardTemplate.probeBody(_resolution.template, values: _probeValues);
     if (body is Failure<String>) {
       setState(() {
         _status = body.error.message;
@@ -309,7 +370,9 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
       builder: (ctx) => AlertDialog(
         title: const Text('إرسال رسالة تجريبية', style: TextStyle(fontFamily: NetTypography.family)),
         content: Text(
-          'ستُرسل المعاينة إلى $phone مع بادئة توضح أنها ليست كرتاً صادراً. لن يُحفظ القالب ولن يُخصم مخزون.',
+          _useLiveCard
+              ? 'ستُرسل المعاينة إلى $phone بقيم كرت متاح، مع بادئة توضح أنها ليست صرفاً. لن يُحجز الكرت ولن يُحفظ القالب.'
+              : 'ستُرسل المعاينة إلى $phone مع بادئة توضح أنها ليست كرتاً صادراً. لن يُحفظ القالب ولن يُخصم مخزون.',
           style: const TextStyle(fontFamily: NetTypography.family),
         ),
         actions: [
@@ -421,7 +484,10 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
   Widget build(BuildContext context) {
     final unknown = PromotionRewardTemplate.unknownPlaceholders(_draft);
     final resolution = _resolution;
-    final preview = PromotionRewardTemplate.renderPreview(resolution.template);
+    final preview = PromotionRewardTemplate.renderPreview(
+      resolution.template,
+      values: _probeValues,
+    );
     final bottom = MediaQuery.viewInsetsOf(context).bottom;
     return Directionality(
       textDirection: TextDirection.rtl,
@@ -507,6 +573,21 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
                       ),
                     ),
                     const SizedBox(height: 8),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      value: _useLiveCard,
+                      onChanged: _busy || _probing ? null : _toggleLiveCard,
+                      title: const Text(
+                        'معاينة بكرت متاح',
+                        style: TextStyle(fontFamily: NetTypography.family),
+                      ),
+                      subtitle: Text(
+                        _liveCard == null
+                            ? 'بدون هذا الخيار تبقى الأرقام تجريبية ولا تُرسل من المخزون'
+                            : 'الرقم الظاهر من المخزون، والكرت يبقى متاحاً',
+                        style: const TextStyle(fontFamily: NetTypography.family),
+                      ),
+                    ),
                     TextField(
                       controller: _phone,
                       keyboardType: TextInputType.phone,
