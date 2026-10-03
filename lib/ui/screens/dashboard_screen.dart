@@ -84,11 +84,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
   /// Locally dismissed alert banners (presentation-only state).
   final Set<String> _dismissedAlerts = <String>{};
 
+  // يجب أن تُطابق هذه القائمة تماماً مصدر `PendingMessageReviewService
+  // .listPending()` — هو ما تفتحه أيقونة التنبيهات فعلياً. كانت تشمل
+  // `rejected`/`failed` سابقاً فيظهر عدد في الأيقونة لرسائل لا تعرضها
+  // الشاشة المفتوحة (لهما بطاقة/شاشة مستقلة أصلاً: `rejectedCount` أدناه
+  // و«الرسائل الفاشلة»)، بينما كانت تتجاهل حالة `pending` الصريحة فلا
+  // تُحسب أصلاً. التطابق هنا يضمن أن رقم الأيقونة = ما يظهر فعلاً عند فتحها.
   static const _attentionStatuses = <MessageProcessingStatus>[
-    MessageProcessingStatus.rejected,
     MessageProcessingStatus.received,
     MessageProcessingStatus.parsed,
-    MessageProcessingStatus.failed,
+    MessageProcessingStatus.pending,
   ];
 
   @override
@@ -159,18 +164,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ];
 
       var attentionCount = 0;
-      var rejectedCount = 0;
       var attentionFailed = false;
       for (final status in _attentionStatuses) {
         final r = await c.messages.listByStatus(status);
         if (r is Success<List<IncomingMessage>>) {
           attentionCount += r.value.length;
-          if (status == MessageProcessingStatus.rejected) {
-            rejectedCount = r.value.length;
-          }
         } else {
           attentionFailed = true;
         }
+      }
+
+      // مستقلة عن عدّاد التنبيهات أعلاه: لها بطاقتها الخاصة (`_rejectedCount`
+      // / `onRejectedTap`) ولا تفتحها أيقونة التنبيهات.
+      var rejectedCount = 0;
+      final rejectedResult =
+          await c.messages.listByStatus(MessageProcessingStatus.rejected);
+      if (rejectedResult is Success<List<IncomingMessage>>) {
+        rejectedCount = rejectedResult.value.length;
+      } else {
+        attentionFailed = true;
       }
 
       var accounts = 0;

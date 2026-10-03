@@ -67,9 +67,36 @@ final class PendingMessageReviewService {
         collected[message.id] = message;
       }
     }
-    final list = collected.values.toList()
-      ..sort((a, b) => b.receivedAt.compareTo(a.receivedAt));
-    return Success(list);
+    // المعلَّمة «مقروءة» يدوياً تُستبعد هنا — المصدر الوحيد لشاشة المعلّقة
+    // وعدّاد أيقونة التنبيهات، فيبقى الرقم مطابقاً لما يُعرض دائماً.
+    final visible = <IncomingMessage>[];
+    for (final message in collected.values) {
+      final audits = await auditLogs.findByEntity('message', message.id);
+      final markedRead = audits is Success<List<AuditLog>> &&
+          audits.value.any((log) => log.action == markedReadAction);
+      if (!markedRead) visible.add(message);
+    }
+    visible.sort((a, b) => b.receivedAt.compareTo(a.receivedAt));
+    return Success(visible);
+  }
+
+  /// علامة «مقروءة» يدوية — لا تغيّر حالة الرسالة ولا تعتمدها ولا ترفضها؛
+  /// فقط تُخرجها من قائمة التنبيه (والصوت والعدّاد).
+  static const markedReadAction = 'pending_message_marked_read_by_operator';
+
+  Future<Result<void>> markRead(String messageId) async {
+    final found = await messages.findById(messageId);
+    if (found is Failure<IncomingMessage?>) return Failure(found.error);
+    if ((found as Success<IncomingMessage?>).value == null) {
+      return const Failure(AppFailure(code: 'message_not_found', message: 'Message was not found'));
+    }
+    return auditLogs.append(AuditLog(
+      id: ids.next('audit'),
+      entityType: 'message',
+      entityId: messageId,
+      action: markedReadAction,
+      occurredAt: clock.now(),
+    ));
   }
 
   Future<Result<Transaction>> approve(String messageId) async {

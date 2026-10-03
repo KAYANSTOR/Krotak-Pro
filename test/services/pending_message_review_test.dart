@@ -69,6 +69,25 @@ void main() {
       expect(ids, containsAll(<String>['p1', 'p2']));
     });
 
+    test('markRead hides the message from listPending without changing its status', () async {
+      messages.store['r1'] = IncomingMessage(id: 'r1', sender: 'bank', body: 'body', receivedAt: DateTime.utc(2026, 9, 12), status: MessageProcessingStatus.parsed);
+      messages.store['r2'] = IncomingMessage(id: 'r2', sender: 'bank', body: 'body', receivedAt: DateTime.utc(2026, 9, 11), status: MessageProcessingStatus.pending);
+
+      final marked = await service.markRead('r1');
+      expect(marked, isA<Success<void>>());
+
+      final result = await service.listPending();
+      final ids = (result as Success<List<IncomingMessage>>).value.map((m) => m.id).toList();
+      expect(ids, ['r2']);
+      expect(messages.store['r1']!.status, MessageProcessingStatus.parsed);
+      expect(audit.logs.any((l) => l.action == PendingMessageReviewService.markedReadAction && l.entityId == 'r1'), isTrue);
+    });
+
+    test('markRead fails for an unknown message', () async {
+      final result = await service.markRead('missing');
+      expect(result, isA<Failure<void>>());
+    });
+
     test('reject marks rejected and audits', () async {
       messages.store['m2'] = IncomingMessage(id: 'm2', sender: 'bank', body: 'body', receivedAt: DateTime.utc(2026, 9, 12), status: MessageProcessingStatus.parsed);
       final result = await service.reject('m2', reason: 'اختبار');

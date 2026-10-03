@@ -237,6 +237,34 @@ class _PendingMessagesScreenState extends State<PendingMessagesScreen>
     await _load();
   }
 
+  Future<void> _markRead(_PendingRow row) async {
+    setState(() => _busyId = row.message.id);
+    final result =
+        await AppScope.of(context).pendingReview.markRead(row.message.id);
+    if (!mounted) return;
+    setState(() => _busyId = null);
+    if (result is Failure<void>) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            result.error.message,
+            style: const TextStyle(fontFamily: 'Tajawal'),
+          ),
+        ),
+      );
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'تم تحديد الرسالة كمقروءة',
+          style: TextStyle(fontFamily: 'Tajawal'),
+        ),
+      ),
+    );
+    await _load();
+  }
+
   void _toggleMute() {
     if (_alarm.isMuted) {
       _alarm.unmute();
@@ -421,6 +449,7 @@ class _PendingMessagesScreenState extends State<PendingMessagesScreen>
                                     busy: busy,
                                     onApprove: () => _approve(row),
                                     onReject: () => _reject(row),
+                                    onMarkRead: () => _markRead(row),
                                   );
                                 },
                               ),
@@ -454,12 +483,14 @@ class _PendingCard extends StatelessWidget {
     required this.busy,
     required this.onApprove,
     required this.onReject,
+    required this.onMarkRead,
   });
 
   final _PendingRow row;
   final bool busy;
   final VoidCallback onApprove;
   final VoidCallback onReject;
+  final VoidCallback onMarkRead;
 
   String _fmtAmount(Money? m) {
     if (m == null) return '—';
@@ -614,6 +645,20 @@ class _PendingCard extends StatelessWidget {
                 ),
               ),
             ],
+          ),
+          Align(
+            alignment: AlignmentDirectional.centerStart,
+            child: TextButton.icon(
+              onPressed: busy ? null : onMarkRead,
+              icon: const Icon(Icons.done_all_rounded, size: 16),
+              label: const Text(
+                'تحديد كمقروء',
+                style: TextStyle(fontFamily: 'Tajawal', fontSize: 12),
+              ),
+              style: TextButton.styleFrom(
+                foregroundColor: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
           ),
         ],
       ),

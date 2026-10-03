@@ -110,6 +110,7 @@ final class RejectedMessageItem {
     this.reference,
     this.auditAction,
     this.diagnostic,
+    this.archivedByOperator = false,
   });
 
   final IncomingMessage message;
@@ -121,6 +122,9 @@ final class RejectedMessageItem {
   final String? reference;
   final String? auditAction;
   final Map<String, dynamic>? diagnostic;
+
+  /// أُرشفت يدوياً من المشغّل (زر «أرشفة») دون أن تُحل فعلياً.
+  final bool archivedByOperator;
 }
 
 final class RejectedMessageCatalog {
@@ -133,6 +137,25 @@ final class RejectedMessageCatalog {
   final MessageRepository messages;
   final AuditLogRepository auditLogs;
   final MessageParser parser;
+
+  /// علامة أرشفة يدوية — لا تغيّر حالة الرسالة في قاعدة البيانات (تبقى
+  /// `rejected`)، فقط تُخفيها من القائمة النشطة وتُظهرها في تبويب الأرشيف.
+  static const archivedByOperatorAction = 'rejected_message_archived_by_operator';
+
+  /// يؤرشف رسالة مرفوضة يدوياً دون محاولة حلّها.
+  Future<Result<void>> archive(
+    String messageId, {
+    required String auditId,
+    required DateTime occurredAt,
+  }) {
+    return auditLogs.append(AuditLog(
+      id: auditId,
+      entityType: 'message',
+      entityId: messageId,
+      action: archivedByOperatorAction,
+      occurredAt: occurredAt,
+    ));
+  }
 
   static const _rejectActions = {
     'sms_delivery_failed',
@@ -189,6 +212,7 @@ final class RejectedMessageCatalog {
     String? action;
     String? payloadReason;
     Map<String, dynamic>? diagnostic;
+    var archivedByOperator = false;
     final audits = await auditLogs.findByEntity('message', m.id).timeout(
       const Duration(seconds: 10),
       onTimeout: () => const Failure(
@@ -199,7 +223,13 @@ final class RejectedMessageCatalog {
       ),
     );
     if (audits is Success<List<AuditLog>>) {
-      final logs = audits.value;
+      archivedByOperator =
+          audits.value.any((l) => l.action == archivedByOperatorAction);
+      // علامة الأرشفة ليست سبب رفض: تُستبعد حتى لا تحلّ محل السبب الحقيقي
+      // في الاحتياط `last` أدناه.
+      final logs = audits.value
+          .where((l) => l.action != archivedByOperatorAction)
+          .toList(growable: false);
       final diagnosticLogs = logs.where((l) => l.action == 'pipeline_diagnostic').toList()
         ..sort((a, b) => b.occurredAt.compareTo(a.occurredAt));
       if (diagnosticLogs.isNotEmpty) {
@@ -268,6 +298,7 @@ final class RejectedMessageCatalog {
       reference: reference,
       auditAction: action,
       diagnostic: diagnostic,
+      archivedByOperator: archivedByOperator,
     );
   }
 

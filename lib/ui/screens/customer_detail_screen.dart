@@ -12,6 +12,7 @@ import '../../domain/entities/pos_account.dart';
 import '../../domain/entities/transaction.dart';
 import '../../domain/services/local_promotion_progress_service.dart';
 import '../../domain/services/services.dart';
+import '../../platform/contact_picker_bridge.dart';
 import '../app_scope.dart';
 import '../theme/net_semantic_colors.dart';
 import '../theme/net_tokens.dart';
@@ -111,6 +112,66 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
       if (id.type == CustomerIdentifierType.phoneNumber) return id.value;
     }
     return '—';
+  }
+
+  /// إضافة يدوية لهذا العميل إلى جهات اتصال الجهاز — الكتابة التلقائية
+  /// (`ContactWriter.upsertPhone`) تحدث فقط عند إيداع جديد غير نقطة بيع؛
+  /// هذا الزر يسدّ الفجوة لأي عميل آخر (قديم أو من مسار نقطة بيع).
+  Future<void> _addToContacts() async {
+    final c = _customer;
+    if (c == null) return;
+    final phone = _primaryPhone;
+    if (phone.trim().isEmpty || phone == '—') {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'لا يوجد رقم هاتف مسجّل لهذا العميل',
+            style: TextStyle(fontFamily: 'Tajawal'),
+          ),
+        ),
+      );
+      return;
+    }
+    final bridge = ContactPickerBridge();
+    if (!await bridge.hasContactsPermission()) {
+      final granted = await bridge.requestContactsPermission();
+      if (!mounted) return;
+      if (!granted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'صلاحية جهات الاتصال مطلوبة لإضافة العميل',
+              style: TextStyle(fontFamily: 'Tajawal'),
+            ),
+          ),
+        );
+        return;
+      }
+    }
+    final result = await bridge.upsertPhone(
+      phone: phone,
+      displayName: c.displayName,
+    );
+    if (!mounted) return;
+    if (result is Failure) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            (result as Failure).error.message,
+            style: const TextStyle(fontFamily: 'Tajawal'),
+          ),
+        ),
+      );
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'تمت إضافة ${c.displayName} إلى جهات الاتصال',
+          style: const TextStyle(fontFamily: 'Tajawal'),
+        ),
+      ),
+    );
   }
 
   String _statusLabel(CustomerStatus s) => switch (s) {
@@ -393,6 +454,12 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                   );
                 },
                 icon: const Icon(Icons.sms_outlined),
+              ),
+            if (_customer != null)
+              IconButton(
+                tooltip: 'إضافة إلى جهات الاتصال',
+                onPressed: _addToContacts,
+                icon: const Icon(Icons.person_add_alt_1_rounded),
               ),
             if (_customer != null)
               IconButton(

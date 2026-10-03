@@ -50,6 +50,51 @@ void main() {
       expect(item.amount?.minorUnits, 20000);
     });
 
+    test('archive flags the item without losing its real rejection reason', () async {
+      final messages = _FakeMessages()
+        ..store['m9'] = IncomingMessage(
+          id: 'm9',
+          sender: 'Jaib',
+          body: 'x',
+          receivedAt: DateTime.utc(2026, 9, 12),
+          status: MessageProcessingStatus.rejected,
+        );
+      final audit = _FakeAudit()
+        ..logs.add(
+          AuditLog(
+            id: 'a9',
+            entityType: 'message',
+            entityId: 'm9',
+            action: 'transfer_out_of_stock',
+            occurredAt: DateTime.utc(2026, 9, 12, 1),
+          ),
+        );
+      final catalog = RejectedMessageCatalog(
+        messages: messages,
+        auditLogs: audit,
+        parser: _FakeParser(
+          const ParsedTransfer(
+            messageId: 'm9',
+            amount: Money(minorUnits: 1000, currencyCode: 'YER'),
+            customerIdentifier: '770123456',
+            identifierType: TransferIdentifierType.phone,
+            reference: 'R9',
+          ),
+        ),
+      );
+
+      final before = (await catalog.listRejected() as Success<List<RejectedMessageItem>>).value.single;
+      expect(before.archivedByOperator, isFalse);
+
+      final archived = await catalog.archive('m9', auditId: 'a10', occurredAt: DateTime.utc(2026, 9, 13));
+      expect(archived, isA<Success<void>>());
+
+      final after = (await catalog.listRejected() as Success<List<RejectedMessageItem>>).value.single;
+      expect(after.archivedByOperator, isTrue);
+      expect(after.category, RejectionCategories.outOfStock);
+      expect(messages.store['m9']!.status, MessageProcessingStatus.rejected);
+    });
+
     test('pending_message_rejected maps to rejected-from-pending', () async {
       final messages = _FakeMessages()
         ..store['m2'] = IncomingMessage(

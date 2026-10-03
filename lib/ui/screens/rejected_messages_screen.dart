@@ -92,9 +92,25 @@ class _RejectedMessagesScreenState extends State<RejectedMessagesScreen> {
       if (result is Failure<List<RejectedMessageItem>>) {
         throw StateError(result.error.message);
       }
-      final items = (result as Success<List<RejectedMessageItem>>).value;
+      final all = (result as Success<List<RejectedMessageItem>>).value;
+      // المؤرشفة يدوياً تُنقل لتبويب الأرشيف وتبقى حالتها `rejected` في القاعدة.
+      final items = all.where((i) => !i.archivedByOperator).toList();
       final newCount = items.where((i) => i.isNew).length;
-      final archive = <RejectedMessageItem>[];
+      final archive = <RejectedMessageItem>[
+        for (final i in all.where((i) => i.archivedByOperator))
+          RejectedMessageItem(
+            message: i.message,
+            category: i.category,
+            reason: 'أُرشفت يدوياً',
+            isNew: false,
+            amount: i.amount,
+            phone: i.phone,
+            reference: i.reference,
+            auditAction: i.auditAction,
+            diagnostic: i.diagnostic,
+            archivedByOperator: true,
+          ),
+      ];
       for (final status in [
         MessageProcessingStatus.processed,
         MessageProcessingStatus.recovered,
@@ -169,6 +185,59 @@ class _RejectedMessagesScreenState extends State<RejectedMessagesScreen> {
     } finally {
       if (mounted) setState(() => _retryingId = null);
     }
+  }
+
+  /// أرشفة يدوية: تُخرج الرسالة من القائمة النشطة دون حلّها (مفيدة للرسائل
+  /// غير ذات الصلة). لا تُحذف — تظهر في تبويب الأرشيف.
+  Future<void> _archive(RejectedMessageItem item) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          title: const Text(
+            'أرشفة الرسالة؟',
+            style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w800),
+          ),
+          content: const Text(
+            'ستنتقل إلى الأرشيف دون معالجتها ولن يُسجَّل إيداع.',
+            style: TextStyle(fontFamily: 'Tajawal', height: 1.5),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('إلغاء', style: TextStyle(fontFamily: 'Tajawal')),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('أرشفة', style: TextStyle(fontFamily: 'Tajawal')),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    final c = AppScope.of(context);
+    final r = await RejectedMessageCatalog(
+      messages: c.messages,
+      auditLogs: c.auditLogs,
+      parser: c.messageParser,
+    ).archive(
+      item.message.id,
+      auditId: c.ids.next('audit'),
+      occurredAt: c.clock.now(),
+    );
+    if (!mounted) return;
+    if (r is Failure) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('تعذّرت الأرشفة: ${(r as Failure).error.message}')),
+      );
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('تمت أرشفة الرسالة')),
+    );
+    await _load(markViewed: false);
   }
 
   /// يفتح «بيع مباشر» مع تعبئة الجوال والمبلغ من الرسالة قدر الإمكان، حتى
@@ -423,6 +492,7 @@ class _RejectedMessagesScreenState extends State<RejectedMessagesScreen> {
                                                 ? null
                                                 : () => _retry(item),
                                             onManual: () => _manual(item),
+                                            onArchive: () => _archive(item),
                                           ),
                                         ),
                                       ),
@@ -570,6 +640,7 @@ class _RejectedCard extends StatelessWidget {
     this.busy = false,
     this.onRetry,
     this.onManual,
+    this.onArchive,
   });
   final RejectedMessageItem item;
   final bool archived;
@@ -580,6 +651,7 @@ class _RejectedCard extends StatelessWidget {
   /// null يعني: إعادة المحاولة غير متاحة لهذه الرسالة (مثل التكرار).
   final VoidCallback? onRetry;
   final VoidCallback? onManual;
+  final VoidCallback? onArchive;
 
   String _fmtTime(DateTime t) {
     final local = t.toLocal();
@@ -699,7 +771,7 @@ class _RejectedCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
-                  'تمت المعالجة',
+                  item.archivedByOperator ? 'مؤرشفة' : 'تمت المعالجة',
                   style: TextStyle(
                     fontFamily: 'Tajawal',
                     fontSize: 11,
@@ -752,6 +824,21 @@ class _RejectedCard extends StatelessWidget {
                 ),
               ],
             ),
+            if (onArchive != null)
+              Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: TextButton.icon(
+                  onPressed: busy ? null : onArchive,
+                  icon: const Icon(Icons.archive_outlined, size: 16),
+                  label: const Text(
+                    'أرشفة',
+                    style: TextStyle(fontFamily: 'Tajawal', fontSize: 12),
+                  ),
+                  style: TextButton.styleFrom(
+                    foregroundColor: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
           ],
         ],
       ),
