@@ -75,6 +75,7 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
   RewardProbeReceipt? _probeReceipt;
   var _useLiveCard = false;
   RewardProbeCardSnapshot? _liveCard;
+  List<RewardProbeCardSnapshot> _availableCards = const [];
 
   String get _fallback =>
       LocalPromotionFulfillmentService.defaultRewardSmsTemplate;
@@ -122,6 +123,7 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
       setState(() {
         _useLiveCard = false;
         _liveCard = null;
+        _availableCards = const [];
         final receipt = _probeReceipt;
         _status = receipt?.labelFor(_currentProbeBody());
         _statusIsError = receipt == null ||
@@ -137,31 +139,54 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
       setState(() {
         _useLiveCard = false;
         _liveCard = null;
+        _availableCards = const [];
         _status = 'لا يوجد كرت متاح. بقيت المعاينة على القيم التجريبية';
         _statusIsError = true;
       });
       return;
     }
-    final card = listed.value.first;
-    final category = await c.categories.findById(card.categoryId);
-    if (!mounted) return;
-    final found = category is Success<CardCategory?> ? category.value : null;
-    final title = found?.name.trim().isNotEmpty == true
-        ? found!.name.trim()
-        : 'كرت متاح';
-    final amount = found == null
-        ? PromotionRewardTemplate.sampleValues['amount']!
-        : (found.faceValue.minorUnits / 100).toStringAsFixed(2);
-    setState(() {
-      _useLiveCard = true;
-      _liveCard = RewardProbeCardSnapshot(
-        cardId: card.id,
-        title: title,
-        serial: card.serialNumber,
-        secret: card.secretCode,
-        amount: amount,
+    final snapshots = <RewardProbeCardSnapshot>[];
+    for (final card in listed.value.take(40)) {
+      final category = await c.categories.findById(card.categoryId);
+      if (!mounted) return;
+      final found = category is Success<CardCategory?> ? category.value : null;
+      final title = found?.name.trim().isNotEmpty == true
+          ? found!.name.trim()
+          : 'كرت متاح';
+      final amount = found == null
+          ? PromotionRewardTemplate.sampleValues['amount']!
+          : (found.faceValue.minorUnits / 100).toStringAsFixed(2);
+      snapshots.add(
+        RewardProbeCardSnapshot(
+          cardId: card.id,
+          title: title,
+          serial: card.serialNumber,
+          secret: card.secretCode,
+          amount: amount,
+        ),
       );
-      _status = 'المعاينة تعرض كرتاً متاحاً دون حجز أو خصم';
+    }
+    final selected = PromotionRewardTemplate.selectProbeCard(snapshots);
+    setState(() {
+      _useLiveCard = selected != null;
+      _availableCards = snapshots;
+      _liveCard = selected;
+      _status = selected == null
+          ? 'لا يوجد كرت متاح. بقيت المعاينة على القيم التجريبية'
+          : 'المعاينة تعرض الكرت المختار دون حجز أو خصم';
+      _statusIsError = selected == null;
+    });
+  }
+
+  void _selectLiveCard(String? cardId) {
+    final selected = PromotionRewardTemplate.selectProbeCard(
+      _availableCards,
+      selectedId: cardId,
+    );
+    if (selected == null) return;
+    setState(() {
+      _liveCard = selected;
+      _status = 'المعاينة تعرض الكرت المختار دون حجز أو خصم';
       _statusIsError = false;
     });
   }
@@ -565,7 +590,9 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
                       ),
                     ),
                     Text(
-                      'قيم المعاينة تجريبية وليست كرتاً حقيقياً.',
+                      _liveCard == null
+                          ? 'قيم المعاينة تجريبية وليست كرتاً حقيقياً.'
+                          : 'قيم الكرت من المخزون المتاح، دون حجز أو خصم.',
                       style: TextStyle(
                         fontFamily: NetTypography.family,
                         fontSize: 11.5,
@@ -588,6 +615,26 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
                         style: const TextStyle(fontFamily: NetTypography.family),
                       ),
                     ),
+                    if (_useLiveCard && _availableCards.length > 1)
+                      DropdownButtonFormField<String>(
+                        value: _liveCard?.cardId,
+                        decoration: const InputDecoration(
+                          labelText: 'الكرت المستخدم في المعاينة',
+                          border: OutlineInputBorder(),
+                        ),
+                        items: [
+                          for (final card in _availableCards)
+                            DropdownMenuItem(
+                              value: card.cardId,
+                              child: Text(
+                                '${card.title} · ${card.serial}',
+                                style: const TextStyle(fontFamily: NetTypography.family),
+                              ),
+                            ),
+                        ],
+                        onChanged: _busy || _probing ? null : _selectLiveCard,
+                      ),
+                    const SizedBox(height: 8),
                     TextField(
                       controller: _phone,
                       keyboardType: TextInputType.phone,

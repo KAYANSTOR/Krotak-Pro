@@ -93,6 +93,21 @@ class PromotionRewardTemplate {
     'customer_name': 'عميل تجريبي',
   };
 
+  /// يختار كرت المعاينة من المتاح فقط. المعرّف المفقود أو غير المتاح يعود لأول كرت، بلا حجز.
+  static RewardProbeCardSnapshot? selectProbeCard(
+    List<RewardProbeCardSnapshot> available, {
+    String? selectedId,
+  }) {
+    if (available.isEmpty) return null;
+    final wanted = selectedId?.trim() ?? '';
+    if (wanted.isNotEmpty) {
+      for (final card in available) {
+        if (card.cardId == wanted) return card;
+      }
+    }
+    return available.first;
+  }
+
   /// قيم المعاينة. الكرت المتاح يستبدل حقول الكرت فقط، بلا حجز أو خصم.
   static Map<String, String> probeValues({
     RewardProbeCardSnapshot? card,

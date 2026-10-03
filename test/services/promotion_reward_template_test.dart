@@ -379,4 +379,40 @@ void main() {
     final samples = PromotionRewardTemplate.probeValues();
     expect(samples['serial'], PromotionRewardTemplate.sampleValues['serial']);
   });
+
+  test('probe card selection stays inside available cards', () {
+    const first = RewardProbeCardSnapshot(
+      cardId: 'card-1',
+      title: 'كرت 100',
+      serial: '111',
+      secret: '1',
+      amount: '100.00',
+    );
+    const second = RewardProbeCardSnapshot(
+      cardId: 'card-2',
+      title: 'كرت 200',
+      serial: '222',
+      secret: '2',
+      amount: '200.00',
+    );
+    expect(PromotionRewardTemplate.selectProbeCard(const []), isNull);
+    expect(
+      PromotionRewardTemplate.selectProbeCard(const [first, second])?.cardId,
+      'card-1',
+    );
+    expect(
+      PromotionRewardTemplate.selectProbeCard(
+        const [first, second],
+        selectedId: 'card-2',
+      )?.serial,
+      '222',
+    );
+    expect(
+      PromotionRewardTemplate.selectProbeCard(
+        const [first, second],
+        selectedId: 'sold-or-missing',
+      )?.cardId,
+      'card-1',
+    );
+  });
 }
