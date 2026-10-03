@@ -6,6 +6,7 @@ import '../services/report_pdf_export.dart';
 import 'package:flutter/services.dart';
 
 import '../../core/result.dart';
+import '../../domain/customer_account_currency.dart';
 import '../../domain/customer_file_currency.dart';
 import '../../domain/entities/customer.dart';
 import '../../domain/entities/money.dart';
@@ -40,6 +41,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
   List<PromotionProgress> _promos = const [];
   PosAccount? _posLink;
   String _displayCurrency = CustomerFileCurrency.defaultCode;
+  String? _accountCurrencyRaw;
 
   @override
   void initState() {
@@ -89,8 +91,18 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
     final sorted = List<Transaction>.from(txs)
       ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
-    final codes = CustomerFileCurrency.availableCodes(sorted);
-    final selected = CustomerFileCurrency.keepOrDefault(_displayCurrency, codes);
+    final setting = await c.settings.find(SettingKeys.customerAccountCurrency);
+    final raw = setting is Success<AppSetting?> ? setting.value?.value : null;
+    final stored = CustomerAccountCurrency.lookup(raw, widget.customerId);
+    final codes = CustomerAccountCurrency.withPreferred(
+      CustomerFileCurrency.availableCodes(sorted),
+      stored,
+    );
+    final selected = CustomerAccountCurrency.preferred(
+      raw,
+      widget.customerId,
+      codes,
+    );
     var summary = summaryR is Success<CustomerAccountSummary>
         ? summaryR.value
         : null;
@@ -106,6 +118,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
       _loading = false;
       _customer = customer;
       _ids = idsR is Success<List<CustomerIdentifier>> ? idsR.value : const [];
+      _accountCurrencyRaw = raw;
       _displayCurrency = selected;
       _summary = summary;
       _ledger = sorted;
@@ -164,6 +177,19 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
     if (code == _displayCurrency) return;
     setState(() => _displayCurrency = code);
     final c = AppScope.of(context);
+    final next = CustomerAccountCurrency.encodeMap(
+      _accountCurrencyRaw,
+      customerId: widget.customerId,
+      currencyCode: code,
+    );
+    await c.settings.save(
+      AppSetting(
+        key: SettingKeys.customerAccountCurrency,
+        value: next,
+        updatedAt: c.clock.now(),
+      ),
+    );
+    _accountCurrencyRaw = next;
     final summaryR = await c.balanceService.getAccountSummary(
       customerId: widget.customerId,
       currencyCode: code,
@@ -413,7 +439,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
           actions: [
             if (_currencyCodes.length > 1)
               PopupMenuButton<String>(
-                tooltip: 'عملة ملف العميل',
+                tooltip: 'عملة الحساب الدائمة',
                 icon: Icon(Icons.currency_exchange_rounded, color: scheme.onSurface),
                 onSelected: _setDisplayCurrency,
                 itemBuilder: (context) => [
@@ -421,7 +447,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                     PopupMenuItem(
                       value: code,
                       child: Text(
-                        code == _displayCurrency ? '$code — المعروضة' : code,
+                        code == _displayCurrency ? '$code — عملة الحساب' : code,
                         style: const TextStyle(fontFamily: 'Tajawal'),
                       ),
                     ),

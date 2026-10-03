@@ -1,5 +1,6 @@
 abstract final class SettingKeys {
   static const defaultCurrency = 'default_currency';
+  static const customerAccountCurrency = 'customer_account_currency';
   static const reservationMinutes = 'reservation_minutes';
   static const preferredSimSlot = 'preferred_sim_slot';
   static const preferredSendSimSlot = 'preferred_send_sim_slot';
