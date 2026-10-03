@@ -2,6 +2,7 @@ abstract final class SettingKeys {
   static const defaultCurrency = 'default_currency';
   static const customerAccountCurrency = 'customer_account_currency';
   static const ledgerExchangeRates = 'ledger_exchange_rates';
+  static const ledgerExchangeRatePins = 'ledger_exchange_rate_pins';
   static const reservationMinutes = 'reservation_minutes';
   static const preferredSimSlot = 'preferred_sim_slot';
   static const preferredSendSimSlot = 'preferred_send_sim_slot';

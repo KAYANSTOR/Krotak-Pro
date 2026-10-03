@@ -85,3 +85,37 @@ void main() {
     expect(quote.complete, isFalse);
   });
 }
+
+  test('pins a movement rate so a later display rate does not rewrite it', () {
+    final saved = LedgerExchangeRate.encodePin(
+      null,
+      transactionId: 'tx-1',
+      currencyCode: 'usd',
+      ratePerMajor: 50000,
+    );
+    final pins = LedgerExchangeRate.decodePins(saved);
+    expect(pins['tx-1']?.yerMinorPerMajor, 50000);
+
+    final quote = LedgerExchangeRate.quoteMovements(
+      movements: [
+        RatedMovement(
+          currencyCode: 'USD',
+          signedMinorUnits: 100,
+          pinnedRate: pins['tx-1']?.yerMinorPerMajor,
+        ),
+        const RatedMovement(currencyCode: 'YER', signedMinorUnits: 10000),
+      ],
+      targetCurrency: 'YER',
+      rates: const {'USD': 90000},
+    );
+    expect(quote.minorUnits, 60000);
+    expect(quote.complete, isTrue);
+
+    final cleared = LedgerExchangeRate.encodePin(
+      saved,
+      transactionId: 'tx-1',
+      currencyCode: 'USD',
+      ratePerMajor: 0,
+    );
+    expect(LedgerExchangeRate.decodePins(cleared), isEmpty);
+  });

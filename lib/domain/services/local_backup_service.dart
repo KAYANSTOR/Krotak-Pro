@@ -62,6 +62,7 @@ final class LocalBackupService {
     SettingKeys.defaultCurrency,
     SettingKeys.customerAccountCurrency,
     SettingKeys.ledgerExchangeRates,
+    SettingKeys.ledgerExchangeRatePins,
     SettingKeys.reservationMinutes,
     SettingKeys.preferredSimSlot,
     SettingKeys.preferredSendSimSlot,

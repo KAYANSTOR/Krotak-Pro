@@ -2,7 +2,8 @@ import 'dart:convert';
 
 import 'customer_file_currency.dart';
 
-/// سعر صرف للعرض فقط. لا يعيد كتابة الدفتر ولا يحوّل الحركات التاريخية.
+/// سعر صرف للعرض فقط. لا يعيد كتابة مبلغ الحركة ولا يعيد تقييم الدفتر.
+/// يمكن تثبيت السعر الذي كان ظاهراً عند إنشاء الحركة حتى لا يغيّره سعر لاحق.
 final class LedgerExchangeRate {
   const LedgerExchangeRate._();
 
@@ -43,6 +44,90 @@ final class LedgerExchangeRate {
     };
     if (rate == null || rate <= 0 || rate > 100000000) return null;
     return rate;
+  }
+
+
+  static Map<String, LedgerRatePin> decodePins(String? raw) {
+    if (raw == null || raw.trim().isEmpty) return const {};
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) return const {};
+      final out = <String, LedgerRatePin>{};
+      decoded.forEach((key, value) {
+        final id = key?.toString().trim() ?? '';
+        if (id.isEmpty || value is! Map) return;
+        final code = normalizeCode(value['currency']?.toString());
+        final rate = normalizeRate(value['rate']);
+        if (code == null || rate == null) return;
+        out[id] = LedgerRatePin(currencyCode: code, yerMinorPerMajor: rate);
+      });
+      return out;
+    } catch (_) {
+      return const {};
+    }
+  }
+
+  static String encodePin(
+    String? raw, {
+    required String transactionId,
+    required String currencyCode,
+    required int? ratePerMajor,
+  }) {
+    final next = <String, dynamic>{
+      for (final entry in decodePins(raw).entries)
+        entry.key: {
+          'currency': entry.value.currencyCode,
+          'rate': entry.value.yerMinorPerMajor,
+        },
+    };
+    final id = transactionId.trim();
+    final code = normalizeCode(currencyCode);
+    final rate = normalizeRate(ratePerMajor);
+    if (id.isEmpty || code == null || rate == null) {
+      if (id.isNotEmpty) next.remove(id);
+      return jsonEncode(next);
+    }
+    next[id] = {'currency': code, 'rate': rate};
+    return jsonEncode(next);
+  }
+
+  /// تقدير كل حركة بسعرها المثبّت إن وُجد، وإلا بالسعر الحالي. لا يغيّر المبلغ الأصلي.
+  static ExchangeQuote quoteMovements({
+    required List<RatedMovement> movements,
+    required String targetCurrency,
+    required Map<String, int> rates,
+  }) {
+    final target = targetCurrency.trim().toUpperCase().isEmpty
+        ? CustomerFileCurrency.defaultCode
+        : targetCurrency.trim().toUpperCase();
+    var total = 0;
+    final missing = <String>{};
+    for (final movement in movements) {
+      final code = movement.currencyCode.trim().toUpperCase();
+      if (code.isEmpty) continue;
+      final effective = Map<String, int>.from(rates);
+      final pin = movement.pinnedRate;
+      if (pin != null && normalizeCode(code) != null) {
+        effective[code] = pin;
+      }
+      final converted = convertMinor(
+        minorUnits: movement.signedMinorUnits,
+        from: code,
+        to: target,
+        rates: effective,
+      );
+      if (converted == null) {
+        missing.add(code);
+        continue;
+      }
+      total += converted;
+    }
+    final named = missing.toList()..sort();
+    return ExchangeQuote(
+      targetCurrency: target,
+      minorUnits: total,
+      missingCurrencies: named,
+    );
   }
 
   static int? lookup(String? raw, String currencyCode) {
@@ -191,3 +276,23 @@ final class ExchangeSideQuote {
 
   bool get complete => missingCurrencies.isEmpty;
 }
+
+final class LedgerRatePin {
+  const LedgerRatePin({required this.currencyCode, required this.yerMinorPerMajor});
+
+  final String currencyCode;
+  final int yerMinorPerMajor;
+}
+
+final class RatedMovement {
+  const RatedMovement({
+    required this.currencyCode,
+    required this.signedMinorUnits,
+    this.pinnedRate,
+  });
+
+  final String currencyCode;
+  final int signedMinorUnits;
+  final int? pinnedRate;
+}
+

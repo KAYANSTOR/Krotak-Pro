@@ -44,6 +44,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
   String _displayCurrency = CustomerFileCurrency.defaultCode;
   String? _accountCurrencyRaw;
   String? _exchangeRatesRaw;
+  String? _ratePinsRaw;
 
   @override
   void initState() {
@@ -98,6 +99,9 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
     final rateSetting = await c.settings.find(SettingKeys.ledgerExchangeRates);
     final rateRaw =
         rateSetting is Success<AppSetting?> ? rateSetting.value?.value : null;
+    final pinSetting = await c.settings.find(SettingKeys.ledgerExchangeRatePins);
+    final pinRaw =
+        pinSetting is Success<AppSetting?> ? pinSetting.value?.value : null;
     final stored = CustomerAccountCurrency.lookup(raw, widget.customerId);
     final codes = CustomerAccountCurrency.withPreferred(
       CustomerFileCurrency.availableCodes(sorted),
@@ -125,6 +129,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
       _ids = idsR is Success<List<CustomerIdentifier>> ? idsR.value : const [];
       _accountCurrencyRaw = raw;
       _exchangeRatesRaw = rateRaw;
+      _ratePinsRaw = pinRaw;
       _displayCurrency = selected;
       _summary = summary;
       _ledger = sorted;
@@ -266,23 +271,33 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
   }
 
   ExchangeQuote? get _exchangeQuote {
-    final balances = <String, int>{};
+    final pins = LedgerExchangeRate.decodePins(_ratePinsRaw);
+    final movements = <RatedMovement>[];
+    final codes = <String>{};
     for (final tx in _ledger) {
       if (tx.status != TransactionStatus.completed) continue;
       final code = tx.amount.currencyCode.trim().toUpperCase();
       if (code.isEmpty) continue;
+      codes.add(code);
       final sign = ledgerIsCredit(tx.type) ? 1 : -1;
-      balances[code] = (balances[code] ?? 0) + sign * tx.amount.minorUnits;
+      final pin = pins[tx.id];
+      movements.add(RatedMovement(
+        currencyCode: code,
+        signedMinorUnits: sign * tx.amount.minorUnits,
+        pinnedRate: pin != null && pin.currencyCode == code ? pin.yerMinorPerMajor : null,
+      ));
     }
-    if (balances.length < 2 && !balances.containsKey(_displayCurrency)) {
-      return null;
-    }
-    if (balances.length < 2) return null;
-    return LedgerExchangeRate.quote(
-      balancesByCurrency: balances,
+    if (codes.length < 2) return null;
+    return LedgerExchangeRate.quoteMovements(
+      movements: movements,
       targetCurrency: _displayCurrency,
       rates: LedgerExchangeRate.decodeMap(_exchangeRatesRaw),
     );
+  }
+
+  bool get _hasPinnedRate {
+    final pins = LedgerExchangeRate.decodePins(_ratePinsRaw);
+    return _ledger.any((tx) => pins.containsKey(tx.id));
   }
 
   String _fmtMoney(int minor) {
@@ -493,6 +508,23 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
         ),
       );
       return;
+    }
+    final created = (r as Success<Transaction>).value;
+    final pinRate = LedgerExchangeRate.lookup(_exchangeRatesRaw, amount.currencyCode);
+    if (pinRate != null) {
+      final pinned = LedgerExchangeRate.encodePin(
+        _ratePinsRaw,
+        transactionId: created.id,
+        currencyCode: amount.currencyCode,
+        ratePerMajor: pinRate,
+      );
+      await c.settings.save(
+        AppSetting(
+          key: SettingKeys.ledgerExchangeRatePins,
+          value: pinned,
+          updatedAt: c.clock.now(),
+        ),
+      );
     }
     await _load();
     if (!mounted) return;
@@ -860,8 +892,8 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
           cell(
             'تقدير محوّل لكل العملات',
             _exchangeQuote!.missingCurrencies.isEmpty
-                ? '${_fmtMoney(_exchangeQuote!.minorUnits)} $_currencyLabel'
-                : '${_fmtMoney(_exchangeQuote!.minorUnits)} $_currencyLabel · بلا سعر: ${_exchangeQuote!.missingCurrencies.join('، ')}',
+                ? '${_fmtMoney(_exchangeQuote!.minorUnits)} $_currencyLabel${_hasPinnedRate ? ' · سعر مثبّت' : ''}'
+                : '${_fmtMoney(_exchangeQuote!.minorUnits)} $_currencyLabel · بلا سعر: ${_exchangeQuote!.missingCurrencies.join('، ')}${_hasPinnedRate ? ' · سعر مثبّت' : ''}',
           ),
         ],
         const SizedBox(height: 8),
