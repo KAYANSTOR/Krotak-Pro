@@ -61,6 +61,7 @@ final class LocalBackupService {
   static const List<String> snapshotKeys = [
     SettingKeys.defaultCurrency,
     SettingKeys.customerAccountCurrency,
+    SettingKeys.ledgerExchangeRates,
     SettingKeys.reservationMinutes,
     SettingKeys.preferredSimSlot,
     SettingKeys.preferredSendSimSlot,

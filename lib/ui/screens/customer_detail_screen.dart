@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import '../../core/result.dart';
 import '../../domain/customer_account_currency.dart';
 import '../../domain/customer_file_currency.dart';
+import '../../domain/ledger_exchange_rate.dart';
 import '../../domain/entities/customer.dart';
 import '../../domain/entities/money.dart';
 import '../../domain/entities/pos_account.dart';
@@ -42,6 +43,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
   PosAccount? _posLink;
   String _displayCurrency = CustomerFileCurrency.defaultCode;
   String? _accountCurrencyRaw;
+  String? _exchangeRatesRaw;
 
   @override
   void initState() {
@@ -93,6 +95,9 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
 
     final setting = await c.settings.find(SettingKeys.customerAccountCurrency);
     final raw = setting is Success<AppSetting?> ? setting.value?.value : null;
+    final rateSetting = await c.settings.find(SettingKeys.ledgerExchangeRates);
+    final rateRaw =
+        rateSetting is Success<AppSetting?> ? rateSetting.value?.value : null;
     final stored = CustomerAccountCurrency.lookup(raw, widget.customerId);
     final codes = CustomerAccountCurrency.withPreferred(
       CustomerFileCurrency.availableCodes(sorted),
@@ -119,6 +124,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
       _customer = customer;
       _ids = idsR is Success<List<CustomerIdentifier>> ? idsR.value : const [];
       _accountCurrencyRaw = raw;
+      _exchangeRatesRaw = rateRaw;
       _displayCurrency = selected;
       _summary = summary;
       _ledger = sorted;
@@ -200,6 +206,83 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
           ? summaryR.value
           : null;
     });
+  }
+
+
+  Future<void> _editExchangeRate() async {
+    final code = LedgerExchangeRate.normalizeCode(_displayCurrency);
+    if (code == null) return;
+    final current = LedgerExchangeRate.lookup(_exchangeRatesRaw, code);
+    final controller = TextEditingController(
+      text: current == null ? '' : (current / 100).toString(),
+    );
+    final saved = await showDialog<int?>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('سعر $code مقابل الريال', style: const TextStyle(fontFamily: 'Tajawal')),
+        content: TextField(
+          controller: controller,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          decoration: const InputDecoration(
+            labelText: 'كم ريالًا يمنيًا يساوي 1',
+            helperText: 'للعرض فقط. اتركه فارغًا لمسح السعر. لا يغيّر الحركات.',
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('إلغاء')),
+          FilledButton(
+            onPressed: () {
+              final raw = controller.text.trim().replaceAll(',', '.');
+              if (raw.isEmpty) {
+                Navigator.pop(context, 0);
+                return;
+              }
+              final major = double.tryParse(raw);
+              if (major == null || major <= 0) return;
+              Navigator.pop(context, (major * 100).round());
+            },
+            child: const Text('حفظ'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (saved == null || !mounted) return;
+    final c = AppScope.of(context);
+    final next = LedgerExchangeRate.encodeMap(
+      _exchangeRatesRaw,
+      currencyCode: code,
+      ratePerMajor: saved,
+    );
+    await c.settings.save(
+      AppSetting(
+        key: SettingKeys.ledgerExchangeRates,
+        value: next,
+        updatedAt: c.clock.now(),
+      ),
+    );
+    if (!mounted) return;
+    setState(() => _exchangeRatesRaw = next);
+  }
+
+  ExchangeQuote? get _exchangeQuote {
+    final balances = <String, int>{};
+    for (final tx in _ledger) {
+      if (tx.status != TransactionStatus.completed) continue;
+      final code = tx.amount.currencyCode.trim().toUpperCase();
+      if (code.isEmpty) continue;
+      final sign = ledgerIsCredit(tx.type) ? 1 : -1;
+      balances[code] = (balances[code] ?? 0) + sign * tx.amount.minorUnits;
+    }
+    if (balances.length < 2 && !balances.containsKey(_displayCurrency)) {
+      return null;
+    }
+    if (balances.length < 2) return null;
+    return LedgerExchangeRate.quote(
+      balancesByCurrency: balances,
+      targetCurrency: _displayCurrency,
+      rates: LedgerExchangeRate.decodeMap(_exchangeRatesRaw),
+    );
   }
 
   String _fmtMoney(int minor) {
@@ -437,6 +520,12 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
             icon: Icons.person_rounded,
           ),
           actions: [
+            if (LedgerExchangeRate.normalizeCode(_displayCurrency) != null)
+              IconButton(
+                tooltip: 'سعر الصرف للعرض',
+                onPressed: _editExchangeRate,
+                icon: Icon(Icons.price_change_outlined, color: scheme.onSurface),
+              ),
             if (_currencyCodes.length > 1)
               PopupMenuButton<String>(
                 tooltip: 'عملة الحساب الدائمة',
@@ -766,6 +855,15 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
             ),
           ],
         ),
+        if (_exchangeQuote != null) ...[
+          const SizedBox(height: 8),
+          cell(
+            'تقدير محوّل لكل العملات',
+            _exchangeQuote!.missingCurrencies.isEmpty
+                ? '${_fmtMoney(_exchangeQuote!.minorUnits)} $_currencyLabel'
+                : '${_fmtMoney(_exchangeQuote!.minorUnits)} $_currencyLabel · بلا سعر: ${_exchangeQuote!.missingCurrencies.join('، ')}',
+          ),
+        ],
         const SizedBox(height: 8),
         Row(
           children: [
