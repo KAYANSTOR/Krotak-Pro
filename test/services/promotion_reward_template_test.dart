@@ -218,4 +218,41 @@ void main() {
       isA<Failure<String>>(),
     );
   });
+
+  test('probe delivery status matches only the sent request', () {
+    final delivered = PromotionRewardTemplate.probeDeliveryStatus(
+      requestId: 7,
+      eventRequestId: 7,
+      delivered: true,
+      resultCode: 0,
+    );
+    expect(delivered, isA<Success<String>>());
+    expect((delivered as Success<String>).value, contains('وصلت'));
+
+    final failed = PromotionRewardTemplate.probeDeliveryStatus(
+      requestId: 7,
+      eventRequestId: 7,
+      delivered: false,
+      resultCode: 3,
+    );
+    expect((failed as Success<String>).value, contains('رمز 3'));
+    expect(
+      PromotionRewardTemplate.probeDeliveryStatus(
+        requestId: 7,
+        eventRequestId: 8,
+        delivered: true,
+        resultCode: 0,
+      ),
+      isA<Failure<String>>(),
+    );
+    expect(
+      PromotionRewardTemplate.probeDeliveryStatus(
+        requestId: null,
+        eventRequestId: 7,
+        delivered: true,
+        resultCode: 0,
+      ),
+      isA<Failure<String>>(),
+    );
+  });
 }

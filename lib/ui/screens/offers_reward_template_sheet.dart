@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../core/result.dart';
@@ -5,6 +7,7 @@ import '../../domain/entities/audit.dart';
 import '../../domain/entities/setting.dart';
 import '../../domain/services/local_promotion_fulfillment_service.dart';
 import '../../domain/services/promotion_reward_template.dart';
+import '../../platform/sms_bridge.dart';
 import '../app_scope.dart';
 import '../theme/net_tokens.dart';
 import '../widgets/net/net_surface_card.dart';
@@ -59,6 +62,8 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
   var _busy = false;
   var _probing = false;
   var _dirty = false;
+  int? _probeRequestId;
+  StreamSubscription<SmsDeliveryEvent>? _probeDelivery;
   String _draft = '';
   String? _status;
   bool _statusIsError = true;
@@ -298,11 +303,16 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
         ),
       );
       if (!mounted) return;
+      final requestId = receipt.requestId;
       setState(() {
         _probing = false;
-        _status = 'أُرسلت الرسالة التجريبية إلى $phone';
-        _statusIsError = false;
+        _probeRequestId = requestId;
+        _status = requestId == null
+            ? 'أُرسلت الرسالة للشبكة، وتقرير التسليم غير مربوط بمعرّف طلب'
+            : 'أُرسلت الرسالة التجريبية إلى $phone. بانتظار تقرير شركة الاتصالات';
+        _statusIsError = requestId == null;
       });
+      if (requestId != null) _listenForProbeDelivery();
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -313,8 +323,41 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
     }
   }
 
+  void _listenForProbeDelivery() {
+    final c = AppScope.of(context);
+    _probeDelivery ??= c.smsBridge.outboundEvents.listen((event) async {
+      final status = PromotionRewardTemplate.probeDeliveryStatus(
+        requestId: _probeRequestId,
+        eventRequestId: event.requestId,
+        delivered: event.delivered,
+        resultCode: event.resultCode,
+      );
+      if (status is Failure<String>) return;
+      final label = (status as Success<String>).value;
+      await c.auditLogs.append(
+        AuditLog(
+          id: c.ids.next('reward-probe-delivery'),
+          entityType: 'promotion_reward_template',
+          entityId: widget.promotionId ?? widget.customerId ?? 'global',
+          action: event.delivered
+              ? 'reward_sms_probe_delivered'
+              : 'reward_sms_probe_delivery_failed',
+          occurredAt: c.clock.now(),
+          payloadJson:
+              '{"to":"${event.to}","requestId":${event.requestId},"resultCode":${event.resultCode}}',
+        ),
+      );
+      if (!mounted) return;
+      setState(() {
+        _status = label;
+        _statusIsError = !event.delivered;
+      });
+    });
+  }
+
   @override
   void dispose() {
+    _probeDelivery?.cancel();
     _body.removeListener(_onTyped);
     _body.dispose();
     _phone.dispose();

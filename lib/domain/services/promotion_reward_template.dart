@@ -138,6 +138,35 @@ class PromotionRewardTemplate {
     return Success(destination);
   }
 
+  /// يربط تقرير الناقل بالطلب التجريبي فقط. التقرير غير المطابق يُرفض ولا يُعرض.
+  static Result<String> probeDeliveryStatus({
+    required int? requestId,
+    required int eventRequestId,
+    required bool delivered,
+    required int resultCode,
+  }) {
+    if (requestId == null) {
+      return const Failure(
+        AppFailure(
+          code: 'reward_probe_delivery_untracked',
+          message: 'أُرسلت الرسالة للشبكة، وتقرير التسليم غير مربوط بمعرّف طلب',
+        ),
+      );
+    }
+    if (eventRequestId != requestId) {
+      return const Failure(
+        AppFailure(
+          code: 'reward_probe_delivery_unmatched',
+          message: 'تقرير التسليم لا يخص هذه الرسالة التجريبية',
+        ),
+      );
+    }
+    if (delivered) {
+      return const Success('وصلت الرسالة التجريبية إلى الجهاز');
+    }
+    return Success('لم تصل الرسالة التجريبية (رمز $resultCode)');
+  }
+
   static String customerKey(String promotionId, String customerId) =>
       '${promotionId.trim()}|${customerId.trim()}';
 
