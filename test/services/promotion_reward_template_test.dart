@@ -255,4 +255,58 @@ void main() {
       isA<Failure<String>>(),
     );
   });
+
+  test('probe receipt is remembered per scope and unmatched delivery is ignored', () {
+    expect(
+      PromotionRewardTemplate.probeScope(promotionId: 'p1', customerId: 'c1'),
+      'offer:p1|customer:c1',
+    );
+    expect(PromotionRewardTemplate.probeScope(), 'global');
+    const sent = RewardProbeReceipt(
+      scope: 'offer:p1',
+      to: '777123456',
+      requestId: 7,
+      state: 'sent',
+    );
+    final encoded = PromotionRewardTemplate.rememberProbe(null, sent);
+    expect(PromotionRewardTemplate.lookupProbe(encoded, 'offer:p1')?.state, 'sent');
+    expect(PromotionRewardTemplate.lookupProbe(encoded, 'global'), isNull);
+
+    final other = PromotionRewardTemplate.applyProbeDelivery(
+      current: sent,
+      eventRequestId: 8,
+      delivered: true,
+      resultCode: 0,
+    );
+    expect(other, isA<Failure<RewardProbeReceipt>>());
+
+    final delivered = PromotionRewardTemplate.applyProbeDelivery(
+      current: sent,
+      eventRequestId: 7,
+      delivered: true,
+      resultCode: 0,
+    );
+    expect(delivered, isA<Success<RewardProbeReceipt>>());
+    final stored = (delivered as Success<RewardProbeReceipt>).value;
+    expect(stored.state, 'delivered');
+    expect(stored.label, contains('وصلت'));
+    expect(stored.isError, isFalse);
+
+    const untracked = RewardProbeReceipt(
+      scope: 'global',
+      to: '777123456',
+      requestId: null,
+      state: 'untracked',
+    );
+    expect(
+      PromotionRewardTemplate.applyProbeDelivery(
+        current: untracked,
+        eventRequestId: 7,
+        delivered: true,
+        resultCode: 0,
+      ),
+      isA<Failure<RewardProbeReceipt>>(),
+    );
+    expect(PromotionRewardTemplate.lookupProbe('{', 'global'), isNull);
+  });
 }

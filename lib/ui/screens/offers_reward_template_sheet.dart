@@ -71,6 +71,7 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
   String? _storedOffer;
   String? _storedCustomer;
   String? _storedCustomerGlobal;
+  RewardProbeReceipt? _probeReceipt;
 
   String get _fallback =>
       LocalPromotionFulfillmentService.defaultRewardSmsTemplate;
@@ -164,12 +165,43 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
     _body.removeListener(_onTyped);
     _body.text = text;
     _body.addListener(_onTyped);
+    final probes = await c.settings.find(SettingKeys.promotionRewardProbeReceipts);
+    final probeRaw = probes is Success<AppSetting?> ? probes.value?.value : null;
+    final receipt = PromotionRewardTemplate.lookupProbe(probeRaw, _scope);
     if (!mounted) return;
     setState(() {
       _draft = text;
       _dirty = false;
       _loading = false;
+      _probeReceipt = receipt;
+      if (receipt != null) {
+        _status = receipt.label;
+        _statusIsError = receipt.isError;
+        _probeRequestId = receipt.requestId;
+      }
     });
+    if (receipt != null && receipt.state == 'sent' && receipt.requestId != null) {
+      _listenForProbeDelivery();
+    }
+  }
+
+  String get _scope => PromotionRewardTemplate.probeScope(
+        promotionId: widget.promotionId,
+        customerId: widget.customerId,
+      );
+
+  Future<void> _persistProbe(RewardProbeReceipt receipt) async {
+    final c = AppScope.of(context);
+    final current = await c.settings.find(SettingKeys.promotionRewardProbeReceipts);
+    final raw = current is Success<AppSetting?> ? current.value?.value : null;
+    await c.settings.save(
+      AppSetting(
+        key: SettingKeys.promotionRewardProbeReceipts,
+        value: PromotionRewardTemplate.rememberProbe(raw, receipt),
+        updatedAt: c.clock.now(),
+      ),
+    );
+    _probeReceipt = receipt;
   }
 
   Future<void> _save() async {
@@ -304,13 +336,20 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
       );
       if (!mounted) return;
       final requestId = receipt.requestId;
+      final stored = RewardProbeReceipt(
+        scope: _scope,
+        to: phone,
+        requestId: requestId,
+        state: requestId == null ? 'untracked' : 'sent',
+      );
+      await _persistProbe(stored);
+      if (!mounted) return;
       setState(() {
         _probing = false;
         _probeRequestId = requestId;
-        _status = requestId == null
-            ? 'أُرسلت الرسالة للشبكة، وتقرير التسليم غير مربوط بمعرّف طلب'
-            : 'أُرسلت الرسالة التجريبية إلى $phone. بانتظار تقرير شركة الاتصالات';
-        _statusIsError = requestId == null;
+        _probeReceipt = stored;
+        _status = stored.label;
+        _statusIsError = stored.isError;
       });
       if (requestId != null) _listenForProbeDelivery();
     } catch (e) {
@@ -326,14 +365,15 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
   void _listenForProbeDelivery() {
     final c = AppScope.of(context);
     _probeDelivery ??= c.smsBridge.outboundEvents.listen((event) async {
-      final status = PromotionRewardTemplate.probeDeliveryStatus(
-        requestId: _probeRequestId,
+      final applied = PromotionRewardTemplate.applyProbeDelivery(
+        current: _probeReceipt,
         eventRequestId: event.requestId,
         delivered: event.delivered,
         resultCode: event.resultCode,
       );
-      if (status is Failure<String>) return;
-      final label = (status as Success<String>).value;
+      if (applied is Failure<RewardProbeReceipt>) return;
+      final stored = (applied as Success<RewardProbeReceipt>).value;
+      await _persistProbe(stored);
       await c.auditLogs.append(
         AuditLog(
           id: c.ids.next('reward-probe-delivery'),
@@ -349,8 +389,9 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
       );
       if (!mounted) return;
       setState(() {
-        _status = label;
-        _statusIsError = !event.delivered;
+        _probeReceipt = stored;
+        _status = stored.label;
+        _statusIsError = stored.isError;
       });
     });
   }
