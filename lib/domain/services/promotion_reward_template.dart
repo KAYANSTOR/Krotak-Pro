@@ -1,5 +1,8 @@
 import 'dart:convert';
 
+import '../../core/result.dart';
+import '../phone_normalizer.dart';
+
 /// نص رسالة مكافأة العرض: تطبيع وحفظ المتغيرات المعروفة.
 class PromotionRewardTemplate {
   const PromotionRewardTemplate._();
@@ -98,6 +101,41 @@ class PromotionRewardTemplate {
       output = output.replaceAll('{$name}', value);
     });
     return output;
+  }
+
+  /// بادئة إلزامية حتى لا تُقرأ الرسالة التجريبية كصرف كرت.
+  static const probePrefix =
+      'رسالة تجريبية من كروتك — ليست كرتاً صادراً ولا تُخصم من المخزون';
+
+  /// يبني نص الإرسال التجريبي من القالب الظاهر، دون لمس المخزون أو الدفتر.
+  static Result<String> probeBody(String template) {
+    final rendered = renderPreview(template).trim();
+    if (rendered.isEmpty) {
+      return const Failure(
+        AppFailure(
+          code: 'reward_probe_empty',
+          message: 'لا يوجد نص لإرساله',
+        ),
+      );
+    }
+    return Success('$probePrefix\n$rendered');
+  }
+
+  /// يرفض الوجهة إن لم تكن رقماً هاتفياً، ويعيد الشكل المعياري للإرسال.
+  static Result<String> probeDestination(String raw) {
+    final trimmed = raw.trim();
+    if (!PhoneNormalizer.isPhoneLike(trimmed)) {
+      return const Failure(
+        AppFailure(
+          code: 'reward_probe_destination',
+          message: 'أدخل رقم هاتف صالحاً للرسالة التجريبية',
+        ),
+      );
+    }
+    final canonical = PhoneNormalizer.canonicalize(trimmed);
+    final destination =
+        (canonical == null || canonical.isEmpty) ? trimmed : canonical;
+    return Success(destination);
   }
 
   static String customerKey(String promotionId, String customerId) =>

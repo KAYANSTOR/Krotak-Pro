@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/result.dart';
+import '../../domain/entities/audit.dart';
 import '../../domain/entities/setting.dart';
 import '../../domain/services/local_promotion_fulfillment_service.dart';
 import '../../domain/services/promotion_reward_template.dart';
@@ -53,11 +54,14 @@ class _OffersRewardTemplateSheet extends StatefulWidget {
 
 class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> {
   final _body = TextEditingController();
+  final _phone = TextEditingController();
   var _loading = true;
   var _busy = false;
+  var _probing = false;
   var _dirty = false;
   String _draft = '';
   String? _status;
+  bool _statusIsError = true;
   String? _storedGlobal;
   String? _storedOffer;
   String? _storedCustomer;
@@ -80,6 +84,7 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
       _draft = next;
       _dirty = true;
       _status = null;
+      _statusIsError = true;
     });
   }
 
@@ -225,16 +230,94 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
       setState(() {
         _busy = false;
         _status = result.error.message;
+        _statusIsError = true;
       });
       return;
     }
     Navigator.pop(context, true);
   }
 
+  Future<void> _sendProbe() async {
+    final destination = PromotionRewardTemplate.probeDestination(_phone.text);
+    if (destination is Failure<String>) {
+      setState(() {
+        _status = destination.error.message;
+        _statusIsError = true;
+      });
+      return;
+    }
+    final body = PromotionRewardTemplate.probeBody(_resolution.template);
+    if (body is Failure<String>) {
+      setState(() {
+        _status = body.error.message;
+        _statusIsError = true;
+      });
+      return;
+    }
+    final phone = (destination as Success<String>).value;
+    final text = (body as Success<String>).value;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('إرسال رسالة تجريبية', style: TextStyle(fontFamily: NetTypography.family)),
+        content: Text(
+          'ستُرسل المعاينة إلى $phone مع بادئة توضح أنها ليست كرتاً صادراً. لن يُحفظ القالب ولن يُخصم مخزون.',
+          style: const TextStyle(fontFamily: NetTypography.family),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('إلغاء')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('إرسال')),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() {
+      _probing = true;
+      _status = null;
+    });
+    final c = AppScope.of(context);
+    try {
+      final receipt = await c.smsBridge.sendSms(to: phone, body: text);
+      if (!mounted) return;
+      if (!receipt.sent) {
+        setState(() {
+          _probing = false;
+          _status = 'تعذر تسليم الرسالة للشبكة';
+          _statusIsError = true;
+        });
+        return;
+      }
+      await c.auditLogs.append(
+        AuditLog(
+          id: c.ids.next('reward-probe'),
+          entityType: 'promotion_reward_template',
+          entityId: widget.promotionId ?? widget.customerId ?? 'global',
+          action: 'reward_sms_probe_sent',
+          occurredAt: c.clock.now(),
+          payloadJson: '{"to":"$phone","layer":"${_resolution.source.name}"}',
+        ),
+      );
+      if (!mounted) return;
+      setState(() {
+        _probing = false;
+        _status = 'أُرسلت الرسالة التجريبية إلى $phone';
+        _statusIsError = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _probing = false;
+        _status = 'تعذر الإرسال: $e';
+        _statusIsError = true;
+      });
+    }
+  }
+
   @override
   void dispose() {
     _body.removeListener(_onTyped);
     _body.dispose();
+    _phone.dispose();
     super.dispose();
   }
 
@@ -327,6 +410,16 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
                         color: Theme.of(context).hintColor,
                       ),
                     ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: _phone,
+                      keyboardType: TextInputType.phone,
+                      decoration: const InputDecoration(
+                        labelText: 'رقم الرسالة التجريبية',
+                        border: OutlineInputBorder(),
+                      ),
+                      style: const TextStyle(fontFamily: NetTypography.family),
+                    ),
                     if (unknown.isNotEmpty) ...[
                       const SizedBox(height: 8),
                       Text(
@@ -340,9 +433,25 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
                     ],
                     if (_status != null) ...[
                       const SizedBox(height: 8),
-                      Text(_status!, style: TextStyle(fontFamily: NetTypography.family, color: Theme.of(context).colorScheme.error)),
+                      Text(
+                        _status!,
+                        style: TextStyle(
+                          fontFamily: NetTypography.family,
+                          color: _statusIsError
+                              ? Theme.of(context).colorScheme.error
+                              : Theme.of(context).colorScheme.primary,
+                        ),
+                      ),
                     ],
                     const SizedBox(height: 12),
+                    OutlinedButton.icon(
+                      onPressed: _busy || _probing ? null : _sendProbe,
+                      icon: _probing
+                          ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                          : const Icon(Icons.sms_outlined),
+                      label: const Text('إرسال الرسالة التجريبية', style: TextStyle(fontFamily: NetTypography.family)),
+                    ),
+                    const SizedBox(height: 8),
                     FilledButton.icon(
                       onPressed: _busy || !_dirty ? null : _save,
                       icon: _busy

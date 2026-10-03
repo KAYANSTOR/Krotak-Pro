@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:net_app/core/result.dart';
 import 'package:net_app/domain/services/promotion_reward_template.dart';
 
 void main() {
@@ -163,8 +164,6 @@ void main() {
     );
     expect(PromotionRewardTemplate.lookupGlobalCustomer(cleared, 'c1'), isNull);
   });
-}
-
 
   test('preview names the winning layer and substitutes samples', () {
     final resolved = PromotionRewardTemplate.resolveLayer(
@@ -199,3 +198,24 @@ void main() {
       'كرت {serial_number}',
     );
   });
+
+  test('probe body prefixes the preview and rejects an empty template', () {
+    final body = PromotionRewardTemplate.probeBody('مكافأة {customer_name}');
+    expect(body, isA<Success<String>>());
+    final text = (body as Success<String>).value;
+    expect(text, startsWith(PromotionRewardTemplate.probePrefix));
+    expect(text, contains('عميل تجريبي'));
+    expect(text, isNot(contains('{customer_name}')));
+    expect(PromotionRewardTemplate.probeBody('   '), isA<Failure<String>>());
+  });
+
+  test('probe destination accepts a phone and rejects a name', () {
+    final phone = PromotionRewardTemplate.probeDestination('0777123456');
+    expect(phone, isA<Success<String>>());
+    expect((phone as Success<String>).value, '777123456');
+    expect(
+      PromotionRewardTemplate.probeDestination('عميل'),
+      isA<Failure<String>>(),
+    );
+  });
+}
