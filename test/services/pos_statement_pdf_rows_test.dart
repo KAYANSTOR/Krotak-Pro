@@ -78,7 +78,6 @@ void main() {
     expect(lines[2].description, 'كرت 200');
     expect(lines[2].status, 'مكتملة');
   });
-}
 
   test('prior customer movements stay out of the POS statement', () {
     final linkedAt = DateTime.utc(2026, 10, 1, 0);
@@ -129,3 +128,4 @@ void main() {
     expect(rows[3].cells[4], 'مديونية قبل الربط');
     expect(rows[4].cells[2], 'أول بيع للنقطة');
   });
+}
