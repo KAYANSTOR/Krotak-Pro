@@ -11,6 +11,7 @@ import '../../core/result.dart';
 import '../../domain/entities/customer.dart';
 import '../../domain/entities/money.dart';
 import '../../domain/entities/setting.dart';
+import '../../domain/ledger_exchange_rate.dart';
 import '../../domain/entities/account_sql_filter.dart';
 import '../../domain/entities/account_sql_sort.dart';
 import '../../domain/services/account_list_export.dart';
@@ -59,6 +60,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
   AccountFilterCounts? _buckets;
   AccountLedgerTotals? _ledgerTotals;
   List<AccountCurrencyLedgerTotals> _currencyTotals = const [];
+  String? _exchangeRatesRaw;
   String _displayCurrency = 'YER';
   List<_AccountRow> _allRows = const [];
   _AccountFilter _filter = _AccountFilter.all;
@@ -135,6 +137,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
     final buckets = await _fetchBuckets(query);
     final ledger = await _fetchLedgerTotals(query, _sqlFilter);
     final currencies = await _fetchCurrencyTotals(query, _sqlFilter);
+    final rates = await _fetchExchangeRates();
     if (!mounted || rows == null) return;
     setState(() {
       _loading = false;
@@ -143,8 +146,16 @@ class _CustomersScreenState extends State<CustomersScreen> {
       _buckets = buckets;
       _ledgerTotals = ledger;
       _currencyTotals = currencies;
+      _exchangeRatesRaw = rates;
       _hasMore = rows.length >= _pageSize;
     });
+  }
+
+  Future<String?> _fetchExchangeRates() async {
+    final c = AppScope.of(context);
+    final setting = await c.settings.find(SettingKeys.ledgerExchangeRates);
+    if (!mounted) return _exchangeRatesRaw;
+    return setting?.value;
   }
 
   Future<AccountLedgerTotals?> _fetchLedgerTotals(
@@ -369,6 +380,37 @@ class _CustomersScreenState extends State<CustomersScreen> {
 
   String get _displayCurrencyLabel =>
       _displayCurrency == 'YER' ? 'ر.ي' : _displayCurrency;
+
+  ExchangeSideQuote? get _listExchangeQuote {
+    final rows = _currencyTotals.where(
+      (row) => row.debtorMinorUnits != 0 || row.creditorMinorUnits != 0,
+    );
+    if (rows.length < 2 &&
+        rows.every((row) => row.currencyCode == _displayCurrency)) {
+      return null;
+    }
+    return LedgerExchangeRate.quoteSides(
+      debtorByCurrency: {
+        for (final row in _currencyTotals) row.currencyCode: row.debtorMinorUnits,
+      },
+      creditorByCurrency: {
+        for (final row in _currencyTotals) row.currencyCode: row.creditorMinorUnits,
+      },
+      targetCurrency: _displayCurrency,
+      rates: LedgerExchangeRate.decodeMap(_exchangeRatesRaw),
+    );
+  }
+
+  String get _listExchangeLabel {
+    final quote = _listExchangeQuote;
+    if (quote == null) return '';
+    final debtor = formatMoneyMinor(quote.debtorMinorUnits, currency: _displayCurrencyLabel);
+    final creditor = formatMoneyMinor(quote.creditorMinorUnits, currency: _displayCurrencyLabel);
+    final missing = quote.missingCurrencies.isEmpty
+        ? ''
+        : ' · بلا سعر: ${quote.missingCurrencies.join('، ')}';
+    return 'تقدير العرض: مدين $debtor · دائن $creditor$missing';
+  }
 
   List<String> get _displayCurrencies {
     final codes = <String>{'YER'};
@@ -674,6 +716,18 @@ class _CustomersScreenState extends State<CustomersScreen> {
                   const SizedBox(height: NetSpacing.sm),
                   Text(
                     otherCurrencyTotalsLabel(_currencyTotals),
+                    style: TextStyle(
+                      fontFamily: NetTypography.family,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: palette.textSecondary,
+                    ),
+                  ),
+                ],
+                if (_listExchangeLabel.isNotEmpty) ...[
+                  const SizedBox(height: NetSpacing.xs),
+                  Text(
+                    _listExchangeLabel,
                     style: TextStyle(
                       fontFamily: NetTypography.family,
                       fontSize: 12,

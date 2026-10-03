@@ -71,4 +71,17 @@ void main() {
     expect(quote.missingCurrencies, ['EUR']);
     expect(quote.complete, isFalse);
   });
+
+  test('quotes debtor and creditor sides and names a currency without a rate', () {
+    final quote = LedgerExchangeRate.quoteSides(
+      debtorByCurrency: const {'YER': 10000, 'USD': 200, 'EUR': 50},
+      creditorByCurrency: const {'SAR': 100, 'EUR': 25},
+      targetCurrency: 'YER',
+      rates: const {'USD': 50000, 'SAR': 14000},
+    );
+    expect(quote.debtorMinorUnits, 110000);
+    expect(quote.creditorMinorUnits, 14000);
+    expect(quote.missingCurrencies, ['EUR']);
+    expect(quote.complete, isFalse);
+  });
 }

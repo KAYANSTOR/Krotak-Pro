@@ -132,7 +132,35 @@ final class LedgerExchangeRate {
       missingCurrencies: missing,
     );
   }
+
+  /// تقدير مدين/دائن لكل العملات. العملة بلا سعر تُستبعد من الجانبين ولا تُخلط.
+  static ExchangeSideQuote quoteSides({
+    required Map<String, int> debtorByCurrency,
+    required Map<String, int> creditorByCurrency,
+    required String targetCurrency,
+    required Map<String, int> rates,
+  }) {
+    final debtor = quote(
+      balancesByCurrency: debtorByCurrency,
+      targetCurrency: targetCurrency,
+      rates: rates,
+    );
+    final creditor = quote(
+      balancesByCurrency: creditorByCurrency,
+      targetCurrency: targetCurrency,
+      rates: rates,
+    );
+    final missing = {...debtor.missingCurrencies, ...creditor.missingCurrencies}.toList()
+      ..sort();
+    return ExchangeSideQuote(
+      targetCurrency: debtor.targetCurrency,
+      debtorMinorUnits: debtor.minorUnits,
+      creditorMinorUnits: creditor.minorUnits,
+      missingCurrencies: missing,
+    );
+  }
 }
+
 
 final class ExchangeQuote {
   const ExchangeQuote({
@@ -143,6 +171,22 @@ final class ExchangeQuote {
 
   final String targetCurrency;
   final int minorUnits;
+  final List<String> missingCurrencies;
+
+  bool get complete => missingCurrencies.isEmpty;
+}
+
+final class ExchangeSideQuote {
+  const ExchangeSideQuote({
+    required this.targetCurrency,
+    required this.debtorMinorUnits,
+    required this.creditorMinorUnits,
+    required this.missingCurrencies,
+  });
+
+  final String targetCurrency;
+  final int debtorMinorUnits;
+  final int creditorMinorUnits;
   final List<String> missingCurrencies;
 
   bool get complete => missingCurrencies.isEmpty;
