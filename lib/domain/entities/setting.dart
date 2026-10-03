@@ -63,6 +63,13 @@ abstract final class SettingKeys {
   static const lowStockActiveJson = 'low_stock_active_json';
 
   static const customOutboundTemplates = 'custom_outbound_templates';
+
+  /// خريطة JSON: مفتاح قالب النظام ← معرّف القالب المخصّص الفعّال بدلاً منه.
+  static const activeOutboundTemplates = 'active_outbound_templates';
+
+  /// نص قالب النظام الأصلي المحفوظ أثناء استبداله بقالب مخصّص فعّال.
+  static String outboundSystemOriginal(String systemKey) =>
+      'outbound_system_original:$systemKey';
   static const walletExtras = 'wallet_extras';
   static const defaultWalletsSeeded = 'default_wallets_seeded';
 }

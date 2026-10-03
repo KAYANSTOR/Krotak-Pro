@@ -6,6 +6,7 @@ import '../../../core/result.dart';
 import '../../../domain/entities/setting.dart';
 import '../../../domain/services/default_outbound_templates_seeder.dart';
 import '../../../domain/services/local_advance_service.dart';
+import '../../../domain/services/outbound_template_activation.dart';
 import '../../app_scope.dart';
 import '../../theme/kayan_palette.dart';
 import '../../widgets/async_views.dart';
@@ -26,6 +27,7 @@ class _Tpl {
     this.fallback,
     this.vars, {
     this.isCustom = false,
+    this.target,
   });
   final String keyName;
   final String title;
@@ -34,6 +36,12 @@ class _Tpl {
 
   /// قالب أنشأه المشغّل بنفسه (لا قالب نظام) — قابل للحذف.
   final bool isCustom;
+
+  /// مفتاح قالب النظام الذي يستبدله هذا القالب المخصّص عند تفعيله.
+  final String? target;
+
+  /// معرّف القالب المخصّص (بدون البادئة `custom:`).
+  String get customId => keyName.startsWith('custom:') ? keyName.substring(7) : keyName;
 }
 
 class _TabDef {
@@ -55,6 +63,28 @@ class _OutboundMessageTemplatesScreenState
 
   /// القوالب المخصّصة التي أنشأها المشغّل — مفهرسة برقم التبويب.
   final Map<int, List<_Tpl>> _custom = <int, List<_Tpl>>{};
+
+  /// الاستبدالات الفعّالة: مفتاح قالب النظام ← معرّف القالب المخصّص.
+  Map<String, String> _active = <String, String>{};
+
+  OutboundTemplateActivation get _activation {
+    final c = AppScope.of(context);
+    return OutboundTemplateActivation(settings: c.settings, clock: c.clock);
+  }
+
+  _Tpl? _systemTpl(String key) {
+    for (final tab in _tabsData) {
+      for (final t in tab.items) {
+        if (t.keyName == key) return t;
+      }
+    }
+    return null;
+  }
+
+  bool _isActive(_Tpl t) {
+    if (t.isCustom) return t.target != null && _active[t.target] == t.customId;
+    return !_active.containsKey(t.keyName);
+  }
 
   static final _tabsData = <_TabDef>[
     _TabDef('رسائل العملاء', [
@@ -194,9 +224,11 @@ class _OutboundMessageTemplatesScreenState
             final index = tab.clamp(0, _tabsData.length - 1);
             final key = _customKey(id);
             final body = (entry['body'] as String?) ?? '';
+            final targetRaw = (entry['target'] as String?)?.trim();
+            final target = (targetRaw != null && _systemTpl(targetRaw) != null) ? targetRaw : null;
             next[key] = body;
             (custom[index] ??= <_Tpl>[]).add(
-              _Tpl(key, title, body, const ['CARD_CODE', 'CARD_VALUE', 'CURRENCY', 'NETWORK_NAME', 'amount', 'balance', 'pos', 'reason'], isCustom: true),
+              _Tpl(key, title, body, const ['CARD_CODE', 'CARD_VALUE', 'CURRENCY', 'NETWORK_NAME', 'amount', 'balance', 'pos', 'reason'], isCustom: true, target: target),
             );
           }
         }
@@ -205,10 +237,33 @@ class _OutboundMessageTemplatesScreenState
       }
     }
 
+    // الاستبدالات الفعّالة: نتجاهل أي سجل قديم لا يطابق قالباً مخصّصاً موجوداً،
+    // ونعرض نص النظام الأصلي (لا المُرسَل) على بطاقة قالب النظام المستبدَل.
+    final activation = _activation;
+    final storedActive = await activation.loadActive();
+    final active = <String, String>{};
+    for (final entry in storedActive.entries) {
+      final match = custom.values
+          .expand((list) => list)
+          .where((t) => t.customId == entry.value && t.target == entry.key)
+          .firstOrNull;
+      final sys = _systemTpl(entry.key);
+      if (match == null || sys == null) continue;
+      final sentNow = next[entry.key] ?? sys.fallback;
+      final wanted = next[match.keyName] ?? match.fallback;
+      if (sentNow.trim() != wanted.trim()) {
+        // انحراف (عدّل شاشة أخرى المفتاح مباشرة): أعد المُرسَل إلى القالب الفعّال.
+        await activation.syncActiveBody(entry.key, entry.value, wanted);
+      }
+      active[entry.key] = entry.value;
+      next[entry.key] = await activation.originalBody(entry.key) ?? sys.fallback;
+    }
+
     if (!mounted) return;
     setState(() {
       _values..clear()..addAll(next);
       _custom..clear()..addAll(custom);
+      _active = active;
       _loading = false;
     });
   }
@@ -221,10 +276,11 @@ class _OutboundMessageTemplatesScreenState
       ];
 
   /// حفظ قالب جديد فعلياً: يُضاف للسجل ويُحفظ نصه، فلا يضيع كما كان سابقاً.
-  Future<bool> _createCustom({
+  Future<String?> _createCustom({
     required String title,
     required String body,
     required int tabIndex,
+    required String target,
   }) async {
     final c = AppScope.of(context);
     final id = c.ids.next('tpl').replaceAll(':', '-');
@@ -233,6 +289,7 @@ class _OutboundMessageTemplatesScreenState
       'title': title,
       'tab': tabIndex,
       'body': body,
+      'target': target,
     };
 
     final existing = await c.settings.find(SettingKeys.customOutboundTemplates);
@@ -255,7 +312,7 @@ class _OutboundMessageTemplatesScreenState
     );
     if (bodySaved is Failure) {
       if (mounted) _snack(bodySaved.error.message);
-      return false;
+      return null;
     }
     final saved = await c.settings.save(
       AppSetting(
@@ -266,13 +323,133 @@ class _OutboundMessageTemplatesScreenState
     );
     if (saved is Failure) {
       if (mounted) _snack(saved.error.message);
-      return false;
+      return null;
     }
-    return true;
+    return id;
+  }
+
+  Future<List<Map<String, Object?>>> _readRegistry() async {
+    final c = AppScope.of(context);
+    final existing = await c.settings.find(SettingKeys.customOutboundTemplates);
+    final raw = existing is Success<AppSetting?> ? existing.value?.value : null;
+    final list = <Map<String, Object?>>[];
+    if (raw != null && raw.trim().isNotEmpty) {
+      try {
+        final decoded = jsonDecode(raw);
+        if (decoded is List) {
+          list.addAll(decoded.whereType<Map>().map((e) => Map<String, Object?>.from(e)));
+        }
+      } on FormatException {
+        // سجل تالف — يُعامل كفارغ.
+      }
+    }
+    return list;
+  }
+
+  Future<void> _writeRegistry(List<Map<String, Object?>> list) async {
+    final c = AppScope.of(context);
+    await c.settings.save(
+      AppSetting(
+        key: SettingKeys.customOutboundTemplates,
+        value: jsonEncode(list),
+        updatedAt: c.clock.now(),
+      ),
+    );
+  }
+
+  /// تفعيل قالب مخصّص: يصبح هو النص المُرسَل فعلياً بدل قالب النظام الذي يستبدله.
+  Future<void> _activateCustom(_Tpl t) async {
+    var target = t.target;
+    target ??= await _pickTarget(t);
+    if (target == null || !mounted) return;
+    final sys = _systemTpl(target);
+    if (sys == null) return;
+    if (t.target != target) await _setTarget(t, target);
+    final body = _values[t.keyName] ?? t.fallback;
+    final r = await _activation.activate(
+      systemKey: target,
+      customId: t.customId,
+      customBody: body,
+      systemFallback: sys.fallback,
+    );
+    if (!mounted) return;
+    if (r is Failure<void>) {
+      _snack(r.error.message);
+      return;
+    }
+    await _load();
+    _snack('تم تفعيل «${t.title}» — سيُرسل بدل «${sys.title}»');
+  }
+
+  /// إلغاء الاستبدال: يعود قالب النظام الأصلي هو المُرسَل.
+  Future<void> _activateSystem(_Tpl t) async {
+    final r = await _activation.revert(systemKey: t.keyName, systemFallback: t.fallback);
+    if (!mounted) return;
+    if (r is Failure<void>) {
+      _snack(r.error.message);
+      return;
+    }
+    await _load();
+    _snack('تم تفعيل القالب الافتراضي «${t.title}»');
+  }
+
+  Future<void> _setTarget(_Tpl t, String target) async {
+    final list = await _readRegistry();
+    for (final e in list) {
+      if (_customKey((e['id'] as String?) ?? '') == t.keyName) e['target'] = target;
+    }
+    await _writeRegistry(list);
+  }
+
+  /// يختار القالب (من نفس التبويب) الذي سيستبدله القالب المخصّص.
+  Future<String?> _pickTarget(_Tpl t) async {
+    final tab = _custom.entries.firstWhere((e) => e.value.contains(t), orElse: () => MapEntry(0, <_Tpl>[])).key;
+    final options = _tabsData[tab].items;
+    return showDialog<String>(
+      context: context,
+      builder: (ctx) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: SimpleDialog(
+          title: const Text('أي قالب سيستبدله؟', style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w800)),
+          children: [
+            for (final o in options)
+              SimpleDialogOption(
+                onPressed: () => Navigator.pop(ctx, o.keyName),
+                child: Text(o.title, style: const TextStyle(fontFamily: 'Tajawal')),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _changeTarget(_Tpl t) async {
+    final target = await _pickTarget(t);
+    if (target == null || target == t.target || !mounted) return;
+    final wasActive = _isActive(t);
+    if (wasActive && t.target != null) {
+      final old = _systemTpl(t.target!);
+      if (old != null) {
+        await _activation.revert(systemKey: old.keyName, systemFallback: old.fallback);
+      }
+    }
+    await _setTarget(t, target);
+    await _load();
+    if (wasActive && mounted) {
+      final fresh = _tabItems(_custom.entries.firstWhere((e) => e.value.any((x) => x.keyName == t.keyName)).key)
+          .firstWhere((x) => x.keyName == t.keyName);
+      await _activateCustom(fresh);
+    }
   }
 
   Future<void> _deleteCustom(_Tpl t) async {
     final c = AppScope.of(context);
+    if (_isActive(t) && t.target != null) {
+      final sys = _systemTpl(t.target!);
+      if (sys != null) {
+        await _activation.revert(systemKey: sys.keyName, systemFallback: sys.fallback);
+      }
+    }
     final existing = await c.settings.find(SettingKeys.customOutboundTemplates);
     final raw = existing is Success<AppSetting?> ? existing.value?.value : null;
     final list = <Map<String, Object?>>[];
@@ -300,9 +477,25 @@ class _OutboundMessageTemplatesScreenState
 
   Future<void> _save(String key, String value) async {
     final c = AppScope.of(context);
-    final r = await c.settings.save(AppSetting(key: key, value: value, updatedAt: c.clock.now()));
+    Result<void> r;
+    if (key.startsWith('custom:')) {
+      // القالب المخصّص: السجل هو مصدر النص (يُقرأ منه عند كل تحميل)، فيُحدَّث هو
+      // والمفتاح معاً، ثم يُحدَّث المُرسَل فعلياً إن كان القالب فعّالاً.
+      final list = await _readRegistry();
+      for (final e in list) {
+        if (_customKey((e['id'] as String?) ?? '') == key) e['body'] = value;
+      }
+      await _writeRegistry(list);
+      r = await c.settings.save(AppSetting(key: key, value: value, updatedAt: c.clock.now()));
+      final tpl = _custom.values.expand((l) => l).where((t) => t.keyName == key).firstOrNull;
+      if (r is Success<void> && tpl?.target != null) {
+        r = await _activation.syncActiveBody(tpl!.target!, tpl.customId, value);
+      }
+    } else {
+      r = await _activation.saveSystemBody(key, value);
+    }
     if (!mounted) return;
-    if (r is Failure) { _snack(r.error.message); return; }
+    if (r is Failure<void>) { _snack(r.error.message); return; }
     setState(() => _values[key] = value);
     _snack('تم تحديث القالب بنجاح');
   }
@@ -329,6 +522,12 @@ class _OutboundMessageTemplatesScreenState
   Future<void> _edit(_Tpl? item) async {
     final isNew = item == null;
     var tabIndex = _tabs.index.clamp(0, _tabsData.length - 1);
+    String? targetKey;
+    var activateNow = true;
+    String effectiveTarget() {
+      final items = _tabsData[tabIndex].items;
+      return items.any((x) => x.keyName == targetKey) ? targetKey! : items.first.keyName;
+    }
     final nameCtrl = TextEditingController(text: item?.title ?? '');
     final bodyCtrl = TextEditingController(text: item != null ? (_values[item.keyName] ?? item.fallback) : '');
     final vars = item?.vars ?? const ['NETWORK_NAME', 'CARD_VALUE', 'CURRENCY', 'cards', 'CUSTOMER_PHONE', 'POS_NAME', 'QUANTITY_TEXT', 'TOTAL', 'category', 'reason'];
@@ -367,10 +566,31 @@ class _OutboundMessageTemplatesScreenState
                         ],
                         onChanged: (value) {
                           if (value == null) return;
-                          setLocal(() => tabIndex = value);
+                          setLocal(() {
+                            tabIndex = value;
+                            targetKey = null;
+                          });
                         },
                       ),
                       const SizedBox(height: 12),
+                      DropdownButtonFormField<String>(
+                        key: ValueKey('target-$tabIndex'),
+                        value: effectiveTarget(),
+                        isExpanded: true,
+                        decoration: InputDecoration(labelText: 'يستبدل القالب', labelStyle: const TextStyle(fontFamily: 'Tajawal'), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
+                        items: [
+                          for (final o in _tabsData[tabIndex].items)
+                            DropdownMenuItem(value: o.keyName, child: Text(o.title, overflow: TextOverflow.ellipsis, style: const TextStyle(fontFamily: 'Tajawal'))),
+                        ],
+                        onChanged: (value) => setLocal(() => targetKey = value),
+                      ),
+                      SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        value: activateNow,
+                        onChanged: (v) => setLocal(() => activateNow = v),
+                        title: const Text('تفعيله فوراً (يُرسل بدل القالب المحدد)', style: TextStyle(fontFamily: 'Tajawal', fontSize: 13)),
+                      ),
+                      const SizedBox(height: 4),
                     ],
                     TextField(controller: nameCtrl, style: const TextStyle(fontFamily: 'Tajawal'), decoration: InputDecoration(labelText: 'اسم القالب', labelStyle: const TextStyle(fontFamily: 'Tajawal'), prefixIcon: const Icon(Icons.title_rounded), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)))),
                     const SizedBox(height: 12),
@@ -418,10 +638,15 @@ class _OutboundMessageTemplatesScreenState
                       } else {
                         final title = nameCtrl.text.trim();
                         if (title.isEmpty) { _snack('أدخل اسم القالب'); return; }
-                        final created = await _createCustom(title: title, body: b, tabIndex: tabIndex);
-                        if (!created) return;
+                        final created = await _createCustom(title: title, body: b, tabIndex: tabIndex, target: effectiveTarget());
+                        if (created == null) return;
                         await _load();
-                        if (mounted) _snack('تم إضافة القالب بنجاح');
+                        final tpl = _custom.values.expand((l) => l).where((t) => t.customId == created).firstOrNull;
+                        if (activateNow && tpl != null) {
+                          await _activateCustom(tpl);
+                        } else if (mounted) {
+                          _snack('تم إضافة القالب (غير مفعّل)');
+                        }
                       }
                       if (ctx.mounted) Navigator.pop(ctx);
                     }, child: const Text('حفظ', style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w700)))),
@@ -448,17 +673,26 @@ class _OutboundMessageTemplatesScreenState
       ],
     )));
     if (ok != true) return;
+    // الاستعادة تعني عودة نصوص النظام للإرسال: تُلغى الاستبدالات الفعّالة أولاً
+    // (القوالب المخصّصة تبقى لكن غير فعّالة).
+    await _activation.clear();
+    _active = <String, String>{};
     for (final tab in _tabsData) {
       for (final t in tab.items) {
         await _save(t.keyName, t.fallback);
       }
     }
+    await _load();
     if (mounted) _snack('تمت استعادة القوالب الافتراضية');
   }
 
   void _menu(_Tpl t) {
     showModalBottomSheet<void>(context: context, shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))), builder: (ctx) => Directionality(textDirection: TextDirection.rtl, child: SafeArea(child: Column(mainAxisSize: MainAxisSize.min, children: [
       ListTile(leading: Icon(Icons.edit_outlined, color: KayanPalette.of(ctx).primary), title: const Text('تعديل القالب', style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w600)), onTap: () { Navigator.pop(ctx); _edit(t); }),
+      if (!_isActive(t))
+        ListTile(leading: const Icon(Icons.check_circle_outline, color: Color(0xFF10B981)), title: Text(t.isCustom ? 'تفعيل هذا القالب' : 'تفعيل القالب الافتراضي', style: const TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w600)), onTap: () { Navigator.pop(ctx); t.isCustom ? _activateCustom(t) : _activateSystem(t); }),
+      if (t.isCustom)
+        ListTile(leading: Icon(Icons.swap_horiz_rounded, color: KayanPalette.of(ctx).primary), title: const Text('تغيير القالب الذي يستبدله', style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w600)), onTap: () { Navigator.pop(ctx); _changeTarget(t); }),
       if (!t.isCustom)
         ListTile(leading: Icon(Icons.restart_alt_rounded, color: KayanPalette.of(ctx).primary), title: const Text('استعادة الافتراضي', style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w600)), onTap: () async { Navigator.pop(ctx); await _save(t.keyName, t.fallback); }),
       if (t.isCustom)
@@ -515,6 +749,8 @@ class _OutboundMessageTemplatesScreenState
     final unknown = _unknownVars(t, body);
     // «افتراضي» يعني أن نص قالب النظام لم يُعدّل بعد — القوالب المخصّصة تُعرض مخصّصة دائماً.
     final isDefaultBody = !t.isCustom && body.trim() == t.fallback.trim();
+    final isActive = _isActive(t);
+    final targetTitle = t.target == null ? null : _systemTpl(t.target!)?.title;
     return Padding(padding: const EdgeInsets.only(bottom: 12), child: Material(color: Theme.of(context).colorScheme.surface, borderRadius: BorderRadius.circular(16), child: InkWell(borderRadius: BorderRadius.circular(16), onTap: () => _edit(t), child: Container(
       decoration: BoxDecoration(borderRadius: BorderRadius.circular(16), border: Border.all(color: palette.border.withValues(alpha: 0.6))),
       padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
@@ -539,7 +775,14 @@ class _OutboundMessageTemplatesScreenState
             ),
           ),
           const SizedBox(width: 6),
-          Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3), decoration: BoxDecoration(color: const Color(0xFF10B981).withValues(alpha: 0.12), borderRadius: BorderRadius.circular(8)), child: const Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.check_circle, size: 14, color: Color(0xFF10B981)), SizedBox(width: 4), Text('نشط', style: TextStyle(fontFamily: 'Tajawal', fontSize: 11, color: Color(0xFF10B981), fontWeight: FontWeight.w700))])),
+          if (isActive)
+            Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3), decoration: BoxDecoration(color: const Color(0xFF10B981).withValues(alpha: 0.12), borderRadius: BorderRadius.circular(8)), child: const Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.check_circle, size: 14, color: Color(0xFF10B981)), SizedBox(width: 4), Text('نشط', style: TextStyle(fontFamily: 'Tajawal', fontSize: 11, color: Color(0xFF10B981), fontWeight: FontWeight.w700))]))
+          else
+            InkWell(
+              borderRadius: BorderRadius.circular(8),
+              onTap: () => t.isCustom ? _activateCustom(t) : _activateSystem(t),
+              child: Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3), decoration: BoxDecoration(color: palette.textTertiary.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(8)), child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.radio_button_unchecked, size: 14, color: palette.textTertiary), const SizedBox(width: 4), Text('غير نشط · اضغط للتفعيل', style: TextStyle(fontFamily: 'Tajawal', fontSize: 11, color: palette.textTertiary, fontWeight: FontWeight.w700))])),
+            ),
           if (unknown.isNotEmpty) ...[
             const SizedBox(width: 6),
             Container(
@@ -569,6 +812,14 @@ class _OutboundMessageTemplatesScreenState
           const Spacer(),
           Flexible(child: Text(t.title, textAlign: TextAlign.end, style: const TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w800, fontSize: 15))),
         ]),
+        if (t.isCustom)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text(
+              targetTitle == null ? 'غير مرتبط بقالب — من القائمة اختر «تغيير القالب الذي يستبدله»' : 'يستبدل: $targetTitle',
+              style: TextStyle(fontFamily: 'Tajawal', fontSize: 11.5, color: targetTitle == null ? const Color(0xFFDC2626) : palette.textSecondary),
+            ),
+          ),
         const SizedBox(height: 8),
         Container(width: double.infinity, padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: palette.primary.withValues(alpha: 0.04), borderRadius: BorderRadius.circular(12)), child: Text(_preview(body), style: TextStyle(fontFamily: 'Tajawal', height: 1.45, color: palette.textSecondary, fontSize: 13))),
       ]),
