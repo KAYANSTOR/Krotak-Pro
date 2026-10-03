@@ -58,6 +58,10 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
   var _dirty = false;
   String _draft = '';
   String? _status;
+  String? _storedGlobal;
+  String? _storedOffer;
+  String? _storedCustomer;
+  String? _storedCustomerGlobal;
 
   String get _fallback =>
       LocalPromotionFulfillmentService.defaultRewardSmsTemplate;
@@ -87,39 +91,65 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
   bool get _perCustomerGlobal =>
       !_perOffer && widget.customerId != null && widget.customerId!.isNotEmpty;
 
+  PromotionRewardResolution get _resolution {
+    final draft = _draft.trim();
+    final editingCustomer = _perCustomer;
+    final editingCustomerGlobal = _perCustomerGlobal;
+    final editingOffer = _perOffer && !editingCustomer;
+    final editingGlobal =
+        !editingOffer && !editingCustomer && !editingCustomerGlobal;
+    String? layer(bool editing, String? stored) =>
+        editing ? (draft.isEmpty ? null : draft) : stored;
+    return PromotionRewardTemplate.resolveLayer(
+      perCustomer: layer(editingCustomer, _storedCustomer),
+      perOffer: layer(editingOffer, _storedOffer),
+      perCustomerGlobal: layer(editingCustomerGlobal, _storedCustomerGlobal),
+      global: layer(editingGlobal, _storedGlobal),
+      fallback: _fallback,
+    );
+  }
+
   Future<void> _load() async {
     final c = AppScope.of(context);
     final global = await c.settings.find(SettingKeys.promotionRewardSmsTemplate);
     final stored = global is Success<AppSetting?> ? global.value?.value : null;
+    _storedGlobal = stored;
     var text = PromotionRewardTemplate.normalize(stored, fallback: _fallback);
+    final offerMap = await c.settings.find(SettingKeys.promotionRewardSmsTemplates);
+    final offerRaw = offerMap is Success<AppSetting?> ? offerMap.value?.value : null;
     if (_perOffer) {
-      final map = await c.settings.find(SettingKeys.promotionRewardSmsTemplates);
-      final raw = map is Success<AppSetting?> ? map.value?.value : null;
-      final specific = PromotionRewardTemplate.lookup(raw, widget.promotionId!);
+      final specific = PromotionRewardTemplate.lookup(offerRaw, widget.promotionId!);
+      _storedOffer = specific;
       if (specific != null) text = specific;
     }
+    final customerMap = await c.settings.find(
+      SettingKeys.promotionRewardCustomerSmsTemplates,
+    );
+    final customerRaw =
+        customerMap is Success<AppSetting?> ? customerMap.value?.value : null;
     if (_perCustomer) {
-      final map = await c.settings.find(
-        SettingKeys.promotionRewardCustomerSmsTemplates,
-      );
-      final raw = map is Success<AppSetting?> ? map.value?.value : null;
       final specific = PromotionRewardTemplate.lookupCustomer(
-        raw,
+        customerRaw,
         widget.promotionId!,
         widget.customerId!,
       );
+      _storedCustomer = specific;
       if (specific != null) text = specific;
     }
-    if (_perCustomerGlobal) {
-      final map = await c.settings.find(
-        SettingKeys.promotionRewardCustomerGlobalSmsTemplates,
-      );
-      final raw = map is Success<AppSetting?> ? map.value?.value : null;
-      final specific = PromotionRewardTemplate.lookupGlobalCustomer(
-        raw,
+    final customerGlobalMap = await c.settings.find(
+      SettingKeys.promotionRewardCustomerGlobalSmsTemplates,
+    );
+    final customerGlobalRaw = customerGlobalMap is Success<AppSetting?>
+        ? customerGlobalMap.value?.value
+        : null;
+    if (_perCustomerGlobal || _perCustomer) {
+      _storedCustomerGlobal = PromotionRewardTemplate.lookupGlobalCustomer(
+        customerGlobalRaw,
         widget.customerId!,
       );
-      if (specific != null) text = specific;
+    }
+    if (_perCustomerGlobal && _storedCustomerGlobal != null) {
+      text = _storedCustomerGlobal!;
     }
     _body.removeListener(_onTyped);
     _body.text = text;
@@ -211,6 +241,8 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
   @override
   Widget build(BuildContext context) {
     final unknown = PromotionRewardTemplate.unknownPlaceholders(_draft);
+    final resolution = _resolution;
+    final preview = PromotionRewardTemplate.renderPreview(resolution.template);
     final bottom = MediaQuery.viewInsetsOf(context).bottom;
     return Directionality(
       textDirection: TextDirection.rtl,
@@ -268,6 +300,31 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
                           border: OutlineInputBorder(),
                         ),
                         style: const TextStyle(fontFamily: NetTypography.family),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'ستُصرف من: ${resolution.sourceLabel}',
+                      style: TextStyle(
+                        fontFamily: NetTypography.family,
+                        fontSize: 12.5,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      preview,
+                      style: const TextStyle(
+                        fontFamily: NetTypography.family,
+                        fontSize: 13,
+                      ),
+                    ),
+                    Text(
+                      'قيم المعاينة تجريبية وليست كرتاً حقيقياً.',
+                      style: TextStyle(
+                        fontFamily: NetTypography.family,
+                        fontSize: 11.5,
+                        color: Theme.of(context).hintColor,
                       ),
                     ),
                     if (unknown.isNotEmpty) ...[

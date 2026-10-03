@@ -165,3 +165,37 @@ void main() {
   });
 }
 
+
+  test('preview names the winning layer and substitutes samples', () {
+    final resolved = PromotionRewardTemplate.resolveLayer(
+      perCustomer: 'خاص {customer_name}',
+      perOffer: 'عرض {promotion_name}',
+      perCustomerGlobal: 'عام عميل',
+      global: 'عام',
+      fallback: 'افتراضي',
+    );
+    expect(resolved.source, PromotionRewardTemplateSource.customerInOffer);
+    expect(resolved.sourceLabel, 'تخصيص العميل داخل العرض');
+    expect(
+      PromotionRewardTemplate.renderPreview(resolved.template),
+      'خاص عميل تجريبي',
+    );
+  });
+
+  test('empty customer layer falls through to the offer in preview', () {
+    final resolved = PromotionRewardTemplate.resolveLayer(
+      perCustomer: '   ',
+      perOffer: 'عرض {reward_value}',
+      global: 'عام',
+      fallback: 'افتراضي',
+    );
+    expect(resolved.source, PromotionRewardTemplateSource.offer);
+    expect(PromotionRewardTemplate.renderPreview(resolved.template), 'عرض 100');
+  });
+
+  test('unknown placeholder stays literal in the preview', () {
+    expect(
+      PromotionRewardTemplate.renderPreview('كرت {serial_number}'),
+      'كرت {serial_number}',
+    );
+  });

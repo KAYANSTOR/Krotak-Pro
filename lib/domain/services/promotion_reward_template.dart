@@ -28,14 +28,76 @@ class PromotionRewardTemplate {
     String? perCustomerGlobal,
     required String? global,
     required String fallback,
+  }) =>
+      resolveLayer(
+        perCustomer: perCustomer,
+        perOffer: perOffer,
+        perCustomerGlobal: perCustomerGlobal,
+        global: global,
+        fallback: fallback,
+      ).template;
+
+  /// نفس ترتيب الصرف مع اسم الطبقة الرابحة، حتى تعرض المعاينة مصدر النص.
+  static PromotionRewardResolution resolveLayer({
+    String? perCustomer,
+    required String? perOffer,
+    String? perCustomerGlobal,
+    required String? global,
+    required String fallback,
   }) {
     final customer = perCustomer?.trim() ?? '';
-    if (customer.isNotEmpty) return customer;
+    if (customer.isNotEmpty) {
+      return PromotionRewardResolution(
+        source: PromotionRewardTemplateSource.customerInOffer,
+        template: customer,
+      );
+    }
     final specific = perOffer?.trim() ?? '';
-    if (specific.isNotEmpty) return specific;
+    if (specific.isNotEmpty) {
+      return PromotionRewardResolution(
+        source: PromotionRewardTemplateSource.offer,
+        template: specific,
+      );
+    }
     final generalCustomer = perCustomerGlobal?.trim() ?? '';
-    if (generalCustomer.isNotEmpty) return generalCustomer;
-    return normalize(global, fallback: fallback);
+    if (generalCustomer.isNotEmpty) {
+      return PromotionRewardResolution(
+        source: PromotionRewardTemplateSource.customerGlobal,
+        template: generalCustomer,
+      );
+    }
+    final general = global?.trim() ?? '';
+    if (general.isNotEmpty) {
+      return PromotionRewardResolution(
+        source: PromotionRewardTemplateSource.global,
+        template: general,
+      );
+    }
+    return PromotionRewardResolution(
+      source: PromotionRewardTemplateSource.fallback,
+      template: fallback.trim(),
+    );
+  }
+
+  static const sampleValues = <String, String>{
+    'title': 'كرت 100',
+    'serial': '123456789012',
+    'secret': '0000',
+    'code': '0000',
+    'amount': '100',
+    'promotion_name': 'عرض تجريبي',
+    'reward_value': '100',
+    'customer_name': 'عميل تجريبي',
+  };
+
+  /// يستبدل المتغيرات المعروفة بقيم تجريبية ويبقي المجهولة كما هي.
+  static String renderPreview(String template, {Map<String, String>? values}) {
+    final source = values ?? sampleValues;
+    var output = template;
+    source.forEach((name, value) {
+      output = output.replaceAll('{$name}', value);
+    });
+    return output;
   }
 
   static String customerKey(String promotionId, String customerId) =>
@@ -124,4 +186,31 @@ class PromotionRewardTemplate {
     }
     return found;
   }
+}
+
+enum PromotionRewardTemplateSource {
+  customerInOffer,
+  offer,
+  customerGlobal,
+  global,
+  fallback,
+}
+
+class PromotionRewardResolution {
+  const PromotionRewardResolution({
+    required this.source,
+    required this.template,
+  });
+
+  final PromotionRewardTemplateSource source;
+  final String template;
+
+  String get sourceLabel => switch (source) {
+        PromotionRewardTemplateSource.customerInOffer =>
+          'تخصيص العميل داخل العرض',
+        PromotionRewardTemplateSource.offer => 'قالب العرض',
+        PromotionRewardTemplateSource.customerGlobal => 'قالب العميل العام',
+        PromotionRewardTemplateSource.global => 'القالب العام',
+        PromotionRewardTemplateSource.fallback => 'النص الافتراضي',
+      };
 }
