@@ -309,4 +309,39 @@ void main() {
     );
     expect(PromotionRewardTemplate.lookupProbe('{', 'global'), isNull);
   });
+
+  test('probe receipt stays bound to the sent body', () {
+    const sent = RewardProbeReceipt(
+      scope: 'global',
+      to: '777123456',
+      requestId: 4,
+      state: 'delivered',
+      body: 'رسالة تجريبية\nمكافأة عميل تجريبي',
+    );
+    final encoded = PromotionRewardTemplate.rememberProbe(null, sent);
+    final loaded = PromotionRewardTemplate.lookupProbe(encoded, 'global');
+    expect(loaded?.body, sent.body);
+    expect(loaded?.labelFor(sent.body), isNot(contains('لنص سابق')));
+    expect(loaded?.labelFor('نص آخر'), contains('لنص سابق'));
+    expect(loaded?.matchesBody(sent.body), isTrue);
+
+    const legacy = RewardProbeReceipt(
+      scope: 'global',
+      to: '777123456',
+      requestId: 4,
+      state: 'delivered',
+    );
+    expect(legacy.labelFor(sent.body), contains('لنص سابق'));
+
+    final delivered = PromotionRewardTemplate.applyProbeDelivery(
+      current: sent,
+      eventRequestId: 4,
+      delivered: false,
+      resultCode: 3,
+    );
+    expect(
+      (delivered as Success<RewardProbeReceipt>).value.body,
+      sent.body,
+    );
+  });
 }

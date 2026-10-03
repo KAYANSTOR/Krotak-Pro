@@ -86,12 +86,23 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
   void _onTyped() {
     final next = _body.text;
     if (next == _draft && _dirty) return;
+    final receipt = _probeReceipt;
     setState(() {
       _draft = next;
       _dirty = true;
-      _status = null;
-      _statusIsError = true;
+      if (receipt == null) {
+        _status = null;
+        _statusIsError = true;
+      } else {
+        _status = receipt.labelFor(_currentProbeBody());
+        _statusIsError = receipt.isError || !receipt.matchesBody(_currentProbeBody());
+      }
     });
+  }
+
+  String? _currentProbeBody() {
+    final rendered = PromotionRewardTemplate.probeBody(_body.text);
+    return rendered is Success<String> ? rendered.value : null;
   }
 
   bool get _perOffer => widget.promotionId != null && widget.promotionId!.isNotEmpty;
@@ -175,8 +186,8 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
       _loading = false;
       _probeReceipt = receipt;
       if (receipt != null) {
-        _status = receipt.label;
-        _statusIsError = receipt.isError;
+        _status = receipt.labelFor(_currentProbeBody());
+        _statusIsError = receipt.isError || !receipt.matchesBody(_currentProbeBody());
         _probeRequestId = receipt.requestId;
       }
     });
@@ -341,6 +352,7 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
         to: phone,
         requestId: requestId,
         state: requestId == null ? 'untracked' : 'sent',
+        body: text,
       );
       await _persistProbe(stored);
       if (!mounted) return;
@@ -348,7 +360,7 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
         _probing = false;
         _probeRequestId = requestId;
         _probeReceipt = stored;
-        _status = stored.label;
+        _status = stored.labelFor(text);
         _statusIsError = stored.isError;
       });
       if (requestId != null) _listenForProbeDelivery();
@@ -390,8 +402,8 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
       if (!mounted) return;
       setState(() {
         _probeReceipt = stored;
-        _status = stored.label;
-        _statusIsError = stored.isError;
+        _status = stored.labelFor(_currentProbeBody());
+        _statusIsError = stored.isError || !stored.matchesBody(_currentProbeBody());
       });
     });
   }

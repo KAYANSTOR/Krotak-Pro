@@ -363,6 +363,7 @@ class RewardProbeReceipt {
     required this.requestId,
     required this.state,
     this.resultCode,
+    this.body = '',
   });
 
   final String scope;
@@ -370,6 +371,9 @@ class RewardProbeReceipt {
   final int? requestId;
   final String state;
   final int? resultCode;
+
+  /// نص الإرسال التجريبي كما أُرسل. فارغ في الإيصالات الأقدم من مرحلة 59.
+  final String body;
 
   bool get isError => state == 'failed' || state == 'untracked';
 
@@ -386,6 +390,20 @@ class RewardProbeReceipt {
     }
   }
 
+  /// الإيصال يخص النص المرسل فقط. مسودة مختلفة أو إيصال بلا نص لا يُعرض كنتيجة الحالية.
+  String labelFor(String? currentBody) {
+    final current = currentBody?.trim() ?? '';
+    if (body.isEmpty || current.isEmpty || body != current) {
+      return 'لنص سابق — $label';
+    }
+    return label;
+  }
+
+  bool matchesBody(String? currentBody) {
+    final current = currentBody?.trim() ?? '';
+    return body.isNotEmpty && current.isNotEmpty && body == current;
+  }
+
   RewardProbeReceipt copyWith({String? state, int? resultCode}) =>
       RewardProbeReceipt(
         scope: scope,
@@ -393,6 +411,7 @@ class RewardProbeReceipt {
         requestId: requestId,
         state: state ?? this.state,
         resultCode: resultCode ?? this.resultCode,
+        body: body,
       );
 
   Map<String, Object?> toJson() => {
@@ -400,6 +419,7 @@ class RewardProbeReceipt {
         'requestId': requestId,
         'state': state,
         'resultCode': resultCode,
+        'body': body,
       };
 
   static RewardProbeReceipt? fromJson(String scope, Map<dynamic, dynamic> json) {
@@ -416,6 +436,7 @@ class RewardProbeReceipt {
       requestId: requestId,
       state: state,
       resultCode: resultCode,
+      body: json['body']?.toString() ?? '',
     );
   }
 }
