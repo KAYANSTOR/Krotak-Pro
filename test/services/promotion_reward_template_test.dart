@@ -677,4 +677,115 @@ void main() {
       'card-c',
     );
   });
+
+  test('customer cross-category probe queue stays separate from the shared queue', () {
+    final expires = DateTime.utc(2026, 10, 6, 8);
+    final shared = RewardProbeHold(
+      categoryId: 'cat-2',
+      cardId: 'card-shared',
+      reservationId: 'res-shared',
+      expiresAt: expires,
+    );
+    final first = RewardProbeHold(
+      categoryId: 'cat-1',
+      cardId: 'card-a',
+      reservationId: 'res-a',
+      expiresAt: expires,
+      customerId: 'cust-1',
+    );
+    final second = RewardProbeHold(
+      categoryId: 'cat-2',
+      cardId: 'card-b',
+      reservationId: 'res-b',
+      expiresAt: expires,
+      customerId: 'cust-1',
+    );
+    final sameCategory = RewardProbeHold(
+      categoryId: 'cat-2',
+      cardId: 'card-same',
+      reservationId: 'res-same',
+      expiresAt: expires,
+      customerId: 'cust-1',
+    );
+    final encoded = PromotionRewardTemplate.enqueueHold(
+      PromotionRewardTemplate.enqueueCrossCategoryHold(
+        PromotionRewardTemplate.enqueueCrossCategoryHold(
+          PromotionRewardTemplate.enqueueCrossCategoryHold(null, shared),
+          first,
+        ),
+        second,
+      ),
+      sameCategory,
+    );
+    final queue = PromotionRewardTemplate.lookupCrossCategoryHold(
+      encoded,
+      customerId: 'cust-1',
+    );
+    expect(queue?.cards.map((card) => card.cardId), ['card-a', 'card-b']);
+    expect(queue?.cards.map((card) => card.categoryId), ['cat-1', 'cat-2']);
+    expect(
+      PromotionRewardTemplate.lookupCrossCategoryHold(encoded)?.cardId,
+      'card-shared',
+    );
+    expect(
+      PromotionRewardTemplate.claimHold(
+        encoded,
+        'cat-2',
+        expires.subtract(const Duration(minutes: 1)),
+        customerId: 'cust-1',
+      )?.cardId,
+      'card-same',
+    );
+    final withoutSame = PromotionRewardTemplate.clearHold(
+      encoded,
+      'cat-2',
+      customerId: 'cust-1',
+    );
+    expect(
+      PromotionRewardTemplate.claimHold(
+        withoutSame,
+        'cat-2',
+        expires.subtract(const Duration(minutes: 1)),
+        customerId: 'cust-1',
+      )?.cardId,
+      'card-b',
+    );
+    expect(
+      PromotionRewardTemplate.claimHold(
+        withoutSame,
+        'cat-2',
+        expires.subtract(const Duration(minutes: 1)),
+      )?.cardId,
+      'card-shared',
+    );
+    final consumed = PromotionRewardTemplate.consumeHold(
+      withoutSame,
+      'cat-2',
+      customerId: 'cust-1',
+      cardId: 'card-b',
+    );
+    expect(
+      PromotionRewardTemplate.lookupCrossCategoryHold(
+        consumed,
+        customerId: 'cust-1',
+      )?.cards.map((card) => card.cardId),
+      ['card-a'],
+    );
+    expect(
+      PromotionRewardTemplate.lookupCrossCategoryHold(consumed)?.cardId,
+      'card-shared',
+    );
+    final cleared = PromotionRewardTemplate.clearCrossCategoryHold(
+      consumed,
+      customerId: 'cust-1',
+    );
+    expect(
+      PromotionRewardTemplate.lookupCrossCategoryHold(cleared, customerId: 'cust-1'),
+      isNull,
+    );
+    expect(
+      PromotionRewardTemplate.lookupCrossCategoryHold(cleared)?.cardId,
+      'card-shared',
+    );
+  });
 }

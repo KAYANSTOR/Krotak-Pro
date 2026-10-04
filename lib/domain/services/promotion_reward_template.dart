@@ -280,9 +280,13 @@ class PromotionRewardTemplate {
     );
   }
 
-  /// يضيف كرتاً لطابور الصرف المشترك بين الفئات. كروت الفئات الأخرى تبقى.
+  /// يضيف كرتاً لطابور الصرف عبر الفئات. مع عميل لا يختلط بالطابور المشترك.
   static String enqueueCrossCategoryHold(String? raw, RewardProbeHold hold) {
-    final existing = lookupCrossCategoryHold(raw);
+    final customerId = hold.customerId.trim();
+    final existing = lookupCrossCategoryHold(
+      raw,
+      customerId: customerId.isEmpty ? null : customerId,
+    );
     final card = RewardProbeHeldCard(
       cardId: hold.cardId,
       reservationId: hold.reservationId,
@@ -296,6 +300,7 @@ class PromotionRewardTemplate {
           cardId: card.cardId,
           reservationId: card.reservationId,
           expiresAt: hold.expiresAt,
+          customerId: customerId,
           queue: [card],
         ),
       );
@@ -317,17 +322,18 @@ class PromotionRewardTemplate {
         expiresAt: existing.expiresAt.isAfter(hold.expiresAt)
             ? existing.expiresAt
             : hold.expiresAt,
+        customerId: customerId,
         queue: capped,
       ),
     );
   }
 
-  static RewardProbeHold? lookupCrossCategoryHold(String? raw) {
-    return lookupHold(raw, crossCategoryHoldKey);
+  static RewardProbeHold? lookupCrossCategoryHold(String? raw, {String? customerId}) {
+    return lookupHold(raw, crossCategoryHoldKey, customerId: customerId);
   }
 
-  static String clearCrossCategoryHold(String? raw) {
-    return clearHold(raw, crossCategoryHoldKey);
+  static String clearCrossCategoryHold(String? raw, {String? customerId}) {
+    return clearHold(raw, crossCategoryHoldKey, customerId: customerId);
   }
 
   static String clearHold(String? raw, String categoryId, {String? customerId}) {
@@ -347,14 +353,13 @@ class PromotionRewardTemplate {
     if (hold == null) {
       final customer = customerId?.trim() ?? '';
       final wanted = cardId?.trim() ?? '';
-      if (customer.isEmpty &&
-          categoryId.trim() != crossCategoryHoldKey &&
-          wanted.isNotEmpty) {
-        final cross = lookupCrossCategoryHold(raw);
-        if (cross != null && cross.holdsCard(wanted)) {
-          return consumeHold(raw, crossCategoryHoldKey, cardId: wanted);
-        }
-      }
+      final fromCross = _consumeMatchingCross(
+        raw,
+        categoryId,
+        customerId: customer,
+        cardId: wanted,
+      );
+      if (fromCross != null) return fromCross;
       return clearHold(raw, categoryId, customerId: customerId);
     }
     final wanted = cardId?.trim() ?? '';
@@ -364,12 +369,13 @@ class PromotionRewardTemplate {
     ];
     if (wanted.isEmpty || remaining.length == hold.cards.length) {
       final customer = customerId?.trim() ?? '';
-      if (customer.isEmpty && categoryId.trim() != crossCategoryHoldKey) {
-        final cross = lookupCrossCategoryHold(raw);
-        if (cross != null && cross.holdsCard(wanted)) {
-          return consumeHold(raw, crossCategoryHoldKey, cardId: wanted);
-        }
-      }
+      final fromCross = _consumeMatchingCross(
+        raw,
+        categoryId,
+        customerId: customer,
+        cardId: wanted,
+      );
+      if (fromCross != null) return fromCross;
       return clearHold(raw, categoryId, customerId: customerId);
     }
     if (remaining.isEmpty) return clearHold(raw, categoryId, customerId: customerId);
@@ -397,7 +403,7 @@ class PromotionRewardTemplate {
     return RewardProbeHold.fromJson(categoryId.trim(), item, customerId: customerId);
   }
 
-  /// حجز العميل النشط يسبق حجز الفئة. الحجز المنتهي لا يُصرف.
+  /// حجز العميل داخل الفئة يسبق طابوره عبر الفئات، ثم حجز الفئة، ثم الطابور المشترك.
   static RewardProbeHold? claimHold(
     String? raw,
     String categoryId,
@@ -408,10 +414,26 @@ class PromotionRewardTemplate {
     if (customer.isNotEmpty) {
       final personal = lookupHold(raw, categoryId, customerId: customer);
       if (personal != null && personal.isActiveAt(now)) return personal;
+      final personalCross = _claimMatchingCross(
+        raw,
+        categoryId,
+        now,
+        customerId: customer,
+      );
+      if (personalCross != null) return personalCross;
     }
     final hold = lookupHold(raw, categoryId);
     if (hold != null && hold.isActiveAt(now)) return hold;
-    final cross = lookupCrossCategoryHold(raw);
+    return _claimMatchingCross(raw, categoryId, now);
+  }
+
+  static RewardProbeHold? _claimMatchingCross(
+    String? raw,
+    String categoryId,
+    DateTime now, {
+    String? customerId,
+  }) {
+    final cross = lookupCrossCategoryHold(raw, customerId: customerId);
     if (cross == null || !cross.isActiveAt(now)) return null;
     final matching = [
       for (final card in cross.cards)
@@ -423,8 +445,34 @@ class PromotionRewardTemplate {
       cardId: matching.first.cardId,
       reservationId: matching.first.reservationId,
       expiresAt: cross.expiresAt,
+      customerId: customerId ?? '',
       queue: matching,
     );
+  }
+
+  static String? _consumeMatchingCross(
+    String? raw,
+    String categoryId, {
+    required String customerId,
+    required String cardId,
+  }) {
+    if (categoryId.trim() == crossCategoryHoldKey || cardId.isEmpty) return null;
+    if (customerId.isNotEmpty) {
+      final personal = lookupCrossCategoryHold(raw, customerId: customerId);
+      if (personal != null && personal.holdsCard(cardId)) {
+        return consumeHold(
+          raw,
+          crossCategoryHoldKey,
+          customerId: customerId,
+          cardId: cardId,
+        );
+      }
+    }
+    final cross = lookupCrossCategoryHold(raw);
+    if (cross != null && cross.holdsCard(cardId)) {
+      return consumeHold(raw, crossCategoryHoldKey, cardId: cardId);
+    }
+    return null;
   }
 
   static Map<String, Map<String, Object?>> decodeHoldMap(String? raw) {

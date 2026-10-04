@@ -217,13 +217,10 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
     final c = AppScope.of(context);
     final found = await c.settings.find(SettingKeys.promotionRewardProbeHolds);
     final raw = found is Success<AppSetting?> ? found.value?.value : null;
-    final hold = _holdCustomerId == null
-        ? PromotionRewardTemplate.lookupCrossCategoryHold(raw)
-        : PromotionRewardTemplate.lookupHold(
-            raw,
-            card.categoryId,
-            customerId: _holdCustomerId,
-          );
+    final hold = PromotionRewardTemplate.lookupCrossCategoryHold(
+      raw,
+      customerId: _holdCustomerId,
+    );
     if (hold == null || !hold.isActiveAt(c.clock.now()) || !hold.holdsCard(card.cardId)) {
       return false;
     }
@@ -280,9 +277,7 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
       expiresAt: now.add(PromotionRewardTemplate.probeHoldDuration),
       customerId: _holdCustomerId ?? '',
     );
-    final encoded = _holdCustomerId == null
-        ? PromotionRewardTemplate.enqueueCrossCategoryHold(raw, hold)
-        : PromotionRewardTemplate.enqueueHold(raw, hold);
+    final encoded = PromotionRewardTemplate.enqueueCrossCategoryHold(raw, hold);
     await c.settings.save(
       AppSetting(
         key: SettingKeys.promotionRewardProbeHolds,
@@ -290,13 +285,10 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
         updatedAt: now,
       ),
     );
-    final stored = _holdCustomerId == null
-        ? PromotionRewardTemplate.lookupCrossCategoryHold(encoded)
-        : PromotionRewardTemplate.lookupHold(
-            encoded,
-            card.categoryId,
-            customerId: _holdCustomerId,
-          );
+    final stored = PromotionRewardTemplate.lookupCrossCategoryHold(
+      encoded,
+      customerId: _holdCustomerId,
+    );
     await c.auditLogs.append(
       AuditLog(
         id: c.ids.next('reward-probe-hold'),
@@ -331,13 +323,10 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
     final c = AppScope.of(context);
     final current = await c.settings.find(SettingKeys.promotionRewardProbeHolds);
     final raw = current is Success<AppSetting?> ? current.value?.value : null;
-    final hold = _holdCustomerId == null
-        ? PromotionRewardTemplate.lookupCrossCategoryHold(raw)
-        : PromotionRewardTemplate.lookupHold(
-            raw,
-            card.categoryId,
-            customerId: _holdCustomerId,
-          );
+    final hold = PromotionRewardTemplate.lookupCrossCategoryHold(
+      raw,
+      customerId: _holdCustomerId,
+    );
     final queued = hold?.cards ?? [RewardProbeHeldCard(cardId: card.cardId, reservationId: reservationId)];
     for (final item in queued) {
       await c.cards.releaseReservation(item.cardId, item.reservationId);
@@ -351,9 +340,8 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
                 PromotionRewardTemplate.clearCrossCategoryHold(raw),
                 card.categoryId,
               )
-            : PromotionRewardTemplate.clearHold(
+            : PromotionRewardTemplate.clearCrossCategoryHold(
                 raw,
-                card.categoryId,
                 customerId: _holdCustomerId,
               ),
         updatedAt: now,
@@ -393,7 +381,7 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
     if (_holdQueueCount > 1) {
       return _holdCustomerId == null
           ? 'طابور الصرف عبر الفئات: $_holdQueueCount كروت، بلا خصم حتى يُصرف كرت الفئة المطابقة'
-          : 'طابور صرف هذا العميل: $_holdQueueCount كروت، بلا خصم حتى تُصرف بالترتيب';
+          : 'طابور هذا العميل عبر الفئات: $_holdQueueCount كروت، بلا خصم حتى يُصرف كرت الفئة المطابقة';
     }
     return _holdCustomerId == null
         ? 'الكرت المختار محجوز للصرف التالي، بلا خصم حتى يُصرف'
@@ -843,13 +831,13 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
                         title: Text(
                           _holdCustomerId == null
                               ? 'أضف الكرت لطابور الصرف عبر الفئات'
-                              : 'أضف الكرت لطابور صرف هذا العميل',
+                              : 'أضف الكرت لطابور هذا العميل عبر الفئات',
                           style: const TextStyle(fontFamily: NetTypography.family),
                         ),
                         subtitle: Text(
                           _holdCustomerId == null
                               ? 'كروت فئات مختلفة تبقى في طابور واحد. الصرف يأخذ أول كرت ما زال محجوزاً لفئة المكافأة.'
-                              : 'صرف مكافأة هذا العميل التالي في نفس الفئة يستخدم هذا الكرت. حجز الفئة يبقى لبقية العملاء.',
+                              : 'كروت فئات مختلفة تبقى في طابور هذا العميل. الصرف يأخذ أول كرت ما زال محجوزاً لفئة المكافأة.',
                           style: const TextStyle(fontFamily: NetTypography.family),
                         ),
                       ),
