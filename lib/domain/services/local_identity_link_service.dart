@@ -83,6 +83,14 @@ final class LocalIdentityLinkService {
     final plan = (p as Success<IdentityLinkPreview>).value;
 
     if (plan.owner == null) {
+      // الحساب البديل غالباً «مؤقت»، و`bindPrimaryGsm` لا يقبل إلا حساباً نشطاً.
+      // إدخال المشغّل رقماً فعلياً حرّاً هو التأكيد الصريح لاعتماده عميلاً.
+      final current = await customers.findById(altCustomerId);
+      if (current is Failure<Customer?>) return Failure(current.error);
+      if ((current as Success<Customer?>).value?.status == CustomerStatus.provisional) {
+        final promoted = await customerService.promoteToActive(altCustomerId);
+        if (promoted is Failure<Customer>) return Failure(promoted.error);
+      }
       final bound = await customerService.bindPrimaryGsm(
         customerId: altCustomerId,
         phone: plan.phone,
