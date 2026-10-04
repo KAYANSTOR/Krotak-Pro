@@ -304,9 +304,15 @@ final class LocalWalletCatalogService implements WalletCatalogService {
     if (existing == null) return const Failure(AppFailure(code: 'wallet_not_found', message: 'المحفظة غير موجودة'));
     final extras = await _readExtras();
     final prev = extras[id];
-    final resolvedSender = senderId ?? prev?['senderId'] as String? ?? existing.senderId;
+    // null = إبقاء القيمة السابقة، نص فارغ = مسح، غير ذلك = تعيين بعد التنظيف
+    // (كما يفعل saveWallet) حتى لا تُخزَّن مسافات زائدة تُربك العرض والمطابقة.
+    String? clean(String? v) {
+      final t = v?.trim();
+      return (t == null || t.isEmpty) ? null : t;
+    }
+    final resolvedSender = senderId != null ? clean(senderId) : (prev?['senderId'] as String? ?? existing.senderId);
     final resolvedMode = sourceMode ?? ((prev?['sourceMode'] as String?) == 'notification' ? WalletSourceMode.notification : existing.sourceMode);
-    final resolvedPkg = packageName ?? prev?['packageName'] as String? ?? existing.packageName;
+    final resolvedPkg = packageName != null ? clean(packageName) : (prev?['packageName'] as String? ?? existing.packageName);
     final updated = Wallet(id: existing.id, name: trimmed, status: status, createdAt: existing.createdAt, senderId: resolvedSender, sourceMode: resolvedMode, packageName: resolvedPkg);
     final saved = await wallets.save(updated);
     if (saved is Failure<void>) return Failure(saved.error);
@@ -316,18 +322,23 @@ final class LocalWalletCatalogService implements WalletCatalogService {
   }
   @override
   Future<Result<void>> ensureDefaultWallets() async {
-    final existing = await wallets.listAll();
+    final existing = await listEnriched();
     if (existing is Failure) return Failure((existing as Failure).error);
-    final byName = {
-      for (final w in (existing as Success<List<Wallet>>).value)
-        w.name.trim().toLowerCase(): w,
-    };
+    final current = (existing as Success<List<Wallet>>).value;
     final extras = await _readExtras();
     for (final spec in _defaults) {
-      final key = spec.name.toLowerCase();
-      if (byName.containsKey(key)) {
+      // يُعدّ الافتراضي موجوداً إن طابق الاسمُ أو المرسلُ أو الحزمةُ محفظةً قائمة؛
+      // فإعادة تسمية «جيب» لا يجوز أن تُنتج محفظة «جيب» مكررة ونشطة عند الإقلاع التالي.
+      final specSender = spec.senderId.trim().toLowerCase();
+      final specPackage = spec.packageName.trim();
+      final match = current.where((w) {
+        if (w.name.trim().toLowerCase() == spec.name.toLowerCase()) return true;
+        if ((w.senderId?.trim().toLowerCase() ?? '') == specSender) return true;
+        return specPackage.isNotEmpty && (w.packageName?.trim() ?? '') == specPackage;
+      }).firstOrNull;
+      if (match != null) {
         // Never overwrite operator-edited sender/mode/package on subsequent boots.
-        final id = byName[key]!.id;
+        final id = match.id;
         if (!extras.containsKey(id)) {
           await _writeExtras(id, spec.senderId, spec.sourceMode, spec.packageName);
         }

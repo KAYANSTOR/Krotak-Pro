@@ -294,7 +294,14 @@ final class PaymentSourceGuard {
   bool _senderMatches(String incoming, String configured) {
     if (incoming.isEmpty || configured.isEmpty) return false;
     if (incoming == configured) return true;
-    if (incoming.contains(configured) || configured.contains(incoming)) {
+    // احتواء جزئي مسموح (JAIB داخل JAIB-PROMO) لكن بشرط ألا يقلّ الجزء المحتوى
+    // عن 3 أحرف؛ وإلا طابق مرسلٌ من حرف أو حرفين (مثل «A» أو «AI») أي محفظة
+    // معرّفها يحتوي ذلك الحرف، وهي ثغرة انتحال مصدر دفع.
+    const minPartialLength = 3;
+    if (configured.length >= minPartialLength && incoming.contains(configured)) {
+      return true;
+    }
+    if (incoming.length >= minPartialLength && configured.contains(incoming)) {
       return true;
     }
     final incDigits = incoming.replaceAll(RegExp(r'[^0-9]'), '');
