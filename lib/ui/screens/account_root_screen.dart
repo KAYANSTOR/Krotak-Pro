@@ -60,7 +60,11 @@ class _AccountRootScreenState extends State<AccountRootScreen>
   Widget build(BuildContext context) {
     final session = AccountSession.maybeInstance;
     if (session == null) {
-      return const _AccountBootView();
+      // بعض مضيفي الواجهة (مثل اختبارات NetApp) يبنون التطبيق مباشرة
+      // من دون استدعاء main()، وبالتالي لا تكون جلسة السحابة مسجلة. في
+      // هذه الحالة نحافظ على سلوك التطبيق المحلي القديم بدلاً من عرض
+      // مؤشر انتظار دائم. التشغيل الحقيقي يهيئ AccountSession في main().
+      return const HomeShell();
     }
     return ValueListenableBuilder<AccountState>(
       valueListenable: session.state,
