@@ -61,7 +61,6 @@ import '../platform/notification_bridge.dart';
 import '../platform/stock_alert_bridge.dart';
 import '../platform/sms_bridge.dart';
 import '../platform/contact_picker_bridge.dart';
-import '../platform/system_diagnostics_bridge.dart';
 import 'incoming_notification_handler.dart';
 import 'incoming_sms_handler.dart';
 

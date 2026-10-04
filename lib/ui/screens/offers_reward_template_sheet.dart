@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Card;
 
 import '../../core/result.dart';
 import '../../domain/entities/audit.dart';
@@ -63,7 +63,6 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
   var _busy = false;
   var _probing = false;
   var _dirty = false;
-  int? _probeRequestId;
   StreamSubscription<SmsDeliveryEvent>? _probeDelivery;
   String _draft = '';
   String? _status;
@@ -274,7 +273,6 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
       if (receipt != null) {
         _status = receipt.labelFor(_currentProbeBody());
         _statusIsError = receipt.isError || !receipt.matchesBody(_currentProbeBody());
-        _probeRequestId = receipt.requestId;
       }
     });
     if (receipt != null && receipt.state == 'sent' && receipt.requestId != null) {
@@ -446,7 +444,6 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
       if (!mounted) return;
       setState(() {
         _probing = false;
-        _probeRequestId = requestId;
         _probeReceipt = stored;
         _status = stored.labelFor(text);
         _statusIsError = stored.isError;

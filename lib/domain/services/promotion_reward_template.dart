@@ -230,7 +230,7 @@ class PromotionRewardTemplate {
 
   static RewardProbeReceipt? lookupProbe(String? raw, String scope) {
     final item = decodeProbeMap(raw)[scope];
-    if (item is! Map) return null;
+    if (item == null) return null;
     return RewardProbeReceipt.fromJson(scope, item);
   }
 
