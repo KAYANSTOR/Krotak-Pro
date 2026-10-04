@@ -6,6 +6,7 @@ import 'package:path/path.dart' as p;
 
 import '../../../core/result.dart';
 import '../../../domain/services/local_backup_service.dart';
+import '../../app_reloader.dart';
 import '../../app_scope.dart';
 import '../../theme/kayan_palette.dart';
 import '../../theme/net_semantic_colors.dart';
@@ -122,7 +123,7 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen> {
             title: const Text('تأكيد الاستعادة', style: TextStyle(fontFamily: 'Tajawal')),
             content: Text(
               'ستُستبدل الإعدادات وقاعدة البيانات من النسخة المحددة.\n'
-              'يُفضَّل إعادة تشغيل التطبيق بعد الاستعادة.\n\n'
+              'سيُعاد تحميل التطبيق تلقائياً بعد الاستعادة (دون الحاجة لإغلاقه).\n\n'
               'الملف: ${p.basename(file.path)}',
               style: TextStyle(fontFamily: 'Tajawal', height: 1.5, color: palette.textSecondary),
             ),
@@ -141,13 +142,30 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen> {
       _status = null;
     });
     final c = AppScope.of(context);
+    var databaseClosed = false;
     final r = await c.backupService.restoreFromFile(
       file,
       password: password,
       closeDatabase: () async {
+        databaseClosed = true;
         await c.database.close();
       },
     );
+
+    // أُغلقت القاعدة (نجحت الاستعادة أو فشلت بعد الإغلاق): الحاوية الحالية لم
+    // تعد صالحة في الحالتين، فيجب فتح قاعدة جديدة وإعادة بناء الواجهات.
+    if (databaseClosed && AppReloader.isAvailable) {
+      if (r is Success) {
+        final report = (r as Success).value;
+        final dbNote = report.databaseRestored ? ' مع استبدال قاعدة البيانات' : '';
+        AppReloader.setNotice('تمت الاستعادة (${report.settingsCount} إعداد$dbNote)');
+      } else if (r is Failure) {
+        AppReloader.setNotice('تعذّرت الاستعادة: ${(r as Failure).error.message}');
+      }
+      await AppReloader.reload();
+      return;
+    }
+
     if (!mounted) return;
     setState(() => _restoring = false);
     if (r is Failure) {

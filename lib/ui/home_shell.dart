@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'app_reloader.dart';
 import 'routing/app_routes.dart';
 import 'screens/broadcast_sheet.dart';
 import 'screens/customers_screen.dart';
@@ -50,6 +51,15 @@ class _HomeShellState extends State<HomeShell> {
       if (!mounted || _permissionsStarted) return;
       _permissionsStarted = true;
       PermissionsOnboarding.maybeRun(context);
+      final notice = AppReloader.takeNotice();
+      if (notice != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(notice, style: const TextStyle(fontFamily: 'Tajawal')),
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
     });
   }
 

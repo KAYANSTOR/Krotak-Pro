@@ -255,6 +255,12 @@ final class LocalBackupService {
           if (closeDatabase != null) {
             await closeDatabase();
           }
+          // ملفات WAL/SHM المتبقية من القاعدة القديمة قد تُطبَّق خطأً على الملف
+          // المستعاد عند فتحه من جديد (دون إعادة تشغيل) — تُحذف قبل الاستبدال.
+          for (final suffix in const ['-wal', '-shm', '-journal']) {
+            final stale = File('${target.path}$suffix');
+            if (await stale.exists()) await stale.delete();
+          }
           final parent = target.parent;
           if (!await parent.exists()) {
             await parent.create(recursive: true);
