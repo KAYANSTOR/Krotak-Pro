@@ -613,7 +613,7 @@ void main() {
     );
   });
 
-  test('customer cross-category queue exceeds the shared 8-card and 24-hour caps', () {
+  test('customer cross-category queue keeps the wide window beside a same-category cap', () {
     final start = DateTime.utc(2026, 10, 4, 6);
     var encoded;
     for (var i = 0; i < 9; i++) {
@@ -656,25 +656,79 @@ void main() {
       ),
       isNull,
     );
-    var shared;
+    var sameCategory;
     for (var i = 0; i < 9; i++) {
+      sameCategory = PromotionRewardTemplate.enqueueHold(
+        sameCategory,
+        RewardProbeHold(
+          categoryId: 'cat-1',
+          cardId: 'same-$i',
+          reservationId: 'same-res-$i',
+          expiresAt: start.add(PromotionRewardTemplate.probeHoldDuration),
+          customerId: 'cust-1',
+        ),
+      );
+    }
+    expect(
+      PromotionRewardTemplate.lookupHold(
+        sameCategory,
+        'cat-1',
+        customerId: 'cust-1',
+      )?.cards.length,
+      PromotionRewardTemplate.probeHoldQueueLimit,
+    );
+  });
+
+  test('category and shared probe queues use the 32-card 7-day window', () {
+    final start = DateTime.utc(2026, 10, 4, 8);
+    var category;
+    var shared;
+    for (var i = 0; i < 33; i++) {
+      category = PromotionRewardTemplate.enqueueHold(
+        category,
+        RewardProbeHold(
+          categoryId: 'cat-1',
+          cardId: 'cat-$i',
+          reservationId: 'cat-res-$i',
+          expiresAt: start.add(PromotionRewardTemplate.categoryHoldDuration),
+        ),
+      );
       shared = PromotionRewardTemplate.enqueueCrossCategoryHold(
         shared,
         RewardProbeHold(
           categoryId: 'cat-$i',
           cardId: 'shared-$i',
           reservationId: 'shared-res-$i',
-          expiresAt: start.add(PromotionRewardTemplate.probeHoldDuration),
+          expiresAt: start.add(PromotionRewardTemplate.sharedCrossCategoryHoldDuration),
         ),
       );
     }
+    final categoryQueue = PromotionRewardTemplate.lookupHold(category, 'cat-1');
+    final sharedQueue = PromotionRewardTemplate.lookupCrossCategoryHold(shared);
+    expect(categoryQueue?.cards.length, PromotionRewardTemplate.categoryQueueLimit);
+    expect(sharedQueue?.cards.length, PromotionRewardTemplate.sharedCrossCategoryQueueLimit);
+    expect(categoryQueue?.cards.first.cardId, 'cat-1');
+    expect(sharedQueue?.cards.first.cardId, 'shared-1');
+    expect(categoryQueue?.expiresAt, start.add(PromotionRewardTemplate.categoryHoldDuration));
     expect(
-      PromotionRewardTemplate.lookupCrossCategoryHold(shared)?.cards.length,
-      PromotionRewardTemplate.probeHoldQueueLimit,
+      sharedQueue?.expiresAt,
+      start.add(PromotionRewardTemplate.sharedCrossCategoryHoldDuration),
     );
     expect(
-      PromotionRewardTemplate.lookupCrossCategoryHold(shared)?.cards.first.cardId,
+      PromotionRewardTemplate.claimHold(
+        shared,
+        'cat-1',
+        start.add(const Duration(days: 2)),
+      )?.cardId,
       'shared-1',
+    );
+    expect(
+      PromotionRewardTemplate.claimHold(
+        category,
+        'cat-1',
+        start.add(const Duration(days: 8)),
+      ),
+      isNull,
     );
   });
 

@@ -93,11 +93,18 @@ class PromotionRewardTemplate {
     'customer_name': 'عميل تجريبي',
   };
 
-  /// مدة حجز كرت المعاينة للصرف التالي. بعد انتهاء المدة لا يُستخدم الحجز.
+  /// مدة حجز كرت المعاينة للصرف التالي داخل فئة العميل. بعد انتهاء المدة لا يُستخدم الحجز.
   static const probeHoldDuration = Duration(hours: 24);
 
-  /// حجز طابور العميل عبر الفئات أطول من حجز الفئة أو الطابور المشترك.
-  static const customerCrossCategoryHoldDuration = Duration(days: 7);
+  /// نافذة الطوابير العريضة: العميل عبر الفئات، والفئة بلا عميل، والطابور المشترك.
+  static const wideProbeHoldDuration = Duration(days: 7);
+
+  /// حجز طابور العميل عبر الفئات.
+  static const customerCrossCategoryHoldDuration = wideProbeHoldDuration;
+
+  /// حجز طابور الفئة بلا عميل والطابور المشترك بلا عميل.
+  static const categoryHoldDuration = wideProbeHoldDuration;
+  static const sharedCrossCategoryHoldDuration = wideProbeHoldDuration;
 
   /// يختار كرت المعاينة من المتاح فقط. المعرّف المفقود أو غير المتاح يعود لأول كرت، بلا حجز.
   static RewardProbeCardSnapshot? selectProbeCard(
@@ -249,18 +256,28 @@ class PromotionRewardTemplate {
     return jsonEncode(next);
   }
 
-  /// يضيف كرتاً لطابور العميل أو لطابور الفئة بلا عميل. الاختيار لا يحرّر السابق.
+  /// طابور العميل داخل فئة واحدة يبقى عند هذا السقف.
   static const probeHoldQueueLimit = 8;
 
-  /// طابور العميل عبر الفئات يتجاوز حد الطوابير الأخرى دون أن يصبح بلا سقف.
-  static const customerCrossCategoryQueueLimit = 32;
+  /// سقف الطوابير العريضة دون إلغاء السقف بالكامل.
+  static const wideProbeQueueLimit = 32;
+
+  /// طابور العميل عبر الفئات.
+  static const customerCrossCategoryQueueLimit = wideProbeQueueLimit;
+
+  /// طابور الفئة بلا عميل والطابور المشترك.
+  static const categoryQueueLimit = wideProbeQueueLimit;
+  static const sharedCrossCategoryQueueLimit = wideProbeQueueLimit;
 
   /// طابور بلا عميل يجمع كروت فئات مختلفة. لا يختلط بطوابير العملاء.
   static const crossCategoryHoldKey = '*';
 
   static String enqueueHold(String? raw, RewardProbeHold hold) {
+    final customerQueue = hold.customerId.trim().isNotEmpty;
+    final window = customerQueue ? probeHoldDuration : categoryHoldDuration;
+    final limit = customerQueue ? probeHoldQueueLimit : categoryQueueLimit;
     final existing = lookupHold(raw, hold.categoryId, customerId: hold.customerId);
-    if (existing == null || !existing.isActiveAt(hold.expiresAt.subtract(probeHoldDuration))) {
+    if (existing == null || !existing.isActiveAt(hold.expiresAt.subtract(window))) {
       return rememberHold(raw, hold);
     }
     final cards = <RewardProbeHeldCard>[
@@ -268,9 +285,7 @@ class PromotionRewardTemplate {
         if (card.cardId != hold.cardId) card,
       RewardProbeHeldCard(cardId: hold.cardId, reservationId: hold.reservationId),
     ];
-    final capped = cards.length > probeHoldQueueLimit
-        ? cards.sublist(cards.length - probeHoldQueueLimit)
-        : cards;
+    final capped = cards.length > limit ? cards.sublist(cards.length - limit) : cards;
     return rememberHold(
       raw,
       RewardProbeHold(
@@ -298,7 +313,10 @@ class PromotionRewardTemplate {
       reservationId: hold.reservationId,
       categoryId: hold.categoryId,
     );
-    if (existing == null || !existing.isActiveAt(hold.expiresAt.subtract(probeHoldDuration))) {
+    final window = customerId.isEmpty
+        ? sharedCrossCategoryHoldDuration
+        : customerCrossCategoryHoldDuration;
+    if (existing == null || !existing.isActiveAt(hold.expiresAt.subtract(window))) {
       return rememberHold(
         raw,
         RewardProbeHold(
@@ -317,7 +335,7 @@ class PromotionRewardTemplate {
       card,
     ];
     final limit = customerId.isEmpty
-        ? probeHoldQueueLimit
+        ? sharedCrossCategoryQueueLimit
         : customerCrossCategoryQueueLimit;
     final capped = cards.length > limit ? cards.sublist(cards.length - limit) : cards;
     return rememberHold(
