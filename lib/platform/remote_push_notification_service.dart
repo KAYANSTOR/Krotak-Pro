@@ -4,9 +4,10 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
-/// FCM bootstrap for the Android app. It is intentionally opt-in: when the
-/// build has no Firebase dart-defines, the existing offline-first app starts
-/// normally and this service remains disabled.
+/// FCM bootstrap for the Android app. Configuration comes from the registered
+/// `android/app/google-services.json`, or from build-time dart-defines when
+/// supplied. Any initialization failure is swallowed so the offline-first app
+/// always keeps working.
 final class RemotePushNotificationService {
   RemotePushNotificationService._();
   static final instance = RemotePushNotificationService._();
@@ -15,24 +16,43 @@ final class RemotePushNotificationService {
   StreamSubscription<RemoteMessage>? _foregroundSubscription;
   StreamSubscription<String>? _tokenSubscription;
 
-  static bool get isConfigured =>
-      const String.fromEnvironment('KROTAK_FIREBASE_API_KEY').isNotEmpty &&
-      const String.fromEnvironment('KROTAK_FIREBASE_APP_ID').isNotEmpty &&
-      const String.fromEnvironment('KROTAK_FIREBASE_PROJECT_ID').isNotEmpty &&
-      const String.fromEnvironment('KROTAK_FIREBASE_MESSAGING_SENDER_ID').isNotEmpty;
+  /// True when either build-time defines or the registered Android
+  /// `google-services.json` provide the Firebase configuration.
+  static bool get isConfigured => true;
+
+  static bool get _hasBuildDefines =>
+      const String.fromEnvironment('KROTAK_FIREBASE_API_KEY').isNotEmpty;
+
+  static FirebaseOptions? get _options => _hasBuildDefines
+      ? const FirebaseOptions(
+          apiKey: String.fromEnvironment('KROTAK_FIREBASE_API_KEY'),
+          appId: String.fromEnvironment('KROTAK_FIREBASE_APP_ID'),
+          messagingSenderId: String.fromEnvironment('KROTAK_FIREBASE_MESSAGING_SENDER_ID'),
+          projectId: String.fromEnvironment('KROTAK_FIREBASE_PROJECT_ID'),
+          storageBucket: String.fromEnvironment('KROTAK_FIREBASE_STORAGE_BUCKET'),
+        )
+      : null;
 
   Future<void> start({void Function(RemoteMessage message)? onMessage}) async {
     if (_started || !isConfigured || defaultTargetPlatform != TargetPlatform.android) return;
     _started = true;
-    await Firebase.initializeApp(
-      options: const FirebaseOptions(
-        apiKey: String.fromEnvironment('KROTAK_FIREBASE_API_KEY'),
-        appId: String.fromEnvironment('KROTAK_FIREBASE_APP_ID'),
-        messagingSenderId: String.fromEnvironment('KROTAK_FIREBASE_MESSAGING_SENDER_ID'),
-        projectId: String.fromEnvironment('KROTAK_FIREBASE_PROJECT_ID'),
-        storageBucket: String.fromEnvironment('KROTAK_FIREBASE_STORAGE_BUCKET'),
-      ),
-    );
+    try {
+      await _startInternal(onMessage);
+    } catch (error, stackTrace) {
+      // A missing or invalid Firebase configuration must never block the
+      // offline-first app from starting.
+      debugPrint('Krotak remote notifications unavailable: $error');
+      debugPrintStack(stackTrace: stackTrace);
+    }
+  }
+
+  Future<void> _startInternal(void Function(RemoteMessage message)? onMessage) async {
+    final options = _options;
+    if (options != null) {
+      await Firebase.initializeApp(options: options);
+    } else {
+      await Firebase.initializeApp();
+    }
     await _localNotifications.initialize(const InitializationSettings(
       android: AndroidInitializationSettings('@drawable/ic_stat_stock'),
     ));
@@ -101,15 +121,11 @@ final class RemotePushNotificationService {
 
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  if (!RemotePushNotificationService.isConfigured) return;
-  await Firebase.initializeApp(
-    options: const FirebaseOptions(
-      apiKey: String.fromEnvironment('KROTAK_FIREBASE_API_KEY'),
-      appId: String.fromEnvironment('KROTAK_FIREBASE_APP_ID'),
-      messagingSenderId: String.fromEnvironment('KROTAK_FIREBASE_MESSAGING_SENDER_ID'),
-      projectId: String.fromEnvironment('KROTAK_FIREBASE_PROJECT_ID'),
-      storageBucket: String.fromEnvironment('KROTAK_FIREBASE_STORAGE_BUCKET'),
-    ),
-  );
+  final options = RemotePushNotificationService._options;
+  if (options != null) {
+    await Firebase.initializeApp(options: options);
+  } else {
+    await Firebase.initializeApp();
+  }
   debugPrint('Krotak background notification: ${message.messageId}');
 }

@@ -1,72 +1,71 @@
 # تكامل الإشعارات الحية عبر FCM
 
-## ما تم تنفيذه
+## الحالة المطبقة على مشروع Firebase
 
-- تطبيق Flutter يهيئ Firebase اختياريًا من خلال `--dart-define`.
+- المشروع النشط: `kroty-434e3` (Kroty).
+- تطبيق Android المسجل: `Krotak-pro` بالمعرّف `com.kayan.net_app`.
+- قواعد Firestore المحدثة **منشورة فعليًا** على المشروع.
+- إعداد العميل محفوظ في `android/app/google-services.json` (إعداد عام غير سري).
+- Cloud Functions **غير منشورة**: مشروع `kroty-434e3` على خطة Spark، والخدمة ترفض النشر وتطلب الترقية إلى Blaze:
+
+```text
+Your project kroty-434e3 must be on the Blaze (pay-as-you-go) plan
+to complete this command.
+```
+
+## ما تم تنفيذه في التطبيق
+
+- تهيئة Firebase من `google-services.json`، مع إمكانية تجاوزها عبر `--dart-define`.
 - الاشتراك في Topic عام: `krotak_all_users`.
-- معالجة رسائل FCM في foreground/background.
+- استقبال الإشعارات في foreground/background، وإظهارها محليًا أثناء استخدام التطبيق.
 - قناة Android باسم `krotak_admin` وأيقونة `ic_stat_stock`.
-- لوحة الإدارة تنشئ مستندًا في `notification_requests` بدل اعتبار الكتابة إلى Firestore إرسالًا ناجحًا.
-- Cloud Function باسم `dispatchNotificationRequest` ترسل عبر FCM وتكتب حالة التسليم.
-- قواعد Firestore تمنع العميل من إنشاء طلبات الإرسال، وتسمح للمشرفين بقراءة سجلات التسليم.
+- أي فشل في تهيئة Firebase لا يمنع إقلاع التطبيق المحلي.
 
-## إعداد بناء التطبيق
+## ما تم تنفيذه في لوحة الإدارة
 
-مرر إعدادات مشروع Firebase العامة وقت البناء، ولا تضع Service Account داخل APK:
+- زر الإرسال ينشئ طلبًا في `notification_requests` بدل اعتبار كتابة Firestore إرسالًا ناجحًا.
+- Cloud Function `dispatchNotificationRequest` ترسل عبر FCM وتكتب حالة التسليم:
+  `queued` / `sent` / `partial` / `failed` / `no_devices`.
+- قواعد Firestore تمنع العميل من إنشاء الطلبات أو تعديل سجلات التسليم.
 
-```bash
-flutter pub get
-flutter build apk --release \
-  --dart-define=KROTAK_FIREBASE_API_KEY=... \
-  --dart-define=KROTAK_FIREBASE_APP_ID=... \
-  --dart-define=KROTAK_FIREBASE_PROJECT_ID=... \
-  --dart-define=KROTAK_FIREBASE_MESSAGING_SENDER_ID=... \
-  --dart-define=KROTAK_FIREBASE_STORAGE_BUCKET=...
-```
+## المتبقي لتفعيل الإرسال الفعلي
 
-بدون هذه القيم يستمر التطبيق في وضعه المحلي الحالي، ولا يحاول الاتصال بـ Firebase.
+اختر أحد المسارين:
 
-## نشر الوظيفة والقواعد
+### المسار الأول: ترقية المشروع إلى Blaze
 
-من مجلد لوحة الإدارة وبعد تسجيل الدخول إلى Firebase واختيار المشروع الصحيح:
+بعد الترقية من صفحة الاستخدام في Firebase Console، يُنشر ما يلي من مستودع لوحة الإدارة:
 
 ```bash
-cd functions && npm install && cd ..
-firebase use <PROJECT_ID>
-firebase deploy --only functions:dispatchNotificationRequest,firestore:rules
+firebase use kroty-434e3
+firebase deploy --only functions,firestore:rules
 ```
 
-لا تُشغّل النشر قبل التأكد من أن المشروع المختار هو مشروع Krotak الصحيح.
+وتبقى تكلفة Cloud Functions ضمن الطبقة المجانية للاستخدام الخفيف.
 
-## الإرسال العام
+### المسار الثاني: الإرسال اليدوي من Firebase Console
 
-تكتب لوحة الإدارة طلبًا مثل:
+من دون ترقية، يمكن إرسال رسالة عامة من:
 
-```json
-{
-  "audienceType": "global",
-  "title": "عنوان",
-  "body": "نص الإشعار",
-  "data": { "route": "/account-notifications" },
-  "status": "queued"
-}
+```text
+Firebase Console → Messaging → New campaign → Android → Topic: krotak_all_users
 ```
 
-تقوم الوظيفة بإرساله إلى Topic `krotak_all_users`.
+يصل الإشعار إلى كل جهاز مشترك في Topic العام. هذا مسار يدوي ولا يربط طلبات لوحة الإدارة بالتنفيذ الآلي.
 
 ## الإرسال لمستخدم محدد
 
-المسار المدعوم في الوظيفة هو:
+المسار المدعوم في الوظيفة:
 
 ```text
 users/{uid}/devices/{tokenHash}
 ```
 
-ويجب أن يكتب تطبيق Android Token بعد اكتمال تسجيل دخول الحساب السحابي باستخدام جلسة Firebase موثوقة. التسجيل العام في Topic يعمل الآن، أما التوجيه لمستخدم محدد فيتطلب ربط خدمة الحساب الحالية بعملية upsert للـToken؛ لا يجوز تخزين Token مجهول ثم نسبته إلى مستخدم بالاعتماد على قيمة محلية.
+ويجب أن يكتب التطبيق الـToken بعد اكتمال تسجيل دخول الحساب السحابي بجلسة Firebase موثوقة؛ لا يجوز نسبة Token مجهول إلى مستخدم اعتمادًا على قيمة محلية.
 
-## ملاحظات التحقق
+## التحقق
 
-- بناء لوحة الإدارة ينجح باستخدام `npm run build`.
-- Cloud Function تمر بفحص `node --check`.
-- لم يتم نشر Cloud Function أو قواعد Firebase من هذه البيئة؛ النشر فعل خارجي يعتمد على مشروع Firebase وصلاحياته.
-- لا يوجد في الملفات المضافة Service Account أو مفتاح Admin.
+- `firebase_validate_security_rules` على قواعد Firestore: لا أخطاء.
+- نشر Firestore: نجح (Job `1791157115302`).
+- نشر Functions: مرفوض بسبب خطة Spark (Job `1791157434061`).
+- بناء لوحة الإدارة وفحص Cloud Function: نجحا في GitHub Actions.
