@@ -26,7 +26,12 @@ final class LocalAccountMergeService {
     required this.unitOfWork,
     required this.clock,
     required this.ids,
+    this.historyMovers = const <CustomerHistoryMover>[],
   });
+
+  /// تنقل حركات/مبيعات الحساب المصدر إلى الهدف حتى يظهر الرصيد مجتمعاً.
+  /// بدونها (اختبارات قديمة) يقتصر الدمج على نقل الهويات فقط.
+  final List<CustomerHistoryMover> historyMovers;
 
   final CustomerRepository customers;
   final TransactionRepository transactions;
@@ -75,7 +80,9 @@ final class LocalAccountMergeService {
         return Success(source);
       }
 
-      if (source.status != CustomerStatus.active) {
+      // المصدر «دفتر مؤقت» مسموح: هو الحالة المعتادة لمودع برقم مخفي.
+      if (source.status != CustomerStatus.active &&
+          source.status != CustomerStatus.provisional) {
         return Failure(
           AppFailure(
             code: 'source_not_mergeable',
@@ -128,6 +135,16 @@ final class LocalAccountMergeService {
         if (moved is Failure<void>) return Failure(moved.error);
       }
 
+      var movedRecords = 0;
+      for (final mover in historyMovers) {
+        final moved = await mover.reassignCustomer(
+          fromCustomerId: sourceCustomerId,
+          toCustomerId: targetCustomerId,
+        );
+        if (moved is Failure<int>) return Failure(moved.error);
+        movedRecords += (moved as Success<int>).value;
+      }
+
       final now = clock.now();
       final mergedSource = source.copyWith(
         status: CustomerStatus.merged,
@@ -144,7 +161,7 @@ final class LocalAccountMergeService {
           entityId: sourceCustomerId,
           action: 'merged',
           payloadJson:
-              '{"into":"$targetCustomerId","identifiersMoved":${sourceIds.length}}',
+              '{"into":"$targetCustomerId","identifiersMoved":${sourceIds.length},"recordsMoved":$movedRecords}',
           occurredAt: now,
         ),
       );

@@ -10,6 +10,7 @@ import '../../domain/entities/customer.dart';
 import '../../domain/entities/money.dart';
 import '../../domain/entities/pos_account.dart';
 import '../../domain/entities/transaction.dart';
+import '../../domain/services/local_identity_link_service.dart';
 import '../../domain/services/local_promotion_progress_service.dart';
 import '../../domain/services/services.dart';
 import '../../platform/contact_picker_bridge.dart';
@@ -112,6 +113,124 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
       if (id.type == CustomerIdentifierType.phoneNumber) return id.value;
     }
     return '—';
+  }
+
+  bool get _hasRealPhone =>
+      _ids.any((i) => i.type == CustomerIdentifierType.phoneNumber);
+
+  /// ربط «الرقم البديل» (مرسل مخفي) برقم العميل الفعلي. إن كان الرقم لحساب
+  /// موجود يُدمج هذا الحساب فيه بكل حركاته ثم يُفتح الحساب الأصلي.
+  Future<void> _linkRealPhone() async {
+    final c = AppScope.of(context);
+    final ctrl = TextEditingController();
+    String? error;
+    IdentityLinkPreview? preview;
+    final phone = await showDialog<String>(
+      context: context,
+      builder: (ctx) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: StatefulBuilder(
+          builder: (ctx, setLocal) => AlertDialog(
+            title: const Text(
+              'ربط برقم العميل الفعلي',
+              style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w800),
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                TextField(
+                  controller: ctrl,
+                  keyboardType: TextInputType.phone,
+                  textDirection: TextDirection.ltr,
+                  onChanged: (_) => setLocal(() {
+                    error = null;
+                    preview = null;
+                  }),
+                  decoration: InputDecoration(
+                    labelText: 'رقم الجوال الفعلي',
+                    labelStyle: const TextStyle(fontFamily: 'Tajawal'),
+                    errorText: error,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+                if (preview != null) ...[
+                  const SizedBox(height: 10),
+                  Text(
+                    preview!.willMerge
+                        ? 'الرقم يخص «${preview!.owner!.displayName}» — سيُدمج هذا الحساب فيه مع كل حركاته ومبيعاته.'
+                        : 'الرقم غير مسجّل لأي حساب — سيُربط بهذا الحساب مباشرة.',
+                    style: const TextStyle(fontFamily: 'Tajawal', fontSize: 12.5, height: 1.5),
+                  ),
+                ],
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('إلغاء', style: TextStyle(fontFamily: 'Tajawal')),
+              ),
+              FilledButton(
+                onPressed: () async {
+                  if (preview == null) {
+                    final r = await c.identityLinkService.preview(
+                      altCustomerId: widget.customerId,
+                      phone: ctrl.text,
+                    );
+                    if (r is Failure<IdentityLinkPreview>) {
+                      setLocal(() => error = r.error.message);
+                      return;
+                    }
+                    setLocal(() => preview = (r as Success<IdentityLinkPreview>).value);
+                    return;
+                  }
+                  if (ctx.mounted) Navigator.pop(ctx, ctrl.text);
+                },
+                child: Text(
+                  preview == null ? 'متابعة' : (preview!.willMerge ? 'دمج وربط' : 'ربط'),
+                  style: const TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w700),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    ctrl.dispose();
+    if (phone == null || !mounted) return;
+
+    final result = await c.identityLinkService.link(
+      altCustomerId: widget.customerId,
+      phone: phone,
+    );
+    if (!mounted) return;
+    if (result is Failure<Customer>) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(result.error.message, style: const TextStyle(fontFamily: 'Tajawal'))),
+      );
+      return;
+    }
+    final kept = (result as Success<Customer>).value;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          kept.id == widget.customerId
+              ? 'تم ربط الرقم بالحساب'
+              : 'تم دمج الحساب في «${kept.displayName}»',
+          style: const TextStyle(fontFamily: 'Tajawal'),
+        ),
+      ),
+    );
+    if (kept.id == widget.customerId) {
+      await _load();
+    } else {
+      // هذا الحساب صار «مدموجاً» — افتح الحساب الذي بقي فعّالاً.
+      await Navigator.of(context).pushReplacement(
+        MaterialPageRoute<void>(
+          builder: (_) => CustomerDetailScreen(customerId: kept.id),
+        ),
+      );
+    }
   }
 
   /// إضافة يدوية لهذا العميل إلى جهات اتصال الجهاز — الكتابة التلقائية
@@ -640,6 +759,17 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
               ),
             ],
           ),
+          if (!_hasRealPhone && c.status != CustomerStatus.merged) ...[
+            const SizedBox(height: 10),
+            OutlinedButton.icon(
+              onPressed: _linkRealPhone,
+              icon: const Icon(Icons.link_rounded, size: 18),
+              label: const Text(
+                'ربط الرقم البديل برقم العميل الفعلي',
+                style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w700),
+              ),
+            ),
+          ],
           const SizedBox(height: 10),
           Text(
             'تاريخ الإنشاء: ${_fmtTime(c.createdAt)}',

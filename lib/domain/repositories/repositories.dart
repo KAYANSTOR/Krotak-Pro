@@ -89,6 +89,15 @@ abstract interface class TransactionRepository {
   Future<Result<List<Transaction>>> listCompleted({String? currencyCode});
 }
 
+/// ينقل سجلات حساب إلى حساب آخر (عند دمج حسابين) — منفصلة عن واجهات
+/// المستودعات حتى لا يُجبر كل تنفيذ تجريبي على تطبيقها.
+abstract interface class CustomerHistoryMover {
+  Future<Result<int>> reassignCustomer({
+    required String fromCustomerId,
+    required String toCustomerId,
+  });
+}
+
 abstract interface class SaleRepository {
   Future<Result<void>> save(Sale sale);
   Future<Result<Sale?>> findById(String id);
