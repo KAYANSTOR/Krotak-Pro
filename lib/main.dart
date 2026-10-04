@@ -7,13 +7,13 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:sqlite3_flutter_libs/sqlite3_flutter_libs.dart';
 
 import 'application/app_container.dart';
+import 'application/account_session.dart';
 import 'core/app_brand.dart';
 import 'core/result.dart';
 import 'domain/entities/message.dart';
 import 'domain/entities/setting.dart';
 import 'ui/app_reloader.dart';
 import 'ui/app_scope.dart';
-import 'ui/home_shell.dart';
 import 'ui/screens/net_splash_screen.dart';
 import 'ui/theme/kayan_theme.dart';
 import 'ui/theme/net_theme_schedule.dart';
@@ -49,6 +49,8 @@ Future<void> main() async {
   final themeRaw = await _loadThemeMode(container);
   _NetAppState.seedPersistedThemeRaw(themeRaw);
   AppScope.register(container);
+  // جلسة حساب الشبكة: تسجيل/دخول + مزامنة حالة الحساب مع لوحة الإدارة.
+  AccountSession.attach(AccountSession(settings: container.settings));
   runApp(NetApp(container: container));
   unawaited(_startBackgroundHandlersSafely(container));
 }
@@ -104,6 +106,9 @@ class _NetAppState extends State<NetApp> with WidgetsBindingObserver {
       final next = await AppContainer.bootstrap(templates: _defaultTemplates);
       NetThemeRawCache.raw = await _loadThemeMode(next);
       AppScope.register(next);
+      // الحاوية تغيّرت (استعادة نسخة احتياطية) — جلسة الحساب تُعاد بناؤها
+      // على مخزن الإعدادات الجديد مع بقاء بيانات الحساب نفسها.
+      AccountSession.attach(AccountSession(settings: next.settings));
       if (!mounted) {
         await next.dispose();
         return;

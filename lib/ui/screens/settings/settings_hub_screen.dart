@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../core/app_brand.dart';
+import '../../../application/account_session.dart';
 import '../../../platform/system_diagnostics_bridge.dart';
 import '../../../core/result.dart';
 import '../../../domain/entities/setting.dart';
@@ -18,6 +19,7 @@ import '../../widgets/net/net_surface_card.dart';
 import '../../widgets/settings/settings_cards.dart';
 import '../../widgets/settings/settings_section_header.dart';
 import '../pos_screen.dart';
+import '../account_notifications_screen.dart';
 import '../system_check_screen.dart';
 import '../wallets_screen.dart';
 import 'backup_restore_screen.dart';
@@ -69,6 +71,8 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
   static const _walletsKeywords =
       'المحافظ نقاط البيع إشعارات المحافظ طلبات رصيد نقاط البيع حد يومي ملخص العمليات اليومي التسوية التلقائية مصادر الإشعارات الحسابات سقف الدين قوالب المحفظة';
   static const _maintenanceKeywords = 'تنظيف السجلات تصدير السجل الأرشفة نسخ احتياطي استعادة بيانات تنظيف عميق فهارس';
+  static const _accountKeywords =
+      'الحساب حساب الشبكة التسجيل تسجيل الدخول الرقم كلمة المرور الاشتراك التجريبي إشعارات الإدارة الخروج';
   static const _aboutKeywords =
       'عن التطبيق المبرمج الحقوق كيان سوفت إصدار كروتك ${AppBrand.latinName} الموقع';
 
@@ -79,6 +83,7 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
   }
 
   bool get _anySectionVisible =>
+      _sectionVisible(_accountKeywords) ||
       _sectionVisible(_systemKeywords) ||
       _sectionVisible(_licenseKeywords) ||
       _sectionVisible(_themeKeywords) ||
@@ -303,6 +308,36 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
     if (mounted) await _load();
   }
 
+  /// تسجيل الخروج من حساب الشبكة: يُغلق كل الشاشات ويعود إلى بوابة الدخول.
+  Future<void> _confirmSignOut() async {
+    final session = AccountSession.maybeInstance;
+    if (session == null) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('تسجيل الخروج من الحساب'),
+        content: const Text(
+          'سيتم مسح جلسة الحساب من هذا الجهاز، وستحتاج إلى إدخال رقم الهاتف وكلمة '
+          'المرور مرة أخرى. بياناتك المحلية (الكروت والمبيعات والحسابات) لا تُمس.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('إلغاء'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('خروج'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    await session.signOut();
+    if (!mounted) return;
+    Navigator.of(context).popUntil((route) => route.isFirst);
+  }
+
   Future<void> _openLowStock() async {
     await Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LowStockSettingsScreen()));
     if (mounted) await _load();
@@ -336,6 +371,8 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
                                   padding: const EdgeInsets.symmetric(vertical: 24),
                                   child: AsyncEmptyView(message: 'لا توجد إعدادات مطابقة للبحث', icon: Icons.search_off_rounded, hint: 'جرّب كلمة أخرى مثل: الرسائل، المظهر، المحافظ', compact: true),
                                 ),
+                              if (_sectionVisible(_accountKeywords))
+                                _AccountSection(onSignOut: _confirmSignOut),
                               if (_sectionVisible(_systemKeywords)) const SettingsSectionHeader(title: 'النظام'),
                               if (_sectionVisible(_systemKeywords))
                                 SettingsGroupCard(children: [
@@ -549,6 +586,69 @@ class _AboutAppCard extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+/// قسم «الحساب» في الإعدادات: حالة الحساب، إشعارات الإدارة، تسجيل الخروج.
+class _AccountSection extends StatelessWidget {
+  const _AccountSection({required this.onSignOut});
+
+  final Future<void> Function() onSignOut;
+
+  @override
+  Widget build(BuildContext context) {
+    final session = AccountSession.maybeInstance;
+    if (session == null) return const SizedBox.shrink();
+
+    return ValueListenableBuilder<AccountState>(
+      valueListenable: session.state,
+      builder: (context, state, _) {
+        final account = state.account;
+        if (account == null && state.phase != AccountPhase.blocked) {
+          return const SizedBox.shrink();
+        }
+        final unread = state.unreadCount;
+        final networkName = account?.networkName ?? '';
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const SettingsSectionHeader(title: 'الحساب'),
+            SettingsGroupCard(children: [
+              SettingsGroupNavRow(
+                icon: Icons.storefront_outlined,
+                title: networkName.isEmpty ? 'حساب الشبكة' : networkName,
+                subtitle: session.statusSummary,
+                searchText: 'الحساب حساب الشبكة التسجيل الاشتراك التجريبي الرقم',
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const AccountNotificationsScreen(),
+                  ),
+                ),
+              ),
+              SettingsGroupNavRow(
+                icon: Icons.notifications_none_outlined,
+                title: 'إشعارات الإدارة',
+                subtitle: unread == 0
+                    ? 'لا توجد إشعارات غير مقروءة'
+                    : '$unread إشعار غير مقروء',
+                searchText: 'إشعارات الإدارة الرسائل التنبيهات',
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const AccountNotificationsScreen(),
+                  ),
+                ),
+              ),
+              SettingsGroupNavRow(
+                icon: Icons.logout_rounded,
+                title: 'تسجيل الخروج من الحساب',
+                subtitle: 'يمسح جلسة الحساب من هذا الجهاز فقط',
+                searchText: 'خروج تسجيل الخروج الحساب',
+                onTap: () => onSignOut(),
+              ),
+            ]),
+          ],
+        );
+      },
     );
   }
 }
