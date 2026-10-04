@@ -8,7 +8,7 @@ abstract final class AppBrand {
   /// الاسم اللاتيني (اسم التطبيق على الجهاز + أسماء ملفات النسخ الاحتياطي).
   static const latinName = 'Krotak Pro';
 
-  static const version = '1.0.13';
+  static const version = '1.0.15';
   static const buildNumber = '13';
 
   static const developer = 'جارالله الكبودي';

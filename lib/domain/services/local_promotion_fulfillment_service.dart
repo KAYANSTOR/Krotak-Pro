@@ -186,10 +186,11 @@ final class LocalPromotionFulfillmentService {
       final cleared = await settings.save(
         AppSetting(
           key: SettingKeys.promotionRewardProbeHolds,
-          value: PromotionRewardTemplate.clearHold(
+          value: PromotionRewardTemplate.consumeHold(
             holdRaw,
             categoryId,
             customerId: consumed.customerId,
+            cardId: card.id,
           ),
           updatedAt: now,
         ),
@@ -353,16 +354,19 @@ final class LocalPromotionFulfillmentService {
       customerId: customerId,
     );
     if (hold == null) return const Success(null);
-    final found = await cards.findById(hold.cardId);
-    if (found is Failure<Card?>) return Failure(found.error);
-    final card = (found as Success<Card?>).value;
-    final reservation = card?.reservation;
-    if (card == null ||
-        card.categoryId != categoryId ||
-        card.status != CardStatus.reserved ||
-        reservation?.reservationId != hold.reservationId) {
-      return const Success(null);
+    for (final item in hold.cards) {
+      final found = await cards.findById(item.cardId);
+      if (found is Failure<Card?>) return Failure(found.error);
+      final card = (found as Success<Card?>).value;
+      final reservation = card?.reservation;
+      if (card == null ||
+          card.categoryId != categoryId ||
+          card.status != CardStatus.reserved ||
+          reservation?.reservationId != item.reservationId) {
+        continue;
+      }
+      return Success(card);
     }
-    return Success(card);
+    return const Success(null);
   }
 }

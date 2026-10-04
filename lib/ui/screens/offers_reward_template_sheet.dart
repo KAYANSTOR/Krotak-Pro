@@ -77,6 +77,7 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
   RewardProbeCardSnapshot? _liveCard;
   List<RewardProbeCardSnapshot> _availableCards = const [];
   String? _holdReservationId;
+  int _holdQueueCount = 0;
 
   String get _fallback =>
       LocalPromotionFulfillmentService.defaultRewardSmsTemplate;
@@ -221,10 +222,11 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
       card.categoryId,
       customerId: _holdCustomerId,
     );
-    if (hold == null || !hold.isActiveAt(c.clock.now()) || hold.cardId != card.cardId) {
+    if (hold == null || !hold.isActiveAt(c.clock.now()) || !hold.holdsCard(card.cardId)) {
       return false;
     }
-    _holdReservationId = hold.reservationId;
+    _holdReservationId = hold.cardFor(card.cardId)?.reservationId;
+    _holdQueueCount = hold.cards.length;
     return true;
   }
 
@@ -249,7 +251,11 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
     final c = AppScope.of(context);
     setState(() => _busy = true);
     final previous = _liveCard;
-    if (_holdNextPayout && previous != null && previous.cardId != card.cardId) {
+    final queueForCustomer = _holdCustomerId != null;
+    if (_holdNextPayout &&
+        previous != null &&
+        previous.cardId != card.cardId &&
+        !queueForCustomer) {
       await _releaseHold(quiet: true);
       if (!mounted) return false;
     }
@@ -281,12 +287,18 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
       expiresAt: now.add(PromotionRewardTemplate.probeHoldDuration),
       customerId: _holdCustomerId ?? '',
     );
+    final encoded = PromotionRewardTemplate.enqueueHold(raw, hold);
     await c.settings.save(
       AppSetting(
         key: SettingKeys.promotionRewardProbeHolds,
-        value: PromotionRewardTemplate.rememberHold(raw, hold),
+        value: encoded,
         updatedAt: now,
       ),
+    );
+    final stored = PromotionRewardTemplate.lookupHold(
+      encoded,
+      card.categoryId,
+      customerId: _holdCustomerId,
     );
     await c.auditLogs.append(
       AuditLog(
@@ -304,6 +316,7 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
       _liveCard = card;
       _holdNextPayout = true;
       _holdReservationId = reservationId;
+      _holdQueueCount = stored?.cards.length ?? 1;
       _status = _holdStatus;
       _statusIsError = false;
     });
@@ -315,12 +328,21 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
     final reservationId = _holdReservationId;
     if (card == null || reservationId == null || card.categoryId.isEmpty) {
       _holdReservationId = null;
+      _holdQueueCount = 0;
       return;
     }
     final c = AppScope.of(context);
-    await c.cards.releaseReservation(card.cardId, reservationId);
     final current = await c.settings.find(SettingKeys.promotionRewardProbeHolds);
     final raw = current is Success<AppSetting?> ? current.value?.value : null;
+    final hold = PromotionRewardTemplate.lookupHold(
+      raw,
+      card.categoryId,
+      customerId: _holdCustomerId,
+    );
+    final queued = hold?.cards ?? [RewardProbeHeldCard(cardId: card.cardId, reservationId: reservationId)];
+    for (final item in queued) {
+      await c.cards.releaseReservation(item.cardId, item.reservationId);
+    }
     final now = c.clock.now();
     await c.settings.save(
       AppSetting(
@@ -344,6 +366,7 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
       ),
     );
     _holdReservationId = null;
+    _holdQueueCount = 0;
     if (!quiet && mounted) {
       setState(() => _holdNextPayout = false);
     }
@@ -364,7 +387,9 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
 
   String get _holdStatus => _holdCustomerId == null
       ? 'الكرت المختار محجوز للصرف التالي، بلا خصم حتى يُصرف'
-      : 'الكرت المختار محجوز لصرف هذا العميل، بلا خصم حتى يُصرف';
+      : _holdQueueCount > 1
+          ? 'طابور صرف هذا العميل: $_holdQueueCount كروت، بلا خصم حتى تُصرف بالترتيب'
+          : 'الكرت المختار محجوز لصرف هذا العميل، بلا خصم حتى يُصرف';
 
   PromotionRewardResolution get _resolution {
     final draft = _draft.trim();
@@ -809,7 +834,7 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
                         title: Text(
                           _holdCustomerId == null
                               ? 'احجز الكرت للصرف التالي'
-                              : 'احجز الكرت لصرف هذا العميل',
+                              : 'أضف الكرت لطابور صرف هذا العميل',
                           style: const TextStyle(fontFamily: NetTypography.family),
                         ),
                         subtitle: Text(

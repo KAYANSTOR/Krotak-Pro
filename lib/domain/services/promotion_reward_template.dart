@@ -246,10 +246,73 @@ class PromotionRewardTemplate {
     return jsonEncode(next);
   }
 
+  /// يضيف كرتاً لطابور العميل نفسه. حجز الفئة يبقى كرتاً واحداً ويُستبدل.
+  static const probeHoldQueueLimit = 8;
+
+  static String enqueueHold(String? raw, RewardProbeHold hold) {
+    if (hold.customerId.trim().isEmpty) return rememberHold(raw, hold);
+    final existing = lookupHold(raw, hold.categoryId, customerId: hold.customerId);
+    if (existing == null || !existing.isActiveAt(hold.expiresAt.subtract(probeHoldDuration))) {
+      return rememberHold(raw, hold);
+    }
+    final cards = <RewardProbeHeldCard>[
+      for (final card in existing.cards)
+        if (card.cardId != hold.cardId) card,
+      RewardProbeHeldCard(cardId: hold.cardId, reservationId: hold.reservationId),
+    ];
+    final capped = cards.length > probeHoldQueueLimit
+        ? cards.sublist(cards.length - probeHoldQueueLimit)
+        : cards;
+    return rememberHold(
+      raw,
+      RewardProbeHold(
+        categoryId: hold.categoryId,
+        cardId: capped.first.cardId,
+        reservationId: capped.first.reservationId,
+        expiresAt: existing.expiresAt.isAfter(hold.expiresAt)
+            ? existing.expiresAt
+            : hold.expiresAt,
+        customerId: hold.customerId,
+        queue: capped,
+      ),
+    );
+  }
+
   static String clearHold(String? raw, String categoryId, {String? customerId}) {
     final next = decodeHoldMap(raw);
     next.remove(holdStorageKey(categoryId, customerId: customerId));
     return jsonEncode(next);
+  }
+
+  /// يزيل كرتاً مستهلكاً من الطابور ويبقي بقية كروت العميل.
+  static String consumeHold(
+    String? raw,
+    String categoryId, {
+    String? customerId,
+    String? cardId,
+  }) {
+    final hold = lookupHold(raw, categoryId, customerId: customerId);
+    if (hold == null) return clearHold(raw, categoryId, customerId: customerId);
+    final wanted = cardId?.trim() ?? '';
+    final remaining = <RewardProbeHeldCard>[
+      for (final card in hold.cards)
+        if (wanted.isNotEmpty && card.cardId != wanted) card,
+    ];
+    if (wanted.isEmpty || remaining.length == hold.cards.length) {
+      return clearHold(raw, categoryId, customerId: customerId);
+    }
+    if (remaining.isEmpty) return clearHold(raw, categoryId, customerId: customerId);
+    return rememberHold(
+      raw,
+      RewardProbeHold(
+        categoryId: hold.categoryId,
+        cardId: remaining.first.cardId,
+        reservationId: remaining.first.reservationId,
+        expiresAt: hold.expiresAt,
+        customerId: hold.customerId,
+        queue: remaining,
+      ),
+    );
   }
 
   static RewardProbeHold? lookupHold(
@@ -486,6 +549,18 @@ class RewardProbeCardSnapshot {
 }
 
 /// حجز كرت معاينة لصرف المكافأة التالي في نفس الفئة. ليس بيعاً ولا قيد دفتر.
+class RewardProbeHeldCard {
+  const RewardProbeHeldCard({required this.cardId, required this.reservationId});
+
+  final String cardId;
+  final String reservationId;
+
+  Map<String, Object?> toJson() => {
+        'cardId': cardId,
+        'reservationId': reservationId,
+      };
+}
+
 class RewardProbeHold {
   const RewardProbeHold({
     required this.categoryId,
@@ -493,6 +568,7 @@ class RewardProbeHold {
     required this.reservationId,
     required this.expiresAt,
     this.customerId = '',
+    this.queue = const [],
   });
 
   final String categoryId;
@@ -503,13 +579,33 @@ class RewardProbeHold {
   /// فارغ يعني حجز الفئة لكل العملاء. غير الفارغ يخص عميلاً واحداً.
   final String customerId;
 
+  /// طابور صرف العميل. الفارغ يعني كرت الرأس فقط، للتوافق مع مراحل 62 و63.
+  final List<RewardProbeHeldCard> queue;
+
+  List<RewardProbeHeldCard> get cards {
+    if (queue.isNotEmpty) return queue;
+    if (cardId.trim().isEmpty || reservationId.trim().isEmpty) return const [];
+    return [RewardProbeHeldCard(cardId: cardId, reservationId: reservationId)];
+  }
+
   bool isActiveAt(DateTime now) => !expiresAt.isBefore(now);
 
+  bool holdsCard(String id) => cards.any((card) => card.cardId == id);
+
+  RewardProbeHeldCard? cardFor(String id) {
+    for (final card in cards) {
+      if (card.cardId == id) return card;
+    }
+    return null;
+  }
+
   Map<String, Object?> toJson() => {
-        'cardId': cardId,
-        'reservationId': reservationId,
+        'cardId': cards.isEmpty ? cardId : cards.first.cardId,
+        'reservationId': cards.isEmpty ? reservationId : cards.first.reservationId,
         'expiresAt': expiresAt.toUtc().toIso8601String(),
         if (customerId.trim().isNotEmpty) 'customerId': customerId.trim(),
+        if (cards.length > 1)
+          'queue': [for (final card in cards) card.toJson()],
       };
 
   static RewardProbeHold? fromJson(
@@ -523,15 +619,28 @@ class RewardProbeHold {
     final storedCustomer = customerId?.trim().isNotEmpty == true
         ? customerId!.trim()
         : (json['customerId']?.toString().trim() ?? '');
-    if (categoryId.trim().isEmpty || cardId.isEmpty || reservationId.isEmpty || expires == null) {
-      return null;
+    final queue = <RewardProbeHeldCard>[];
+    final rawQueue = json['queue'];
+    if (rawQueue is List) {
+      for (final item in rawQueue) {
+        if (item is! Map) continue;
+        final id = item['cardId']?.toString().trim() ?? '';
+        final reservation = item['reservationId']?.toString().trim() ?? '';
+        if (id.isEmpty || reservation.isEmpty) continue;
+        queue.add(RewardProbeHeldCard(cardId: id, reservationId: reservation));
+      }
     }
+    if (queue.isEmpty && cardId.isNotEmpty && reservationId.isNotEmpty) {
+      queue.add(RewardProbeHeldCard(cardId: cardId, reservationId: reservationId));
+    }
+    if (categoryId.trim().isEmpty || queue.isEmpty || expires == null) return null;
     return RewardProbeHold(
       categoryId: categoryId,
-      cardId: cardId,
-      reservationId: reservationId,
+      cardId: queue.first.cardId,
+      reservationId: queue.first.reservationId,
       expiresAt: expires.toUtc(),
       customerId: storedCustomer,
+      queue: queue,
     );
   }
 }
