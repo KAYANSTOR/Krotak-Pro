@@ -1,5 +1,6 @@
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:net_app/core/app_brand.dart';
 import 'package:net_app/core/clock.dart';
 import 'package:net_app/core/result.dart';
 import 'package:net_app/data/database/app_database.dart' hide AppSetting;
@@ -115,7 +116,7 @@ void main() {
     final pack = service.exportEvidencePack(snap);
     expect(pack['phase'], 19);
     expect(pack['matchingPhase'], 11);
-    expect(pack['appVersion'], '1.0.13+13');
+    expect(pack['appVersion'], '${AppBrand.version}+${AppBrand.buildNumber}');
     expect(pack['schema'], 'net.device_verification.v1');
     expect(pack['readyForRelease'], isFalse);
     final gates = pack['gates'] as Map;

@@ -751,7 +751,8 @@ class RewardProbeHold {
     return [RewardProbeHeldCard(cardId: cardId, reservationId: reservationId)];
   }
 
-  bool isActiveAt(DateTime now) => !expiresAt.isBefore(now);
+  /// ينتهي الحجز عند لحظة [expiresAt] نفسها، فلا يُصرف بعد بلوغها.
+  bool isActiveAt(DateTime now) => expiresAt.isAfter(now);
 
   bool holdsCard(String id) => cards.any((card) => card.cardId == id);
 
