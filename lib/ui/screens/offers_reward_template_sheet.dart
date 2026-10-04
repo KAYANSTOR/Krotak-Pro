@@ -182,7 +182,7 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
       _status = selected == null
           ? 'لا يوجد كرت متاح. بقيت المعاينة على القيم التجريبية'
           : holding
-              ? 'الكرت المختار محجوز للصرف التالي، بلا خصم حتى يُصرف'
+              ? _holdStatus
               : 'المعاينة تعرض الكرت المختار دون حجز أو خصم';
       _statusIsError = selected == null;
     });
@@ -205,7 +205,7 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
       _liveCard = selected;
       _holdNextPayout = holding;
       _status = holding
-          ? 'الكرت المختار محجوز للصرف التالي، بلا خصم حتى يُصرف'
+          ? _holdStatus
           : 'المعاينة تعرض الكرت المختار دون حجز أو خصم';
       _statusIsError = false;
     });
@@ -216,8 +216,14 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
     final c = AppScope.of(context);
     final found = await c.settings.find(SettingKeys.promotionRewardProbeHolds);
     final raw = found is Success<AppSetting?> ? found.value?.value : null;
-    final hold = PromotionRewardTemplate.claimHold(raw, card.categoryId, c.clock.now());
-    if (hold == null || hold.cardId != card.cardId) return false;
+    final hold = PromotionRewardTemplate.lookupHold(
+      raw,
+      card.categoryId,
+      customerId: _holdCustomerId,
+    );
+    if (hold == null || !hold.isActiveAt(c.clock.now()) || hold.cardId != card.cardId) {
+      return false;
+    }
     _holdReservationId = hold.reservationId;
     return true;
   }
@@ -273,6 +279,7 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
       cardId: card.cardId,
       reservationId: reservationId,
       expiresAt: now.add(PromotionRewardTemplate.probeHoldDuration),
+      customerId: _holdCustomerId ?? '',
     );
     await c.settings.save(
       AppSetting(
@@ -288,7 +295,7 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
         entityId: card.cardId,
         action: 'reward_probe_card_held',
         occurredAt: now,
-        payloadJson: '{"categoryId":"${card.categoryId}","reservationId":"$reservationId"}',
+        payloadJson: '{"categoryId":"${card.categoryId}","reservationId":"$reservationId","customerId":"${_holdCustomerId ?? ''}"}',
       ),
     );
     if (!mounted) return false;
@@ -297,7 +304,7 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
       _liveCard = card;
       _holdNextPayout = true;
       _holdReservationId = reservationId;
-      _status = 'الكرت المختار محجوز للصرف التالي، بلا خصم حتى يُصرف';
+      _status = _holdStatus;
       _statusIsError = false;
     });
     return true;
@@ -318,7 +325,11 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
     await c.settings.save(
       AppSetting(
         key: SettingKeys.promotionRewardProbeHolds,
-        value: PromotionRewardTemplate.clearHold(raw, card.categoryId),
+        value: PromotionRewardTemplate.clearHold(
+          raw,
+          card.categoryId,
+          customerId: _holdCustomerId,
+        ),
         updatedAt: now,
       ),
     );
@@ -329,7 +340,7 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
         entityId: card.cardId,
         action: 'reward_probe_card_released',
         occurredAt: now,
-        payloadJson: '{"categoryId":"${card.categoryId}","reservationId":"$reservationId"}',
+        payloadJson: '{"categoryId":"${card.categoryId}","reservationId":"$reservationId","customerId":"${_holdCustomerId ?? ''}"}',
       ),
     );
     _holdReservationId = null;
@@ -345,6 +356,15 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
 
   bool get _perCustomerGlobal =>
       !_perOffer && widget.customerId != null && widget.customerId!.isNotEmpty;
+
+  String? get _holdCustomerId {
+    final id = widget.customerId?.trim() ?? '';
+    return id.isEmpty ? null : id;
+  }
+
+  String get _holdStatus => _holdCustomerId == null
+      ? 'الكرت المختار محجوز للصرف التالي، بلا خصم حتى يُصرف'
+      : 'الكرت المختار محجوز لصرف هذا العميل، بلا خصم حتى يُصرف';
 
   PromotionRewardResolution get _resolution {
     final draft = _draft.trim();
@@ -786,13 +806,17 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
                         contentPadding: EdgeInsets.zero,
                         value: _holdNextPayout,
                         onChanged: _busy || _probing ? null : _toggleHold,
-                        title: const Text(
-                          'احجز الكرت للصرف التالي',
-                          style: TextStyle(fontFamily: NetTypography.family),
+                        title: Text(
+                          _holdCustomerId == null
+                              ? 'احجز الكرت للصرف التالي'
+                              : 'احجز الكرت لصرف هذا العميل',
+                          style: const TextStyle(fontFamily: NetTypography.family),
                         ),
-                        subtitle: const Text(
-                          'صرف المكافأة التالي في نفس الفئة يستخدم هذا الكرت. لا قيد دفتر حتى يُصرف.',
-                          style: TextStyle(fontFamily: NetTypography.family),
+                        subtitle: Text(
+                          _holdCustomerId == null
+                              ? 'صرف المكافأة التالي في نفس الفئة يستخدم هذا الكرت. لا قيد دفتر حتى يُصرف.'
+                              : 'صرف مكافأة هذا العميل التالي في نفس الفئة يستخدم هذا الكرت. حجز الفئة يبقى لبقية العملاء.',
+                          style: const TextStyle(fontFamily: NetTypography.family),
                         ),
                       ),
                     const SizedBox(height: 8),

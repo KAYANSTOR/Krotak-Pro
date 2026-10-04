@@ -231,27 +231,50 @@ class PromotionRewardTemplate {
     return jsonEncode(next);
   }
 
-  /// يحفظ حجزاً واحداً لكل فئة. كرت آخر في نفس الفئة يستبدل الحجز السابق في الإعداد فقط.
+  /// مفتاح الحجز: الفئة وحدها، أو الفئة مع عميل حتى لا يستهلك عميل حجز غيره.
+  static String holdStorageKey(String categoryId, {String? customerId}) {
+    final category = categoryId.trim();
+    final customer = customerId?.trim() ?? '';
+    if (customer.isEmpty) return category;
+    return '$category|customer:$customer';
+  }
+
+  /// يحفظ حجزاً واحداً لكل فئة، وحجزاً مستقلاً لكل عميل داخل الفئة.
   static String rememberHold(String? raw, RewardProbeHold hold) {
     final next = decodeHoldMap(raw);
-    next[hold.categoryId] = hold.toJson();
+    next[holdStorageKey(hold.categoryId, customerId: hold.customerId)] = hold.toJson();
     return jsonEncode(next);
   }
 
-  static String clearHold(String? raw, String categoryId) {
+  static String clearHold(String? raw, String categoryId, {String? customerId}) {
     final next = decodeHoldMap(raw);
-    next.remove(categoryId.trim());
+    next.remove(holdStorageKey(categoryId, customerId: customerId));
     return jsonEncode(next);
   }
 
-  static RewardProbeHold? lookupHold(String? raw, String categoryId) {
-    final item = decodeHoldMap(raw)[categoryId.trim()];
+  static RewardProbeHold? lookupHold(
+    String? raw,
+    String categoryId, {
+    String? customerId,
+  }) {
+    final key = holdStorageKey(categoryId, customerId: customerId);
+    final item = decodeHoldMap(raw)[key];
     if (item == null) return null;
-    return RewardProbeHold.fromJson(categoryId.trim(), item);
+    return RewardProbeHold.fromJson(categoryId.trim(), item, customerId: customerId);
   }
 
-  /// الحجز المنتهي لا يُصرف. المتبقي يُستخدم فقط إن كان الكرت ما يزال محجوزاً بنفس المعرّف.
-  static RewardProbeHold? claimHold(String? raw, String categoryId, DateTime now) {
+  /// حجز العميل النشط يسبق حجز الفئة. الحجز المنتهي لا يُصرف.
+  static RewardProbeHold? claimHold(
+    String? raw,
+    String categoryId,
+    DateTime now, {
+    String? customerId,
+  }) {
+    final customer = customerId?.trim() ?? '';
+    if (customer.isNotEmpty) {
+      final personal = lookupHold(raw, categoryId, customerId: customer);
+      if (personal != null && personal.isActiveAt(now)) return personal;
+    }
     final hold = lookupHold(raw, categoryId);
     if (hold == null || !hold.isActiveAt(now)) return null;
     return hold;
@@ -469,6 +492,7 @@ class RewardProbeHold {
     required this.cardId,
     required this.reservationId,
     required this.expiresAt,
+    this.customerId = '',
   });
 
   final String categoryId;
@@ -476,18 +500,29 @@ class RewardProbeHold {
   final String reservationId;
   final DateTime expiresAt;
 
+  /// فارغ يعني حجز الفئة لكل العملاء. غير الفارغ يخص عميلاً واحداً.
+  final String customerId;
+
   bool isActiveAt(DateTime now) => !expiresAt.isBefore(now);
 
   Map<String, Object?> toJson() => {
         'cardId': cardId,
         'reservationId': reservationId,
         'expiresAt': expiresAt.toUtc().toIso8601String(),
+        if (customerId.trim().isNotEmpty) 'customerId': customerId.trim(),
       };
 
-  static RewardProbeHold? fromJson(String categoryId, Map<dynamic, dynamic> json) {
+  static RewardProbeHold? fromJson(
+    String categoryId,
+    Map<dynamic, dynamic> json, {
+    String? customerId,
+  }) {
     final cardId = json['cardId']?.toString().trim() ?? '';
     final reservationId = json['reservationId']?.toString().trim() ?? '';
     final expires = DateTime.tryParse(json['expiresAt']?.toString() ?? '');
+    final storedCustomer = customerId?.trim().isNotEmpty == true
+        ? customerId!.trim()
+        : (json['customerId']?.toString().trim() ?? '');
     if (categoryId.trim().isEmpty || cardId.isEmpty || reservationId.isEmpty || expires == null) {
       return null;
     }
@@ -496,6 +531,7 @@ class RewardProbeHold {
       cardId: cardId,
       reservationId: reservationId,
       expiresAt: expires.toUtc(),
+      customerId: storedCustomer,
     );
   }
 }

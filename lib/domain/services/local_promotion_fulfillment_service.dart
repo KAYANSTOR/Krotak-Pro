@@ -138,6 +138,7 @@ final class LocalPromotionFulfillmentService {
     final holdRaw = (holds as Success<AppSetting?>).value?.value;
     final held = await _claimProbeHold(
       categoryId: categoryId,
+      customerId: customerId,
       raw: holdRaw,
       now: now,
     );
@@ -173,11 +174,23 @@ final class LocalPromotionFulfillmentService {
     );
     final marked = await cards.markSold(card.id, sale.id);
     if (marked is Failure<void>) return Failure(marked.error);
-    if (PromotionRewardTemplate.lookupHold(holdRaw, categoryId) != null) {
+    final consumed = (held as Success<Card?>).value == null
+        ? null
+        : PromotionRewardTemplate.claimHold(
+            holdRaw,
+            categoryId,
+            now,
+            customerId: customerId,
+          );
+    if (consumed != null) {
       final cleared = await settings.save(
         AppSetting(
           key: SettingKeys.promotionRewardProbeHolds,
-          value: PromotionRewardTemplate.clearHold(holdRaw, categoryId),
+          value: PromotionRewardTemplate.clearHold(
+            holdRaw,
+            categoryId,
+            customerId: consumed.customerId,
+          ),
           updatedAt: now,
         ),
       );
@@ -329,10 +342,16 @@ final class LocalPromotionFulfillmentService {
   /// يستخدم حجز المعاينة إن كان الكرت ما يزال محجوزاً بنفس المعرّف. غير ذلك لا يحجز شيئاً هنا.
   Future<Result<Card?>> _claimProbeHold({
     required String categoryId,
+    required String customerId,
     required String? raw,
     required DateTime now,
   }) async {
-    final hold = PromotionRewardTemplate.claimHold(raw, categoryId, now);
+    final hold = PromotionRewardTemplate.claimHold(
+      raw,
+      categoryId,
+      now,
+      customerId: customerId,
+    );
     if (hold == null) return const Success(null);
     final found = await cards.findById(hold.cardId);
     if (found is Failure<Card?>) return Failure(found.error);

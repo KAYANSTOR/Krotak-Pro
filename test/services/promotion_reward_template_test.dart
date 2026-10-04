@@ -442,4 +442,53 @@ void main() {
     expect(PromotionRewardTemplate.lookupHold(cleared, 'cat-1'), isNull);
     expect(PromotionRewardTemplate.lookupHold('not-json', 'cat-1'), isNull);
   });
+
+  test('customer probe hold does not consume the category hold', () {
+    final expires = DateTime.utc(2026, 10, 5, 6);
+    final category = RewardProbeHold(
+      categoryId: 'cat-1',
+      cardId: 'card-category',
+      reservationId: 'res-category',
+      expiresAt: expires,
+    );
+    final customer = RewardProbeHold(
+      categoryId: 'cat-1',
+      cardId: 'card-customer',
+      reservationId: 'res-customer',
+      expiresAt: expires,
+      customerId: 'cust-1',
+    );
+    final encoded = PromotionRewardTemplate.rememberHold(
+      PromotionRewardTemplate.rememberHold(null, category),
+      customer,
+    );
+    expect(
+      PromotionRewardTemplate.claimHold(
+        encoded,
+        'cat-1',
+        expires.subtract(const Duration(minutes: 1)),
+        customerId: 'cust-1',
+      )?.cardId,
+      'card-customer',
+    );
+    expect(
+      PromotionRewardTemplate.claimHold(
+        encoded,
+        'cat-1',
+        expires.subtract(const Duration(minutes: 1)),
+        customerId: 'cust-2',
+      )?.cardId,
+      'card-category',
+    );
+    final cleared = PromotionRewardTemplate.clearHold(
+      encoded,
+      'cat-1',
+      customerId: 'cust-1',
+    );
+    expect(
+      PromotionRewardTemplate.lookupHold(cleared, 'cat-1', customerId: 'cust-1'),
+      isNull,
+    );
+    expect(PromotionRewardTemplate.lookupHold(cleared, 'cat-1')?.cardId, 'card-category');
+  });
 }
