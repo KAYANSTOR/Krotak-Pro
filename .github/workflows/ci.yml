@@ -29,7 +29,8 @@ jobs:
           flutter analyze --no-fatal-infos > /tmp/analyze.log 2>&1
           rc=$?
           if [ $rc -ne 0 ]; then
-            msg=$(tail -c 3500 /tmp/analyze.log | tr '\n' ' ' | sed 's/%/%25/g')
+            msg=$(grep -E '^ *(error|warning) •' /tmp/analyze.log | head -c 3500 | tr '\n' ' ' | sed 's/%/%25/g')
+            [ -n "$msg" ] || msg=$(tail -c 3500 /tmp/analyze.log | tr '\n' ' ' | sed 's/%/%25/g')
             echo "::error title=flutter analyze failed::$msg"
           fi
           cat /tmp/analyze.log
