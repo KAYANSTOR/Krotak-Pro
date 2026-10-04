@@ -379,7 +379,7 @@ class _AccountAuthScreenState extends State<AccountAuthScreen> {
               textInputAction: TextInputAction.next,
               textDirection: TextDirection.ltr,
               inputFormatters: <TextInputFormatter>[
-                FilteringTextInputFormatter.digitsOnly,
+                FilteringTextInputFormatter.allow(RegExp(r'[0-9٠-٩۰-۹]')),
                 LengthLimitingTextInputFormatter(13),
               ],
               style: _inputStyle(context),

@@ -37,13 +37,35 @@ final class CloudAccountService {
 
   /// يحوّل الرقم إلى صيغة دولية بالأرقام فقط (اليمن افتراضياً: 967).
   static String normalizePhone(String raw) {
-    final digits = raw.replaceAll(RegExp(r'[^0-9]'), '');
+    final digits = _toAsciiDigits(raw).replaceAll(RegExp(r'[^0-9]'), '');
     if (digits.isEmpty) return '';
     if (digits.startsWith('00')) return digits.substring(2);
     if (digits.startsWith('967')) return digits;
     if (digits.startsWith('0')) return '967${digits.substring(1)}';
     if (digits.length <= 9) return '967$digits';
     return digits;
+  }
+
+  /// يدعم أرقام لوحة المفاتيح العربية قبل تطبيق التطبيع الدولي.
+  static String _toAsciiDigits(String raw) {
+    const arabic = '٠١٢٣٤٥٦٧٨٩';
+    const eastern = '۰۱۲۳۴۵۶۷۸۹';
+    final out = StringBuffer();
+    for (final codePoint in raw.runes) {
+      final char = String.fromCharCode(codePoint);
+      final arabicIndex = arabic.indexOf(char);
+      if (arabicIndex >= 0) {
+        out.write(arabicIndex);
+        continue;
+      }
+      final easternIndex = eastern.indexOf(char);
+      if (easternIndex >= 0) {
+        out.write(easternIndex);
+        continue;
+      }
+      out.write(char);
+    }
+    return out.toString();
   }
 
   static bool isValidPhone(String raw) {
@@ -121,12 +143,46 @@ final class CloudAccountService {
     required String password,
   }) async {
     ensureConfigured();
-    final normalized = normalizePhone(phone);
-    return _client.signIn(
-      email: emailForPhone(normalized),
-      password: password,
-    );
+    CloudHttpException? lastInvalidCredentials;
+    for (final candidate in _phoneCandidates(phone)) {
+      try {
+        return await _client.signIn(
+          email: emailForPhone(candidate),
+          password: password,
+        );
+      } on CloudHttpException catch (error) {
+        if (!_isInvalidCredentials(error.code)) rethrow;
+        lastInvalidCredentials = error;
+      }
+    }
+    throw lastInvalidCredentials ??
+        const CloudHttpException(
+          statusCode: 400,
+          code: 'INVALID_LOGIN_CREDENTIALS',
+          message: 'رقم الهاتف أو كلمة المرور غير صحيحة.',
+        );
   }
+
+  /// يدعم الحسابات التي سُجلت قبل توحيد تخزين الرقم بصيغة 967 الدولية.
+  static Iterable<String> _phoneCandidates(String raw) sync* {
+    final digits = _toAsciiDigits(raw).replaceAll(RegExp(r'[^0-9]'), '');
+    final normalized = normalizePhone(raw);
+    final candidates = <String>{normalized};
+    if (digits.startsWith('967') && digits.length > 3) {
+      candidates.add(digits.substring(3));
+    } else if (digits.startsWith('0') && digits.length > 1) {
+      candidates.add(digits.substring(1));
+    } else if (digits.isNotEmpty) {
+      candidates.add('0$digits');
+    }
+    yield* candidates.where((value) => value.isNotEmpty);
+  }
+
+  static bool _isInvalidCredentials(String code) =>
+      code == 'INVALID_LOGIN_CREDENTIALS' ||
+      code == 'INVALID_PASSWORD' ||
+      code == 'EMAIL_NOT_FOUND' ||
+      code == 'INVALID_EMAIL';
 
   /// استعادة جلسة محفوظة محلياً (بعد إعادة تشغيل التطبيق).
   Future<CloudSession> restoreSession({
@@ -157,7 +213,26 @@ final class CloudAccountService {
   }) async {
     final data = await _client.getDocument('users/$uid', idToken: idToken);
     if (data == null) return null;
-    return CloudAccount.fromMap(uid, data);
+    var accountData = data;
+    // توافق مع الحسابات التي خزّنت الهاتف والاسم في metadata فقط.
+    if ((accountData['phone']?.toString().trim().isEmpty ?? true)) {
+      final metadata = await _client.getDocument(
+        'networks/$uid/_metadata/info',
+        idToken: idToken,
+      );
+      if (metadata != null) {
+        accountData = <String, dynamic>{
+          ...accountData,
+          if ((accountData['phone']?.toString().trim().isEmpty ?? true) &&
+              metadata['phoneNumber'] != null)
+            'phone': metadata['phoneNumber'],
+          if ((accountData['network_name']?.toString().trim().isEmpty ?? true) &&
+              metadata['name'] != null)
+            'network_name': metadata['name'],
+        };
+      }
+    }
+    return CloudAccount.fromMap(uid, accountData);
   }
 
   Future<void> touchPresence({
