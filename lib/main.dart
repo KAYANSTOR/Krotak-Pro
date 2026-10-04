@@ -4,10 +4,12 @@ import 'dart:ui';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:sqlite3_flutter_libs/sqlite3_flutter_libs.dart';
 
 import 'application/app_container.dart';
 import 'application/account_session.dart';
+import 'platform/remote_push_notification_service.dart';
 import 'core/app_brand.dart';
 import 'core/result.dart';
 import 'domain/entities/message.dart';
@@ -29,6 +31,11 @@ const _defaultTemplates = [
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  if (RemotePushNotificationService.isConfigured) {
+    FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+    await RemotePushNotificationService.instance.start();
+  }
 
   // Load the bundled native sqlite3 library before Drift/NativeDatabase is used.
   await applyWorkaroundToOpenSqlite3OnOldAndroidVersions();
