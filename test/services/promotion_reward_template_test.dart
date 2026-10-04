@@ -613,6 +613,71 @@ void main() {
     );
   });
 
+  test('customer cross-category queue exceeds the shared 8-card and 24-hour caps', () {
+    final start = DateTime.utc(2026, 10, 4, 6);
+    var encoded;
+    for (var i = 0; i < 9; i++) {
+      encoded = PromotionRewardTemplate.enqueueCrossCategoryHold(
+        encoded,
+        RewardProbeHold(
+          categoryId: 'cat-${i % 3}',
+          cardId: 'card-$i',
+          reservationId: 'res-$i',
+          expiresAt: start.add(PromotionRewardTemplate.customerCrossCategoryHoldDuration),
+          customerId: 'cust-1',
+        ),
+      );
+    }
+    final queue = PromotionRewardTemplate.lookupCrossCategoryHold(
+      encoded,
+      customerId: 'cust-1',
+    );
+    expect(queue?.cards.length, 9);
+    expect(queue?.cards.first.cardId, 'card-0');
+    expect(
+      queue?.expiresAt,
+      start.add(PromotionRewardTemplate.customerCrossCategoryHoldDuration),
+    );
+    expect(
+      PromotionRewardTemplate.claimHold(
+        encoded,
+        'cat-0',
+        start.add(const Duration(hours: 25)),
+        customerId: 'cust-1',
+      )?.cardId,
+      'card-0',
+    );
+    expect(
+      PromotionRewardTemplate.claimHold(
+        encoded,
+        'cat-0',
+        start.add(const Duration(days: 8)),
+        customerId: 'cust-1',
+      ),
+      isNull,
+    );
+    var shared;
+    for (var i = 0; i < 9; i++) {
+      shared = PromotionRewardTemplate.enqueueCrossCategoryHold(
+        shared,
+        RewardProbeHold(
+          categoryId: 'cat-$i',
+          cardId: 'shared-$i',
+          reservationId: 'shared-res-$i',
+          expiresAt: start.add(PromotionRewardTemplate.probeHoldDuration),
+        ),
+      );
+    }
+    expect(
+      PromotionRewardTemplate.lookupCrossCategoryHold(shared)?.cards.length,
+      PromotionRewardTemplate.probeHoldQueueLimit,
+    );
+    expect(
+      PromotionRewardTemplate.lookupCrossCategoryHold(shared)?.cards.first.cardId,
+      'shared-1',
+    );
+  });
+
   test('cross-category probe queue keeps other categories and customer queues', () {
     final expires = DateTime.utc(2026, 10, 6, 6);
     final first = RewardProbeHold(

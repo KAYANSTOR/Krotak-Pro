@@ -251,12 +251,13 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
     setState(() => _busy = true);
     final now = c.clock.now();
     final reservationId = c.ids.next('reward-probe-hold');
+    final holdFor = _holdDuration;
     final reserved = await c.cards.reserve(
       card.cardId,
       CardReservation(
         reservationId: reservationId,
         reservedAt: now,
-        expiresAt: now.add(PromotionRewardTemplate.probeHoldDuration),
+        expiresAt: now.add(holdFor),
       ),
     );
     if (!mounted) return false;
@@ -274,7 +275,7 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
       categoryId: card.categoryId,
       cardId: card.cardId,
       reservationId: reservationId,
-      expiresAt: now.add(PromotionRewardTemplate.probeHoldDuration),
+      expiresAt: now.add(holdFor),
       customerId: _holdCustomerId ?? '',
     );
     final encoded = PromotionRewardTemplate.enqueueCrossCategoryHold(raw, hold);
@@ -377,15 +378,19 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
     return id.isEmpty ? null : id;
   }
 
+  Duration get _holdDuration => _holdCustomerId == null
+      ? PromotionRewardTemplate.probeHoldDuration
+      : PromotionRewardTemplate.customerCrossCategoryHoldDuration;
+
   String get _holdStatus {
     if (_holdQueueCount > 1) {
       return _holdCustomerId == null
-          ? 'طابور الصرف عبر الفئات: $_holdQueueCount كروت، بلا خصم حتى يُصرف كرت الفئة المطابقة'
-          : 'طابور هذا العميل عبر الفئات: $_holdQueueCount كروت، بلا خصم حتى يُصرف كرت الفئة المطابقة';
+          ? 'طابور الصرف عبر الفئات: $_holdQueueCount كروت لمدة 24 ساعة، بلا خصم حتى يُصرف كرت الفئة المطابقة'
+          : 'طابور هذا العميل عبر الفئات: $_holdQueueCount كروت لمدة 7 أيام، بلا خصم حتى يُصرف كرت الفئة المطابقة';
     }
     return _holdCustomerId == null
-        ? 'الكرت المختار محجوز للصرف التالي، بلا خصم حتى يُصرف'
-        : 'الكرت المختار محجوز لصرف هذا العميل، بلا خصم حتى يُصرف';
+        ? 'الكرت المختار محجوز للصرف التالي لمدة 24 ساعة، بلا خصم حتى يُصرف'
+        : 'الكرت المختار محجوز لصرف هذا العميل لمدة 7 أيام، بلا خصم حتى يُصرف';
   }
 
   PromotionRewardResolution get _resolution {
@@ -837,7 +842,7 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
                         subtitle: Text(
                           _holdCustomerId == null
                               ? 'كروت فئات مختلفة تبقى في طابور واحد. الصرف يأخذ أول كرت ما زال محجوزاً لفئة المكافأة.'
-                              : 'كروت فئات مختلفة تبقى في طابور هذا العميل. الصرف يأخذ أول كرت ما زال محجوزاً لفئة المكافأة.',
+                              : 'كروت فئات مختلفة تبقى في طابور هذا العميل حتى 32 كرتاً ولمدة 7 أيام. الصرف يأخذ أول كرت ما زال محجوزاً لفئة المكافأة.',
                           style: const TextStyle(fontFamily: NetTypography.family),
                         ),
                       ),

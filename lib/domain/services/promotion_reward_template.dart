@@ -96,6 +96,9 @@ class PromotionRewardTemplate {
   /// مدة حجز كرت المعاينة للصرف التالي. بعد انتهاء المدة لا يُستخدم الحجز.
   static const probeHoldDuration = Duration(hours: 24);
 
+  /// حجز طابور العميل عبر الفئات أطول من حجز الفئة أو الطابور المشترك.
+  static const customerCrossCategoryHoldDuration = Duration(days: 7);
+
   /// يختار كرت المعاينة من المتاح فقط. المعرّف المفقود أو غير المتاح يعود لأول كرت، بلا حجز.
   static RewardProbeCardSnapshot? selectProbeCard(
     List<RewardProbeCardSnapshot> available, {
@@ -249,6 +252,9 @@ class PromotionRewardTemplate {
   /// يضيف كرتاً لطابور العميل أو لطابور الفئة بلا عميل. الاختيار لا يحرّر السابق.
   static const probeHoldQueueLimit = 8;
 
+  /// طابور العميل عبر الفئات يتجاوز حد الطوابير الأخرى دون أن يصبح بلا سقف.
+  static const customerCrossCategoryQueueLimit = 32;
+
   /// طابور بلا عميل يجمع كروت فئات مختلفة. لا يختلط بطوابير العملاء.
   static const crossCategoryHoldKey = '*';
 
@@ -310,9 +316,10 @@ class PromotionRewardTemplate {
         if (item.cardId != card.cardId) item,
       card,
     ];
-    final capped = cards.length > probeHoldQueueLimit
-        ? cards.sublist(cards.length - probeHoldQueueLimit)
-        : cards;
+    final limit = customerId.isEmpty
+        ? probeHoldQueueLimit
+        : customerCrossCategoryQueueLimit;
+    final capped = cards.length > limit ? cards.sublist(cards.length - limit) : cards;
     return rememberHold(
       raw,
       RewardProbeHold(
