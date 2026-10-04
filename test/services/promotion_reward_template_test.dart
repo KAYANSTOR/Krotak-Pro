@@ -612,4 +612,69 @@ void main() {
       'card-c',
     );
   });
+
+  test('cross-category probe queue keeps other categories and customer queues', () {
+    final expires = DateTime.utc(2026, 10, 6, 6);
+    final first = RewardProbeHold(
+      categoryId: 'cat-1',
+      cardId: 'card-a',
+      reservationId: 'res-a',
+      expiresAt: expires,
+    );
+    final second = RewardProbeHold(
+      categoryId: 'cat-2',
+      cardId: 'card-b',
+      reservationId: 'res-b',
+      expiresAt: expires,
+    );
+    final customer = RewardProbeHold(
+      categoryId: 'cat-1',
+      cardId: 'card-c',
+      reservationId: 'res-c',
+      expiresAt: expires,
+      customerId: 'cust-1',
+    );
+    final encoded = PromotionRewardTemplate.enqueueCrossCategoryHold(
+      PromotionRewardTemplate.enqueueCrossCategoryHold(
+        PromotionRewardTemplate.enqueueHold(null, customer),
+        first,
+      ),
+      second,
+    );
+    final queue = PromotionRewardTemplate.lookupCrossCategoryHold(encoded);
+    expect(queue?.cards.map((card) => card.cardId), ['card-a', 'card-b']);
+    expect(queue?.cards.map((card) => card.categoryId), ['cat-1', 'cat-2']);
+    expect(
+      PromotionRewardTemplate.claimHold(
+        encoded,
+        'cat-2',
+        expires.subtract(const Duration(minutes: 1)),
+      )?.cardId,
+      'card-b',
+    );
+    expect(
+      PromotionRewardTemplate.claimHold(
+        encoded,
+        'cat-1',
+        expires.subtract(const Duration(minutes: 1)),
+        customerId: 'cust-1',
+      )?.cardId,
+      'card-c',
+    );
+    final consumed = PromotionRewardTemplate.consumeHold(
+      encoded,
+      'cat-2',
+      cardId: 'card-b',
+    );
+    expect(
+      PromotionRewardTemplate.lookupCrossCategoryHold(consumed)?.cards.map((card) => card.cardId),
+      ['card-a'],
+    );
+    final cleared = PromotionRewardTemplate.clearCrossCategoryHold(consumed);
+    expect(PromotionRewardTemplate.lookupCrossCategoryHold(cleared), isNull);
+    expect(
+      PromotionRewardTemplate.lookupHold(cleared, 'cat-1', customerId: 'cust-1')?.cardId,
+      'card-c',
+    );
+  });
 }
