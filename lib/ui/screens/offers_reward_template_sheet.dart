@@ -250,15 +250,6 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
     if (card.categoryId.isEmpty) return false;
     final c = AppScope.of(context);
     setState(() => _busy = true);
-    final previous = _liveCard;
-    final queueForCustomer = _holdCustomerId != null;
-    if (_holdNextPayout &&
-        previous != null &&
-        previous.cardId != card.cardId &&
-        !queueForCustomer) {
-      await _releaseHold(quiet: true);
-      if (!mounted) return false;
-    }
     final now = c.clock.now();
     final reservationId = c.ids.next('reward-probe-hold');
     final reserved = await c.cards.reserve(
@@ -385,11 +376,16 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
     return id.isEmpty ? null : id;
   }
 
-  String get _holdStatus => _holdCustomerId == null
-      ? 'الكرت المختار محجوز للصرف التالي، بلا خصم حتى يُصرف'
-      : _holdQueueCount > 1
-          ? 'طابور صرف هذا العميل: $_holdQueueCount كروت، بلا خصم حتى تُصرف بالترتيب'
-          : 'الكرت المختار محجوز لصرف هذا العميل، بلا خصم حتى يُصرف';
+  String get _holdStatus {
+    if (_holdQueueCount > 1) {
+      return _holdCustomerId == null
+          ? 'طابور صرف هذه الفئة: $_holdQueueCount كروت، بلا خصم حتى تُصرف بالترتيب'
+          : 'طابور صرف هذا العميل: $_holdQueueCount كروت، بلا خصم حتى تُصرف بالترتيب';
+    }
+    return _holdCustomerId == null
+        ? 'الكرت المختار محجوز للصرف التالي، بلا خصم حتى يُصرف'
+        : 'الكرت المختار محجوز لصرف هذا العميل، بلا خصم حتى يُصرف';
+  }
 
   PromotionRewardResolution get _resolution {
     final draft = _draft.trim();

@@ -246,11 +246,10 @@ class PromotionRewardTemplate {
     return jsonEncode(next);
   }
 
-  /// يضيف كرتاً لطابور العميل نفسه. حجز الفئة يبقى كرتاً واحداً ويُستبدل.
+  /// يضيف كرتاً لطابور العميل أو لطابور الفئة بلا عميل. الاختيار لا يحرّر السابق.
   static const probeHoldQueueLimit = 8;
 
   static String enqueueHold(String? raw, RewardProbeHold hold) {
-    if (hold.customerId.trim().isEmpty) return rememberHold(raw, hold);
     final existing = lookupHold(raw, hold.categoryId, customerId: hold.customerId);
     if (existing == null || !existing.isActiveAt(hold.expiresAt.subtract(probeHoldDuration))) {
       return rememberHold(raw, hold);

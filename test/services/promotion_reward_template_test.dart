@@ -544,4 +544,72 @@ void main() {
       isNull,
     );
   });
+
+  test('category probe hold queues cards without a customer and keeps the customer queue', () {
+    final expires = DateTime.utc(2026, 10, 5, 6);
+    final first = RewardProbeHold(
+      categoryId: 'cat-1',
+      cardId: 'card-a',
+      reservationId: 'res-a',
+      expiresAt: expires,
+    );
+    final second = RewardProbeHold(
+      categoryId: 'cat-1',
+      cardId: 'card-b',
+      reservationId: 'res-b',
+      expiresAt: expires,
+    );
+    final customer = RewardProbeHold(
+      categoryId: 'cat-1',
+      cardId: 'card-c',
+      reservationId: 'res-c',
+      expiresAt: expires,
+      customerId: 'cust-1',
+    );
+    final encoded = PromotionRewardTemplate.enqueueHold(
+      PromotionRewardTemplate.enqueueHold(
+        PromotionRewardTemplate.enqueueHold(null, customer),
+        first,
+      ),
+      second,
+    );
+    final claimed = PromotionRewardTemplate.claimHold(
+      encoded,
+      'cat-1',
+      expires.subtract(const Duration(minutes: 1)),
+    );
+    expect(claimed?.cardId, 'card-a');
+    expect(claimed?.cards.map((card) => card.cardId), ['card-a', 'card-b']);
+    final consumed = PromotionRewardTemplate.consumeHold(
+      encoded,
+      'cat-1',
+      cardId: 'card-a',
+    );
+    expect(
+      PromotionRewardTemplate.claimHold(
+        consumed,
+        'cat-1',
+        expires.subtract(const Duration(minutes: 1)),
+      )?.cardId,
+      'card-b',
+    );
+    expect(
+      PromotionRewardTemplate.claimHold(
+        consumed,
+        'cat-1',
+        expires.subtract(const Duration(minutes: 1)),
+        customerId: 'cust-1',
+      )?.cardId,
+      'card-c',
+    );
+    final cleared = PromotionRewardTemplate.clearHold(consumed, 'cat-1');
+    expect(
+      PromotionRewardTemplate.lookupHold(cleared, 'cat-1'),
+      isNull,
+    );
+    expect(
+      PromotionRewardTemplate.lookupHold(cleared, 'cat-1', customerId: 'cust-1')?.cardId,
+      'card-c',
+    );
+  });
 }
