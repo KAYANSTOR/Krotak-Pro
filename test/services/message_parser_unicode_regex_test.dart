@@ -38,6 +38,27 @@ void main() {
       expect(parsed.reference, '5500.36');
     });
 
+    test('parses the JAIB shared-transfer format with a space separator', () {
+      const jaib = TransferTemplate(
+        id: 'wallet-jaib-shared-space',
+        name: 'جيب — تحويل مشترك',
+        pattern: 'اضيف {amount} ر.ي تحويل مشترك رص:{ref} ر.ي من {account} {phone}',
+        isActive: true,
+      );
+      final result = LocalMessageParser(templates: const [jaib]).parse(
+        messageWith(
+          'اضيف 100ر.ي تحويل مشترك رص:10615ر.ي من جارالله الكبودي 773086403',
+        ),
+      );
+
+      expect(result, isA<Success<ParsedTransfer>>());
+      final parsed = (result as Success<ParsedTransfer>).value;
+      expect(parsed.amount.minorUnits, 10000);
+      expect(parsed.reference, '10615');
+      expect(parsed.customerIdentifier, '773086403');
+      expect(parsed.identifierType, TransferIdentifierType.phone);
+    });
+
     test('parse never throws, even for unrelated bodies', () {
       expect(
         () => parser.parse(messageWith('رسالة لا تطابق أي قالب: - / , .')),

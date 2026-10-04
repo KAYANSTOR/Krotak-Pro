@@ -28,6 +28,11 @@ final class DefaultWalletTemplatesSeeder {
 
   static const seededKey = 'default_wallet_templates_seeded_v2';
 
+  // Legacy JAIB default before the provider changed the separator from `-` to
+  // a space between the sender name and phone number.
+  static const _legacyJaibSharedPattern =
+      'اضيف {amount} ر.ي تحويل مشترك رص:{ref} ر.ي من {account}-{phone}';
+
   /// Idempotent: skips the **insert** pass when [seededKey] is set, otherwise
   /// inserts missing templates keyed by stable id `tpl-default-{senderId}-{variant}`.
   ///
@@ -93,13 +98,38 @@ final class DefaultWalletTemplatesSeeder {
 
     // إصلاح الربط: قالب بمرسل معروف لكنه بلا محفظة (أو محفظة محذوفة) = رسائل
     // تلك المحفظة تُرفض بـ`no_source_template` رغم ظهور القالب.
-    for (final t in all) {
+    for (final original in all) {
+      var t = original;
+      var templateChanged = false;
+      final jaibSharedId = 'tpl-default-jaib-ar-shared';
+      if (t.id == jaibSharedId && t.pattern == _legacyJaibSharedPattern) {
+        t = t.copyWith(
+          pattern: _specs
+              .firstWhere((spec) => spec.senderCode == 'JAIB' && spec.variant == 'ar-shared')
+              .pattern,
+          sampleBody: 'اضيف 100 ر.ي تحويل مشترك رص:10615 ر.ي من جارالله الكبودي 773086403',
+        );
+        templateChanged = true;
+      }
+
       final code = t.senderCode?.trim().toUpperCase();
       if (code == null || code.isEmpty) continue;
       final wallet = bySender[code];
-      if (wallet == null) continue;
+      if (wallet == null) {
+        if (templateChanged) {
+          final saved = await templates.save(t);
+          if (saved is Failure<void>) return Failure(saved.error);
+          changed += 1;
+        }
+        continue;
+      }
       final current = t.walletId?.trim();
       if (current != null && current.isNotEmpty && knownWalletIds.contains(current)) {
+        if (templateChanged) {
+          final saved = await templates.save(t);
+          if (saved is Failure<void>) return Failure(saved.error);
+          changed += 1;
+        }
         continue;
       }
       final saved = await templates.save(t.copyWith(walletId: wallet.id));
@@ -122,9 +152,9 @@ final class DefaultWalletTemplatesSeeder {
       name: 'جيب — تحويل مشترك',
       priority: 10,
       pattern:
-          'اضيف {amount} ر.ي تحويل مشترك رص:{ref} ر.ي من {account}-{phone}',
+          'اضيف {amount} ر.ي تحويل مشترك رص:{ref} ر.ي من {account} {phone}',
       sampleBody:
-          'اضيف 5000 ر.ي تحويل مشترك رص:5500.36 ر.ي من وليد العمري-770455491',
+          'اضيف 100 ر.ي تحويل مشترك رص:10615 ر.ي من جارالله الكبودي 773086403',
     ),
     _TplSpec(
       senderCode: 'JAIB',
