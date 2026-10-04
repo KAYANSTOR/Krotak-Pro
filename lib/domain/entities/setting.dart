@@ -74,6 +74,22 @@ abstract final class SettingKeys {
       'outbound_system_original:$systemKey';
   static const walletExtras = 'wallet_extras';
   static const defaultWalletsSeeded = 'default_wallets_seeded';
+
+  // ── حساب الشبكة (Cloud account) ─────────────────────────────────────
+  /// معرّف الحساب في Firebase (نفس المعرّف المستخدم في لوحة الإدارة).
+  static const cloudAccountUid = 'cloud_account_uid';
+
+  /// رمز تجديد جلسة Firebase — يُخزَّن محلياً على الجهاز فقط.
+  static const cloudRefreshToken = 'cloud_refresh_token';
+  static const cloudPhone = 'cloud_phone';
+  static const cloudNetworkName = 'cloud_network_name';
+  static const cloudIsTrial = 'cloud_is_trial';
+  static const cloudIsActive = 'cloud_is_active';
+  static const cloudSubscriptionEnd = 'cloud_subscription_end';
+  static const cloudTrialWarning = 'cloud_trial_warning';
+
+  /// وقت آخر قراءة للإشعارات العامة (لتمييز غير المقروء).
+  static const cloudGlobalSeenAt = 'cloud_global_seen_at';
 }
 
 abstract final class SettingDefaults {
