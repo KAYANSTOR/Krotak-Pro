@@ -133,21 +133,36 @@ final class LocalPromotionFulfillmentService {
     }
 
     final now = clock.now();
-    final reserved = await inventory.reserveAvailableCard(
+    final holds = await settings.find(SettingKeys.promotionRewardProbeHolds);
+    if (holds is Failure<AppSetting?>) return Failure(holds.error);
+    final holdRaw = (holds as Success<AppSetting?>).value?.value;
+    final held = await _claimProbeHold(
       categoryId: categoryId,
-      reservationId: ids.next('promo-res'),
+      raw: holdRaw,
       now: now,
-      expiresAt: now.add(const Duration(minutes: 5)),
     );
-    if (reserved is Failure<Card>) {
-      return Failure(
-        AppFailure(
-          code: 'reward_stock_unavailable',
-          message: reserved.error.message,
-        ),
+    if (held is Failure<Card?>) return Failure(held.error);
+    final claimed = (held as Success<Card?>).value;
+    final Card card;
+    if (claimed != null) {
+      card = claimed;
+    } else {
+      final reserved = await inventory.reserveAvailableCard(
+        categoryId: categoryId,
+        reservationId: ids.next('promo-res'),
+        now: now,
+        expiresAt: now.add(const Duration(minutes: 5)),
       );
+      if (reserved is Failure<Card>) {
+        return Failure(
+          AppFailure(
+            code: 'reward_stock_unavailable',
+            message: reserved.error.message,
+          ),
+        );
+      }
+      card = (reserved as Success<Card>).value;
     }
-    final card = (reserved as Success<Card>).value;
     final sale = Sale(
       id: ids.next('promo-sale'),
       customerId: customerId,
@@ -158,6 +173,16 @@ final class LocalPromotionFulfillmentService {
     );
     final marked = await cards.markSold(card.id, sale.id);
     if (marked is Failure<void>) return Failure(marked.error);
+    if (PromotionRewardTemplate.lookupHold(holdRaw, categoryId) != null) {
+      final cleared = await settings.save(
+        AppSetting(
+          key: SettingKeys.promotionRewardProbeHolds,
+          value: PromotionRewardTemplate.clearHold(holdRaw, categoryId),
+          updatedAt: now,
+        ),
+      );
+      if (cleared is Failure<void>) return Failure(cleared.error);
+    }
 
     final txn = Transaction(
       id: ids.next('promo-txn'),
@@ -299,5 +324,26 @@ final class LocalPromotionFulfillmentService {
       output = output.replaceAll('{$name}', value);
     });
     return output;
+  }
+
+  /// يستخدم حجز المعاينة إن كان الكرت ما يزال محجوزاً بنفس المعرّف. غير ذلك لا يحجز شيئاً هنا.
+  Future<Result<Card?>> _claimProbeHold({
+    required String categoryId,
+    required String? raw,
+    required DateTime now,
+  }) async {
+    final hold = PromotionRewardTemplate.claimHold(raw, categoryId, now);
+    if (hold == null) return const Success(null);
+    final found = await cards.findById(hold.cardId);
+    if (found is Failure<Card?>) return Failure(found.error);
+    final card = (found as Success<Card?>).value;
+    final reservation = card?.reservation;
+    if (card == null ||
+        card.categoryId != categoryId ||
+        card.status != CardStatus.reserved ||
+        reservation?.reservationId != hold.reservationId) {
+      return const Success(null);
+    }
+    return Success(card);
   }
 }

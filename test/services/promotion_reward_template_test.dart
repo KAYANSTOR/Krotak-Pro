@@ -415,4 +415,31 @@ void main() {
       'card-1',
     );
   });
+
+  test('probe hold is claimed only while it is still active', () {
+    final expires = DateTime.utc(2026, 10, 5, 6);
+    final hold = RewardProbeHold(
+      categoryId: 'cat-1',
+      cardId: 'card-9',
+      reservationId: 'res-9',
+      expiresAt: expires,
+    );
+    final encoded = PromotionRewardTemplate.rememberHold(null, hold);
+    expect(
+      PromotionRewardTemplate.claimHold(
+        encoded,
+        'cat-1',
+        expires.subtract(const Duration(minutes: 1)),
+      )?.cardId,
+      'card-9',
+    );
+    expect(
+      PromotionRewardTemplate.claimHold(encoded, 'cat-1', expires),
+      isNull,
+    );
+    expect(PromotionRewardTemplate.claimHold(encoded, 'cat-2', expires), isNull);
+    final cleared = PromotionRewardTemplate.clearHold(encoded, 'cat-1');
+    expect(PromotionRewardTemplate.lookupHold(cleared, 'cat-1'), isNull);
+    expect(PromotionRewardTemplate.lookupHold('not-json', 'cat-1'), isNull);
+  });
 }

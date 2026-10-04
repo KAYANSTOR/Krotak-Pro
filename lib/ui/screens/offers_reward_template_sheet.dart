@@ -73,8 +73,10 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
   String? _storedCustomerGlobal;
   RewardProbeReceipt? _probeReceipt;
   var _useLiveCard = false;
+  var _holdNextPayout = false;
   RewardProbeCardSnapshot? _liveCard;
   List<RewardProbeCardSnapshot> _availableCards = const [];
+  String? _holdReservationId;
 
   String get _fallback =>
       LocalPromotionFulfillmentService.defaultRewardSmsTemplate;
@@ -119,8 +121,11 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
 
   Future<void> _toggleLiveCard(bool enabled) async {
     if (!enabled) {
+      await _releaseHold();
+      if (!mounted) return;
       setState(() {
         _useLiveCard = false;
+        _holdNextPayout = false;
         _liveCard = null;
         _availableCards = const [];
         final receipt = _probeReceipt;
@@ -158,6 +163,7 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
       snapshots.add(
         RewardProbeCardSnapshot(
           cardId: card.id,
+          categoryId: card.categoryId,
           title: title,
           serial: card.serialNumber,
           secret: card.secretCode,
@@ -166,28 +172,170 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
       );
     }
     final selected = PromotionRewardTemplate.selectProbeCard(snapshots);
+    final holding = await _holdMatches(selected);
+    if (!mounted) return;
     setState(() {
       _useLiveCard = selected != null;
       _availableCards = snapshots;
       _liveCard = selected;
+      _holdNextPayout = holding;
       _status = selected == null
           ? 'لا يوجد كرت متاح. بقيت المعاينة على القيم التجريبية'
-          : 'المعاينة تعرض الكرت المختار دون حجز أو خصم';
+          : holding
+              ? 'الكرت المختار محجوز للصرف التالي، بلا خصم حتى يُصرف'
+              : 'المعاينة تعرض الكرت المختار دون حجز أو خصم';
       _statusIsError = selected == null;
     });
   }
 
-  void _selectLiveCard(String? cardId) {
+  Future<void> _selectLiveCard(String? cardId) async {
     final selected = PromotionRewardTemplate.selectProbeCard(
       _availableCards,
       selectedId: cardId,
     );
     if (selected == null) return;
+    if (_holdNextPayout && selected.cardId != _liveCard?.cardId) {
+      final moved = await _holdCard(selected);
+      if (!mounted || !moved) return;
+      return;
+    }
+    final holding = await _holdMatches(selected);
+    if (!mounted) return;
     setState(() {
       _liveCard = selected;
-      _status = 'المعاينة تعرض الكرت المختار دون حجز أو خصم';
+      _holdNextPayout = holding;
+      _status = holding
+          ? 'الكرت المختار محجوز للصرف التالي، بلا خصم حتى يُصرف'
+          : 'المعاينة تعرض الكرت المختار دون حجز أو خصم';
       _statusIsError = false;
     });
+  }
+
+  Future<bool> _holdMatches(RewardProbeCardSnapshot? card) async {
+    if (card == null || card.categoryId.isEmpty) return false;
+    final c = AppScope.of(context);
+    final found = await c.settings.find(SettingKeys.promotionRewardProbeHolds);
+    final raw = found is Success<AppSetting?> ? found.value?.value : null;
+    final hold = PromotionRewardTemplate.claimHold(raw, card.categoryId, c.clock.now());
+    if (hold == null || hold.cardId != card.cardId) return false;
+    _holdReservationId = hold.reservationId;
+    return true;
+  }
+
+  Future<void> _toggleHold(bool enabled) async {
+    final card = _liveCard;
+    if (card == null) return;
+    if (!enabled) {
+      await _releaseHold();
+      if (!mounted) return;
+      setState(() {
+        _holdNextPayout = false;
+        _status = 'المعاينة تعرض الكرت المختار دون حجز أو خصم';
+        _statusIsError = false;
+      });
+      return;
+    }
+    await _holdCard(card);
+  }
+
+  Future<bool> _holdCard(RewardProbeCardSnapshot card) async {
+    if (card.categoryId.isEmpty) return false;
+    final c = AppScope.of(context);
+    setState(() => _busy = true);
+    final previous = _liveCard;
+    if (_holdNextPayout && previous != null && previous.cardId != card.cardId) {
+      await _releaseHold(quiet: true);
+      if (!mounted) return false;
+    }
+    final now = c.clock.now();
+    final reservationId = c.ids.next('reward-probe-hold');
+    final reserved = await c.cards.reserve(
+      card.cardId,
+      CardReservation(
+        reservationId: reservationId,
+        reservedAt: now,
+        expiresAt: now.add(PromotionRewardTemplate.probeHoldDuration),
+      ),
+    );
+    if (!mounted) return false;
+    if (reserved is Failure<void>) {
+      setState(() {
+        _busy = false;
+        _status = 'تعذر حجز الكرت للصرف التالي';
+        _statusIsError = true;
+      });
+      return false;
+    }
+    final current = await c.settings.find(SettingKeys.promotionRewardProbeHolds);
+    final raw = current is Success<AppSetting?> ? current.value?.value : null;
+    final hold = RewardProbeHold(
+      categoryId: card.categoryId,
+      cardId: card.cardId,
+      reservationId: reservationId,
+      expiresAt: now.add(PromotionRewardTemplate.probeHoldDuration),
+    );
+    await c.settings.save(
+      AppSetting(
+        key: SettingKeys.promotionRewardProbeHolds,
+        value: PromotionRewardTemplate.rememberHold(raw, hold),
+        updatedAt: now,
+      ),
+    );
+    await c.auditLogs.append(
+      AuditLog(
+        id: c.ids.next('reward-probe-hold'),
+        entityType: 'promotion_reward_template',
+        entityId: card.cardId,
+        action: 'reward_probe_card_held',
+        occurredAt: now,
+        payloadJson: '{"categoryId":"${card.categoryId}","reservationId":"$reservationId"}',
+      ),
+    );
+    if (!mounted) return false;
+    setState(() {
+      _busy = false;
+      _liveCard = card;
+      _holdNextPayout = true;
+      _holdReservationId = reservationId;
+      _status = 'الكرت المختار محجوز للصرف التالي، بلا خصم حتى يُصرف';
+      _statusIsError = false;
+    });
+    return true;
+  }
+
+  Future<void> _releaseHold({bool quiet = false}) async {
+    final card = _liveCard;
+    final reservationId = _holdReservationId;
+    if (card == null || reservationId == null || card.categoryId.isEmpty) {
+      _holdReservationId = null;
+      return;
+    }
+    final c = AppScope.of(context);
+    await c.cards.releaseReservation(card.cardId, reservationId);
+    final current = await c.settings.find(SettingKeys.promotionRewardProbeHolds);
+    final raw = current is Success<AppSetting?> ? current.value?.value : null;
+    final now = c.clock.now();
+    await c.settings.save(
+      AppSetting(
+        key: SettingKeys.promotionRewardProbeHolds,
+        value: PromotionRewardTemplate.clearHold(raw, card.categoryId),
+        updatedAt: now,
+      ),
+    );
+    await c.auditLogs.append(
+      AuditLog(
+        id: c.ids.next('reward-probe-hold'),
+        entityType: 'promotion_reward_template',
+        entityId: card.cardId,
+        action: 'reward_probe_card_released',
+        occurredAt: now,
+        payloadJson: '{"categoryId":"${card.categoryId}","reservationId":"$reservationId"}',
+      ),
+    );
+    _holdReservationId = null;
+    if (!quiet && mounted) {
+      setState(() => _holdNextPayout = false);
+    }
   }
 
   bool get _perOffer => widget.promotionId != null && widget.promotionId!.isNotEmpty;
@@ -589,7 +737,9 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
                     Text(
                       _liveCard == null
                           ? 'قيم المعاينة تجريبية وليست كرتاً حقيقياً.'
-                          : 'قيم الكرت من المخزون المتاح، دون حجز أو خصم.',
+                          : _holdNextPayout
+                              ? 'الكرت محجوز للصرف التالي لمدة 24 ساعة، ولم يُخصم بعد.'
+                              : 'قيم الكرت من المخزون المتاح، دون حجز أو خصم.',
                       style: TextStyle(
                         fontFamily: NetTypography.family,
                         fontSize: 11.5,
@@ -630,6 +780,20 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
                             ),
                         ],
                         onChanged: _busy || _probing ? null : _selectLiveCard,
+                      ),
+                    if (_useLiveCard && _liveCard != null)
+                      SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        value: _holdNextPayout,
+                        onChanged: _busy || _probing ? null : _toggleHold,
+                        title: const Text(
+                          'احجز الكرت للصرف التالي',
+                          style: TextStyle(fontFamily: NetTypography.family),
+                        ),
+                        subtitle: const Text(
+                          'صرف المكافأة التالي في نفس الفئة يستخدم هذا الكرت. لا قيد دفتر حتى يُصرف.',
+                          style: TextStyle(fontFamily: NetTypography.family),
+                        ),
                       ),
                     const SizedBox(height: 8),
                     TextField(

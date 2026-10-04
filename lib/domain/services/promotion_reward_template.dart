@@ -93,6 +93,9 @@ class PromotionRewardTemplate {
     'customer_name': 'عميل تجريبي',
   };
 
+  /// مدة حجز كرت المعاينة للصرف التالي. بعد انتهاء المدة لا يُستخدم الحجز.
+  static const probeHoldDuration = Duration(hours: 24);
+
   /// يختار كرت المعاينة من المتاح فقط. المعرّف المفقود أو غير المتاح يعود لأول كرت، بلا حجز.
   static RewardProbeCardSnapshot? selectProbeCard(
     List<RewardProbeCardSnapshot> available, {
@@ -226,6 +229,49 @@ class PromotionRewardTemplate {
     final next = decodeProbeMap(raw);
     next[receipt.scope] = receipt.toJson();
     return jsonEncode(next);
+  }
+
+  /// يحفظ حجزاً واحداً لكل فئة. كرت آخر في نفس الفئة يستبدل الحجز السابق في الإعداد فقط.
+  static String rememberHold(String? raw, RewardProbeHold hold) {
+    final next = decodeHoldMap(raw);
+    next[hold.categoryId] = hold.toJson();
+    return jsonEncode(next);
+  }
+
+  static String clearHold(String? raw, String categoryId) {
+    final next = decodeHoldMap(raw);
+    next.remove(categoryId.trim());
+    return jsonEncode(next);
+  }
+
+  static RewardProbeHold? lookupHold(String? raw, String categoryId) {
+    final item = decodeHoldMap(raw)[categoryId.trim()];
+    if (item == null) return null;
+    return RewardProbeHold.fromJson(categoryId.trim(), item);
+  }
+
+  /// الحجز المنتهي لا يُصرف. المتبقي يُستخدم فقط إن كان الكرت ما يزال محجوزاً بنفس المعرّف.
+  static RewardProbeHold? claimHold(String? raw, String categoryId, DateTime now) {
+    final hold = lookupHold(raw, categoryId);
+    if (hold == null || !hold.isActiveAt(now)) return null;
+    return hold;
+  }
+
+  static Map<String, Map<String, Object?>> decodeHoldMap(String? raw) {
+    if (raw == null || raw.trim().isEmpty) return {};
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) return {};
+      final out = <String, Map<String, Object?>>{};
+      decoded.forEach((key, value) {
+        final categoryId = key.toString().trim();
+        if (categoryId.isEmpty || value is! Map) return;
+        out[categoryId] = Map<String, Object?>.from(value);
+      });
+      return out;
+    } catch (_) {
+      return {};
+    }
   }
 
   static RewardProbeReceipt? lookupProbe(String? raw, String scope) {
@@ -405,6 +451,7 @@ class RewardProbeCardSnapshot {
     required this.serial,
     required this.secret,
     required this.amount,
+    this.categoryId = '',
   });
 
   final String cardId;
@@ -412,6 +459,45 @@ class RewardProbeCardSnapshot {
   final String serial;
   final String secret;
   final String amount;
+  final String categoryId;
+}
+
+/// حجز كرت معاينة لصرف المكافأة التالي في نفس الفئة. ليس بيعاً ولا قيد دفتر.
+class RewardProbeHold {
+  const RewardProbeHold({
+    required this.categoryId,
+    required this.cardId,
+    required this.reservationId,
+    required this.expiresAt,
+  });
+
+  final String categoryId;
+  final String cardId;
+  final String reservationId;
+  final DateTime expiresAt;
+
+  bool isActiveAt(DateTime now) => !expiresAt.isBefore(now);
+
+  Map<String, Object?> toJson() => {
+        'cardId': cardId,
+        'reservationId': reservationId,
+        'expiresAt': expiresAt.toUtc().toIso8601String(),
+      };
+
+  static RewardProbeHold? fromJson(String categoryId, Map<dynamic, dynamic> json) {
+    final cardId = json['cardId']?.toString().trim() ?? '';
+    final reservationId = json['reservationId']?.toString().trim() ?? '';
+    final expires = DateTime.tryParse(json['expiresAt']?.toString() ?? '');
+    if (categoryId.trim().isEmpty || cardId.isEmpty || reservationId.isEmpty || expires == null) {
+      return null;
+    }
+    return RewardProbeHold(
+      categoryId: categoryId,
+      cardId: cardId,
+      reservationId: reservationId,
+      expiresAt: expires.toUtc(),
+    );
+  }
 }
 
 class RewardProbeReceipt {
