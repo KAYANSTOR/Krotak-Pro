@@ -41,7 +41,7 @@ jobs:
           flutter test > /tmp/test.log 2>&1
           rc=$?
           if [ $rc -ne 0 ]; then
-            fails=$(grep -E '\[E\]' -A12 /tmp/test.log | head -c 3200 | tr '\n' ' ' | sed 's/%/%25/g')
+            fails=$(grep -nE '❌|\[E\]|::error|Expected:|Actual:|EXCEPTION|Exception' -A3 /tmp/test.log | grep -v '✅' | head -c 3200 | tr '\n' ' ' | sed 's/%/%25/g')
             [ -n "$fails" ] || fails=$(tail -c 3200 /tmp/test.log | tr '\n' ' ' | sed 's/%/%25/g')
             echo "::error title=flutter test failed::$fails"
           fi
