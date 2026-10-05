@@ -508,6 +508,54 @@ class PromotionRewardTemplate {
     );
   }
 
+  /// يقدّم كرتاً موجوداً خطوة واحدة نحو رأس الطابور دون تحرير حجزه.
+  /// الكرت الذي في الرأس يبقى مكانه. لا يمس طابوراً آخر ولا موعد الانتهاء.
+  static String advanceQueuedCard(
+    String? raw, {
+    required String cardId,
+    String? customerId,
+  }) {
+    final wanted = cardId.trim();
+    if (wanted.isEmpty) return raw ?? '{}';
+    final customer = customerId?.trim() ?? '';
+    final cross = lookupCrossCategoryHold(raw, customerId: customer);
+    if (cross != null && cross.holdsCard(wanted)) {
+      return _advanceHold(raw, cross, wanted);
+    }
+    final map = decodeHoldMap(raw);
+    for (final entry in map.entries) {
+      final key = entry.key.toString();
+      final categoryId = key.split('|customer:').first.trim();
+      if (categoryId.isEmpty || entry.value is! Map) continue;
+      final hold = RewardProbeHold.fromJson(categoryId, entry.value);
+      if (hold == null || !hold.holdsCard(wanted)) continue;
+      if (customer.isNotEmpty && hold.customerId.trim() != customer) continue;
+      if (customer.isEmpty && hold.customerId.trim().isNotEmpty) continue;
+      return _advanceHold(raw, hold, wanted);
+    }
+    return raw ?? '{}';
+  }
+
+  static String _advanceHold(String? raw, RewardProbeHold hold, String cardId) {
+    final cards = [...hold.cards];
+    final index = cards.indexWhere((card) => card.cardId == cardId);
+    if (index <= 0) return raw ?? '{}';
+    final current = cards[index];
+    cards[index] = cards[index - 1];
+    cards[index - 1] = current;
+    return rememberHold(
+      raw,
+      RewardProbeHold(
+        categoryId: hold.categoryId,
+        cardId: cards.first.cardId,
+        reservationId: cards.first.reservationId,
+        expiresAt: hold.expiresAt,
+        customerId: hold.customerId,
+        queue: cards,
+      ),
+    );
+  }
+
   /// يزيل كرتاً مستهلكاً من الطابور ويبقي بقية كروت العميل.
   static String consumeHold(
     String? raw,
