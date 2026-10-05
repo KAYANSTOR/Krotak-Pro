@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../../application/account_session.dart';
@@ -27,10 +29,14 @@ class _CommissionBillingScreenState extends State<CommissionBillingScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _load(sync: true));
+    // اعرض الشاشة من البيانات المحلية أولاً؛ لا ننتظر الشبكة قبل رسم الشاشة.
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await _load(includeRemotePayments: false);
+      if (mounted) unawaited(_load(sync: true));
+    });
   }
 
-  Future<void> _load({bool sync = false}) async {
+  Future<void> _load({bool sync = false, bool includeRemotePayments = true}) async {
     final session = AccountSession.maybeInstance;
     final state = session?.state.value;
     final account = state?.account;
@@ -44,7 +50,8 @@ class _CommissionBillingScreenState extends State<CommissionBillingScreen> {
     }
 
     setState(() {
-      _loading = true;
+      // أثناء التحديث لا نزيل البيانات المعروضة ولا نعيد الشاشة إلى صفحة انتظار.
+      _loading = _months.isEmpty;
       _error = null;
       if (sync) _syncing = true;
     });
@@ -66,6 +73,7 @@ class _CommissionBillingScreenState extends State<CommissionBillingScreen> {
       idToken: cloudSession.idToken,
       account: account,
       config: state.config,
+      includeRemotePayments: includeRemotePayments,
     );
 
     if (!mounted) return;
@@ -97,7 +105,7 @@ class _CommissionBillingScreenState extends State<CommissionBillingScreen> {
           elevation: 0,
           surfaceTintColor: Colors.transparent,
           title: const Text(
-            'العمولات والمبيعات',
+            'عمولة الإدارة',
             style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w800),
           ),
           actions: [

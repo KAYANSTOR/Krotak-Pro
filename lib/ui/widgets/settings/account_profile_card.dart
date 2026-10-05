@@ -538,8 +538,8 @@ class _ProfileActions extends StatelessWidget {
       children: [
         _ActionTile(
           icon: Icons.percent_rounded,
-          title: 'العمولات والمبيعات',
-          subtitle: 'كشف الحساب ونسب العمولة والمطالبات',
+          title: 'عمولة الإدارة',
+          subtitle: 'كشف المبيعات ونسبة العمولة والمطالبات',
           onTap: () => Navigator.of(context).push(
             MaterialPageRoute<void>(
               builder: (_) => const CommissionBillingScreen(),

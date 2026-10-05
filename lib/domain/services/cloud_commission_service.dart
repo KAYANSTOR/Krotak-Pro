@@ -56,8 +56,8 @@ final class CloudCommissionService {
     if (result is Failure<List<Sale>>) return Failure(result.error);
     final list = (result as Success<List<Sale>>).value;
     var uploaded = 0;
-    for (final sale in list) {
-      if (sale.status != TransactionStatus.completed) continue;
+    await Future.wait(list.map((sale) async {
+      if (sale.status != TransactionStatus.completed) return;
       final face = sale.amount.minorUnits / 100.0;
       try {
         await _cloud.upsertNetworkSale(
@@ -68,11 +68,19 @@ final class CloudCommissionService {
             'saleId': sale.id,
             'customerId': sale.customerId,
             'cardId': sale.cardId,
+            // الحقول الأساسية والمرادفات القديمة معاً حتى تقرأها إصدارات
+            // لوحة الإدارة المختلفة ولا تختفي المبيعات من التقرير.
             'faceValue': face,
+            'amount': face,
+            'amountMinor': sale.amount.minorUnits,
+            'currencyCode': sale.amount.currencyCode,
+            'face_value': face,
             'commission': 0,
+            'commissionAmount': 0,
             'netAmount': face,
             'status': 'COMPLETED',
-            'createdAt': sale.createdAt.millisecondsSinceEpoch,
+            'createdAt': sale.createdAt,
+            'created_at': sale.createdAt,
             'source': 'krotak_app',
           },
         );
@@ -80,7 +88,7 @@ final class CloudCommissionService {
       } catch (_) {
         // نتابع بقية السجلات؛ الفشل الشبكي يُعاد في المزامنة التالية.
       }
-    }
+    }));
     return Success(uploaded);
   }
 
@@ -90,6 +98,7 @@ final class CloudCommissionService {
     required String idToken,
     required CloudAccount account,
     required CloudGlobalConfig config,
+    bool includeRemotePayments = true,
   }) async {
     final rate = activeRate(account, config);
     final now = DateTime.now();
@@ -128,7 +137,7 @@ final class CloudCommissionService {
       );
     }
 
-    try {
+    if (includeRemotePayments) try {
       final payments = await _cloud.fetchNetworkPayments(uid: uid, idToken: idToken);
       for (final raw in payments) {
         final month = raw['month']?.toString() ?? '';

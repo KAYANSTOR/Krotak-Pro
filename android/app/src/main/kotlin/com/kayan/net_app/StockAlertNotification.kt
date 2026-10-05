@@ -79,8 +79,8 @@ object StockAlertNotification {
                 PendingIntent.FLAG_UPDATE_CURRENT or mutability,
             )
             val builder = NotificationCompat.Builder(context, CHANNEL_ID)
-                // أيقونة الحالة: مونوغرام كروتك (ic_stat_stock → mono art)، وليس مثلث تحذير.
-                .setSmallIcon(R.drawable.ic_stat_stock)
+                // استخدم أيقونة التطبيق الأساسية نفسها في إشعار Android الحي.
+                .setSmallIcon(R.mipmap.ic_launcher)
                 .setContentTitle(title)
                 .setContentText(body)
                 .setStyle(NotificationCompat.BigTextStyle().bigText(body))

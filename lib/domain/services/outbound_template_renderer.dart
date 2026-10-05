@@ -82,11 +82,34 @@ final class OutboundTemplateRenderer {
     required String serialNumber,
     required String secretCode,
     String cardValue = 'غير محدد',
-    String networkName = 'NET',
+    String? networkName,
     String currency = 'ر.ي',
   }) {
+    return _renderVoucherDelivery(
+      serialNumber: serialNumber,
+      secretCode: secretCode,
+      cardValue: cardValue,
+      networkName: networkName,
+      currency: currency,
+    );
+  }
+
+  Future<Result<String>> _renderVoucherDelivery({
+    required String serialNumber,
+    required String secretCode,
+    required String cardValue,
+    required String? networkName,
+    required String currency,
+  }) async {
     final serial = serialNumber.trim();
     final secret = secretCode.trim();
+    var resolvedNetworkName = networkName?.trim() ?? '';
+    if (resolvedNetworkName.isEmpty && settings != null) {
+      final stored = await settings!.find(SettingKeys.networkName);
+      if (stored is Success<AppSetting?>) {
+        resolvedNetworkName = stored.value?.value.trim() ?? '';
+      }
+    }
     final values = <String, String>{
       'serial': serial,
       'serial_number': serial,
@@ -95,7 +118,9 @@ final class OutboundTemplateRenderer {
       'CARD_CODE': serial,
       'CARD_SERIAL': serial,
       'CARD_VALUE': cardValue.trim().isEmpty ? 'غير محدد' : cardValue.trim(),
-      'NETWORK_NAME': networkName.trim().isEmpty ? 'NET' : networkName.trim(),
+      'NETWORK_NAME': resolvedNetworkName.isEmpty
+          ? SettingDefaults.networkName
+          : resolvedNetworkName,
       'CURRENCY': currency,
     };
     final fallback = SettingDefaults.voucherDeliverySmsTemplate;
