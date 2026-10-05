@@ -1,1 +1,39 @@
-SEE artifacts/krotak_final/dashboard_screen.dart — content must be full file not this placeholder
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+
+import '../../core/result.dart';
+import '../../domain/entities/card.dart' as domain;
+import '../../domain/entities/customer.dart';
+import '../../domain/entities/license.dart' as domain;
+import '../../domain/entities/message.dart';
+import '../../domain/entities/money.dart';
+import '../../domain/entities/setting.dart';
+import '../../domain/entities/system_capability.dart';
+import '../../domain/entities/transaction.dart';
+import '../app_scope.dart';
+import '../labels/net_labels.dart';
+import '../routing/app_routes.dart';
+import '../theme/kayan_palette.dart';
+import '../theme/net_semantic_colors.dart';
+import '../theme/net_tokens.dart';
+import '../widgets/async_views.dart';
+import '../widgets/dashboard/card_stock_sheet.dart';
+import '../widgets/dashboard/sales_period_sheet.dart';
+import '../widgets/net/net_alert_banner.dart';
+import '../widgets/net/net_balance_card.dart';
+import '../widgets/net/net_dashboard_header.dart';
+import 'account_notifications_screen.dart';
+import '../widgets/net/net_metric_card.dart';
+import '../widgets/net/net_recent_transaction_card.dart';
+import '../widgets/net/net_service_tile.dart';
+import '../widgets/net/net_section_header.dart';
+import '../widgets/net/net_surface_card.dart';
+import '../widgets/net/net_transaction_detail_sheet.dart';
+
+part 'dashboard_screen_p0.dart';
+part 'dashboard_screen_p1.dart';
+part 'dashboard_screen_p2.dart';
+part 'dashboard_screen_p3.dart';
+part 'dashboard_screen_p4.dart';
+part 'dashboard_screen_p5.dart';
+part 'dashboard_screen_p6.dart';
