@@ -69,7 +69,7 @@ final class RemotePushNotificationService {
     }
 
     const initSettings = InitializationSettings(
-      android: AndroidInitializationSettings('@drawable/ic_stat_stock'),
+      android: AndroidInitializationSettings('@mipmap/ic_launcher'),
     );
     await _localNotifications.initialize(
       initSettings,
@@ -122,7 +122,7 @@ final class RemotePushNotificationService {
           channelDescription: channelDescription,
           importance: Importance.max,
           priority: Priority.max,
-          icon: '@drawable/ic_stat_stock',
+          icon: '@mipmap/ic_launcher',
           playSound: true,
           sound: const RawResourceAndroidNotificationSound('krotak_notify'),
           enableVibration: true,

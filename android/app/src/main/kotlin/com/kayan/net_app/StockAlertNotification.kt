@@ -79,7 +79,7 @@ object StockAlertNotification {
             )
             val builder = NotificationCompat.Builder(context, CHANNEL_ID)
                 // استخدم أيقونة التطبيق الأساسية نفسها في إشعار Android الحي.
-                .setSmallIcon(R.drawable.ic_stat_stock)
+                .setSmallIcon(R.mipmap.ic_launcher)
                 .setContentTitle(title)
                 .setContentText(body)
                 .setStyle(NotificationCompat.BigTextStyle().bigText(body))
