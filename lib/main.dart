@@ -59,7 +59,7 @@ Future<void> main() async {
   _NetAppState.seedPersistedThemeRaw(themeRaw);
   AppScope.register(container);
   // جلسة حساب الشبكة: تسجيل/دخول + مزامنة حالة الحساب مع لوحة الإدارة.
-  AccountSession.attach(AccountSession(settings: container.settings));
+  AccountSession.attach(AccountSession(settings: container.settings, sales: container.sales));
   runApp(NetApp(container: container));
   if (RemotePushNotificationService.isConfigured) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -132,7 +132,7 @@ class _NetAppState extends State<NetApp> with WidgetsBindingObserver {
       AppScope.register(next);
       // الحاوية تغيّرت (استعادة نسخة احتياطية) — جلسة الحساب تُعاد بناؤها
       // على مخزن الإعدادات الجديد مع بقاء بيانات الحساب نفسها.
-      AccountSession.attach(AccountSession(settings: next.settings));
+      AccountSession.attach(AccountSession(settings: next.settings, sales: next.sales));
       if (!mounted) {
         await next.dispose();
         return;
