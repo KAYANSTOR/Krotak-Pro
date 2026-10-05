@@ -593,6 +593,65 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
     });
   }
 
+  /// يؤخّر الكرت الظاهر ليُصرف آخراً دون تحرير حجزه أو مسح بقية الطابور.
+  Future<void> _demoteSelectedHold() async {
+    final card = _liveCard;
+    if (card == null || _queuedCardIds.length < 2 || _queuedCardIds.last == card.cardId) {
+      return;
+    }
+    final c = AppScope.of(context);
+    setState(() => _busy = true);
+    final current = await c.settings.find(SettingKeys.promotionRewardProbeHolds);
+    final raw = current is Success<AppSetting?> ? current.value?.value : null;
+    final now = c.clock.now();
+    final encoded = PromotionRewardTemplate.demoteQueuedCard(
+      raw,
+      cardId: card.cardId,
+      customerId: _holdCustomerId,
+    );
+    await c.settings.save(
+      AppSetting(
+        key: SettingKeys.promotionRewardProbeHolds,
+        value: encoded,
+        updatedAt: now,
+      ),
+    );
+    var stored = PromotionRewardTemplate.lookupCrossCategoryHold(
+      encoded,
+      customerId: _holdCustomerId,
+    );
+    if (stored == null || !stored.holdsCard(card.cardId)) {
+      stored = PromotionRewardTemplate.lookupHold(
+        encoded,
+        card.categoryId,
+        customerId: _holdCustomerId,
+      );
+    }
+    await c.auditLogs.append(
+      AuditLog(
+        id: c.ids.next('reward-probe-hold'),
+        entityType: 'promotion_reward_template',
+        entityId: card.cardId,
+        action: 'reward_probe_card_demoted',
+        occurredAt: now,
+        payloadJson: '{"customerId":"${_holdCustomerId ?? ''}","queue":${stored?.cards.length ?? 0}}',
+      ),
+    );
+    if (!mounted) return;
+    final ids = [for (final item in stored?.cards ?? const <RewardProbeHeldCard>[]) item.cardId];
+    final nextIndex = ids.indexOf(card.cardId);
+    setState(() {
+      _busy = false;
+      _holdReservationId = stored?.cardFor(card.cardId)?.reservationId ?? _holdReservationId;
+      _holdQueueCount = stored?.cards.length ?? _holdQueueCount;
+      _queuedCardIds = ids;
+      _status = nextIndex == ids.length - 1
+          ? 'أُخّر الكرت الظاهر ليُصرف آخراً، وبقي ${_holdQueueCount} في الطابور'
+          : 'تعذر تأخير الكرت الظاهر إلى آخر الطابور';
+      _statusIsError = nextIndex != ids.length - 1;
+    });
+  }
+
   bool get _perOffer => widget.promotionId != null && widget.promotionId!.isNotEmpty;
 
   bool get _perCustomer =>
@@ -1109,6 +1168,18 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
                           icon: const Icon(Icons.arrow_downward),
                           label: Text(
                             'تأخير الكرت الظاهر خطوة واحدة (${_queuedCardIds.length})',
+                            style: const TextStyle(fontFamily: NetTypography.family),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Align(
+                        alignment: AlignmentDirectional.centerStart,
+                        child: TextButton.icon(
+                          onPressed: _busy || _probing ? null : _demoteSelectedHold,
+                          icon: const Icon(Icons.vertical_align_bottom),
+                          label: Text(
+                            'تأخير الكرت الظاهر ليُصرف آخراً (${_queuedCardIds.length})',
                             style: const TextStyle(fontFamily: NetTypography.family),
                           ),
                         ),

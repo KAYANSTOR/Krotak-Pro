@@ -1221,4 +1221,71 @@ void main() {
       ['own-a'],
     );
   });
+
+  test('demoting one queued card moves it to the tail without touching other queues', () {
+    final expires = DateTime.utc(2026, 10, 12);
+    RewardProbeHold hold(String cardId, String categoryId, {String customerId = ''}) {
+      return RewardProbeHold(
+        categoryId: categoryId,
+        cardId: cardId,
+        reservationId: 'res-$cardId',
+        expiresAt: expires,
+        customerId: customerId,
+      );
+    }
+
+    final encoded = PromotionRewardTemplate.enqueueCrossCategoryHold(
+      PromotionRewardTemplate.enqueueHold(
+        PromotionRewardTemplate.enqueueCrossCategoryHold(
+          null,
+          hold('shared-a', 'cat-shared'),
+        ),
+        hold('own-a', 'cat-1', customerId: 'cust-1'),
+      ),
+      hold('cross-b', 'cat-2', customerId: 'cust-1'),
+    );
+    final withThird = PromotionRewardTemplate.enqueueCrossCategoryHold(
+      PromotionRewardTemplate.enqueueCrossCategoryHold(
+        encoded,
+        hold('cross-a', 'cat-9', customerId: 'cust-1'),
+      ),
+      hold('cross-c', 'cat-3', customerId: 'cust-1'),
+    );
+    final demoted = PromotionRewardTemplate.demoteQueuedCard(
+      withThird,
+      cardId: 'cross-b',
+      customerId: 'cust-1',
+    );
+    final customer = PromotionRewardTemplate.lookupCrossCategoryHold(
+      demoted,
+      customerId: 'cust-1',
+    );
+    expect(customer?.cards.map((card) => card.cardId), ['cross-a', 'cross-c', 'cross-b']);
+    expect(customer?.expiresAt, expires);
+    expect(customer?.cards.last.reservationId, 'res-cross-b');
+    expect(
+      PromotionRewardTemplate.demoteQueuedCard(
+        demoted,
+        cardId: 'cross-b',
+        customerId: 'cust-1',
+      ),
+      demoted,
+    );
+    expect(
+      PromotionRewardTemplate.lookupHold(demoted, 'cat-1', customerId: 'cust-1')?.cardId,
+      'own-a',
+    );
+    expect(
+      PromotionRewardTemplate.lookupCrossCategoryHold(demoted)?.cardId,
+      'shared-a',
+    );
+    final otherCustomer = PromotionRewardTemplate.demoteQueuedCard(
+      demoted,
+      cardId: 'own-a',
+    );
+    expect(
+      PromotionRewardTemplate.lookupHold(otherCustomer, 'cat-1', customerId: 'cust-1')?.cards.map((card) => card.cardId),
+      ['own-a'],
+    );
+  });
 }

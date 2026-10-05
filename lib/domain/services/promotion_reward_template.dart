@@ -556,6 +556,56 @@ class PromotionRewardTemplate {
     );
   }
 
+  /// يؤخّر كرتاً موجوداً ليصبح آخر صرف، دون تحرير حجزه أو مس بقية الطابور.
+  static String demoteQueuedCard(
+    String? raw, {
+    required String cardId,
+    String? customerId,
+  }) {
+    final wanted = cardId.trim();
+    if (wanted.isEmpty) return raw ?? '{}';
+    final customer = customerId?.trim() ?? '';
+    final cross = lookupCrossCategoryHold(raw, customerId: customer);
+    if (cross != null && cross.holdsCard(wanted)) {
+      return _demoteHold(raw, cross, wanted);
+    }
+    final map = decodeHoldMap(raw);
+    for (final entry in map.entries) {
+      final key = entry.key.toString();
+      final categoryId = key.split('|customer:').first.trim();
+      if (categoryId.isEmpty || entry.value is! Map) continue;
+      final hold = RewardProbeHold.fromJson(categoryId, entry.value);
+      if (hold == null || !hold.holdsCard(wanted)) continue;
+      if (customer.isNotEmpty && hold.customerId.trim() != customer) continue;
+      if (customer.isEmpty && hold.customerId.trim().isNotEmpty) continue;
+      return _demoteHold(raw, hold, wanted);
+    }
+    return raw ?? '{}';
+  }
+
+  static String _demoteHold(String? raw, RewardProbeHold hold, String cardId) {
+    final cards = hold.cards;
+    final index = cards.indexWhere((card) => card.cardId == cardId);
+    if (index < 0 || index >= cards.length - 1) return raw ?? '{}';
+    final demoted = cards[index];
+    final next = <RewardProbeHeldCard>[
+      for (final card in cards)
+        if (card.cardId != cardId) card,
+      demoted,
+    ];
+    return rememberHold(
+      raw,
+      RewardProbeHold(
+        categoryId: hold.categoryId,
+        cardId: next.first.cardId,
+        reservationId: next.first.reservationId,
+        expiresAt: hold.expiresAt,
+        customerId: hold.customerId,
+        queue: next,
+      ),
+    );
+  }
+
   /// يزيل كرتاً مستهلكاً من الطابور ويبقي بقية كروت العميل.
   static String consumeHold(
     String? raw,
