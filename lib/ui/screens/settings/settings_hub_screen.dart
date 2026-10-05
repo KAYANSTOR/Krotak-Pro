@@ -10,12 +10,12 @@ import '../../../core/result.dart';
 import '../../../domain/entities/setting.dart';
 import '../../app_scope.dart';
 import '../../theme/kayan_palette.dart';
-import '../../theme/net_semantic_colors.dart';
 import '../../theme/net_theme_schedule.dart';
 import '../../theme/net_tokens.dart';
 import '../../widgets/async_views.dart';
 import '../../widgets/dashboard/theme_mode_sheet.dart';
 import '../../widgets/net/net_surface_card.dart';
+import '../../widgets/settings/account_profile_card.dart';
 import '../../widgets/settings/settings_cards.dart';
 import '../../widgets/settings/settings_section_header.dart';
 import '../pos_screen.dart';
@@ -28,7 +28,6 @@ import 'deep_clean_screen.dart';
 import 'export_ledger_screen.dart';
 import 'low_stock_settings_screen.dart';
 import 'network_name_settings_screen.dart';
-import 'commission_billing_screen.dart';
 import 'outbound_message_templates_screen.dart';
 import 'sim_settings_screen.dart';
 import 'template_simulation_screen.dart';
@@ -318,7 +317,7 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
                                   child: AsyncEmptyView(message: 'لا توجد إعدادات مطابقة للبحث', icon: Icons.search_off_rounded, hint: 'جرّب كلمة أخرى مثل: الرسائل، المظهر، المحافظ', compact: true),
                                 ),
                               if (_sectionVisible(_accountKeywords))
-                                _AccountProfileCard(networkName: _networkName, onEditNetworkName: _openNetworkName, onSignOut: _confirmSignOut),
+                                AccountProfileCard(networkName: _networkName, onEditNetworkName: _openNetworkName, onSignOut: _confirmSignOut),
                               if (_sectionVisible(_systemKeywords)) const SettingsSectionHeader(title: 'النظام'),
                               if (_sectionVisible(_systemKeywords))
                                 SettingsGroupCard(children: [
@@ -527,172 +526,6 @@ class _AboutAppCard extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-}
-/// قسم «الحساب» في الإعدادات: حالة الحساب، إشعارات الإدارة، تسجيل الخروج.
-class _AccountProfileCard extends StatelessWidget {
-  const _AccountProfileCard({
-    required this.networkName,
-    required this.onEditNetworkName,
-    required this.onSignOut,
-  });
-
-  final String networkName;
-  final Future<void> Function() onEditNetworkName;
-  final Future<void> Function() onSignOut;
-
-  @override
-  Widget build(BuildContext context) {
-    final session = AccountSession.maybeInstance;
-    if (session == null) return const SizedBox.shrink();
-    final palette = KayanPalette.of(context);
-
-    return ValueListenableBuilder<AccountState>(
-      valueListenable: session.state,
-      builder: (context, state, _) {
-        final account = state.account;
-        if (account == null && state.phase != AccountPhase.blocked) {
-          return const SizedBox.shrink();
-        }
-        final displayName = (account?.networkName.isNotEmpty == true)
-            ? account!.networkName
-            : (networkName.trim().isNotEmpty ? networkName.trim() : 'حساب الشبكة');
-        final phone = account?.phone ?? '';
-        final status = session.statusSummary;
-        final offline = state.offline;
-
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const SettingsSectionHeader(title: 'الحساب'),
-            Container(
-              margin: const EdgeInsets.only(bottom: NetSpacing.sm),
-              padding: const EdgeInsets.all(NetSpacing.md),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topRight,
-                  end: Alignment.bottomLeft,
-                  colors: [
-                    palette.primary,
-                    palette.primary.withValues(alpha: 0.82),
-                  ],
-                ),
-                borderRadius: BorderRadius.circular(18),
-                boxShadow: [
-                  BoxShadow(
-                    color: palette.primary.withValues(alpha: 0.28),
-                    blurRadius: 16,
-                    offset: const Offset(0, 8),
-                  ),
-                ],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Row(
-                    children: [
-                      Container(
-                        width: 52,
-                        height: 52,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.18),
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        child: const Icon(Icons.storefront_rounded, color: Colors.white, size: 28),
-                      ),
-                      const SizedBox(width: NetSpacing.md),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              displayName,
-                              style: const TextStyle(
-                                fontFamily: NetTypography.family,
-                                fontWeight: FontWeight.w800,
-                                fontSize: 17,
-                                color: Colors.white,
-                              ),
-                            ),
-                            if (phone.isNotEmpty)
-                              Text(
-                                phone,
-                                style: TextStyle(
-                                  fontFamily: NetTypography.family,
-                                  fontSize: 12.5,
-                                  color: Colors.white.withValues(alpha: 0.88),
-                                ),
-                              ),
-                            const SizedBox(height: 2),
-                            Text(
-                              offline ? '$status · بدون إنترنت' : status,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontFamily: NetTypography.family,
-                                fontSize: 11.5,
-                                color: Colors.white.withValues(alpha: 0.78),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: NetSpacing.md),
-                  FilledButton.tonalIcon(
-                    style: FilledButton.styleFrom(
-                      backgroundColor: Colors.white.withValues(alpha: 0.18),
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 10),
-                    ),
-                    onPressed: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute<void>(
-                          builder: (_) => const CommissionBillingScreen(),
-                        ),
-                      );
-                    },
-                    icon: const Icon(Icons.percent_rounded, size: 18),
-                    label: const Text('العمولات والمبيعات', style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w700)),
-                  ),
-                  const SizedBox(height: NetSpacing.sm),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: FilledButton.tonalIcon(
-                          style: FilledButton.styleFrom(
-                            backgroundColor: Colors.white.withValues(alpha: 0.18),
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 10),
-                          ),
-                          onPressed: () => onEditNetworkName(),
-                          icon: const Icon(Icons.edit_rounded, size: 18),
-                          label: const Text('اسم الشبكة', style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w700)),
-                        ),
-                      ),
-                      const SizedBox(width: NetSpacing.sm),
-                      Expanded(
-                        child: FilledButton.tonalIcon(
-                          style: FilledButton.styleFrom(
-                            backgroundColor: Colors.white.withValues(alpha: 0.18),
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 10),
-                          ),
-                          onPressed: () => onSignOut(),
-                          icon: const Icon(Icons.logout_rounded, size: 18),
-                          label: const Text('تسجيل الخروج', style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w700)),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ],
-        );
-      },
     );
   }
 }

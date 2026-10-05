@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../../application/account_session.dart';
 import '../../core/app_brand.dart';
 import '../../core/cloud_config.dart';
+import '../../core/contact_admin.dart';
 import '../../data/cloud/cloud_http.dart';
 import '../../domain/services/cloud_account_service.dart';
 import '../theme/kayan_colors.dart';
@@ -486,6 +487,11 @@ class _AccountAuthScreenState extends State<AccountAuthScreen> {
                     ? 'لدي حساب بالفعل — تسجيل الدخول'
                     : 'لا أملك حساباً — إنشاء حساب جديد',
               ),
+            ),
+            OutlinedButton.icon(
+              onPressed: _busy ? null : () => AdminContact.openWhatsApp(context),
+              icon: const Icon(Icons.chat_rounded),
+              label: Text('التواصل مع الإدارة عبر واتساب\n${AdminContact.displayPhone}', textAlign: TextAlign.center),
             ),
           ],
         ),
