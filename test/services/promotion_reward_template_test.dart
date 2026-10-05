@@ -1087,4 +1087,71 @@ void main() {
       ['own-a'],
     );
   });
+
+  test('delaying one queued card moves it one step without touching other queues', () {
+    final expires = DateTime.utc(2026, 10, 12);
+    RewardProbeHold hold(String cardId, String categoryId, {String customerId = ''}) {
+      return RewardProbeHold(
+        categoryId: categoryId,
+        cardId: cardId,
+        reservationId: 'res-$cardId',
+        expiresAt: expires,
+        customerId: customerId,
+      );
+    }
+
+    final encoded = PromotionRewardTemplate.enqueueCrossCategoryHold(
+      PromotionRewardTemplate.enqueueHold(
+        PromotionRewardTemplate.enqueueCrossCategoryHold(
+          null,
+          hold('shared-a', 'cat-shared'),
+        ),
+        hold('own-a', 'cat-1', customerId: 'cust-1'),
+      ),
+      hold('cross-b', 'cat-2', customerId: 'cust-1'),
+    );
+    final withThird = PromotionRewardTemplate.enqueueCrossCategoryHold(
+      PromotionRewardTemplate.enqueueCrossCategoryHold(
+        encoded,
+        hold('cross-a', 'cat-9', customerId: 'cust-1'),
+      ),
+      hold('cross-c', 'cat-3', customerId: 'cust-1'),
+    );
+    final delayed = PromotionRewardTemplate.delayQueuedCard(
+      withThird,
+      cardId: 'cross-b',
+      customerId: 'cust-1',
+    );
+    final customer = PromotionRewardTemplate.lookupCrossCategoryHold(
+      delayed,
+      customerId: 'cust-1',
+    );
+    expect(customer?.cards.map((card) => card.cardId), ['cross-a', 'cross-b', 'cross-c']);
+    expect(customer?.expiresAt, expires);
+    expect(customer?.cards[1].reservationId, 'res-cross-b');
+    expect(
+      PromotionRewardTemplate.delayQueuedCard(
+        delayed,
+        cardId: 'cross-c',
+        customerId: 'cust-1',
+      ),
+      delayed,
+    );
+    expect(
+      PromotionRewardTemplate.lookupHold(delayed, 'cat-1', customerId: 'cust-1')?.cardId,
+      'own-a',
+    );
+    expect(
+      PromotionRewardTemplate.lookupCrossCategoryHold(delayed)?.cardId,
+      'shared-a',
+    );
+    final otherCustomer = PromotionRewardTemplate.delayQueuedCard(
+      delayed,
+      cardId: 'own-a',
+    );
+    expect(
+      PromotionRewardTemplate.lookupHold(otherCustomer, 'cat-1', customerId: 'cust-1')?.cards.map((card) => card.cardId),
+      ['own-a'],
+    );
+  });
 }
