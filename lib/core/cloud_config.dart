@@ -54,9 +54,12 @@ abstract final class CloudConfig {
   /// مهلة طلبات الشبكة.
   static const requestTimeout = Duration(seconds: 20);
 
-  /// دورة مزامنة حالة الحساب أثناء تشغيل التطبيق.
-  static const syncInterval = Duration(seconds: 90);
+  /// مهلة قصيرة لإقلاع التطبيق حتى لا تتعطل شاشة التحقق عند انقطاع النت.
+  static const bootNetworkTimeout = Duration(seconds: 4);
 
-  /// أقل فاصل بين تحديث «آخر ظهور» لتقليل الكتابات على الخادم.
+  /// دورة مزامنة حالة الحساب أثناء تشغيل التطبيق.
+  static const syncInterval = Duration(minutes: 5);
+
+  /// أقل فاصل بين تحديثات الحضور (last_seen).
   static const presenceInterval = Duration(minutes: 10);
 }
