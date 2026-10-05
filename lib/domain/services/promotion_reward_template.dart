@@ -583,6 +583,58 @@ class PromotionRewardTemplate {
     return raw ?? '{}';
   }
 
+  /// يعكس ترتيب الطابور الذي يحمل الكرت دون تحرير الحجوزات أو تغيير موعد الانتهاء.
+  static String reverseQueuedCard(
+    String? raw, {
+    required String cardId,
+    String? customerId,
+  }) {
+    final wanted = cardId.trim();
+    if (wanted.isEmpty) return raw ?? '{}';
+    final customer = customerId?.trim() ?? '';
+    final cross = lookupCrossCategoryHold(raw, customerId: customer);
+    if (cross != null && cross.holdsCard(wanted)) {
+      return _reverseHold(raw, cross);
+    }
+    final map = decodeHoldMap(raw);
+    for (final entry in map.entries) {
+      final key = entry.key.toString();
+      final categoryId = key.split('|customer:').first.trim();
+      if (categoryId.isEmpty || entry.value is! Map) continue;
+      final hold = RewardProbeHold.fromJson(categoryId, entry.value);
+      if (hold == null || !hold.holdsCard(wanted)) continue;
+      if (customer.isNotEmpty && hold.customerId.trim() != customer) continue;
+      if (customer.isEmpty && hold.customerId.trim().isNotEmpty) continue;
+      return _reverseHold(raw, hold);
+    }
+    return raw ?? '{}';
+  }
+
+  static String _reverseHold(String? raw, RewardProbeHold hold) {
+    final cards = hold.cards;
+    if (cards.length < 2) return raw ?? '{}';
+    final reversed = cards.reversed.toList(growable: false);
+    var unchanged = true;
+    for (var i = 0; i < cards.length; i++) {
+      if (cards[i].cardId != reversed[i].cardId) {
+        unchanged = false;
+        break;
+      }
+    }
+    if (unchanged) return raw ?? '{}';
+    return rememberHold(
+      raw,
+      RewardProbeHold(
+        categoryId: hold.categoryId,
+        cardId: reversed.first.cardId,
+        reservationId: reversed.first.reservationId,
+        expiresAt: hold.expiresAt,
+        customerId: hold.customerId,
+        queue: reversed,
+      ),
+    );
+  }
+
   static String _demoteHold(String? raw, RewardProbeHold hold, String cardId) {
     final cards = hold.cards;
     final index = cards.indexWhere((card) => card.cardId == cardId);

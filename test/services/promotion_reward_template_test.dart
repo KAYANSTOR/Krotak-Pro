@@ -1288,4 +1288,71 @@ void main() {
       ['own-a'],
     );
   });
+
+  test('reversing a queued card flips that queue only and keeps reservations', () {
+    final expires = DateTime.utc(2026, 10, 12);
+    RewardProbeHold hold(String cardId, String categoryId, {String customerId = ''}) {
+      return RewardProbeHold(
+        categoryId: categoryId,
+        cardId: cardId,
+        reservationId: 'res-$cardId',
+        expiresAt: expires,
+        customerId: customerId,
+      );
+    }
+
+    final encoded = PromotionRewardTemplate.enqueueCrossCategoryHold(
+      PromotionRewardTemplate.enqueueHold(
+        PromotionRewardTemplate.enqueueCrossCategoryHold(
+          null,
+          hold('shared-a', 'cat-shared'),
+        ),
+        hold('own-a', 'cat-1', customerId: 'cust-1'),
+      ),
+      hold('cross-b', 'cat-2', customerId: 'cust-1'),
+    );
+    final withThird = PromotionRewardTemplate.enqueueCrossCategoryHold(
+      PromotionRewardTemplate.enqueueCrossCategoryHold(
+        encoded,
+        hold('cross-a', 'cat-9', customerId: 'cust-1'),
+      ),
+      hold('cross-c', 'cat-3', customerId: 'cust-1'),
+    );
+    final reversed = PromotionRewardTemplate.reverseQueuedCard(
+      withThird,
+      cardId: 'cross-a',
+      customerId: 'cust-1',
+    );
+    final customer = PromotionRewardTemplate.lookupCrossCategoryHold(
+      reversed,
+      customerId: 'cust-1',
+    );
+    expect(customer?.cards.map((card) => card.cardId), ['cross-c', 'cross-a', 'cross-b']);
+    expect(customer?.expiresAt, expires);
+    expect(customer?.cards[1].reservationId, 'res-cross-a');
+    expect(
+      PromotionRewardTemplate.reverseQueuedCard(
+        reversed,
+        cardId: 'cross-a',
+        customerId: 'cust-1',
+      ),
+      withThird,
+    );
+    expect(
+      PromotionRewardTemplate.lookupHold(reversed, 'cat-1', customerId: 'cust-1')?.cardId,
+      'own-a',
+    );
+    expect(
+      PromotionRewardTemplate.lookupCrossCategoryHold(reversed)?.cardId,
+      'shared-a',
+    );
+    final otherCustomer = PromotionRewardTemplate.reverseQueuedCard(
+      reversed,
+      cardId: 'own-a',
+    );
+    expect(
+      PromotionRewardTemplate.lookupHold(otherCustomer, 'cat-1', customerId: 'cust-1')?.cards.map((card) => card.cardId),
+      ['own-a'],
+    );
+  });
 }
