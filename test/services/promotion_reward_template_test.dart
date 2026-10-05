@@ -1023,4 +1023,68 @@ void main() {
       'cross-a',
     );
   });
+
+  test('promoting one queued card makes it first without touching other queues', () {
+    final expires = DateTime.utc(2026, 10, 12);
+    RewardProbeHold hold(String cardId, String categoryId, {String customerId = ''}) {
+      return RewardProbeHold(
+        categoryId: categoryId,
+        cardId: cardId,
+        reservationId: 'res-$cardId',
+        expiresAt: expires,
+        customerId: customerId,
+      );
+    }
+
+    final encoded = PromotionRewardTemplate.enqueueCrossCategoryHold(
+      PromotionRewardTemplate.enqueueHold(
+        PromotionRewardTemplate.enqueueCrossCategoryHold(
+          null,
+          hold('shared-a', 'cat-shared'),
+        ),
+        hold('own-a', 'cat-1', customerId: 'cust-1'),
+      ),
+      hold('cross-b', 'cat-2', customerId: 'cust-1'),
+    );
+    final withSecond = PromotionRewardTemplate.enqueueCrossCategoryHold(
+      encoded,
+      hold('cross-a', 'cat-9', customerId: 'cust-1'),
+    );
+    final promoted = PromotionRewardTemplate.promoteQueuedCard(
+      withSecond,
+      cardId: 'cross-a',
+      customerId: 'cust-1',
+    );
+    final customer = PromotionRewardTemplate.lookupCrossCategoryHold(
+      promoted,
+      customerId: 'cust-1',
+    );
+    expect(customer?.cards.map((card) => card.cardId), ['cross-a', 'cross-b']);
+    expect(customer?.expiresAt, expires);
+    expect(customer?.cards.first.reservationId, 'res-cross-a');
+    expect(
+      PromotionRewardTemplate.promoteQueuedCard(
+        promoted,
+        cardId: 'cross-a',
+        customerId: 'cust-1',
+      ),
+      promoted,
+    );
+    expect(
+      PromotionRewardTemplate.lookupHold(promoted, 'cat-1', customerId: 'cust-1')?.cardId,
+      'own-a',
+    );
+    expect(
+      PromotionRewardTemplate.lookupCrossCategoryHold(promoted)?.cardId,
+      'shared-a',
+    );
+    final otherCustomer = PromotionRewardTemplate.promoteQueuedCard(
+      promoted,
+      cardId: 'own-a',
+    );
+    expect(
+      PromotionRewardTemplate.lookupHold(otherCustomer, 'cat-1', customerId: 'cust-1')?.cards.map((card) => card.cardId),
+      ['own-a'],
+    );
+  });
 }

@@ -78,6 +78,7 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
   List<RewardProbeCardSnapshot> _availableCards = const [];
   String? _holdReservationId;
   int _holdQueueCount = 0;
+  List<String> _queuedCardIds = const [];
 
   String get _fallback =>
       LocalPromotionFulfillmentService.defaultRewardSmsTemplate;
@@ -226,6 +227,7 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
     }
     _holdReservationId = hold.cardFor(card.cardId)?.reservationId;
     _holdQueueCount = hold.cards.length;
+    _queuedCardIds = [for (final item in hold.cards) item.cardId];
     return true;
   }
 
@@ -307,6 +309,7 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
       _holdNextPayout = true;
       _holdReservationId = reservationId;
       _holdQueueCount = stored?.cards.length ?? 1;
+      _queuedCardIds = [for (final item in stored?.cards ?? const <RewardProbeHeldCard>[]) item.cardId];
       _status = _holdStatus;
       _statusIsError = false;
     });
@@ -319,6 +322,7 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
     if (card == null || reservationId == null || card.categoryId.isEmpty) {
       _holdReservationId = null;
       _holdQueueCount = 0;
+      _queuedCardIds = const [];
       return;
     }
     final c = AppScope.of(context);
@@ -360,6 +364,7 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
     );
     _holdReservationId = null;
     _holdQueueCount = 0;
+      _queuedCardIds = const [];
     if (!quiet && mounted) {
       setState(() => _holdNextPayout = false);
     }
@@ -409,10 +414,61 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
       _holdNextPayout = next != null;
       _holdReservationId = next?.reservationId;
       _holdQueueCount = remaining?.cards.length ?? 0;
+      _queuedCardIds = [for (final item in remaining?.cards ?? const <RewardProbeHeldCard>[]) item.cardId];
       _status = next == null
           ? 'أُخرج الكرت من الطابور ولم يبقَ حجز'
           : 'أُخرج الكرت الظاهر وبقي ${_holdQueueCount} في الطابور';
       _statusIsError = false;
+    });
+  }
+
+  /// يقدّم الكرت الظاهر ليُصرف أولاً دون تحرير حجزه أو مسح بقية الطابور.
+  Future<void> _promoteSelectedHold() async {
+    final card = _liveCard;
+    if (card == null || _queuedCardIds.isEmpty || _queuedCardIds.first == card.cardId) {
+      return;
+    }
+    final c = AppScope.of(context);
+    setState(() => _busy = true);
+    final current = await c.settings.find(SettingKeys.promotionRewardProbeHolds);
+    final raw = current is Success<AppSetting?> ? current.value?.value : null;
+    final now = c.clock.now();
+    final encoded = PromotionRewardTemplate.promoteQueuedCard(
+      raw,
+      cardId: card.cardId,
+      customerId: _holdCustomerId,
+    );
+    await c.settings.save(
+      AppSetting(
+        key: SettingKeys.promotionRewardProbeHolds,
+        value: encoded,
+        updatedAt: now,
+      ),
+    );
+    final stored = PromotionRewardTemplate.lookupCrossCategoryHold(
+      encoded,
+      customerId: _holdCustomerId,
+    );
+    await c.auditLogs.append(
+      AuditLog(
+        id: c.ids.next('reward-probe-hold'),
+        entityType: 'promotion_reward_template',
+        entityId: card.cardId,
+        action: 'reward_probe_card_promoted',
+        occurredAt: now,
+        payloadJson: '{"customerId":"${_holdCustomerId ?? ''}","queue":${stored?.cards.length ?? 0}}',
+      ),
+    );
+    if (!mounted) return;
+    setState(() {
+      _busy = false;
+      _holdReservationId = stored?.cardFor(card.cardId)?.reservationId ?? _holdReservationId;
+      _holdQueueCount = stored?.cards.length ?? _holdQueueCount;
+      _queuedCardIds = [for (final item in stored?.cards ?? const <RewardProbeHeldCard>[]) item.cardId];
+      _status = _queuedCardIds.isNotEmpty && _queuedCardIds.first == card.cardId
+          ? 'قُدّم الكرت الظاهر ليُصرف أولاً، وبقي ${_holdQueueCount} في الطابور'
+          : 'تعذر تقديم الكرت الظاهر';
+      _statusIsError = _queuedCardIds.isEmpty || _queuedCardIds.first != card.cardId;
     });
   }
 
@@ -897,6 +953,20 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
                           style: const TextStyle(fontFamily: NetTypography.family),
                         ),
                       ),
+                    if (_holdNextPayout && _holdQueueCount > 1 && _queuedCardIds.isNotEmpty && _queuedCardIds.first != _liveCard?.cardId) ...[
+                      const SizedBox(height: 4),
+                      Align(
+                        alignment: AlignmentDirectional.centerStart,
+                        child: TextButton.icon(
+                          onPressed: _busy || _probing ? null : _promoteSelectedHold,
+                          icon: const Icon(Icons.vertical_align_top),
+                          label: Text(
+                            'تقديم الكرت الظاهر ليُصرف أولاً (${_queuedCardIds.length})',
+                            style: const TextStyle(fontFamily: NetTypography.family),
+                          ),
+                        ),
+                      ),
+                    ],
                     if (_holdNextPayout && _holdQueueCount > 0) ...[
                       const SizedBox(height: 4),
                       Align(
