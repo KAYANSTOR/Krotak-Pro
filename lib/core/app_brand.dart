@@ -14,7 +14,7 @@ abstract final class AppBrand {
   static const developer = 'جارالله الكبودي';
   static const company = 'شركة كيان سوفت';
   static const phone = '773303455';
-  static const website = 'www.ye.kayan-soft.online';
+  static const website = 'www.kayan-soft.online';
   static const description =
       'Krotak Pro — نظام إدارة شبكات الكروت والرسائل: مخزون الكروت، المبيعات، حسابات '
       'العملاء، نقاط البيع، المحافظ، العروض والتقارير — يعمل محلياً على الجهاز.';
