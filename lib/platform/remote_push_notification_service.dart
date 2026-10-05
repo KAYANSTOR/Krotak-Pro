@@ -10,27 +10,36 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 final class RemotePushNotificationService {
   RemotePushNotificationService._();
   static final instance = RemotePushNotificationService._();
-  final FlutterLocalNotificationsPlugin _localNotifications = FlutterLocalNotificationsPlugin();
+  final FlutterLocalNotificationsPlugin _localNotifications =
+      FlutterLocalNotificationsPlugin();
   bool _started = false;
   String? _latestToken;
   Future<void> Function(String token)? _tokenWriter;
   StreamSubscription<RemoteMessage>? _foregroundSubscription;
   StreamSubscription<String>? _tokenSubscription;
 
+  /// قناة احترافية جديدة — تغيير المعرف ضروري لأن أندرويد لا يحدّث صوت/أهمية
+  /// قناة موجودة مسبقاً.
+  static const channelId = 'krotak_admin_v2';
+  static const channelName = 'إشعارات الإدارة';
+  static const channelDescription =
+      'إشعارات الإدارة والتنبيهات المركزية — نغمة وأيقونة كروتك برو';
+
   static bool get isConfigured => true;
-  static bool get _hasBuildDefines => const String.fromEnvironment('KROTAK_FIREBASE_API_KEY').isNotEmpty;
+  static bool get _hasBuildDefines =>
+      const String.fromEnvironment('KROTAK_FIREBASE_API_KEY').isNotEmpty;
   static FirebaseOptions? get _options => _hasBuildDefines
       ? const FirebaseOptions(
           apiKey: String.fromEnvironment('KROTAK_FIREBASE_API_KEY'),
           appId: String.fromEnvironment('KROTAK_FIREBASE_APP_ID'),
-          messagingSenderId: String.fromEnvironment('KROTAK_FIREBASE_MESSAGING_SENDER_ID'),
+          messagingSenderId:
+              String.fromEnvironment('KROTAK_FIREBASE_MESSAGING_SENDER_ID'),
           projectId: String.fromEnvironment('KROTAK_FIREBASE_PROJECT_ID'),
-          storageBucket: String.fromEnvironment('KROTAK_FIREBASE_STORAGE_BUCKET'),
+          storageBucket:
+              String.fromEnvironment('KROTAK_FIREBASE_STORAGE_BUCKET'),
         )
       : null;
 
-  /// يربط كاتب الـToken بجلسة الحساب الحالية. إذا وصل الـToken قبل تسجيل
-  /// الدخول، يُرسل فور جاهزية الحساب بدل إسقاطه.
   Future<void> bindTokenWriter(Future<void> Function(String token) writer) async {
     _tokenWriter = writer;
     final token = _latestToken;
@@ -40,7 +49,9 @@ final class RemotePushNotificationService {
   void unbindTokenWriter() => _tokenWriter = null;
 
   Future<void> start({void Function(RemoteMessage message)? onMessage}) async {
-    if (_started || !isConfigured || defaultTargetPlatform != TargetPlatform.android) return;
+    if (_started || !isConfigured || defaultTargetPlatform != TargetPlatform.android) {
+      return;
+    }
     _started = true;
     try {
       await _startInternal(onMessage);
@@ -57,16 +68,30 @@ final class RemotePushNotificationService {
     } else {
       await Firebase.initializeApp();
     }
-    await _localNotifications.initialize(const InitializationSettings(
+
+    const initSettings = InitializationSettings(
       android: AndroidInitializationSettings('@drawable/ic_stat_stock'),
-    ));
-    const channel = AndroidNotificationChannel(
-      'krotak_admin',
-      'إشعارات الإدارة',
-      description: 'إشعارات الإدارة والتنبيهات المركزية',
-      importance: Importance.high,
     );
-    await _localNotifications.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()?.createNotificationChannel(channel);
+    await _localNotifications.initialize(
+      initSettings,
+      onDidReceiveNotificationResponse: (response) {},
+    );
+
+    final channel = AndroidNotificationChannel(
+      channelId,
+      channelName,
+      description: channelDescription,
+      importance: Importance.max,
+      playSound: true,
+      sound: const RawResourceAndroidNotificationSound('krotak_notify'),
+      enableVibration: true,
+      showBadge: true,
+    );
+    await _localNotifications
+        .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>()
+        ?.createNotificationChannel(channel);
+
     final messaging = FirebaseMessaging.instance;
     await messaging.requestPermission(alert: true, badge: true, sound: true);
     await messaging.subscribeToTopic('krotak_all_users');
@@ -89,14 +114,25 @@ final class RemotePushNotificationService {
       message.hashCode,
       notification.title,
       notification.body,
-      const NotificationDetails(
+      NotificationDetails(
         android: AndroidNotificationDetails(
-          'krotak_admin',
-          'إشعارات الإدارة',
-          channelDescription: 'إشعارات الإدارة والتنبيهات المركزية',
-          importance: Importance.high,
-          priority: Priority.high,
+          channelId,
+          channelName,
+          channelDescription: channelDescription,
+          importance: Importance.max,
+          priority: Priority.max,
           icon: '@drawable/ic_stat_stock',
+          largeIcon: const DrawableResourceAndroidBitmap('@drawable/ic_notif_large'),
+          playSound: true,
+          sound: const RawResourceAndroidNotificationSound('krotak_notify'),
+          enableVibration: true,
+          category: AndroidNotificationCategory.message,
+          visibility: NotificationVisibility.public,
+          styleInformation: BigTextStyleInformation(
+            notification.body ?? '',
+            contentTitle: notification.title,
+            summaryText: 'كروتك برو',
+          ),
         ),
       ),
       payload: message.data['route']?.toString(),
@@ -119,8 +155,8 @@ final class RemotePushNotificationService {
     }
   }
 
-  /// معرف ثابت مشتق من الـToken لتحديث نفس الجهاز عند تغير بياناته.
-  static String deviceIdForToken(String token) => base64Url.encode(utf8.encode(token)).replaceAll('=', '');
+  static String deviceIdForToken(String token) =>
+      base64Url.encode(utf8.encode(token)).replaceAll('=', '');
 
   Future<void> dispose() async {
     await _foregroundSubscription?.cancel();
