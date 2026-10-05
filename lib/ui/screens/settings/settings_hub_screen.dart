@@ -21,6 +21,7 @@ import '../../widgets/settings/settings_section_header.dart';
 import '../pos_screen.dart';
 import '../system_check_screen.dart';
 import '../wallets_screen.dart';
+import '../inventory_screen.dart';
 import 'backup_restore_screen.dart';
 import 'clean_logs_screen.dart';
 import 'deep_clean_screen.dart';
@@ -328,6 +329,7 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
                                   SettingsGroupSwitchRow(icon: Icons.history, title: 'معالجة الرسائل القديمة (عند التوقف)', subtitle: 'عند فتح التطبيق مجدداً فقط — لا تضمن المعالجة والتطبيق مغلق أو بعد Force-stop', value: _oldMsgs, onChanged: (v) async { setState(() => _oldMsgs = v); await _saveBool(SettingKeys.processOldMessagesOnResume, v); }),
                                   SettingsGroupSwitchRow(icon: Icons.notifications_active_outlined, title: 'تنبيه العمليات التي تتطلب تدخلاً', subtitle: _interventionAlert ? 'يصدر تنبيه صوتي عند وجود عملية معلّقة تحتاج تدخلاً يدوياً' : 'التنبيه الصوتي معطّل — الرسائل المعلّقة تظهر في القائمة دون صوت', value: _interventionAlert, onChanged: (v) async { setState(() => _interventionAlert = v); await _saveBool(SettingKeys.pendingAttentionAlertEnabled, v); }),
                                   SettingsGroupNavRow(icon: Icons.notifications_active_outlined, title: 'تنبيهات انخفاض مخزون الكروت', subtitle: 'سيتم تنبيهك عندما يقل مخزون أي فئة عن '+_lowStock.toString()+' كرت', onTap: _openLowStock),
+                                  SettingsGroupNavRow(icon: Icons.style_outlined, title: 'إدارة الكروت والفئات', subtitle: 'إنشاء الفئات واستيراد الكروت ومراجعة المخزون', searchText: 'الكروت الفئات المخزون توليد', onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const InventoryScreen()))),
                                   SettingsGroupNavRow(icon: Icons.sim_card_outlined, title: 'شرائح الاتصال', subtitle: 'اختيار شريحة الاستقبال والإرسال', onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SimSettingsScreen()))),
                                   SettingsGroupNavRow(icon: Icons.health_and_safety_outlined, title: 'فحص النظام', subtitle: 'جاهزية الأذونات والخدمات', searchText: 'فحص جاهزية الأذونات الخدمات', onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SystemCheckScreen()))),
                                 ]),

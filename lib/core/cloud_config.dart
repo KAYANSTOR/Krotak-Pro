@@ -45,8 +45,8 @@ abstract final class CloudConfig {
   /// (الرقم + كلمة المرور) لأن Firebase لا يدعم الرقم وكلمة المرور مباشرة.
   static const emailDomain = 'krotak.app';
 
-  /// مدة التجربة الاحتياطية إن تعذّر قراءة الإعداد العام من الخادم.
-  static const fallbackTrialDays = 3;
+  /// لا توجد فترة تجريبية محلية؛ الحسابات الدائمة تُدار من لوحة الإدارة.
+  static const fallbackTrialDays = 0;
 
   /// أقصى مدة تجربة يقبلها الخادم (مطابقة لقواعد الأمان).
   static const maxTrialDays = 30;

@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/result.dart';
+import '../../core/contact_admin.dart';
 import '../../domain/entities/card.dart' as domain;
 import '../../domain/entities/customer.dart';
 import '../../domain/entities/license.dart' as domain;
@@ -314,6 +315,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     await AppRoutes.openHelp(context);
   }
 
+  void _contactAdmin() => AdminContact.openWhatsApp(context);
+
   Future<void> _openAttentionMessages() async {
     await AppRoutes.openAttentionMessages(context);
     _notifyMutation();
@@ -410,6 +413,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   : _dateLabel,
               onSettings: _openSettings,
               onHelp: _openHelp,
+              onContactAdmin: _contactAdmin,
               onNotifications: _openAdminNotifications,
               notificationsCount: _attentionMessagesCount,
               subscriptionLabel: _subscriptionLabel,
@@ -488,11 +492,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   onTap: () => widget.onNavigateToTab?.call('offers'),
                 ),
                 NetServiceBigTile(
-                  label: 'توليد كروت',
-                  description: 'إضافة مخزون جديد',
-                  icon: Icons.style_rounded,
+                  label: 'إعدادات التطبيق',
+                  description: 'ضبط الكروت والرسائل والمحافظ',
+                  icon: Icons.settings_suggest_rounded,
                   tint: net.success,
-                  onTap: () => widget.onNavigateToTab?.call('cards'),
+                  onTap: _openSettings,
                 ),
               ],
             ),

@@ -176,7 +176,7 @@ final class CloudGlobalConfig {
       isAppActive: data['is_app_active'] != false,
       maintenanceMessage: data['maintenance_message']?.toString() ?? '',
       defaultTrialDays: (parsedTrialDays ?? CloudConfig.fallbackTrialDays)
-          .clamp(1, CloudConfig.maxTrialDays),
+          .clamp(0, CloudConfig.maxTrialDays),
       defaultTrialWarning: data['default_trial_warning']?.toString() ?? '',
       globalOfficialWarning: data['global_official_warning']?.toString() ?? '',
       warningDaysBeforeExpiry:

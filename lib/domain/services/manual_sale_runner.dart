@@ -220,6 +220,7 @@ final class ManualSaleRunner {
         ).renderVoucherDelivery(
           serialNumber: card.serialNumber,
           secretCode: card.secretCode,
+          cardValue: (category.faceValue.minorUnits / 100).toString(),
         );
         if (rendered is Failure<String>) {
           await host.auditLogs.append(

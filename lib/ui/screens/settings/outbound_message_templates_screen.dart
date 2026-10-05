@@ -519,6 +519,30 @@ class _OutboundMessageTemplatesScreenState
         .replaceAll('{POS_NAME}', 'الأمل').replaceAll('{TOTAL}', '90').replaceAll('{AMOUNT}', '90').replaceAll('{cards}', 'رقم الكرت: 1234567\\nالرمز: 987654');
   }
 
+  String _variableLabel(String variable) => const <String, String>{
+        'NETWORK_NAME': 'اسم الشبكة',
+        'CARD_CODE': 'كود الكرت',
+        'CARD_VALUE': 'فئة الكرت',
+        'CURRENCY': 'العملة',
+        'serial': 'رقم الكرت',
+        'code': 'الرمز',
+        'secret': 'الرمز السري',
+        'SECRET': 'الرمز السري',
+        'CODE': 'الرمز',
+        'cards': 'بيانات الكروت',
+        'QUANTITY_TEXT': 'عدد الكروت',
+        'CUSTOMER_PHONE': 'رقم العميل',
+        'POS_NAME': 'اسم نقطة البيع',
+        'TOTAL': 'الإجمالي',
+        'AMOUNT': 'المبلغ',
+        'category': 'الفئة',
+        'amount': 'المبلغ',
+        'balance': 'الرصيد',
+        'debt': 'الدين',
+        'reason': 'السبب',
+        'count': 'العدد',
+      }[variable] ?? variable;
+
   Future<void> _edit(_Tpl? item) async {
     final isNew = item == null;
     var tabIndex = _tabs.index.clamp(0, _tabsData.length - 1);
@@ -608,7 +632,7 @@ class _OutboundMessageTemplatesScreenState
                     const SizedBox(height: 8),
                     Wrap(spacing: 8, runSpacing: 8, children: [
                       for (final v in vars)
-                        ActionChip(label: Text('+'+v, style: const TextStyle(fontFamily: 'Tajawal', fontSize: 12)), onPressed: () {
+                        ActionChip(label: Text(_variableLabel(v), style: const TextStyle(fontFamily: 'Tajawal', fontSize: 12)), onPressed: () {
                           final t = bodyCtrl.text; final sel = bodyCtrl.selection; final ins = '{'+v+'}';
                           final start = sel.isValid ? sel.start : t.length; final end = sel.isValid ? sel.end : t.length;
                           bodyCtrl.text = t.replaceRange(start, end, ins);

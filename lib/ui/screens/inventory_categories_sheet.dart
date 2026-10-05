@@ -45,6 +45,8 @@ class _CategoriesSheet extends StatefulWidget {
 }
 
 class _CategoriesSheetState extends State<_CategoriesSheet> {
+  late List<domain.CardCategory> _categories;
+  late List<domain.Card> _cards;
   /// نِسَب العمولة بالـ basis points لكل فئة (500 = 5%).
   ///
   /// تُخزَّن في الإعدادات (LocalCategoryCommissionStore) لا في جدول الفئات،
@@ -54,14 +56,29 @@ class _CategoriesSheetState extends State<_CategoriesSheet> {
   @override
   void initState() {
     super.initState();
+    _categories = List<domain.CardCategory>.from(widget.categories);
+    _cards = List<domain.Card>.from(widget.cards);
     WidgetsBinding.instance.addPostFrameCallback((_) => _loadCommissions());
+  }
+
+  Future<void> _reloadLocalCatalog() async {
+    final c = AppScope.of(context);
+    final cats = await c.categories.listAll();
+    final cards = await c.cards.listAll();
+    if (!mounted) return;
+    if (cats is Success<List<domain.CardCategory>> && cards is Success<List<domain.Card>>) {
+      setState(() {
+        _categories = cats.value;
+        _cards = cards.value;
+      });
+    }
   }
 
   Future<void> _loadCommissions() async {
     final c = AppScope.of(context);
     final store = LocalCategoryCommissionStore(settings: c.settings, clock: c.clock);
     final next = <String, int>{};
-    for (final cat in widget.categories) {
+    for (final cat in _categories) {
       final r = await store.bpsFor(cat.id);
       if (r is Success<int>) next[cat.id] = r.value;
     }
@@ -84,10 +101,10 @@ class _CategoriesSheetState extends State<_CategoriesSheet> {
 
   Map<String, List<int>> _counts() {
     final map = <String, List<int>>{};
-    for (final cat in widget.categories) {
+    for (final cat in _categories) {
       map[cat.id] = [0, 0, 0, 0];
     }
-    for (final card in widget.cards) {
+    for (final card in _cards) {
       final cur = map[card.categoryId];
       if (cur == null) continue;
       if (card.status == domain.CardStatus.available) cur[0]++;
@@ -123,7 +140,7 @@ class _CategoriesSheetState extends State<_CategoriesSheet> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           const Text('فئات الكروت', style: TextStyle(fontFamily: 'Tajawal', fontSize: 18, fontWeight: FontWeight.w800)),
-                          Text(widget.categories.length.toString() + ' فئة · إدارة القيم والمخزون', style: TextStyle(fontFamily: 'Tajawal', fontSize: 12, color: palette.textSecondary)),
+                          Text(_categories.length.toString() + ' فئة · إدارة القيم والمخزون', style: TextStyle(fontFamily: 'Tajawal', fontSize: 12, color: palette.textSecondary)),
                         ],
                       ),
                     ),
@@ -136,14 +153,14 @@ class _CategoriesSheetState extends State<_CategoriesSheet> {
                 ),
               ),
               Expanded(
-                child: widget.categories.isEmpty
+                child: _categories.isEmpty
                     ? const AsyncEmptyView(message: 'لا توجد فئات بعد', hint: 'أنشئ فئة بقيمة اسمية موجبة أولًا', icon: Icons.category_outlined, compact: true)
                     : ListView.builder(
                         controller: scroll,
                         padding: const EdgeInsets.fromLTRB(16, 0, 16, 28),
-                        itemCount: widget.categories.length,
+                        itemCount: _categories.length,
                         itemBuilder: (context, i) {
-                          final cat = widget.categories[i];
+                          final cat = _categories[i];
                           final c = counts[cat.id] ?? [0, 0, 0, 0];
                           final major = cat.faceValue.minorUnits / 100.0;
                           final valueLabel = major == major.roundToDouble() ? major.toInt().toString() : major.toStringAsFixed(2);
@@ -231,6 +248,7 @@ class _CategoriesSheetState extends State<_CategoriesSheet> {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text((r as Failure<dynamic>).error.message, style: const TextStyle(fontFamily: 'Tajawal'))));
       return;
     }
+    await _reloadLocalCatalog();
     await widget.onChanged();
     await _loadCommissions();
     if (mounted) setState(() {});
@@ -360,6 +378,7 @@ class _CategoriesSheetState extends State<_CategoriesSheet> {
     nameCtrl.dispose();
     valueCtrl.dispose();
     commissionCtrl.dispose();
+    await _reloadLocalCatalog();
     await widget.onChanged();
     await _loadCommissions();
   }

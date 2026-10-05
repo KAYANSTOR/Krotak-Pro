@@ -80,7 +80,7 @@ final class CloudAccountService {
 
   // ── التسجيل والدخول ─────────────────────────────────────────────────
 
-  /// إنشاء حساب جديد يبدأ **تجريبياً** مباشرة، ويظهر في لوحة الإدارة.
+  /// إنشاء حساب جديد دائمًا؛ الإيقاف أو التفعيل يبقى بيد الإدارة.
   Future<CloudSession> register({
     required String networkName,
     required String phone,
@@ -93,9 +93,7 @@ final class CloudAccountService {
       password: password,
     );
 
-    final config = await fetchGlobalConfig(session.idToken);
     final now = DateTime.now();
-    final trialEnd = now.add(Duration(days: config.defaultTrialDays));
 
     await _client.patchDocument(
       'users/${session.uid}',
@@ -104,9 +102,7 @@ final class CloudAccountService {
         'phone': normalized,
         'network_name': networkName,
         'is_active': true,
-        'is_trial': true,
-        'subscription_end_date': trialEnd,
-        'trial_days': config.defaultTrialDays,
+        'is_trial': false,
         'platform': 'android',
         'app_version': AppBrand.version,
         'created_at': now,
@@ -119,8 +115,6 @@ final class CloudAccountService {
         'network_name',
         'is_active',
         'is_trial',
-        'subscription_end_date',
-        'trial_days',
         'platform',
         'app_version',
         'created_at',

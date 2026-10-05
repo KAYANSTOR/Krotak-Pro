@@ -36,13 +36,13 @@ class _ActivationScreenState extends State<ActivationScreen> {
     final id = _idCtrl.text.trim().isEmpty ? c.ids.next('lic') : _idCtrl.text.trim();
     final r = await c.licenseService.activateOffline(
       licenseId: id,
-      expiresAt: c.clock.now().add(const Duration(days: 30)),
+      expiresAt: null,
     );
     if (!mounted) return;
     setState(() {
       _busy = false;
       _status = r is Success<License>
-          ? 'مفعّل: ${r.value.id} حتى ${r.value.expiresAt}'
+          ? 'مفعّل بشكل دائم: ${r.value.id}'
           : (r as Failure).error.message;
     });
   }
@@ -85,7 +85,7 @@ class _ActivationScreenState extends State<ActivationScreen> {
                           height: 18,
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
-                      : const Text('تفعيل 30 يومًا'),
+                      : const Text('تفعيل دائم'),
                 ),
               ],
             ),

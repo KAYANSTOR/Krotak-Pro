@@ -81,6 +81,9 @@ final class OutboundTemplateRenderer {
   Future<Result<String>> renderVoucherDelivery({
     required String serialNumber,
     required String secretCode,
+    String cardValue = 'غير محدد',
+    String networkName = 'NET',
+    String currency = 'ر.ي',
   }) {
     final serial = serialNumber.trim();
     final secret = secretCode.trim();
@@ -89,12 +92,13 @@ final class OutboundTemplateRenderer {
       'serial_number': serial,
       'code': secret,
       'secret': secret,
-      'CARD_CODE': secret,
+      'CARD_CODE': serial,
       'CARD_SERIAL': serial,
+      'CARD_VALUE': cardValue.trim().isEmpty ? 'غير محدد' : cardValue.trim(),
+      'NETWORK_NAME': networkName.trim().isEmpty ? 'NET' : networkName.trim(),
+      'CURRENCY': currency,
     };
-    final fallback = secret.isEmpty
-        ? 'بطاقة الإنترنت\nالرقم: {serial}'
-        : SettingDefaults.voucherDeliverySmsTemplate;
+    final fallback = SettingDefaults.voucherDeliverySmsTemplate;
     return renderFromSettings(
       key: SettingKeys.voucherDeliverySmsTemplate,
       fallback: fallback,

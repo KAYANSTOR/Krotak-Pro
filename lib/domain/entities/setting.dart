@@ -113,7 +113,7 @@ abstract final class SettingDefaults {
   static const promotionRewardSmsTemplate =
       'مكافأة عرض {title}\nالرقم: {serial}\nالرمز: {secret}';
   static const voucherDeliverySmsTemplate =
-      'رقم الكرت: {serial}\nالرمز: {code}';
+      'نشكرك على استخدامك شبكة {NETWORK_NAME}.\nكود الكرت: {CARD_CODE}\nفئة: {CARD_VALUE} ر.ي\nالرمز: {code}';
   static const posCustomerCardDeliveryTemplate =
       'شبكة {NETWORK_NAME}\nالفئة: {category}\n{cards}';
   static const posOrderSuccessTemplate =

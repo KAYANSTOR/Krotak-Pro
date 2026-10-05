@@ -14,7 +14,7 @@ import '../widgets/net/net_surface_card.dart';
 
 enum _AuthMode { register, login }
 
-/// شاشة حساب الشبكة: إنشاء حساب جديد (تجريبي تلقائياً) أو الدخول بحساب قائم.
+/// شاشة حساب الشبكة: إنشاء حساب دائم أو الدخول بحساب قائم.
 ///
 /// بنفس هوية التطبيق: تدرّج العلامة، خط Tajawal، البطاقات والحواف الموحّدة،
 /// ودعم الوضعين الفاتح والداكن.
@@ -495,8 +495,6 @@ class _AccountAuthScreenState extends State<AccountAuthScreen> {
 
   Widget _trialCard(BuildContext context, NetSemanticColors net) {
     final palette = KayanPalette.of(context);
-    final trialDays = AccountSession.maybeInstance?.state.value.config.defaultTrialDays ??
-        CloudConfig.fallbackTrialDays;
     return Container(
       padding: const EdgeInsets.all(NetSpacing.md),
       decoration: BoxDecoration(
@@ -514,7 +512,7 @@ class _AccountAuthScreenState extends State<AccountAuthScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'يبدأ حسابك كحساب تجريبي ($trialDays أيام)',
+                  'حساب دائم — بدون فترة تجريبية',
                   style: TextStyle(
                     fontFamily: NetTypography.family,
                     fontSize: 13,

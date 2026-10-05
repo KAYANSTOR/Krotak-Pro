@@ -14,6 +14,7 @@ class NetDashboardHeader extends StatelessWidget {
     this.greeting,
     this.onSettings,
     this.onHelp,
+    this.onContactAdmin,
     this.onNotifications,
     this.notificationsCount = 0,
     this.subscriptionLabel,
@@ -28,6 +29,7 @@ class NetDashboardHeader extends StatelessWidget {
   final String? greeting;
   final VoidCallback? onSettings;
   final VoidCallback? onHelp;
+  final VoidCallback? onContactAdmin;
   final VoidCallback? onNotifications;
   final int notificationsCount;
 
@@ -166,6 +168,12 @@ class NetDashboardHeader extends StatelessWidget {
               icon: Icons.support_agent_rounded,
               tooltip: 'المساعدة',
               onPressed: onHelp,
+            ),
+          if (onContactAdmin != null)
+            NetHeaderAction(
+              icon: Icons.chat_rounded,
+              tooltip: 'التواصل مع الإدارة عبر واتساب',
+              onPressed: onContactAdmin,
             ),
           if (onSettings != null)
             NetHeaderAction(

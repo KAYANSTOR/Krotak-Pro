@@ -129,7 +129,7 @@ class _HomeShellState extends State<HomeShell> {
         await AppRoutes.openPos(context);
         if (mounted) _bumpRefresh();
       },
-      onGenerateCards: () => _goToId('cards'),
+      onGenerateCards: () => AppRoutes.openSettings(context),
       onBroadcast: () => BroadcastSheet.show(context),
       onTodayReports: () async {
         await AppRoutes.openSalesPeriodReport(context);

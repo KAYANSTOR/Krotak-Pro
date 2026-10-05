@@ -30,7 +30,7 @@ final class LocalLicenseService implements LicenseService {
 
   Future<Result<License>> activateOffline({
     required String licenseId,
-    required DateTime expiresAt,
+    DateTime? expiresAt,
     String? deviceBinding,
   }) async {
     final license = License(

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../application/account_session.dart';
 import '../../core/app_brand.dart';
+import '../../core/contact_admin.dart';
 import '../theme/kayan_palette.dart';
 import '../theme/net_semantic_colors.dart';
 import '../theme/net_tokens.dart';
@@ -171,6 +172,15 @@ class _AccountBlockedScreenState extends State<AccountBlockedScreen> {
                                 )
                               : const Icon(Icons.refresh_rounded, size: NetSizes.iconSm),
                           label: const Text('تحديث الحالة'),
+                        ),
+                      ),
+                      const SizedBox(height: NetSpacing.sm),
+                      OutlinedButton.icon(
+                        onPressed: _busy ? null : () => AdminContact.openWhatsApp(context),
+                        icon: const Icon(Icons.chat_rounded),
+                        label: Text(
+                          'التواصل مع الإدارة عبر واتساب\n${AdminContact.displayPhone}',
+                          textAlign: TextAlign.center,
                         ),
                       ),
                       const SizedBox(height: NetSpacing.sm),
