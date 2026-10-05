@@ -6,7 +6,6 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
-import android.graphics.BitmapFactory
 import android.os.Build
 import android.util.Log
 import androidx.core.app.NotificationCompat
@@ -80,7 +79,7 @@ object StockAlertNotification {
             )
             val builder = NotificationCompat.Builder(context, CHANNEL_ID)
                 // استخدم أيقونة التطبيق الأساسية نفسها في إشعار Android الحي.
-                .setSmallIcon(R.mipmap.ic_launcher)
+                .setSmallIcon(R.drawable.ic_stat_stock)
                 .setContentTitle(title)
                 .setContentText(body)
                 .setStyle(NotificationCompat.BigTextStyle().bigText(body))
@@ -92,10 +91,6 @@ object StockAlertNotification {
                 .setOnlyAlertOnce(true)
                 .setShowWhen(true)
                 .setContentIntent(contentIntent)
-            // أيقونة كبيرة من الصور (لا تُستخدم @mipmap/ic_launcher لأنها أيقونة
-            // متكيّفة XML ولا يمكن فكّها كصورة نقطية).
-            val large = BitmapFactory.decodeResource(context.resources, R.drawable.ic_notif_large)
-            if (large != null) builder.setLargeIcon(large)
             NotificationManagerCompat.from(context).notify(NOTIFICATION_ID, builder.build())
         } catch (e: Exception) {
             Log.w(TAG, "failed to post stock alert: ${e.message}")
