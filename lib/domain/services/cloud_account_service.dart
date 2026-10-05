@@ -364,4 +364,47 @@ final class CloudAccountService {
       fieldPaths: const <String>['is_read'],
     );
   }
+
+  /// يرفع سجل بيع مكتمل إلى `networks/{uid}/sales/{saleId}` ليظهر في فوترة اللوحة.
+  Future<void> upsertNetworkSale({
+    required String uid,
+    required String saleId,
+    required String idToken,
+    required Map<String, dynamic> fields,
+  }) async {
+    ensureConfigured();
+    final paths = fields.keys.toList(growable: false);
+    await _client.patchDocument(
+      'networks/$uid/sales/$saleId',
+      fields,
+      idToken: idToken,
+      fieldPaths: paths,
+    );
+  }
+
+  /// مدفوعات العمولة المسجّلة من لوحة الإدارة: `networks/{uid}/payments`.
+  Future<List<Map<String, dynamic>>> fetchNetworkPayments({
+    required String uid,
+    required String idToken,
+  }) async {
+    ensureConfigured();
+    return _client.listDocuments(
+      'networks/$uid/payments',
+      idToken: idToken,
+      pageSize: 200,
+    );
+  }
+
+  /// مبيعات الشبكة على اللوحة (للمطابقة/العرض).
+  Future<List<Map<String, dynamic>>> fetchNetworkSales({
+    required String uid,
+    required String idToken,
+  }) async {
+    ensureConfigured();
+    return _client.listDocuments(
+      'networks/$uid/sales',
+      idToken: idToken,
+      pageSize: 300,
+    );
+  }
 }
