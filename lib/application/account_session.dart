@@ -13,6 +13,7 @@ import '../domain/entities/cloud_account.dart';
 import '../domain/entities/setting.dart';
 import '../domain/repositories/repositories.dart';
 import '../domain/services/cloud_account_service.dart';
+import '../platform/remote_push_notification_service.dart';
 
 /// مراحل حالة الحساب في التطبيق.
 enum AccountPhase {
@@ -226,6 +227,7 @@ final class AccountSession {
 
   Future<void> signOut() async {
     _stopTimer();
+    RemotePushNotificationService.instance.unbindTokenWriter();
     await _clear(SettingKeys.cloudAccountUid);
     await _clear(SettingKeys.cloudRefreshToken);
     await _clear(SettingKeys.cloudPhone);
@@ -400,7 +402,17 @@ final class AccountSession {
       offline: false,
     );
 
-    if (!blocked) _startTimer();
+    if (!blocked) {
+      _startTimer();
+      unawaited(RemotePushNotificationService.instance.bindTokenWriter((token) {
+        return _service.upsertDeviceToken(
+          uid: account.uid,
+          token: token,
+          deviceId: RemotePushNotificationService.deviceIdForToken(token),
+          idToken: session.idToken,
+        );
+      }));
+    }
   }
 
   String _statusMessage(CloudAccount account, CloudGlobalConfig config) {

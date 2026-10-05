@@ -17,6 +17,7 @@ import 'domain/entities/setting.dart';
 import 'ui/app_reloader.dart';
 import 'ui/app_scope.dart';
 import 'ui/screens/net_splash_screen.dart';
+import 'ui/screens/account_notifications_screen.dart';
 import 'ui/theme/kayan_theme.dart';
 import 'ui/theme/net_theme_schedule.dart';
 
@@ -29,12 +30,13 @@ const _defaultTemplates = [
   ),
 ];
 
+final GlobalKey<NavigatorState> _appNavigatorKey = GlobalKey<NavigatorState>();
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   if (RemotePushNotificationService.isConfigured) {
     FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
-    await RemotePushNotificationService.instance.start();
   }
 
   // Load the bundled native sqlite3 library before Drift/NativeDatabase is used.
@@ -59,7 +61,22 @@ Future<void> main() async {
   // جلسة حساب الشبكة: تسجيل/دخول + مزامنة حالة الحساب مع لوحة الإدارة.
   AccountSession.attach(AccountSession(settings: container.settings));
   runApp(NetApp(container: container));
+  if (RemotePushNotificationService.isConfigured) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(RemotePushNotificationService.instance.start(onMessage: _handleRemoteMessage));
+    });
+  }
   unawaited(_startBackgroundHandlersSafely(container));
+}
+
+void _handleRemoteMessage(RemoteMessage message) {
+  final route = message.data['route']?.toString();
+  if (route != '/account-notifications') return;
+  final navigator = _appNavigatorKey.currentState;
+  if (navigator == null) return;
+  navigator.push(
+    MaterialPageRoute<void>(builder: (_) => const AccountNotificationsScreen()),
+  );
 }
 
 Future<void> _startBackgroundHandlersSafely(AppContainer container) async {
@@ -190,6 +207,7 @@ class _NetAppState extends State<NetApp> with WidgetsBindingObserver {
         child: ValueListenableBuilder<ThemeMode>(
           valueListenable: _container.themeModeNotifier,
           builder: (context, mode, _) => MaterialApp(
+            navigatorKey: _appNavigatorKey,
             title: AppBrand.name,
             debugShowCheckedModeBanner: false,
             theme: buildKayanLightTheme(),

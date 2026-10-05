@@ -20,6 +20,8 @@ to complete this command.
 - استقبال الإشعارات في foreground/background، وإظهارها محليًا أثناء استخدام التطبيق.
 - قناة Android باسم `krotak_admin` وأيقونة `ic_stat_stock`.
 - أي فشل في تهيئة Firebase لا يمنع إقلاع التطبيق المحلي.
+- بعد جاهزية جلسة الحساب، يُحفظ Token في `users/{uid}/devices/{deviceId}` مع تحديثه عند تغيّره.
+- النقر على إشعار يحمل `route: /account-notifications` يفتح صندوق إشعارات الإدارة، بما في ذلك الإقلاع من إشعار والتطبيق مغلق.
 
 ## ما تم تنفيذه في لوحة الإدارة
 
@@ -27,6 +29,12 @@ to complete this command.
 - Cloud Function `dispatchNotificationRequest` ترسل عبر FCM وتكتب حالة التسليم:
   `queued` / `sent` / `partial` / `failed` / `no_devices`.
 - قواعد Firestore تمنع العميل من إنشاء الطلبات أو تعديل سجلات التسليم.
+
+## حالة الربط الحالية
+
+- الإرسال العام: جاهز برمجيًا عبر Vercel API إلى Topic `krotak_all_users`.
+- الإرسال الموجه: جاهز برمجيًا بعد تسجيل الحساب؛ يعتمد على `users/{uid}/devices`.
+- التحقق المتبقي: إعداد متغير `FIREBASE_SERVICE_ACCOUNT` في Vercel واختبار جهاز Android حقيقي.
 
 ## المتبقي لتفعيل الإرسال الفعلي
 
@@ -61,7 +69,7 @@ Firebase Console → Messaging → New campaign → Android → Topic: krotak_al
 users/{uid}/devices/{tokenHash}
 ```
 
-ويجب أن يكتب التطبيق الـToken بعد اكتمال تسجيل دخول الحساب السحابي بجلسة Firebase موثوقة؛ لا يجوز نسبة Token مجهول إلى مستخدم اعتمادًا على قيمة محلية.
+يكتب التطبيق الـToken بعد اكتمال تسجيل دخول الحساب السحابي بجلسة موثوقة، ولا ينسب Token مجهولًا إلى مستخدم اعتمادًا على قيمة محلية.
 
 ## التحقق
 

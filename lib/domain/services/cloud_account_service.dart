@@ -235,6 +235,34 @@ final class CloudAccountService {
     return CloudAccount.fromMap(uid, accountData);
   }
 
+  /// يسجل جهاز Android الحالي للحساب حتى تستطيع لوحة الإدارة إرسال إشعارات موجهة.
+  Future<void> upsertDeviceToken({
+    required String uid,
+    required String token,
+    required String deviceId,
+    required String idToken,
+  }) async {
+    if (uid.isEmpty || token.isEmpty || deviceId.isEmpty) return;
+    await _client.patchDocument(
+      'users/$uid/devices/$deviceId',
+      <String, dynamic>{
+        'token': token,
+        'platform': 'android',
+        'app_version': AppBrand.version,
+        'updated_at': DateTime.now(),
+        'enabled': true,
+      },
+      idToken: idToken,
+      fieldPaths: const <String>[
+        'token',
+        'platform',
+        'app_version',
+        'updated_at',
+        'enabled',
+      ],
+    );
+  }
+
   Future<void> touchPresence({
     required String uid,
     required String idToken,

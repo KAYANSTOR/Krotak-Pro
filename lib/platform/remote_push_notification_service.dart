@@ -1,28 +1,24 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
-/// FCM bootstrap for the Android app. Configuration comes from the registered
-/// `android/app/google-services.json`, or from build-time dart-defines when
-/// supplied. Any initialization failure is swallowed so the offline-first app
-/// always keeps working.
+/// عميل FCM للتطبيق. يعمل اختياريًا فوق التطبيق المحلي ولا يمنع إقلاعه عند
+/// فشل الاتصال أو غياب إعداد Firebase.
 final class RemotePushNotificationService {
   RemotePushNotificationService._();
   static final instance = RemotePushNotificationService._();
   final FlutterLocalNotificationsPlugin _localNotifications = FlutterLocalNotificationsPlugin();
   bool _started = false;
+  String? _latestToken;
+  Future<void> Function(String token)? _tokenWriter;
   StreamSubscription<RemoteMessage>? _foregroundSubscription;
   StreamSubscription<String>? _tokenSubscription;
 
-  /// True when either build-time defines or the registered Android
-  /// `google-services.json` provide the Firebase configuration.
   static bool get isConfigured => true;
-
-  static bool get _hasBuildDefines =>
-      const String.fromEnvironment('KROTAK_FIREBASE_API_KEY').isNotEmpty;
-
+  static bool get _hasBuildDefines => const String.fromEnvironment('KROTAK_FIREBASE_API_KEY').isNotEmpty;
   static FirebaseOptions? get _options => _hasBuildDefines
       ? const FirebaseOptions(
           apiKey: String.fromEnvironment('KROTAK_FIREBASE_API_KEY'),
@@ -33,14 +29,22 @@ final class RemotePushNotificationService {
         )
       : null;
 
+  /// يربط كاتب الـToken بجلسة الحساب الحالية. إذا وصل الـToken قبل تسجيل
+  /// الدخول، يُرسل فور جاهزية الحساب بدل إسقاطه.
+  Future<void> bindTokenWriter(Future<void> Function(String token) writer) async {
+    _tokenWriter = writer;
+    final token = _latestToken;
+    if (token != null) await _writeToken(token);
+  }
+
+  void unbindTokenWriter() => _tokenWriter = null;
+
   Future<void> start({void Function(RemoteMessage message)? onMessage}) async {
     if (_started || !isConfigured || defaultTargetPlatform != TargetPlatform.android) return;
     _started = true;
     try {
       await _startInternal(onMessage);
     } catch (error, stackTrace) {
-      // A missing or invalid Firebase configuration must never block the
-      // offline-first app from starting.
       debugPrint('Krotak remote notifications unavailable: $error');
       debugPrintStack(stackTrace: stackTrace);
     }
@@ -62,25 +66,20 @@ final class RemotePushNotificationService {
       description: 'إشعارات الإدارة والتنبيهات المركزية',
       importance: Importance.high,
     );
-    await _localNotifications
-        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
-        ?.createNotificationChannel(channel);
-
+    await _localNotifications.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()?.createNotificationChannel(channel);
     final messaging = FirebaseMessaging.instance;
     await messaging.requestPermission(alert: true, badge: true, sound: true);
     await messaging.subscribeToTopic('krotak_all_users');
     final token = await messaging.getToken();
-    if (token != null) _reportToken(token);
+    if (token != null) await _reportToken(token);
     _tokenSubscription = messaging.onTokenRefresh.listen(_reportToken);
     _foregroundSubscription = FirebaseMessaging.onMessage.listen((message) {
       onMessage?.call(message);
       unawaited(_showForeground(message));
-      debugPrint('Krotak remote notification: ${message.messageId}');
     });
-    FirebaseMessaging.onMessageOpenedApp.listen((message) {
-      debugPrint('Krotak notification opened: ${message.data}');
-      onMessage?.call(message);
-    });
+    FirebaseMessaging.onMessageOpenedApp.listen((message) => onMessage?.call(message));
+    final initialMessage = await messaging.getInitialMessage();
+    if (initialMessage != null) onMessage?.call(initialMessage);
   }
 
   Future<void> _showForeground(RemoteMessage message) async {
@@ -104,18 +103,31 @@ final class RemotePushNotificationService {
     );
   }
 
-  void _reportToken(String token) {
-    // The token is intentionally not sent to Firestore anonymously. Once the
-    // account session is enabled, the authenticated account service should
-    // upsert it under users/{uid}/devices/{tokenHash}.
-    debugPrint('Krotak FCM token received (${token.length} chars)');
+  Future<void> _reportToken(String token) async {
+    _latestToken = token;
+    await _writeToken(token);
   }
+
+  Future<void> _writeToken(String token) async {
+    final writer = _tokenWriter;
+    if (writer == null) return;
+    try {
+      await writer(token);
+    } catch (error, stackTrace) {
+      debugPrint('Krotak FCM token registration failed: $error');
+      debugPrintStack(stackTrace: stackTrace);
+    }
+  }
+
+  /// معرف ثابت مشتق من الـToken لتحديث نفس الجهاز عند تغير بياناته.
+  static String deviceIdForToken(String token) => base64Url.encode(utf8.encode(token)).replaceAll('=', '');
 
   Future<void> dispose() async {
     await _foregroundSubscription?.cancel();
     await _tokenSubscription?.cancel();
     _foregroundSubscription = null;
     _tokenSubscription = null;
+    _tokenWriter = null;
   }
 }
 
