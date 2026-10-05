@@ -1,4 +1,5 @@
 import '../../core/result.dart';
+import '../../data/cloud/cloud_http.dart';
 import '../entities/cloud_account.dart';
 import '../entities/transaction.dart';
 import '../repositories/repositories.dart';
@@ -23,6 +24,26 @@ final class MonthCommissionSummary {
   final int uploadedCount;
 }
 
+/// نتيجة رفع المبيعات، بما فيها السجلات التي فشل رفعها ورسالة كل فشل.
+final class SaleSyncResult {
+  const SaleSyncResult({
+    required this.uploadedCount,
+    required this.failures,
+  });
+
+  final int uploadedCount;
+  final List<SaleSyncFailure> failures;
+  int get failedCount => failures.length;
+  bool get hasFailures => failures.isNotEmpty;
+}
+
+final class SaleSyncFailure {
+  const SaleSyncFailure({required this.saleId, required this.message});
+
+  final String saleId;
+  final String message;
+}
+
 /// يرفع مبيعات التطبيق المكتملة إلى Firestore ويعرض العمولة حسب نسبة اللوحة.
 final class CloudCommissionService {
   CloudCommissionService({
@@ -42,22 +63,22 @@ final class CloudCommissionService {
   static String monthKey(DateTime d) =>
       '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}';
 
-  /// يرفع مبيعات الشهر الحالي (والمبيعات الحديثة) إلى اللوحة.
-  Future<Result<int>> syncCompletedSales({
+  /// يرفع كل المبيعات المكتملة المحفوظة محلياً، وليس مبيعات الشهر الحالي فقط.
+  /// يمكن تمرير [from] و[to] لتقييد الرفع عند الحاجة إلى نطاق محدد.
+  Future<Result<SaleSyncResult>> syncCompletedSales({
     required String uid,
     required String idToken,
     DateTime? from,
     DateTime? to,
   }) async {
-    final now = DateTime.now();
-    final start = from ?? DateTime(now.year, now.month, 1);
-    final end = to ?? now;
+    final start = from ?? DateTime.fromMillisecondsSinceEpoch(0);
+    final end = to ?? DateTime.now();
     final result = await sales.listCompletedBetween(start, end);
     if (result is Failure<List<Sale>>) return Failure(result.error);
-    final list = (result as Success<List<Sale>>).value;
-    var uploaded = 0;
-    await Future.wait(list.map((sale) async {
-      if (sale.status != TransactionStatus.completed) return;
+    final list = (result as Success<List<Sale>>).value
+        .where((sale) => sale.status == TransactionStatus.completed)
+        .toList(growable: false);
+    final results = await Future.wait(list.map((sale) async {
       final face = sale.amount.minorUnits / 100.0;
       try {
         await _cloud.upsertNetworkSale(
@@ -84,12 +105,26 @@ final class CloudCommissionService {
             'source': 'krotak_app',
           },
         );
-        uploaded += 1;
-      } catch (_) {
-        // نتابع بقية السجلات؛ الفشل الشبكي يُعاد في المزامنة التالية.
+        return const SaleSyncFailure(saleId: '', message: '');
+      } catch (error) {
+        return SaleSyncFailure(
+          saleId: sale.id,
+          message: _uploadErrorMessage(error),
+        );
       }
     }));
-    return Success(uploaded);
+    final failures = results
+        .where((item) => item.saleId.isNotEmpty)
+        .toList(growable: false);
+    return Success(SaleSyncResult(
+      uploadedCount: list.length - failures.length,
+      failures: failures,
+    ));
+  }
+
+  static String _uploadErrorMessage(Object error) {
+    if (error is CloudHttpException) return error.message;
+    return error.toString().replaceFirst('Exception: ', '').trim();
   }
 
   /// يجمع ملخص الأشهر من مبيعات محلية + مدفوعات اللوحة.
@@ -102,8 +137,8 @@ final class CloudCommissionService {
   }) async {
     final rate = activeRate(account, config);
     final now = DateTime.now();
-    // آخر 6 أشهر محلياً
-    final from = DateTime(now.year, now.month - 5, 1);
+    // كل السجل المحلي حتى تظهر المبيعات السابقة في كشف الحساب أيضاً.
+    final from = DateTime.fromMillisecondsSinceEpoch(0);
     final salesResult = await sales.listCompletedBetween(from, now);
     if (salesResult is Failure<List<Sale>>) return Failure(salesResult.error);
     final localSales = (salesResult as Success<List<Sale>>).value;

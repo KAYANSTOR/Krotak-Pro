@@ -395,7 +395,7 @@ final class AccountSession {
           idToken: session.idToken,
         );
       }));
-      // مزامنة مبيعات الشهر مع لوحة الإدارة لحساب العمولات.
+      // مزامنة كل المبيعات المكتملة مع لوحة الإدارة لحساب العمولات.
       final salesRepo = _sales;
       if (salesRepo != null) {
         unawaited(

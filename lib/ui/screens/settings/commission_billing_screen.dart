@@ -65,7 +65,18 @@ class _CommissionBillingScreenState extends State<CommissionBillingScreen> {
         uid: account.uid,
         idToken: cloudSession.idToken,
       );
-      if (up is Success<int>) _lastUploaded = up.value;
+      if (up is Success<SaleSyncResult>) {
+        _lastUploaded = up.value.uploadedCount;
+        if (up.value.hasFailures) {
+          final details = up.value.failures
+              .map((failure) => '• ${failure.saleId}: ${failure.message}')
+              .join('\n');
+          _error =
+              'فشل رفع ${up.value.failedCount} سجل. ستتم إعادة المحاولة لاحقاً.\n$details';
+        }
+      } else if (up is Failure<SaleSyncResult>) {
+        _error = up.error.message;
+      }
     }
 
     final result = await service.buildSummaries(
