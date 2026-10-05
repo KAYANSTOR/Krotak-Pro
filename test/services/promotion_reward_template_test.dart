@@ -613,7 +613,7 @@ void main() {
     );
   });
 
-  test('customer cross-category queue keeps the wide window beside a same-category cap', () {
+  test('customer cross-category queue keeps the wide window beside the in-category queue', () {
     final start = DateTime.utc(2026, 10, 4, 6);
     var encoded;
     for (var i = 0; i < 9; i++) {
@@ -675,8 +675,56 @@ void main() {
         'cat-1',
         customerId: 'cust-1',
       )?.cards.length,
-      PromotionRewardTemplate.probeHoldQueueLimit,
+      9,
     );
+    expect(
+      PromotionRewardTemplate.lookupCrossCategoryHold(sameCategory, customerId: 'cust-1'),
+      isNull,
+    );
+  });
+
+  test('customer in-category probe queue uses the 32-card 7-day window', () {
+    final start = DateTime.utc(2026, 10, 5, 8);
+    var encoded;
+    for (var i = 0; i < 33; i++) {
+      encoded = PromotionRewardTemplate.enqueueHold(
+        encoded,
+        RewardProbeHold(
+          categoryId: 'cat-1',
+          cardId: 'card-$i',
+          reservationId: 'res-$i',
+          expiresAt: start.add(PromotionRewardTemplate.customerCategoryHoldDuration),
+          customerId: 'cust-1',
+        ),
+      );
+    }
+    final queue = PromotionRewardTemplate.lookupHold(
+      encoded,
+      'cat-1',
+      customerId: 'cust-1',
+    );
+    expect(queue?.cards.length, PromotionRewardTemplate.customerCategoryQueueLimit);
+    expect(queue?.cards.first.cardId, 'card-1');
+    expect(queue?.expiresAt, start.add(PromotionRewardTemplate.customerCategoryHoldDuration));
+    expect(
+      PromotionRewardTemplate.claimHold(
+        encoded,
+        'cat-1',
+        start.add(const Duration(days: 6)),
+        customerId: 'cust-1',
+      )?.cardId,
+      'card-1',
+    );
+    expect(
+      PromotionRewardTemplate.claimHold(
+        encoded,
+        'cat-1',
+        start.add(const Duration(days: 8)),
+        customerId: 'cust-1',
+      ),
+      isNull,
+    );
+    expect(PromotionRewardTemplate.lookupHold(encoded, 'cat-1'), isNull);
   });
 
   test('category and shared probe queues use the 32-card 7-day window', () {

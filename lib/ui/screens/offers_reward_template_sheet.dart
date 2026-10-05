@@ -785,7 +785,7 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
                       _liveCard == null
                           ? 'قيم المعاينة تجريبية وليست كرتاً حقيقياً.'
                           : _holdNextPayout
-                              ? 'الكرت محجوز للصرف التالي لمدة 24 ساعة، ولم يُخصم بعد.'
+                              ? 'الكرت محجوز للصرف التالي لمدة 7 أيام، ولم يُخصم بعد.'
                               : 'قيم الكرت من المخزون المتاح، دون حجز أو خصم.',
                       style: TextStyle(
                         fontFamily: NetTypography.family,

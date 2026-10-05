@@ -93,10 +93,10 @@ class PromotionRewardTemplate {
     'customer_name': 'عميل تجريبي',
   };
 
-  /// مدة حجز كرت المعاينة للصرف التالي داخل فئة العميل. بعد انتهاء المدة لا يُستخدم الحجز.
-  static const probeHoldDuration = Duration(hours: 24);
+  /// مدة الحجز القديمة داخل فئة العميل. مرحلة 70 وحدّت كل الطوابير على النافذة العريضة.
+  static const probeHoldDuration = wideProbeHoldDuration;
 
-  /// نافذة الطوابير العريضة: العميل عبر الفئات، والفئة بلا عميل، والطابور المشترك.
+  /// نافذة كل طوابير المعاينة: العميل داخل الفئة، وعبر الفئات، والفئة، والمشترك.
   static const wideProbeHoldDuration = Duration(days: 7);
 
   /// حجز طابور العميل عبر الفئات.
@@ -105,6 +105,9 @@ class PromotionRewardTemplate {
   /// حجز طابور الفئة بلا عميل والطابور المشترك بلا عميل.
   static const categoryHoldDuration = wideProbeHoldDuration;
   static const sharedCrossCategoryHoldDuration = wideProbeHoldDuration;
+
+  /// حجز طابور العميل داخل الفئة الواحدة.
+  static const customerCategoryHoldDuration = wideProbeHoldDuration;
 
   /// يختار كرت المعاينة من المتاح فقط. المعرّف المفقود أو غير المتاح يعود لأول كرت، بلا حجز.
   static RewardProbeCardSnapshot? selectProbeCard(
@@ -256,10 +259,10 @@ class PromotionRewardTemplate {
     return jsonEncode(next);
   }
 
-  /// طابور العميل داخل فئة واحدة يبقى عند هذا السقف.
-  static const probeHoldQueueLimit = 8;
+  /// سقف طابور العميل داخل الفئة. مرحلة 70 رفعته إلى سقف الطوابير العريضة.
+  static const probeHoldQueueLimit = wideProbeQueueLimit;
 
-  /// سقف الطوابير العريضة دون إلغاء السقف بالكامل.
+  /// سقف كل طوابير المعاينة دون إلغاء السقف بالكامل.
   static const wideProbeQueueLimit = 32;
 
   /// طابور العميل عبر الفئات.
@@ -269,13 +272,16 @@ class PromotionRewardTemplate {
   static const categoryQueueLimit = wideProbeQueueLimit;
   static const sharedCrossCategoryQueueLimit = wideProbeQueueLimit;
 
+  /// طابور العميل داخل الفئة الواحدة.
+  static const customerCategoryQueueLimit = wideProbeQueueLimit;
+
   /// طابور بلا عميل يجمع كروت فئات مختلفة. لا يختلط بطوابير العملاء.
   static const crossCategoryHoldKey = '*';
 
   static String enqueueHold(String? raw, RewardProbeHold hold) {
     final customerQueue = hold.customerId.trim().isNotEmpty;
-    final window = customerQueue ? probeHoldDuration : categoryHoldDuration;
-    final limit = customerQueue ? probeHoldQueueLimit : categoryQueueLimit;
+    final window = customerQueue ? customerCategoryHoldDuration : categoryHoldDuration;
+    final limit = customerQueue ? customerCategoryQueueLimit : categoryQueueLimit;
     final existing = lookupHold(raw, hold.categoryId, customerId: hold.customerId);
     if (existing == null || !existing.isActiveAt(hold.expiresAt.subtract(window))) {
       return rememberHold(raw, hold);
