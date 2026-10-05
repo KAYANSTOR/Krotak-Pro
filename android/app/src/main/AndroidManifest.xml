@@ -41,7 +41,7 @@
             android:resource="@drawable/ic_stat_stock" />
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"
-            android:value="krotak_admin" />
+            android:value="krotak_admin_v2" />
         <activity
             android:name=".MainActivity"
             android:exported="true"
