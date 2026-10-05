@@ -4,17 +4,20 @@ import 'dart:ui';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:sqlite3_flutter_libs/sqlite3_flutter_libs.dart';
 
 import 'application/app_container.dart';
+import 'application/account_session.dart';
+import 'platform/remote_push_notification_service.dart';
 import 'core/app_brand.dart';
 import 'core/result.dart';
 import 'domain/entities/message.dart';
 import 'domain/entities/setting.dart';
 import 'ui/app_reloader.dart';
 import 'ui/app_scope.dart';
-import 'ui/home_shell.dart';
 import 'ui/screens/net_splash_screen.dart';
+import 'ui/screens/account_notifications_screen.dart';
 import 'ui/theme/kayan_theme.dart';
 import 'ui/theme/net_theme_schedule.dart';
 
@@ -27,8 +30,14 @@ const _defaultTemplates = [
   ),
 ];
 
+final GlobalKey<NavigatorState> _appNavigatorKey = GlobalKey<NavigatorState>();
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  if (RemotePushNotificationService.isConfigured) {
+    FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+  }
 
   // Load the bundled native sqlite3 library before Drift/NativeDatabase is used.
   await applyWorkaroundToOpenSqlite3OnOldAndroidVersions();
@@ -49,8 +58,25 @@ Future<void> main() async {
   final themeRaw = await _loadThemeMode(container);
   _NetAppState.seedPersistedThemeRaw(themeRaw);
   AppScope.register(container);
+  // جلسة حساب الشبكة: تسجيل/دخول + مزامنة حالة الحساب مع لوحة الإدارة.
+  AccountSession.attach(AccountSession(settings: container.settings));
   runApp(NetApp(container: container));
+  if (RemotePushNotificationService.isConfigured) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(RemotePushNotificationService.instance.start(onMessage: _handleRemoteMessage));
+    });
+  }
   unawaited(_startBackgroundHandlersSafely(container));
+}
+
+void _handleRemoteMessage(RemoteMessage message) {
+  final route = message.data['route']?.toString();
+  if (route != '/account-notifications') return;
+  final navigator = _appNavigatorKey.currentState;
+  if (navigator == null) return;
+  navigator.push(
+    MaterialPageRoute<void>(builder: (_) => const AccountNotificationsScreen()),
+  );
 }
 
 Future<void> _startBackgroundHandlersSafely(AppContainer container) async {
@@ -104,6 +130,9 @@ class _NetAppState extends State<NetApp> with WidgetsBindingObserver {
       final next = await AppContainer.bootstrap(templates: _defaultTemplates);
       NetThemeRawCache.raw = await _loadThemeMode(next);
       AppScope.register(next);
+      // الحاوية تغيّرت (استعادة نسخة احتياطية) — جلسة الحساب تُعاد بناؤها
+      // على مخزن الإعدادات الجديد مع بقاء بيانات الحساب نفسها.
+      AccountSession.attach(AccountSession(settings: next.settings));
       if (!mounted) {
         await next.dispose();
         return;
@@ -178,6 +207,7 @@ class _NetAppState extends State<NetApp> with WidgetsBindingObserver {
         child: ValueListenableBuilder<ThemeMode>(
           valueListenable: _container.themeModeNotifier,
           builder: (context, mode, _) => MaterialApp(
+            navigatorKey: _appNavigatorKey,
             title: AppBrand.name,
             debugShowCheckedModeBanner: false,
             theme: buildKayanLightTheme(),

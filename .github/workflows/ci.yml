@@ -6,7 +6,7 @@ concurrency:
 
 on:
   push:
-    branches: [main]
+    branches: [main, development/full-completion]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -102,6 +102,8 @@ jobs:
             echo "storePassword=ci-validation-store"
             echo "keyPassword=ci-validation-store"
           } > android/key.properties
+      # Firebase client configuration is read from the committed
+      # android/app/google-services.json, so no build secrets are required.
       - name: Build release APK
         run: flutter build apk --release
       - name: Scrub signing material

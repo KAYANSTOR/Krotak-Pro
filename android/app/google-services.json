@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "614239660563",
+    "project_id": "kroty-434e3",
+    "storage_bucket": "kroty-434e3.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:614239660563:android:ba98c81cf778ed7da7ede6",
+        "android_client_info": {
+          "package_name": "com.kayan.net_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBxh72P7O0NqgbVuvA_kcYSM_i5MrOVkFI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
