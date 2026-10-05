@@ -955,4 +955,72 @@ void main() {
       'card-shared',
     );
   });
+
+  test('dropping one queued card keeps the other queues and expiry', () {
+    final expires = DateTime.utc(2026, 10, 12);
+    RewardProbeHold hold(String cardId, String categoryId, {String customerId = ''}) {
+      return RewardProbeHold(
+        categoryId: categoryId,
+        cardId: cardId,
+        reservationId: 'res-$cardId',
+        expiresAt: expires,
+        customerId: customerId,
+      );
+    }
+
+    final encoded = PromotionRewardTemplate.enqueueCrossCategoryHold(
+      PromotionRewardTemplate.enqueueHold(
+        PromotionRewardTemplate.enqueueCrossCategoryHold(
+          null,
+          hold('shared-a', 'cat-shared'),
+        ),
+        hold('own-a', 'cat-1', customerId: 'cust-1'),
+      ),
+      hold('cross-b', 'cat-2', customerId: 'cust-1'),
+    );
+    final withSecond = PromotionRewardTemplate.enqueueCrossCategoryHold(
+      encoded,
+      hold('cross-a', 'cat-9', customerId: 'cust-1'),
+    );
+    final dropped = PromotionRewardTemplate.dropQueuedCard(
+      withSecond,
+      cardId: 'cross-b',
+      customerId: 'cust-1',
+    );
+    final customer = PromotionRewardTemplate.lookupCrossCategoryHold(
+      dropped,
+      customerId: 'cust-1',
+    );
+    expect(customer?.cards.map((card) => card.cardId), ['cross-a']);
+    expect(customer?.expiresAt, expires);
+    expect(
+      PromotionRewardTemplate.lookupHold(dropped, 'cat-1', customerId: 'cust-1')?.cardId,
+      'own-a',
+    );
+    expect(
+      PromotionRewardTemplate.lookupCrossCategoryHold(dropped)?.cardId,
+      'shared-a',
+    );
+    final otherCustomer = PromotionRewardTemplate.dropQueuedCard(
+      dropped,
+      cardId: 'own-a',
+    );
+    expect(
+      PromotionRewardTemplate.lookupHold(otherCustomer, 'cat-1', customerId: 'cust-1')?.cardId,
+      'own-a',
+    );
+    final clearedOwn = PromotionRewardTemplate.dropQueuedCard(
+      dropped,
+      cardId: 'own-a',
+      customerId: 'cust-1',
+    );
+    expect(
+      PromotionRewardTemplate.lookupHold(clearedOwn, 'cat-1', customerId: 'cust-1'),
+      isNull,
+    );
+    expect(
+      PromotionRewardTemplate.lookupCrossCategoryHold(clearedOwn, customerId: 'cust-1')?.cardId,
+      'cross-a',
+    );
+  });
 }

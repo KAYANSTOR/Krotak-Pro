@@ -373,6 +373,44 @@ class PromotionRewardTemplate {
     return jsonEncode(next);
   }
 
+  /// يُخرج كرتاً واحداً من الطابور الذي يحمله ويبقي بقية الكروت وموعد الانتهاء.
+  /// لا يمس طابوراً آخر، ولا يمسح الطابور كله إلا إذا كان هذا الكرت آخر عنصر.
+  static String dropQueuedCard(
+    String? raw, {
+    required String cardId,
+    String? customerId,
+  }) {
+    final wanted = cardId.trim();
+    if (wanted.isEmpty) return raw ?? '{}';
+    final customer = customerId?.trim() ?? '';
+    final cross = lookupCrossCategoryHold(raw, customerId: customer);
+    if (cross != null && cross.holdsCard(wanted)) {
+      return consumeHold(
+        raw,
+        crossCategoryHoldKey,
+        customerId: customer,
+        cardId: wanted,
+      );
+    }
+    final map = decodeHoldMap(raw);
+    for (final entry in map.entries) {
+      final key = entry.key.toString();
+      final categoryId = key.split('|customer:').first.trim();
+      if (categoryId.isEmpty || entry.value is! Map) continue;
+      final hold = RewardProbeHold.fromJson(categoryId, entry.value);
+      if (hold == null || !hold.holdsCard(wanted)) continue;
+      if (customer.isNotEmpty && hold.customerId.trim() != customer) continue;
+      if (customer.isEmpty && hold.customerId.trim().isNotEmpty) continue;
+      return consumeHold(
+        raw,
+        hold.categoryId,
+        customerId: hold.customerId,
+        cardId: wanted,
+      );
+    }
+    return raw ?? '{}';
+  }
+
   /// يزيل كرتاً مستهلكاً من الطابور ويبقي بقية كروت العميل.
   static String consumeHold(
     String? raw,

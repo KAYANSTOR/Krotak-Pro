@@ -365,6 +365,57 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
     }
   }
 
+  /// يُخرج الكرت الظاهر فقط. بقية الطابور تبقى محجوزة حتى الصرف أو الإيقاف.
+  Future<void> _dropSelectedHold() async {
+    final card = _liveCard;
+    final reservationId = _holdReservationId;
+    if (card == null || reservationId == null || card.categoryId.isEmpty) return;
+    final c = AppScope.of(context);
+    setState(() => _busy = true);
+    final current = await c.settings.find(SettingKeys.promotionRewardProbeHolds);
+    final raw = current is Success<AppSetting?> ? current.value?.value : null;
+    await c.cards.releaseReservation(card.cardId, reservationId);
+    final now = c.clock.now();
+    final encoded = PromotionRewardTemplate.dropQueuedCard(
+      raw,
+      cardId: card.cardId,
+      customerId: _holdCustomerId,
+    );
+    await c.settings.save(
+      AppSetting(
+        key: SettingKeys.promotionRewardProbeHolds,
+        value: encoded,
+        updatedAt: now,
+      ),
+    );
+    final remaining = PromotionRewardTemplate.lookupCrossCategoryHold(
+      encoded,
+      customerId: _holdCustomerId,
+    );
+    await c.auditLogs.append(
+      AuditLog(
+        id: c.ids.next('reward-probe-hold'),
+        entityType: 'promotion_reward_template',
+        entityId: card.cardId,
+        action: 'reward_probe_card_dropped',
+        occurredAt: now,
+        payloadJson: '{"categoryId":"${card.categoryId}","reservationId":"$reservationId","customerId":"${_holdCustomerId ?? ''}","remaining":"${remaining?.cards.length ?? 0}"}',
+      ),
+    );
+    if (!mounted) return;
+    final next = remaining?.cards.isNotEmpty == true ? remaining!.cards.first : null;
+    setState(() {
+      _busy = false;
+      _holdNextPayout = next != null;
+      _holdReservationId = next?.reservationId;
+      _holdQueueCount = remaining?.cards.length ?? 0;
+      _status = next == null
+          ? 'أُخرج الكرت من الطابور ولم يبقَ حجز'
+          : 'أُخرج الكرت الظاهر وبقي ${_holdQueueCount} في الطابور';
+      _statusIsError = false;
+    });
+  }
+
   bool get _perOffer => widget.promotionId != null && widget.promotionId!.isNotEmpty;
 
   bool get _perCustomer =>
@@ -846,6 +897,22 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
                           style: const TextStyle(fontFamily: NetTypography.family),
                         ),
                       ),
+                    if (_holdNextPayout && _holdQueueCount > 0) ...[
+                      const SizedBox(height: 4),
+                      Align(
+                        alignment: AlignmentDirectional.centerStart,
+                        child: TextButton.icon(
+                          onPressed: _busy || _probing ? null : _dropSelectedHold,
+                          icon: const Icon(Icons.remove_circle_outline),
+                          label: Text(
+                            _holdQueueCount > 1
+                                ? 'إخراج الكرت الظاهر وإبقاء ${_holdQueueCount - 1}'
+                                : 'إخراج الكرت الظاهر من الطابور',
+                            style: const TextStyle(fontFamily: NetTypography.family),
+                          ),
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 8),
                     TextField(
                       controller: _phone,
