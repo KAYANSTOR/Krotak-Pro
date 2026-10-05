@@ -22,8 +22,7 @@ final class RemotePushNotificationService {
   /// قناة موجودة مسبقاً.
   static const channelId = 'krotak_admin_v2';
   static const channelName = 'إشعارات الإدارة';
-  static const channelDescription =
-      'إشعارات الإدارة والتنبيهات المركزية — نغمة وأيقونة كروتك برو';
+  static const channelDescription = 'إشعارات الإدارة والتنبيهات المركزية — نغمة وأيقونة كروتك برو';
 
   static bool get isConfigured => true;
   static bool get _hasBuildDefines =>
@@ -74,7 +73,9 @@ final class RemotePushNotificationService {
     );
     await _localNotifications.initialize(
       initSettings,
-      onDidReceiveNotificationResponse: (response) {},
+      onDidReceiveNotificationResponse: (response) {
+        // يفتح التطبيق؛ التوجيه تتم معالجته من مسار FCM data.
+      },
     );
 
     final channel = AndroidNotificationChannel(

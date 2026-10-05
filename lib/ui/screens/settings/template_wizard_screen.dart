@@ -291,13 +291,22 @@ class _TemplateWizardScreenState extends State<TemplateWizardScreen> {
     setState(() => _saving = true);
     final c = AppScope.of(context);
     final id = widget.existing?.id ?? c.ids.next('tpl');
+    // إن فُتح المعالج من شاشة محفظة، لا يُحفظ القالب بدون ربطها.
+    final boundWalletId = _walletId ?? widget.initialWalletId;
+    final boundPosId = _posId ?? widget.initialPosId;
+    if (widget.initialWalletId != null &&
+        (boundWalletId == null || boundWalletId.isEmpty)) {
+      _toast('اختر المحفظة المرتبطة بالقالب');
+      setState(() => _saving = false);
+      return;
+    }
     final template = TransferTemplate(
       id: id,
       name: _nameCtrl.text.trim(),
       pattern: _patternCtrl.text.trim(),
       isActive: _isActive,
-      walletId: _walletId,
-      posId: _posId,
+      walletId: boundWalletId,
+      posId: boundPosId,
       priority: int.tryParse(_priorityCtrl.text.trim()) ?? 0,
       sampleBody: _sampleCtrl.text.trim().isEmpty ? null : _sampleCtrl.text.trim(),
       senderCode: _senderCtrl.text.trim().isEmpty ? null : _senderCtrl.text.trim(),
