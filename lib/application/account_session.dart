@@ -13,6 +13,7 @@ import '../domain/entities/cloud_account.dart';
 import '../domain/entities/setting.dart';
 import '../domain/repositories/repositories.dart';
 import '../domain/services/cloud_account_service.dart';
+import '../domain/services/cloud_commission_service.dart';
 import '../platform/remote_push_notification_service.dart';
 
 /// مراحل حالة الحساب في التطبيق.
@@ -73,9 +74,11 @@ final class AccountSession {
     required SettingsRepository settings,
     Clock clock = const SystemClock(),
     CloudAccountService? service,
+    SaleRepository? sales,
   })  : _settings = settings,
         _clock = clock,
-        _service = service ?? CloudAccountService();
+        _service = service ?? CloudAccountService(),
+        _sales = sales;
 
   static AccountSession? _instance;
   static AccountSession get instance {
@@ -92,6 +95,7 @@ final class AccountSession {
   final SettingsRepository _settings;
   final Clock _clock;
   final CloudAccountService _service;
+  final SaleRepository? _sales;
 
   final ValueNotifier<AccountState> state =
       ValueNotifier<AccountState>(const AccountState(phase: AccountPhase.loading));
@@ -391,6 +395,16 @@ final class AccountSession {
           idToken: session.idToken,
         );
       }));
+      // مزامنة مبيعات الشهر مع لوحة الإدارة لحساب العمولات.
+      final salesRepo = _sales;
+      if (salesRepo != null) {
+        unawaited(
+          CloudCommissionService(sales: salesRepo, cloud: _service).syncCompletedSales(
+            uid: account.uid,
+            idToken: session.idToken,
+          ),
+        );
+      }
     }
   }
 
