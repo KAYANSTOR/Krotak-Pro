@@ -149,6 +149,7 @@ final class CloudGlobalConfig {
     this.defaultTrialWarning = '',
     this.globalOfficialWarning = '',
     this.warningDaysBeforeExpiry = 5,
+    this.defaultCommissionRate = 5,
   });
 
   final bool isAppActive;
@@ -158,12 +159,19 @@ final class CloudGlobalConfig {
   final String globalOfficialWarning;
   final int warningDaysBeforeExpiry;
 
+  /// نسبة العمولة العامة من لوحة الإدارة (`default_commission_rate`).
+  final double defaultCommissionRate;
+
   static CloudGlobalConfig fromMap(Map<String, dynamic>? data) {
     if (data == null) return const CloudGlobalConfig();
     final trialDays = data['default_trial_days'];
     final parsedTrialDays = trialDays is num
         ? trialDays.toInt()
         : int.tryParse(trialDays?.toString() ?? '');
+    final commissionRaw = data['default_commission_rate'];
+    final commission = commissionRaw is num
+        ? commissionRaw.toDouble()
+        : double.tryParse(commissionRaw?.toString() ?? '') ?? 5;
     return CloudGlobalConfig(
       isAppActive: data['is_app_active'] != false,
       maintenanceMessage: data['maintenance_message']?.toString() ?? '',
@@ -173,6 +181,7 @@ final class CloudGlobalConfig {
       globalOfficialWarning: data['global_official_warning']?.toString() ?? '',
       warningDaysBeforeExpiry:
           int.tryParse(data['warning_days_before_expiry']?.toString() ?? '') ?? 5,
+      defaultCommissionRate: commission > 0 ? commission : 5,
     );
   }
 }
