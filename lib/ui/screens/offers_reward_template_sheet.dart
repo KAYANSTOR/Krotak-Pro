@@ -12,6 +12,7 @@ import '../../domain/services/reward_probe_place.dart';
 import '../../domain/services/reward_probe_swap.dart';
 import '../../domain/services/reward_probe_rotate.dart';
 import '../../domain/services/reward_probe_reverse_span.dart';
+import '../../domain/services/reward_probe_rotate_span.dart';
 import '../../platform/sms_bridge.dart';
 import '../app_scope.dart';
 import '../theme/net_tokens.dart';
@@ -951,6 +952,90 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
     });
   }
 
+  /// يدوّر المقطع بين الكرت الظاهر والموضع المدخل خطوة واحدة دون تحريك ما خارجه.
+  Future<void> _rotateSpanSelectedHold() async {
+    final card = _liveCard;
+    final position = int.tryParse(_placePosition.text.trim());
+    if (card == null || _queuedCardIds.length < 2 || position == null || position < 1) {
+      return;
+    }
+    final visibleIndex = _queuedCardIds.indexOf(card.cardId);
+    if (visibleIndex < 0 || position > _queuedCardIds.length) {
+      setState(() {
+        _status = 'الموضع خارج طول الطابور';
+        _statusIsError = true;
+      });
+      return;
+    }
+    if (position == visibleIndex + 1) {
+      setState(() {
+        _status = 'الكرت الظاهر في الموضع $position أصلاً';
+        _statusIsError = false;
+      });
+      return;
+    }
+    final c = AppScope.of(context);
+    setState(() => _busy = true);
+    final current = await c.settings.find(SettingKeys.promotionRewardProbeHolds);
+    final raw = current is Success<AppSetting?> ? current.value?.value : null;
+    final now = c.clock.now();
+    final encoded = RewardProbeRotateSpan.rotateQueuedSpan(
+      raw,
+      cardId: card.cardId,
+      position: position,
+      customerId: _holdCustomerId,
+    );
+    await c.settings.save(
+      AppSetting(
+        key: SettingKeys.promotionRewardProbeHolds,
+        value: encoded,
+        updatedAt: now,
+      ),
+    );
+    var stored = PromotionRewardTemplate.lookupCrossCategoryHold(
+      encoded,
+      customerId: _holdCustomerId,
+    );
+    if (stored == null || !stored.holdsCard(card.cardId)) {
+      stored = PromotionRewardTemplate.lookupHold(
+        encoded,
+        card.categoryId,
+        customerId: _holdCustomerId,
+      );
+    }
+    await c.auditLogs.append(
+      AuditLog(
+        id: c.ids.next('reward-probe-hold'),
+        entityType: 'promotion_reward_template',
+        entityId: card.cardId,
+        action: 'reward_probe_card_span_rotated',
+        occurredAt: now,
+        payloadJson: '{"customerId":"${_holdCustomerId ?? ''}","position":$position,"queue":${stored?.cards.length ?? 0}}',
+      ),
+    );
+    if (!mounted) return;
+    final ids = [for (final item in stored?.cards ?? const <RewardProbeHeldCard>[]) item.cardId];
+    final start = visibleIndex < position - 1 ? visibleIndex : position - 1;
+    final end = visibleIndex < position - 1 ? position - 1 : visibleIndex;
+    final span = _queuedCardIds.sublist(start, end + 1);
+    final expected = [
+      ..._queuedCardIds.sublist(0, start),
+      ...span.sublist(1),
+      span.first,
+      ..._queuedCardIds.sublist(end + 1),
+    ];
+    setState(() {
+      _busy = false;
+      _holdReservationId = stored?.cardFor(card.cardId)?.reservationId ?? _holdReservationId;
+      _holdQueueCount = stored?.cards.length ?? _holdQueueCount;
+      _queuedCardIds = ids;
+      _status = _sameOrder(ids, expected)
+          ? 'دُوّر المقطع من الموضع ${start + 1} إلى ${end + 1} خطوة واحدة، وبقي ${_holdQueueCount} في الطابور'
+          : 'تعذر تدوير مقطع الطابور';
+      _statusIsError = !_sameOrder(ids, expected);
+    });
+  }
+
   /// يعكس ترتيب الطابور الذي يحمل الكرت الظاهر دون تحرير حجزه.
   Future<void> _reverseSelectedHold() async {
     final card = _liveCard;
@@ -1622,6 +1707,18 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
                           icon: const Icon(Icons.unfold_more),
                           label: Text(
                             'عكس المقطع حتى الموضع',
+                            style: const TextStyle(fontFamily: NetTypography.family),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Align(
+                        alignment: AlignmentDirectional.centerStart,
+                        child: TextButton.icon(
+                          onPressed: _busy || _probing ? null : _rotateSpanSelectedHold,
+                          icon: const Icon(Icons.rotate_right),
+                          label: Text(
+                            'تدوير المقطع خطوة حتى الموضع',
                             style: const TextStyle(fontFamily: NetTypography.family),
                           ),
                         ),
