@@ -13,6 +13,7 @@ import '../../domain/services/reward_probe_swap.dart';
 import '../../domain/services/reward_probe_rotate.dart';
 import '../../domain/services/reward_probe_reverse_span.dart';
 import '../../domain/services/reward_probe_rotate_span.dart';
+import '../../domain/services/reward_probe_rotate_span_steps.dart';
 import '../../platform/sms_bridge.dart';
 import '../app_scope.dart';
 import '../theme/net_tokens.dart';
@@ -65,6 +66,7 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
   final _body = TextEditingController();
   final _phone = TextEditingController();
   final _placePosition = TextEditingController();
+  final _spanSteps = TextEditingController();
   var _loading = true;
   var _busy = false;
   var _probing = false;
@@ -1036,6 +1038,108 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
     });
   }
 
+
+  /// يدوّر المقطع بين الكرت الظاهر والموضع المدخل بعدد خطوات دون تحريك ما خارجه.
+  Future<void> _rotateSpanStepsSelectedHold() async {
+    final card = _liveCard;
+    final position = int.tryParse(_placePosition.text.trim());
+    final steps = int.tryParse(_spanSteps.text.trim());
+    if (card == null ||
+        _queuedCardIds.length < 2 ||
+        position == null ||
+        position < 1 ||
+        steps == null ||
+        steps < 1) {
+      return;
+    }
+    final visibleIndex = _queuedCardIds.indexOf(card.cardId);
+    if (visibleIndex < 0 || position > _queuedCardIds.length) {
+      setState(() {
+        _status = 'الموضع خارج طول الطابور';
+        _statusIsError = true;
+      });
+      return;
+    }
+    if (position == visibleIndex + 1) {
+      setState(() {
+        _status = 'الكرت الظاهر في الموضع $position أصلاً';
+        _statusIsError = false;
+      });
+      return;
+    }
+    final start = visibleIndex < position - 1 ? visibleIndex : position - 1;
+    final end = visibleIndex < position - 1 ? position - 1 : visibleIndex;
+    final spanLength = end - start + 1;
+    final shift = steps % spanLength;
+    if (shift == 0) {
+      setState(() {
+        _status = 'التدوير بعدد يساوي طول المقطع لا يغيّر الترتيب';
+        _statusIsError = false;
+      });
+      return;
+    }
+    final c = AppScope.of(context);
+    setState(() => _busy = true);
+    final current = await c.settings.find(SettingKeys.promotionRewardProbeHolds);
+    final raw = current is Success<AppSetting?> ? current.value?.value : null;
+    final now = c.clock.now();
+    final encoded = RewardProbeRotateSpanSteps.rotateQueuedSpanSteps(
+      raw,
+      cardId: card.cardId,
+      position: position,
+      steps: steps,
+      customerId: _holdCustomerId,
+    );
+    await c.settings.save(
+      AppSetting(
+        key: SettingKeys.promotionRewardProbeHolds,
+        value: encoded,
+        updatedAt: now,
+      ),
+    );
+    var stored = PromotionRewardTemplate.lookupCrossCategoryHold(
+      encoded,
+      customerId: _holdCustomerId,
+    );
+    if (stored == null || !stored.holdsCard(card.cardId)) {
+      stored = PromotionRewardTemplate.lookupHold(
+        encoded,
+        card.categoryId,
+        customerId: _holdCustomerId,
+      );
+    }
+    await c.auditLogs.append(
+      AuditLog(
+        id: c.ids.next('reward-probe-hold'),
+        entityType: 'promotion_reward_template',
+        entityId: card.cardId,
+        action: 'reward_probe_card_span_rotated_steps',
+        occurredAt: now,
+        payloadJson:
+            '{"customerId":"${_holdCustomerId ?? ''}","position":$position,"steps":$steps,"queue":${stored?.cards.length ?? 0}}',
+      ),
+    );
+    if (!mounted) return;
+    final ids = [for (final item in stored?.cards ?? const <RewardProbeHeldCard>[]) item.cardId];
+    final span = _queuedCardIds.sublist(start, end + 1);
+    final expected = [
+      ..._queuedCardIds.sublist(0, start),
+      ...span.sublist(shift),
+      ...span.sublist(0, shift),
+      ..._queuedCardIds.sublist(end + 1),
+    ];
+    setState(() {
+      _busy = false;
+      _holdReservationId = stored?.cardFor(card.cardId)?.reservationId ?? _holdReservationId;
+      _holdQueueCount = stored?.cards.length ?? _holdQueueCount;
+      _queuedCardIds = ids;
+      _status = _sameOrder(ids, expected)
+          ? 'دُوّر المقطع من الموضع ${start + 1} إلى ${end + 1} بعدد $steps، وبقي ${_holdQueueCount} في الطابور'
+          : 'تعذر تدوير مقطع الطابور بعدد الخطوات';
+      _statusIsError = !_sameOrder(ids, expected);
+    });
+  }
+
   /// يعكس ترتيب الطابور الذي يحمل الكرت الظاهر دون تحرير حجزه.
   Future<void> _reverseSelectedHold() async {
     final card = _liveCard;
@@ -1432,6 +1536,7 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
     _body.dispose();
     _phone.dispose();
     _placePosition.dispose();
+    _spanSteps.dispose();
     super.dispose();
   }
 
@@ -1722,6 +1827,34 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
                             style: const TextStyle(fontFamily: NetTypography.family),
                           ),
                         ),
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          SizedBox(
+                            width: 88,
+                            child: TextField(
+                              controller: _spanSteps,
+                              keyboardType: TextInputType.number,
+                              decoration: const InputDecoration(
+                                isDense: true,
+                                labelText: 'خطوات',
+                                hintText: '1',
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: TextButton.icon(
+                              onPressed: _busy || _probing ? null : _rotateSpanStepsSelectedHold,
+                              icon: const Icon(Icons.rotate_90_degrees_ccw),
+                              label: const Text(
+                                'تدوير المقطع بعدد خطوات حتى الموضع',
+                                style: TextStyle(fontFamily: NetTypography.family),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                     if (_holdNextPayout && _holdQueueCount > 0) ...[
