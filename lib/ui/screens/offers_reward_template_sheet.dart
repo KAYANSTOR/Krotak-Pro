@@ -14,6 +14,7 @@ import '../../domain/services/reward_probe_rotate.dart';
 import '../../domain/services/reward_probe_reverse_span.dart';
 import '../../domain/services/reward_probe_rotate_span.dart';
 import '../../domain/services/reward_probe_rotate_span_steps.dart';
+import '../../domain/services/reward_probe_rotate_open_span_steps.dart';
 import '../../platform/sms_bridge.dart';
 import '../app_scope.dart';
 import '../theme/net_tokens.dart';
@@ -67,6 +68,7 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
   final _phone = TextEditingController();
   final _placePosition = TextEditingController();
   final _spanSteps = TextEditingController();
+  final _spanFrom = TextEditingController();
   var _loading = true;
   var _busy = false;
   var _probing = false;
@@ -1039,6 +1041,118 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
   }
 
 
+
+  /// يدوّر مقطعًا بين موضعين مدخلين بعدد خطوات. الكرت الظاهر يحدد الطابور ويقع داخل المقطع.
+  Future<void> _rotateOpenSpanStepsSelectedHold() async {
+    final card = _liveCard;
+    final startPosition = int.tryParse(_spanFrom.text.trim());
+    final endPosition = int.tryParse(_placePosition.text.trim());
+    final steps = int.tryParse(_spanSteps.text.trim());
+    if (card == null ||
+        _queuedCardIds.length < 2 ||
+        startPosition == null ||
+        endPosition == null ||
+        startPosition < 1 ||
+        endPosition < 1 ||
+        steps == null ||
+        steps < 1) {
+      return;
+    }
+    final visibleIndex = _queuedCardIds.indexOf(card.cardId);
+    final start = startPosition < endPosition ? startPosition : endPosition;
+    final end = startPosition < endPosition ? endPosition : startPosition;
+    if (visibleIndex < 0 || end > _queuedCardIds.length) {
+      setState(() {
+        _status = 'الموضع خارج طول الطابور';
+        _statusIsError = true;
+      });
+      return;
+    }
+    if (start == end) {
+      setState(() {
+        _status = 'طرفا المقطع هما نفس الموضع';
+        _statusIsError = false;
+      });
+      return;
+    }
+    if (visibleIndex < start - 1 || visibleIndex > end - 1) {
+      setState(() {
+        _status = 'الكرت الظاهر خارج المقطع المختار';
+        _statusIsError = true;
+      });
+      return;
+    }
+    final spanLength = end - start + 1;
+    final shift = steps % spanLength;
+    if (shift == 0) {
+      setState(() {
+        _status = 'التدوير بعدد يساوي طول المقطع لا يغيّر الترتيب';
+        _statusIsError = false;
+      });
+      return;
+    }
+    final c = AppScope.of(context);
+    setState(() => _busy = true);
+    final current = await c.settings.find(SettingKeys.promotionRewardProbeHolds);
+    final raw = current is Success<AppSetting?> ? current.value?.value : null;
+    final now = c.clock.now();
+    final encoded = RewardProbeRotateOpenSpanSteps.rotateOpenSpanSteps(
+      raw,
+      cardId: card.cardId,
+      startPosition: start,
+      endPosition: end,
+      steps: steps,
+      customerId: _holdCustomerId,
+    );
+    await c.settings.save(
+      AppSetting(
+        key: SettingKeys.promotionRewardProbeHolds,
+        value: encoded,
+        updatedAt: now,
+      ),
+    );
+    var stored = PromotionRewardTemplate.lookupCrossCategoryHold(
+      encoded,
+      customerId: _holdCustomerId,
+    );
+    if (stored == null || !stored.holdsCard(card.cardId)) {
+      stored = PromotionRewardTemplate.lookupHold(
+        encoded,
+        card.categoryId,
+        customerId: _holdCustomerId,
+      );
+    }
+    await c.auditLogs.append(
+      AuditLog(
+        id: c.ids.next('reward-probe-hold'),
+        entityType: 'promotion_reward_template',
+        entityId: card.cardId,
+        action: 'reward_probe_card_open_span_rotated_steps',
+        occurredAt: now,
+        payloadJson: '{"customerId":"${_holdCustomerId ?? ''}","start":$start,"end":$end,"steps":$steps,"queue":${stored?.cards.length ?? 0}}',
+      ),
+    );
+    if (!mounted) return;
+    final ids = [for (final item in stored?.cards ?? const <RewardProbeHeldCard>[]) item.cardId];
+    final span = _queuedCardIds.sublist(start - 1, end);
+    final expected = [
+      ..._queuedCardIds.sublist(0, start - 1),
+      ...span.sublist(shift),
+      ...span.sublist(0, shift),
+      ..._queuedCardIds.sublist(end),
+    ];
+    setState(() {
+      _busy = false;
+      _holdReservationId = stored?.cardFor(card.cardId)?.reservationId ?? _holdReservationId;
+      _holdQueueCount = stored?.cards.length ?? _holdQueueCount;
+      _queuedCardIds = ids;
+      _status = _sameOrder(ids, expected)
+          ? 'دُوّر المقطع من الموضع $start إلى $end بعدد $steps، وبقي ${_holdQueueCount} في الطابور'
+          : 'تعذر تدوير المقطع بين الموضعين';
+      _statusIsError = !_sameOrder(ids, expected);
+    });
+  }
+
   /// يدوّر المقطع بين الكرت الظاهر والموضع المدخل بعدد خطوات دون تحريك ما خارجه.
   Future<void> _rotateSpanStepsSelectedHold() async {
     final card = _liveCard;
@@ -1537,6 +1651,7 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
     _phone.dispose();
     _placePosition.dispose();
     _spanSteps.dispose();
+    _spanFrom.dispose();
     super.dispose();
   }
 
@@ -1855,6 +1970,34 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
                             ),
                           ),
                         ],
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          SizedBox(
+                            width: 88,
+                            child: TextField(
+                              controller: _spanFrom,
+                              keyboardType: TextInputType.number,
+                              decoration: const InputDecoration(
+                                isDense: true,
+                                labelText: 'من',
+                                hintText: '1',
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: TextButton.icon(
+                              onPressed: _busy || _probing ? null : _rotateOpenSpanStepsSelectedHold,
+                              icon: const Icon(Icons.swap_horiz),
+                              label: const Text(
+                                'تدوير مقطع بين موضعين بعدد الخطوات',
+                                style: TextStyle(fontFamily: NetTypography.family),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                       ),
                     ],
                     if (_holdNextPayout && _holdQueueCount > 0) ...[
