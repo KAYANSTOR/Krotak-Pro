@@ -6,7 +6,16 @@ import 'transaction.dart';
 enum AdvanceStatus { open, settled }
 
 final class Advance {
-  const Advance({required this.id, required this.customerId, required this.cardId, required this.amount, required this.outstanding, required this.reference, required this.createdAt, required this.status, this.settledAt});
+  const Advance(
+      {required this.id,
+      required this.customerId,
+      required this.cardId,
+      required this.amount,
+      required this.outstanding,
+      required this.reference,
+      required this.createdAt,
+      required this.status,
+      this.settledAt});
   final String id;
   final String customerId;
   final String cardId;
@@ -25,8 +34,17 @@ final class AdvanceIssue {
 }
 
 final class AdvancePaymentResult {
-  const AdvancePaymentResult({required this.applied, required this.remaining, this.settlementTransaction});
+  const AdvancePaymentResult({
+    required this.applied,
+    required this.remaining,
+    this.settlementTransaction,
+    this.notices = const [],
+  });
   final Money applied;
   final Money remaining;
   final Transaction? settlementTransaction;
+
+  /// إشعارات السداد المؤجلة: الحركات والتدقيق تُثبَّت ذريًا أولًا، ثم تُرسل هذه
+  /// الإشعارات بعد نجاح الالتزام حتى لا ترسل رسالة عن سداد لم يُكتب.
+  final List<Future<void> Function()> notices;
 }

@@ -16,15 +16,31 @@ import 'services.dart';
 import 'local_pos_account_registry.dart';
 
 final class LocalAdvanceService implements AdvanceService {
-  const LocalAdvanceService({required this.advances, required this.customers, required this.categories, required this.cards, required this.inventory, required this.transactions, required this.sales, required this.auditLogs, required this.settings, required this.unitOfWork, required this.messageSender, required this.clock, required this.ids, this.posRegistry});
+  const LocalAdvanceService(
+      {required this.advances,
+      required this.customers,
+      required this.categories,
+      required this.cards,
+      required this.inventory,
+      required this.transactions,
+      required this.sales,
+      required this.auditLogs,
+      required this.settings,
+      required this.unitOfWork,
+      required this.messageSender,
+      required this.clock,
+      required this.ids,
+      this.posRegistry});
 
   static const activationKey = SettingKeys.salafniEnabled;
   static const acceptedTemplateKey = SettingKeys.salafniAcceptedTemplate;
   static const rejectedTemplateKey = SettingKeys.salafniRejectedTemplate;
   static const settledTemplateKey = SettingKeys.salafniSettledTemplate;
-  static const defaultAccepted = 'تم تفعيل سلفني بقيمة {amount} ريال. الكرت: {serial} | الرمز: {code}';
+  static const defaultAccepted =
+      'تم تفعيل سلفني بقيمة {amount} ريال. الكرت: {serial} | الرمز: {code}';
   static const defaultRejected = 'تعذر تنفيذ سلفني: {reason}';
-  static const defaultSettled = 'تم تسديد سلفني بقيمة {amount} ريال. المتبقي من السلفة: {remaining} ريال.';
+  static const defaultSettled =
+      'تم تسديد سلفني بقيمة {amount} ريال. المتبقي من السلفة: {remaining} ريال.';
 
   final AdvanceRepository advances;
   final CustomerRepository customers;
@@ -42,33 +58,47 @@ final class LocalAdvanceService implements AdvanceService {
   final LocalPosAccountRegistry? posRegistry;
 
   @override
-  Future<Result<AdvanceIssue>> request({required String customerId, required String currencyCode, required String operationId}) async {
+  Future<Result<AdvanceIssue>> request(
+      {required String customerId,
+      required String currencyCode,
+      required String operationId}) async {
     final enabledResult = await _isEnabled();
     if (enabledResult is Failure<bool>) return Failure(enabledResult.error);
-    if (!(enabledResult as Success<bool>).value) return _reject('salafni_disabled', 'خدمة سلفني غير مفعلة', customerId: customerId);
+    if (!(enabledResult as Success<bool>).value)
+      return _reject('salafni_disabled', 'خدمة سلفني غير مفعلة',
+          customerId: customerId);
     final op = operationId.trim();
-    if (op.isEmpty) return _reject('invalid_operation_id', 'مرجع العملية فارغ', customerId: customerId);
+    if (op.isEmpty)
+      return _reject('invalid_operation_id', 'مرجع العملية فارغ',
+          customerId: customerId);
 
     final existing = await transactions.findByReference('salafni:$op');
     if (existing is Failure<Transaction?>) return Failure(existing.error);
     final existingTx = (existing as Success<Transaction?>).value;
     if (existingTx != null && existingTx.type == TransactionType.advance) {
       final existingAdvance = await advances.findById(existingTx.id);
-      if (existingAdvance is Failure<Advance?>) return Failure(existingAdvance.error);
+      if (existingAdvance is Failure<Advance?>)
+        return Failure(existingAdvance.error);
       final existingValue = (existingAdvance as Success<Advance?>).value;
       if (existingValue != null) {
         final card = await cards.findById(existingValue.cardId);
         if (card is Failure<Card?>) return Failure(card.error);
         final cardValue = (card as Success<Card?>).value;
-        if (cardValue != null) return Success(AdvanceIssue(advance: existingValue, card: cardValue));
+        if (cardValue != null)
+          return Success(AdvanceIssue(advance: existingValue, card: cardValue));
       }
     }
 
     final customerResult = await customers.findById(customerId);
-    if (customerResult is Failure<Customer?>) return Failure(customerResult.error);
+    if (customerResult is Failure<Customer?>)
+      return Failure(customerResult.error);
     final customer = (customerResult as Success<Customer?>).value;
-    if (customer == null) return _reject('customer_not_found', 'العميل غير موجود', customerId: customerId);
-    if (customer.status != CustomerStatus.active) return _reject('customer_not_active', 'العميل غير نشط', customerId: customerId);
+    if (customer == null)
+      return _reject('customer_not_found', 'العميل غير موجود',
+          customerId: customerId);
+    if (customer.status != CustomerStatus.active)
+      return _reject('customer_not_active', 'العميل غير نشط',
+          customerId: customerId);
 
     // سلفني للعملاء فقط — نقاط البيع لها نظام دين مستقل بسقف.
     if (posRegistry != null) {
@@ -83,19 +113,31 @@ final class LocalAdvanceService implements AdvanceService {
       }
     }
 
-    final open = await advances.findOpenByCustomer(customerId: customerId, currencyCode: currencyCode);
+    final open = await advances.findOpenByCustomer(
+        customerId: customerId, currencyCode: currencyCode);
     if (open is Failure<Advance?>) return Failure(open.error);
-    if ((open as Success<Advance?>).value != null) return _reject('advance_already_open', 'لدى العميل سلفة غير مسددة', customerId: customerId);
+    if ((open as Success<Advance?>).value != null)
+      return _reject('advance_already_open', 'لدى العميل سلفة غير مسددة',
+          customerId: customerId);
 
     final balance = await _balance(customerId, currencyCode);
     if (balance is Failure<Money>) return Failure(balance.error);
-    if ((balance as Success<Money>).value.minorUnits != 0) return _reject('balance_not_zero', 'يجب أن يكون الرصيد صفرًا تمامًا', customerId: customerId);
+    if ((balance as Success<Money>).value.minorUnits != 0)
+      return _reject('balance_not_zero', 'يجب أن يكون الرصيد صفرًا تمامًا',
+          customerId: customerId);
 
     final categoryResult = await categories.listAll();
-    if (categoryResult is Failure<List<CardCategory>>) return Failure(categoryResult.error);
-    final active = (categoryResult as Success<List<CardCategory>>).value.where((c) => c.isActive && c.faceValue.currencyCode == currencyCode).toList(growable: false)
-      ..sort((a, b) => a.faceValue.minorUnits.compareTo(b.faceValue.minorUnits));
-    if (active.isEmpty) return _reject('no_active_category', 'لا توجد فئة كروت نشطة', customerId: customerId);
+    if (categoryResult is Failure<List<CardCategory>>)
+      return Failure(categoryResult.error);
+    final active = (categoryResult as Success<List<CardCategory>>)
+        .value
+        .where((c) => c.isActive && c.faceValue.currencyCode == currencyCode)
+        .toList(growable: false)
+      ..sort(
+          (a, b) => a.faceValue.minorUnits.compareTo(b.faceValue.minorUnits));
+    if (active.isEmpty)
+      return _reject('no_active_category', 'لا توجد فئة كروت نشطة',
+          customerId: customerId);
 
     CardCategory? selectedCategory;
     for (final category in active) {
@@ -106,29 +148,56 @@ final class LocalAdvanceService implements AdvanceService {
         break;
       }
     }
-    if (selectedCategory == null) return _reject('salafni_out_of_stock', 'لا يوجد كرت متاح في الفئات النشطة', customerId: customerId);
+    if (selectedCategory == null)
+      return _reject(
+          'salafni_out_of_stock', 'لا يوجد كرت متاح في الفئات النشطة',
+          customerId: customerId);
 
     final now = clock.now();
     final reservationId = ids.next('salafni-reservation');
-    final reserved = await inventory.reserveAvailableCard(categoryId: selectedCategory.id, reservationId: reservationId, now: now, expiresAt: now.add(const Duration(minutes: 5)));
+    final reserved = await inventory.reserveAvailableCard(
+        categoryId: selectedCategory.id,
+        reservationId: reservationId,
+        now: now,
+        expiresAt: now.add(const Duration(minutes: 5)));
     if (reserved is Failure<Card>) return Failure(reserved.error);
     final selectedCard = (reserved as Success<Card>).value;
 
     final advanceId = ids.next('advance');
-    final advanceTx = Transaction(id: advanceId, type: TransactionType.advance, status: TransactionStatus.completed, amount: selectedCategory.faceValue, createdAt: now, customerId: customerId, reference: 'salafni:$op');
+    final advanceTx = Transaction(
+        id: advanceId,
+        type: TransactionType.advance,
+        status: TransactionStatus.completed,
+        amount: selectedCategory.faceValue,
+        createdAt: now,
+        customerId: customerId,
+        reference: 'salafni:$op');
     final append = await transactions.append(advanceTx);
     if (append is Failure<void>) {
       await cards.releaseReservation(selectedCard.id, reservationId);
       return Failure(append.error);
     }
 
-    final sale = Sale(id: advanceId, customerId: customerId, cardId: selectedCard.id, amount: selectedCategory.faceValue, status: TransactionStatus.completed, createdAt: now);
+    final sale = Sale(
+        id: advanceId,
+        customerId: customerId,
+        cardId: selectedCard.id,
+        amount: selectedCategory.faceValue,
+        status: TransactionStatus.completed,
+        createdAt: now);
     final marked = await cards.markSold(selectedCard.id, advanceId);
     if (marked is Failure<void>) return Failure(marked.error);
     final saleSaved = await sales.save(sale);
     if (saleSaved is Failure<void>) return Failure(saleSaved.error);
 
-    final audit = await auditLogs.append(AuditLog(id: ids.next('audit'), entityType: 'advance', entityId: advanceId, action: 'issued', occurredAt: now, payloadJson: '{"customerId":"$customerId","cardId":"${selectedCard.id}","operationId":"${_escape(op)}"}'));
+    final audit = await auditLogs.append(AuditLog(
+        id: ids.next('audit'),
+        entityType: 'advance',
+        entityId: advanceId,
+        action: 'issued',
+        occurredAt: now,
+        payloadJson:
+            '{"customerId":"$customerId","cardId":"${selectedCard.id}","operationId":"${_escape(op)}"}'));
     if (audit is Failure<void>) return Failure(audit.error);
 
     // Card is already committed (sold + ledger + sale). Delivery is best-effort:
@@ -195,72 +264,173 @@ final class LocalAdvanceService implements AdvanceService {
   }
 
   @override
-  Future<Result<AdvanceIssue>> requestByIdentifier({required String identifier, required String currencyCode, required String operationId}) async {
+  Future<Result<AdvanceIssue>> requestByIdentifier(
+      {required String identifier,
+      required String currencyCode,
+      required String operationId}) async {
     final value = PhoneNormalizer.canonicalize(identifier) ?? identifier.trim();
     final customerResult = await customers.findByIdentifier(value);
-    if (customerResult is Failure<Customer?>) return Failure(customerResult.error);
+    if (customerResult is Failure<Customer?>)
+      return Failure(customerResult.error);
     final customer = (customerResult as Success<Customer?>).value;
-    if (customer == null) return _reject('customer_not_found', 'العميل غير موجود', destination: PhoneNormalizer.isPhoneLike(identifier) ? value : null);
-    return request(customerId: customer.id, currencyCode: currencyCode, operationId: operationId);
+    if (customer == null)
+      return _reject('customer_not_found', 'العميل غير موجود',
+          destination: PhoneNormalizer.isPhoneLike(identifier) ? value : null);
+    return request(
+        customerId: customer.id,
+        currencyCode: currencyCode,
+        operationId: operationId);
   }
 
   @override
-  Future<Result<AdvancePaymentResult>> applyPayment({required String customerId, required Money amount, required String reference}) async {
-    if (amount.minorUnits <= 0) return const Failure(AppFailure(code: 'invalid_amount', message: 'مبلغ السداد يجب أن يكون موجبًا'));
+  Future<Result<AdvancePaymentResult>> applyPayment(
+      {required String customerId,
+      required Money amount,
+      required String reference}) async {
+    if (amount.minorUnits <= 0)
+      return const Failure(AppFailure(
+          code: 'invalid_amount', message: 'مبلغ السداد يجب أن يكون موجبًا'));
+    // كل كتابات السداد (الحركات + التدقيق) داخل معاملة واحدة: لا يُخصَّص جزء من
+    // الدفعة ثم يتعثر الباقي. رسائل الإشعار تُرسل بعد نجاح الالتزام فقط.
+    final applied = await unitOfWork.run(
+      () => _applyPayment(
+          customerId: customerId, amount: amount, reference: reference),
+    );
+    if (applied is Failure<AdvancePaymentResult>) return applied;
+    for (final notice
+        in (applied as Success<AdvancePaymentResult>).value.notices) {
+      await notice();
+    }
+    return applied;
+  }
+
+  Future<Result<AdvancePaymentResult>> _applyPayment({
+    required String customerId,
+    required Money amount,
+    required String reference,
+  }) async {
     final txResult = await transactions.findByCustomer(customerId);
     if (txResult is Failure<List<Transaction>>) return Failure(txResult.error);
     final allTransactions = (txResult as Success<List<Transaction>>).value;
     final prefix = 'salafni-settlement:$reference:';
-    final priorPayments = allTransactions.where((t) => t.status == TransactionStatus.completed && t.type == TransactionType.deposit && (t.reference ?? '').startsWith(prefix)).toList(growable: false);
+    final priorPayments = allTransactions
+        .where((t) =>
+            t.status == TransactionStatus.completed &&
+            t.type == TransactionType.deposit &&
+            (t.reference ?? '').startsWith(prefix))
+        .toList(growable: false);
     var priorApplied = 0;
     Transaction? lastSettlement;
     for (final payment in priorPayments) {
       priorApplied += payment.amount.minorUnits;
       lastSettlement = payment;
     }
-    if (priorApplied > amount.minorUnits) return const Failure(AppFailure(code: 'settlement_reference_conflict', message: 'مرجع السداد استُخدم بمبلغ أكبر سابقًا'));
+    if (priorApplied > amount.minorUnits)
+      return const Failure(AppFailure(
+          code: 'settlement_reference_conflict',
+          message: 'مرجع السداد استُخدم بمبلغ أكبر سابقًا'));
 
     final list = await advances.listByCustomer(customerId);
     if (list is Failure<List<Advance>>) return Failure(list.error);
-    final open = (list as Success<List<Advance>>).value.where((a) => a.status == AdvanceStatus.open && a.amount.currencyCode == amount.currencyCode).toList(growable: false);
-    final outstandingTotal = open.fold<int>(0, (sum, advance) => sum + advance.outstanding.minorUnits);
+    // «المتبقي» هو المصدر الوحيد للمبلغ غير المسدد: سلفة رصيدها المتبقي صفر
+    // (مسددة فعلًا ولو بقيت مفتوحة) لا تُحسب ولا تُكتب لها حركة صفرية.
+    final open = (list as Success<List<Advance>>)
+        .value
+        .where((a) =>
+            a.status == AdvanceStatus.open &&
+            a.amount.currencyCode == amount.currencyCode &&
+            a.outstanding.minorUnits > 0)
+        .toList(growable: false);
+    final outstandingTotal = open.fold<int>(
+        0, (sum, advance) => sum + advance.outstanding.minorUnits);
     final firstAttemptRemaining = amount.minorUnits - priorApplied;
-    if (priorApplied == 0 && outstandingTotal > 0 && firstAttemptRemaining > outstandingTotal) {
+    if (priorApplied == 0 &&
+        outstandingTotal > 0 &&
+        firstAttemptRemaining > outstandingTotal) {
       final residual = firstAttemptRemaining - outstandingTotal;
       final categoriesResult = await categories.listAll();
-      if (categoriesResult is Failure<List<CardCategory>>) return Failure(categoriesResult.error);
-      final matches = (categoriesResult as Success<List<CardCategory>>).value.where((c) => c.isActive && c.faceValue.currencyCode == amount.currencyCode && c.faceValue.minorUnits == residual).toList(growable: false);
-      if (matches.length != 1) return Success(AdvancePaymentResult(applied: Money(minorUnits: 0, currencyCode: amount.currencyCode), remaining: amount, settlementTransaction: null));
+      if (categoriesResult is Failure<List<CardCategory>>)
+        return Failure(categoriesResult.error);
+      final matches = (categoriesResult as Success<List<CardCategory>>)
+          .value
+          .where((c) =>
+              c.isActive &&
+              c.faceValue.currencyCode == amount.currencyCode &&
+              c.faceValue.minorUnits == residual)
+          .toList(growable: false);
+      if (matches.length != 1)
+        return Success(AdvancePaymentResult(
+            applied: Money(minorUnits: 0, currencyCode: amount.currencyCode),
+            remaining: amount,
+            settlementTransaction: null));
     }
 
     var remaining = firstAttemptRemaining;
     var applied = priorApplied;
+    final notices = <Future<void> Function()>[];
     for (final advance in open) {
       if (remaining <= 0) break;
-      final pay = remaining > advance.outstanding.minorUnits ? advance.outstanding.minorUnits : remaining;
-      final payment = Transaction(id: ids.next('txn'), type: TransactionType.deposit, status: TransactionStatus.completed, amount: Money(minorUnits: pay, currencyCode: amount.currencyCode), createdAt: clock.now(), customerId: customerId, reference: '$prefix${advance.id}', relatedTransactionId: advance.id);
+      final pay = remaining > advance.outstanding.minorUnits
+          ? advance.outstanding.minorUnits
+          : remaining;
+      if (pay <= 0) continue;
+      final payment = Transaction(
+          id: ids.next('txn'),
+          type: TransactionType.deposit,
+          status: TransactionStatus.completed,
+          amount: Money(minorUnits: pay, currencyCode: amount.currencyCode),
+          createdAt: clock.now(),
+          customerId: customerId,
+          reference: '$prefix${advance.id}',
+          relatedTransactionId: advance.id);
       final saved = await transactions.append(payment);
       if (saved is Failure<void>) return Failure(saved.error);
       lastSettlement = payment;
       applied += pay;
       remaining -= pay;
       final nowRemaining = advance.outstanding.minorUnits - pay;
-      await auditLogs.append(AuditLog(id: ids.next('audit'), entityType: 'advance', entityId: advance.id, action: nowRemaining <= 0 ? 'settled' : 'partially_settled', occurredAt: clock.now(), payloadJson: '{"paymentReference":"${_escape(reference)}","applied":$pay,"remaining":$nowRemaining}'));
-      final destination = await _deliveryPhone(customerId);
-      if (destination.isNotEmpty) {
-        await messageSender.send(destination: destination, body: await _render(settledTemplateKey, defaultSettled, {'amount': _money(Money(minorUnits: pay, currencyCode: amount.currencyCode)), 'remaining': _money(Money(minorUnits: nowRemaining, currencyCode: amount.currencyCode))}));
-      }
+      await auditLogs.append(AuditLog(
+          id: ids.next('audit'),
+          entityType: 'advance',
+          entityId: advance.id,
+          action: nowRemaining <= 0 ? 'settled' : 'partially_settled',
+          occurredAt: clock.now(),
+          payloadJson:
+              '{"paymentReference":"${_escape(reference)}","applied":$pay,"remaining":$nowRemaining}'));
+      final settledAmount =
+          Money(minorUnits: pay, currencyCode: amount.currencyCode);
+      final settledRemaining =
+          Money(minorUnits: nowRemaining, currencyCode: amount.currencyCode);
+      notices.add(() async {
+        final destination = await _deliveryPhone(customerId);
+        if (destination.isEmpty) return;
+        await messageSender.send(
+          destination: destination,
+          body: await _render(settledTemplateKey, defaultSettled, {
+            'amount': _money(settledAmount),
+            'remaining': _money(settledRemaining),
+          }),
+        );
+      });
     }
-    return Success(AdvancePaymentResult(applied: Money(minorUnits: applied, currencyCode: amount.currencyCode), remaining: Money(minorUnits: remaining, currencyCode: amount.currencyCode), settlementTransaction: lastSettlement));
+    return Success(AdvancePaymentResult(
+      applied: Money(minorUnits: applied, currencyCode: amount.currencyCode),
+      remaining:
+          Money(minorUnits: remaining, currencyCode: amount.currencyCode),
+      settlementTransaction: lastSettlement,
+      notices: notices,
+    ));
   }
 
   @override
-  Future<Result<List<Advance>>> listCustomerAdvances(String customerId) => advances.listByCustomer(customerId);
+  Future<Result<List<Advance>>> listCustomerAdvances(String customerId) =>
+      advances.listByCustomer(customerId);
 
   Future<Result<bool>> _isEnabled() async {
     final result = await settings.find(activationKey);
     if (result is Failure<AppSetting?>) return Failure(result.error);
-    final raw = (result as Success<AppSetting?>).value?.value.trim().toLowerCase();
+    final raw =
+        (result as Success<AppSetting?>).value?.value.trim().toLowerCase();
     return Success(raw == 'true' || raw == '1');
   }
 
@@ -269,10 +439,18 @@ final class LocalAdvanceService implements AdvanceService {
     if (rows is Failure<List<Transaction>>) return Failure(rows.error);
     var total = 0;
     for (final row in (rows as Success<List<Transaction>>).value) {
-      if (row.status != TransactionStatus.completed || row.amount.currencyCode != currencyCode) continue;
+      if (row.status != TransactionStatus.completed ||
+          row.amount.currencyCode != currencyCode) continue;
       total += switch (row.type) {
-        TransactionType.deposit || TransactionType.reward || TransactionType.reversal => row.amount.minorUnits,
-        TransactionType.withdrawal || TransactionType.sale || TransactionType.settlement || TransactionType.advance => -row.amount.minorUnits,
+        TransactionType.deposit ||
+        TransactionType.reward ||
+        TransactionType.reversal =>
+          row.amount.minorUnits,
+        TransactionType.withdrawal ||
+        TransactionType.sale ||
+        TransactionType.settlement ||
+        TransactionType.advance =>
+          -row.amount.minorUnits,
       };
     }
     return Success(Money(minorUnits: total, currencyCode: currencyCode));
@@ -281,13 +459,18 @@ final class LocalAdvanceService implements AdvanceService {
   Future<String> _deliveryPhone(String customerId) async {
     final idsResult = await customers.listIdentifiers(customerId);
     if (idsResult is Failure<List<CustomerIdentifier>>) return '';
-    final identifiers = (idsResult as Success<List<CustomerIdentifier>>).value.where((i) => i.type == CustomerIdentifierType.phoneNumber).toList(growable: false);
+    final identifiers = (idsResult as Success<List<CustomerIdentifier>>)
+        .value
+        .where((i) => i.type == CustomerIdentifierType.phoneNumber)
+        .toList(growable: false);
     if (identifiers.isEmpty) return '';
-    final primary = identifiers.where((i) => i.isPrimary).firstOrNull ?? identifiers.first;
+    final primary =
+        identifiers.where((i) => i.isPrimary).firstOrNull ?? identifiers.first;
     return PhoneNormalizer.canonicalize(primary.value) ?? primary.value;
   }
 
-  Future<String> _render(String key, String fallback, Map<String, String> values) async {
+  Future<String> _render(
+      String key, String fallback, Map<String, String> values) async {
     final result = await settings.find(key);
     final template = result is Success<AppSetting?> &&
             result.value?.value.trim().isNotEmpty == true
@@ -306,17 +489,28 @@ final class LocalAdvanceService implements AdvanceService {
 
   String _money(Money money) => (money.minorUnits / 100).toStringAsFixed(2);
 
-  Future<Result<AdvanceIssue>> _reject(String code, String message, {String? customerId, String? destination}) async {
-    final target = customerId == null ? destination : await _deliveryPhone(customerId);
+  Future<Result<AdvanceIssue>> _reject(String code, String message,
+      {String? customerId, String? destination}) async {
+    final target =
+        customerId == null ? destination : await _deliveryPhone(customerId);
     if (target != null && target.trim().isNotEmpty) {
-      final body = await _render(rejectedTemplateKey, defaultRejected, {'reason': message});
+      final body = await _render(
+          rejectedTemplateKey, defaultRejected, {'reason': message});
       if (body.trim().isNotEmpty) {
         await messageSender.send(destination: target, body: body);
       }
     }
-    await auditLogs.append(AuditLog(id: ids.next('audit'), entityType: 'advance_request', entityId: customerId ?? destination ?? 'unknown', action: 'rejected', occurredAt: clock.now(), payloadJson: '{"code":"${_escape(code)}","reason":"${_escape(message)}"}'));
+    await auditLogs.append(AuditLog(
+        id: ids.next('audit'),
+        entityType: 'advance_request',
+        entityId: customerId ?? destination ?? 'unknown',
+        action: 'rejected',
+        occurredAt: clock.now(),
+        payloadJson:
+            '{"code":"${_escape(code)}","reason":"${_escape(message)}"}'));
     return Failure(AppFailure(code: code, message: message));
   }
 
-  String _escape(String value) => value.replaceAll('"', '\\"').replaceAll('\n', ' ');
+  String _escape(String value) =>
+      value.replaceAll('"', '\\"').replaceAll('\n', ' ');
 }

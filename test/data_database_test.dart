@@ -14,11 +14,13 @@ void main() {
     await database.close();
   });
 
-  test('creates current schema version 4 and starts empty', () async {
-    expect(database.schemaVersion, 4);
+  test('creates current schema version 5 and starts empty', () async {
+    expect(database.schemaVersion, 5);
     expect(await database.select(database.customers).get(), isEmpty);
     expect(await database.select(database.cards).get(), isEmpty);
     expect(await database.select(database.incomingMessages).get(), isEmpty);
+    expect(await database.select(database.broadcastJobs).get(), isEmpty);
+    expect(await database.select(database.broadcastRecipients).get(), isEmpty);
   });
 
   test('stores an incoming message before processing', () async {

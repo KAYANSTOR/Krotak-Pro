@@ -238,6 +238,14 @@ final class _Transactions implements TransactionRepository {
   }
 
   @override
+  Future<Result<Transaction?>> findById(String id) async {
+    for (final row in rows) {
+      if (row.id == id) return Success(row);
+    }
+    return const Success(null);
+  }
+
+  @override
   Future<Result<Transaction?>> findByReference(String reference) async {
     for (final row in rows) {
       if (row.reference == reference) return Success(row);

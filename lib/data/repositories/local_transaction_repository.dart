@@ -56,6 +56,18 @@ final class LocalTransactionRepository implements TransactionRepository, Custome
   }
 
   @override
+  Future<Result<domain.Transaction?>> findById(String id) async {
+    try {
+      final row = await (database.select(database.transactions)
+            ..where((table) => table.id.equals(id)))
+          .getSingleOrNull();
+      return Success(row == null ? null : _toTransaction(row));
+    } catch (error) {
+      return Failure(_failure('transaction_id_find_failed', error));
+    }
+  }
+
+  @override
   Future<Result<domain.Transaction?>> findByReference(String reference) async {
     try {
       final row = await (database.select(database.transactions)

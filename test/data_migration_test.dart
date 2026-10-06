@@ -1,6 +1,7 @@
+import 'dart:convert';
 import 'dart:io';
 
-import 'package:drift/drift.dart' show Value;
+import 'package:drift/drift.dart' show InsertMode, OrderingTerm, Value;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -51,6 +52,7 @@ void main() {
       'note_label',
       'require_reference',
     ],
+    'broadcast_recipients': ['position'],
   };
 
   const idempotencyIndexes = <String>[
@@ -236,7 +238,13 @@ void main() {
     expect(transactions.single.customerId, 'legacy-customer');
 
     // 4. نسخة المخطط أصبحت الحالية.
-    expect(await userVersion(upgraded), 4);
+    expect(await userVersion(upgraded), 5);
+    // جداول البث المسمّاة موجودة بعد الترقية.
+    expect(await columnsOf(upgraded, 'broadcast_jobs'), contains('fingerprint'));
+    expect(
+      await columnsOf(upgraded, 'broadcast_recipients'),
+      contains('position'),
+    );
 
     // 5. الكتابة بعد الترقية تعمل على الأعمدة المضافة (يقرأها المستودع الحقيقي
     //    بـ raw SQL لا عبر Drift).
@@ -317,7 +325,104 @@ void main() {
       throwsA(isA<Exception>()),
     );
 
-    expect(await userVersion(upgraded), 4);
+    expect(await userVersion(upgraded), 5);
+  });
+
+  test('legacy broadcast JSON migrates into the typed tables exactly once',
+      () async {
+    await seedLegacyRows();
+    final legacyPayload = jsonEncode({
+      'jobs': [
+        {
+          'id': 'legacy-bcast-1',
+          'body': 'رسالة جماعية قديمة',
+          'status': 'partiallyFailed',
+          'createdAt': DateTime.utc(2026, 1, 20, 10).toIso8601String(),
+          'confirmedAt': DateTime.utc(2026, 1, 20, 10, 5).toIso8601String(),
+          'completedAt': DateTime.utc(2026, 1, 20, 10, 30).toIso8601String(),
+          'fingerprint': 'legacy-fingerprint',
+          'recipients': [
+            {
+              'customerId': 'legacy-customer',
+              'phone': '733111222',
+              'displayName': 'عميل قديم',
+              'status': 'sent',
+              'attempts': 1,
+              'sentAt': DateTime.utc(2026, 1, 20, 10, 10).toIso8601String(),
+            },
+            {
+              'customerId': 'legacy-second',
+              'phone': '733111333',
+              'displayName': 'عميل ثانٍ',
+              'status': 'failed',
+              'errorCode': 'sms_send_failed',
+              'attempts': 2,
+            },
+          ],
+        },
+      ],
+    });
+    final seed = AppDatabase(NativeDatabase(File(dbPath)));
+    await seed.into(seed.appSettings).insert(
+          AppSettingsCompanion.insert(
+            key: 'broadcast_jobs',
+            value: legacyPayload,
+            updatedAt: DateTime.utc(2026, 1, 20),
+          ),
+          mode: InsertMode.insertOrReplace,
+        );
+    await seed.close();
+
+    // ترقية حقيقية من نسخة 4 (بلا عمود position) مع نص البث القديم في الإعدادات.
+    final upgraded = await openUpgrading(userVersion: 4);
+    addTearDown(upgraded.close);
+    expect(await userVersion(upgraded), 5);
+
+    final jobs = await upgraded.select(upgraded.broadcastJobs).get();
+    expect(jobs, hasLength(1));
+    expect(jobs.single.id, 'legacy-bcast-1');
+    expect(jobs.single.status, 'partiallyFailed');
+    expect(jobs.single.createdAt.toUtc(), DateTime.utc(2026, 1, 20, 10));
+    expect(jobs.single.fingerprint, 'legacy-fingerprint');
+    final recipients = await (upgraded.select(upgraded.broadcastRecipients)
+          ..orderBy([(table) => OrderingTerm(expression: table.position)]))
+        .get();
+    expect(recipients, hasLength(2));
+    expect(recipients.first.customerId, 'legacy-customer');
+    expect(recipients.first.status, 'sent');
+    expect(recipients.first.sentAt!.toUtc(), DateTime.utc(2026, 1, 20, 10, 10));
+    expect(recipients.last.customerId, 'legacy-second');
+    expect(recipients.last.position, 1);
+    expect(recipients.last.errorCode, 'sms_send_failed');
+    expect(recipients.last.attempts, 2);
+
+    // النص القديم باقٍ كمسار رجوع، لكنه ليس مصدرًا وقت التشغيل.
+    final legacy = await (upgraded.select(upgraded.appSettings)
+          ..where((table) => table.key.equals('broadcast_jobs')))
+        .getSingle();
+    expect(legacy.value, legacyPayload);
+
+    await upgraded.close();
+
+    // إعادة الفتح (نسخة 5) تمرّ بمسار الترحيل نفسه: لا تكرار ولا كتابة فوق مهمة.
+    final reopened = AppDatabase(NativeDatabase(File(dbPath)));
+    addTearDown(reopened.close);
+    expect(await reopened.select(reopened.broadcastJobs).get(), hasLength(1));
+    expect(
+      await reopened.select(reopened.broadcastRecipients).get(),
+      hasLength(2),
+    );
+
+    // ولو تقدمت المهمة في الجداول فالنص القديم لا يكتب فوقها.
+    await (reopened.update(reopened.broadcastJobs)
+          ..where((table) => table.id.equals('legacy-bcast-1')))
+        .write(const BroadcastJobsCompanion(status: Value('completed')));
+    final again = AppDatabase(NativeDatabase(File(dbPath)));
+    addTearDown(again.close);
+    final after = await (again.select(again.broadcastJobs)
+          ..where((table) => table.id.equals('legacy-bcast-1')))
+        .getSingle();
+    expect(after.status, 'completed', reason: 'الترحيل إضافي ولا يكتب فوق الحالة');
   });
 
   test('the application boots against a migrated older database', () async {

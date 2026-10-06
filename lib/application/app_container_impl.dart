@@ -7,7 +7,8 @@ import '../core/app_brand.dart';
 import '../core/clock.dart';
 import '../core/id_generator.dart';
 import '../core/result.dart';
-import '../data/database/app_database.dart' hide Customer, Card, Sale, TransferTemplate, AppSetting, Wallet;
+import '../data/database/app_database.dart'
+    hide Customer, Card, Sale, TransferTemplate, AppSetting, Wallet;
 import '../data/database/database_provider.dart';
 import '../data/database/drift_unit_of_work.dart';
 import '../data/repositories/local_repositories.dart';
@@ -68,18 +69,61 @@ import 'incoming_sms_handler.dart';
 
 final class AppContainer {
   AppContainer._({
-    required this.database, required this.customers, required this.wallets, required this.pointsOfSale,
-    required this.categories, required this.cards, required this.messages, required this.transferTemplates,
-    required this.transactions, required this.sales, required this.auditLogs, required this.licenses,
-    required this.settings, required this.unitOfWork, required this.customerService, required this.balanceService,
-    required this.catalogService, required this.walletCatalog, required this.posCatalog, required this.posRegistry, required this.posProfile,
-    required this.inventoryService, required this.saleService, required this.advanceService, required this.broadcastService,
-    required this.promotions, required this.promotionProgress, required this.systemHealth, required this.voucherOps,
-    required this.pendingAlarm, required LocalMessageParser messageParser, required this.transferProcessor,
-    required this.licenseService, required this.backupService, required this.maintenanceService, required this.lowStockAlerts, required this.stockAlertNotifier, required this.dailyPosSummary, required this.mergeService, required this.identityLinkService, required this.settlementService,
-    required this.recoveryService, required this.deliveryWorker, required this.posOrderDeliveryWorker, required this.retryService, required this.pendingReview, required this.smsBridge,
-    required this.smsHandler, required this.notificationBridge, required this.notificationSources,
-    required this.notificationHandler, required this.deliveryKeepAlive, required this.clock, required this.ids, required this.themeModeNotifier,
+    required this.database,
+    required this.customers,
+    required this.wallets,
+    required this.pointsOfSale,
+    required this.categories,
+    required this.cards,
+    required this.messages,
+    required this.transferTemplates,
+    required this.transactions,
+    required this.sales,
+    required this.auditLogs,
+    required this.licenses,
+    required this.settings,
+    required this.unitOfWork,
+    required this.customerService,
+    required this.balanceService,
+    required this.catalogService,
+    required this.walletCatalog,
+    required this.posCatalog,
+    required this.posRegistry,
+    required this.posProfile,
+    required this.inventoryService,
+    required this.saleService,
+    required this.advanceService,
+    required this.broadcastService,
+    required this.promotions,
+    required this.promotionProgress,
+    required this.systemHealth,
+    required this.voucherOps,
+    required this.pendingAlarm,
+    required LocalMessageParser messageParser,
+    required this.transferProcessor,
+    required this.licenseService,
+    required this.backupService,
+    required this.maintenanceService,
+    required this.lowStockAlerts,
+    required this.stockAlertNotifier,
+    required this.dailyPosSummary,
+    required this.mergeService,
+    required this.identityLinkService,
+    required this.settlementService,
+    required this.recoveryService,
+    required this.deliveryWorker,
+    required this.posOrderDeliveryWorker,
+    required this.retryService,
+    required this.pendingReview,
+    required this.smsBridge,
+    required this.smsHandler,
+    required this.notificationBridge,
+    required this.notificationSources,
+    required this.notificationHandler,
+    required this.deliveryKeepAlive,
+    required this.clock,
+    required this.ids,
+    required this.themeModeNotifier,
   }) : _messageParser = messageParser;
 
   final AppDatabase database;
@@ -155,7 +199,8 @@ final class AppContainer {
   Future<Result<void>> reloadTemplates() async {
     final listed = await transferTemplates.listAll();
     if (listed is Failure<List<TransferTemplate>>) return Failure(listed.error);
-    _messageParser.replaceTemplates((listed as Success<List<TransferTemplate>>).value);
+    _messageParser
+        .replaceTemplates((listed as Success<List<TransferTemplate>>).value);
     return const Success(null);
   }
 
@@ -180,19 +225,61 @@ final class AppContainer {
     final auditLogs = LocalAuditLogRepository(database);
     final licenses = LocalLicenseRepository(database);
     final settings = LocalSettingsRepository(database);
-    final advanceRepository = LocalAdvanceRepository(transactions: transactions, sales: sales);
-    final balanceService = LocalCustomerBalanceService(customers: customers, transactions: transactions, auditLogs: auditLogs, unitOfWork: uow, clock: clock, ids: ids, advances: advanceRepository);
-    final customerService = LocalCustomerService(customers: customers, auditLogs: auditLogs, unitOfWork: uow, clock: clock, ids: ids);
-    final walletCatalog = LocalWalletCatalogService(wallets: wallets, auditLogs: auditLogs, settings: settings, clock: clock, ids: ids);
-    final posCatalog = LocalPointOfSaleCatalogService(pointsOfSale: pointsOfSale, auditLogs: auditLogs, clock: clock, ids: ids);
-    final posRegistry = LocalPosAccountRegistry(settings: settings, clock: clock);
-    final categoryCommissionStore = LocalCategoryCommissionStore(settings: settings, clock: clock);
-    final catalogService = LocalCardCatalogService(categories: categories, cards: cards, auditLogs: auditLogs, unitOfWork: uow, clock: clock, ids: ids);
-    final inventoryService = LocalCardInventoryService(categories: categories, cards: cards, unitOfWork: uow);
-    final promotions = LocalPromotionCatalog(settings: settings, clock: clock, ids: ids);
-    final promotionProgress = LocalPromotionProgressService(promotions: promotions, transactions: transactions);
-    final systemHealth = LocalSystemHealthService(bridge: SystemDiagnosticsBridge(), clock: clock);
-    final voucherOps = LocalVoucherOpsService(cards: cards, sales: sales, transactions: transactions, balances: balanceService, auditLogs: auditLogs, unitOfWork: uow, clock: clock, ids: ids);
+    final advanceRepository =
+        LocalAdvanceRepository(transactions: transactions, sales: sales);
+    final balanceService = LocalCustomerBalanceService(
+        customers: customers,
+        transactions: transactions,
+        auditLogs: auditLogs,
+        unitOfWork: uow,
+        clock: clock,
+        ids: ids,
+        advances: advanceRepository);
+    final customerService = LocalCustomerService(
+        customers: customers,
+        auditLogs: auditLogs,
+        unitOfWork: uow,
+        clock: clock,
+        ids: ids);
+    final walletCatalog = LocalWalletCatalogService(
+        wallets: wallets,
+        auditLogs: auditLogs,
+        settings: settings,
+        clock: clock,
+        ids: ids);
+    final posCatalog = LocalPointOfSaleCatalogService(
+        pointsOfSale: pointsOfSale,
+        auditLogs: auditLogs,
+        clock: clock,
+        ids: ids);
+    final posRegistry =
+        LocalPosAccountRegistry(settings: settings, clock: clock);
+    final categoryCommissionStore =
+        LocalCategoryCommissionStore(settings: settings, clock: clock);
+    final catalogService = LocalCardCatalogService(
+        categories: categories,
+        cards: cards,
+        auditLogs: auditLogs,
+        unitOfWork: uow,
+        clock: clock,
+        ids: ids);
+    final inventoryService = LocalCardInventoryService(
+        categories: categories, cards: cards, unitOfWork: uow);
+    final promotions =
+        LocalPromotionCatalog(settings: settings, clock: clock, ids: ids);
+    final promotionProgress = LocalPromotionProgressService(
+        promotions: promotions, transactions: transactions);
+    final systemHealth = LocalSystemHealthService(
+        bridge: SystemDiagnosticsBridge(), clock: clock);
+    final voucherOps = LocalVoucherOpsService(
+        cards: cards,
+        sales: sales,
+        transactions: transactions,
+        balances: balanceService,
+        auditLogs: auditLogs,
+        unitOfWork: uow,
+        clock: clock,
+        ids: ids);
     final pendingAlarm = PendingAttentionAlarmService();
     await walletCatalog.ensureDefaultWallets();
     await DefaultWalletTemplatesSeeder(
@@ -208,17 +295,57 @@ final class AppContainer {
     ).seedIfNeeded();
 
     final listed = await transferTemplates.listAll();
-    final live = listed is Success<List<TransferTemplate>> ? listed.value : const <TransferTemplate>[];
-    final parser = LocalMessageParser(templates: live.isNotEmpty ? live : templates);
+    final live = listed is Success<List<TransferTemplate>>
+        ? listed.value
+        : const <TransferTemplate>[];
+    final parser =
+        LocalMessageParser(templates: live.isNotEmpty ? live : templates);
     final smsBridge = SmsBridge();
     final deliveryKeepAlive = DeliveryKeepAliveController(
       bridge: DeliveryKeepAliveBridge(),
     );
     final messageSender = NativeMessageSender(smsBridge);
-    final saleService = LocalSaleService(customers: customers, categories: categories, cards: cards, sales: sales, transactions: transactions, balances: balanceService, inventory: inventoryService, auditLogs: auditLogs, unitOfWork: uow, clock: clock, ids: ids, messageSender: messageSender, settings: settings);
-        final broadcastJobs = LocalBroadcastRepository(settings: settings);
-    final broadcastService = LocalBroadcastService(customers: customers, jobs: broadcastJobs, settings: settings, auditLogs: auditLogs, messageSender: messageSender, clock: clock, ids: ids, transactions: transactions, posRegistry: posRegistry, sendDelay: Duration.zero);
-    final advanceService = LocalAdvanceService(advances: advanceRepository, customers: customers, categories: categories, cards: cards, inventory: inventoryService, transactions: transactions, sales: sales, auditLogs: auditLogs, settings: settings, unitOfWork: uow, messageSender: messageSender, clock: clock, ids: ids, posRegistry: posRegistry);
+    final saleService = LocalSaleService(
+        customers: customers,
+        categories: categories,
+        cards: cards,
+        sales: sales,
+        transactions: transactions,
+        balances: balanceService,
+        inventory: inventoryService,
+        auditLogs: auditLogs,
+        unitOfWork: uow,
+        clock: clock,
+        ids: ids,
+        messageSender: messageSender,
+        settings: settings);
+    final broadcastJobs = LocalBroadcastRepository(database: database);
+    final broadcastService = LocalBroadcastService(
+        customers: customers,
+        jobs: broadcastJobs,
+        settings: settings,
+        auditLogs: auditLogs,
+        messageSender: messageSender,
+        clock: clock,
+        ids: ids,
+        transactions: transactions,
+        posRegistry: posRegistry,
+        sendDelay: Duration.zero);
+    final advanceService = LocalAdvanceService(
+        advances: advanceRepository,
+        customers: customers,
+        categories: categories,
+        cards: cards,
+        inventory: inventoryService,
+        transactions: transactions,
+        sales: sales,
+        auditLogs: auditLogs,
+        settings: settings,
+        unitOfWork: uow,
+        messageSender: messageSender,
+        clock: clock,
+        ids: ids,
+        posRegistry: posRegistry);
     final contactDirectory = ContactPickerBridge();
     final posAutoSettlement = LocalPosAutoSettlementService(
       posRegistry: posRegistry,
@@ -233,8 +360,31 @@ final class AppContainer {
       templates: transferTemplates,
       messageSender: messageSender,
     );
-    final processor = LocalTransferProcessor(messages: messages, customers: customers, balances: balanceService, auditLogs: auditLogs, unitOfWork: uow, clock: clock, ids: ids, categories: categories, cards: cards, inventory: inventoryService, transactions: transactions, reservedSales: saleService, messageSender: messageSender, settings: settings, advanceService: advanceService, customerService: customerService, contactDirectory: contactDirectory, contactWriter: contactDirectory, posRegistry: posRegistry, categoryCommissionStore: categoryCommissionStore, sales: sales, posAutoSettlement: posAutoSettlement);
-    final licenseService = LocalLicenseService(licenses: licenses, clock: clock);
+    final processor = LocalTransferProcessor(
+        messages: messages,
+        customers: customers,
+        balances: balanceService,
+        auditLogs: auditLogs,
+        unitOfWork: uow,
+        clock: clock,
+        ids: ids,
+        categories: categories,
+        cards: cards,
+        inventory: inventoryService,
+        transactions: transactions,
+        reservedSales: saleService,
+        messageSender: messageSender,
+        settings: settings,
+        advanceService: advanceService,
+        customerService: customerService,
+        contactDirectory: contactDirectory,
+        contactWriter: contactDirectory,
+        posRegistry: posRegistry,
+        categoryCommissionStore: categoryCommissionStore,
+        sales: sales,
+        posAutoSettlement: posAutoSettlement);
+    final licenseService =
+        LocalLicenseService(licenses: licenses, clock: clock);
     final Directory backupDirectory;
     final File? databaseFile;
     final List<Directory> legacyBackupDirectories;
@@ -244,7 +394,8 @@ final class AppContainer {
       legacyBackupDirectories = const <Directory>[];
     } else {
       final docsDir = await getApplicationDocumentsDirectory();
-      backupDirectory = Directory(p.join(docsDir.path, '${AppBrand.latinName}_Backups'));
+      backupDirectory =
+          Directory(p.join(docsDir.path, '${AppBrand.latinName}_Backups'));
       databaseFile = File(p.join(docsDir.path, 'net.sqlite'));
       legacyBackupDirectories = <Directory>[
         Directory(p.join(docsDir.path, 'ZNet_Backups')),
@@ -274,10 +425,28 @@ final class AppContainer {
       clock: clock,
       notifier: stockAlertNotifier,
     );
-    final mergeService = LocalAccountMergeService(customers: customers, transactions: transactions, auditLogs: auditLogs, unitOfWork: uow, clock: clock, ids: ids, historyMovers: [transactions, sales].whereType<CustomerHistoryMover>().toList());
-    final identityLinkService = LocalIdentityLinkService(customers: customers, customerService: customerService, mergeService: mergeService);
-    final settlementService = LocalSettlementService(customers: customers, transactions: transactions, auditLogs: auditLogs, unitOfWork: uow, clock: clock, ids: ids);
-    final retryService = LocalMessageRetryService(auditLogs: auditLogs, messages: messages, clock: clock, ids: ids);
+    final mergeService = LocalAccountMergeService(
+        customers: customers,
+        transactions: transactions,
+        auditLogs: auditLogs,
+        unitOfWork: uow,
+        clock: clock,
+        ids: ids,
+        historyMovers:
+            [transactions, sales].whereType<CustomerHistoryMover>().toList());
+    final identityLinkService = LocalIdentityLinkService(
+        customers: customers,
+        customerService: customerService,
+        mergeService: mergeService);
+    final settlementService = LocalSettlementService(
+        customers: customers,
+        transactions: transactions,
+        auditLogs: auditLogs,
+        unitOfWork: uow,
+        clock: clock,
+        ids: ids);
+    final retryService = LocalMessageRetryService(
+        auditLogs: auditLogs, messages: messages, clock: clock, ids: ids);
     final notificationBridge = NotificationBridge();
     final posProfile = LocalPosProfileService(
       posCatalog: posCatalog,
@@ -287,13 +456,25 @@ final class AppContainer {
       customerService: customerService,
       templates: transferTemplates,
     );
-    final notificationSources = LocalPaymentSourceRegistry(settings: settings, clock: clock);
+    final notificationSources =
+        LocalPaymentSourceRegistry(settings: settings, clock: clock);
     final enrichedWallets = await walletCatalog.listEnriched();
     if (enrichedWallets is Success<List<Wallet>>) {
       await notificationSources.ensureWalletSources(enrichedWallets.value);
     }
-    final sourceGuard = PaymentSourceGuard(wallets: wallets, templates: transferTemplates, notificationSources: notificationSources, posAccounts: posRegistry);
-    final posBalanceRequests = LocalPosBalanceRequestService(posRegistry: posRegistry, balances: balanceService, settings: settings, auditLogs: auditLogs, messageSender: messageSender, clock: clock, ids: ids);
+    final sourceGuard = PaymentSourceGuard(
+        wallets: wallets,
+        templates: transferTemplates,
+        notificationSources: notificationSources,
+        posAccounts: posRegistry);
+    final posBalanceRequests = LocalPosBalanceRequestService(
+        posRegistry: posRegistry,
+        balances: balanceService,
+        settings: settings,
+        auditLogs: auditLogs,
+        messageSender: messageSender,
+        clock: clock,
+        ids: ids);
     final dailyPosSummary = LocalPosDailySummaryService(
       posRegistry: posRegistry,
       transactions: transactions,
@@ -304,13 +485,67 @@ final class AppContainer {
       clock: clock,
       ids: ids,
     );
-    final pipelineMetrics = MessagePipelineMetrics(auditLogs: auditLogs, clock: clock, ids: ids);
-    final smsEngine = UnifiedPaymentEventEngine(messages: messages, parser: parser, processor: processor, ids: ids, settings: settings, sourceGuard: sourceGuard, posBalanceRequestService: posBalanceRequests, metrics: pipelineMetrics, auditLogs: auditLogs);
-    final notificationEngine = UnifiedPaymentEventEngine(messages: messages, parser: parser, processor: processor, ids: ids, settings: settings, sourceGuard: sourceGuard, posBalanceRequestService: posBalanceRequests, metrics: pipelineMetrics, auditLogs: auditLogs);
-    final recoveryService = LocalMessageRecoveryService(messages: messages, parser: parser, processor: processor, sourceGuard: sourceGuard, retryService: retryService, settings: settings, auditLogs: auditLogs);
-    final deliveryWorker = MessageDeliveryWorker(messages: messages, auditLogs: auditLogs, cards: cards, messageSender: messageSender, retryService: retryService, clock: clock, ids: ids, metrics: pipelineMetrics);
-    final posOrderDeliveryWorker = PosOrderDeliveryWorker(messages: messages, auditLogs: auditLogs, cards: cards, settings: settings, posRegistry: posRegistry, messageSender: messageSender, retryService: retryService, clock: clock, ids: ids);
-    final pendingReview = PendingMessageReviewService(messages: messages, parser: parser, customers: customers, customerService: customerService, balances: balanceService, auditLogs: auditLogs, unitOfWork: uow, clock: clock, ids: ids, sourceGuard: sourceGuard, transactions: transactions);
+    final pipelineMetrics =
+        MessagePipelineMetrics(auditLogs: auditLogs, clock: clock, ids: ids);
+    final smsEngine = UnifiedPaymentEventEngine(
+        messages: messages,
+        parser: parser,
+        processor: processor,
+        ids: ids,
+        settings: settings,
+        sourceGuard: sourceGuard,
+        posBalanceRequestService: posBalanceRequests,
+        metrics: pipelineMetrics,
+        auditLogs: auditLogs);
+    final notificationEngine = UnifiedPaymentEventEngine(
+        messages: messages,
+        parser: parser,
+        processor: processor,
+        ids: ids,
+        settings: settings,
+        sourceGuard: sourceGuard,
+        posBalanceRequestService: posBalanceRequests,
+        metrics: pipelineMetrics,
+        auditLogs: auditLogs);
+    final recoveryService = LocalMessageRecoveryService(
+        messages: messages,
+        parser: parser,
+        processor: processor,
+        sourceGuard: sourceGuard,
+        retryService: retryService,
+        settings: settings,
+        auditLogs: auditLogs);
+    final deliveryWorker = MessageDeliveryWorker(
+        messages: messages,
+        auditLogs: auditLogs,
+        cards: cards,
+        messageSender: messageSender,
+        retryService: retryService,
+        clock: clock,
+        ids: ids,
+        metrics: pipelineMetrics);
+    final posOrderDeliveryWorker = PosOrderDeliveryWorker(
+        messages: messages,
+        auditLogs: auditLogs,
+        cards: cards,
+        settings: settings,
+        posRegistry: posRegistry,
+        messageSender: messageSender,
+        retryService: retryService,
+        clock: clock,
+        ids: ids);
+    final pendingReview = PendingMessageReviewService(
+        messages: messages,
+        parser: parser,
+        customers: customers,
+        customerService: customerService,
+        balances: balanceService,
+        auditLogs: auditLogs,
+        unitOfWork: uow,
+        clock: clock,
+        ids: ids,
+        sourceGuard: sourceGuard,
+        transactions: transactions);
     final smsHandler = IncomingSmsHandler(
       bridge: smsBridge,
       messages: messages,
@@ -326,26 +561,88 @@ final class AppContainer {
         posOrderDeliveryWorker.tick(),
       ]).then((_) {}),
     );
-    final notificationHandler = IncomingNotificationHandler(bridge: notificationBridge, sources: notificationSources, engine: notificationEngine);
+    final notificationHandler = IncomingNotificationHandler(
+        bridge: notificationBridge,
+        sources: notificationSources,
+        engine: notificationEngine);
 
     ThemeMode theme = ThemeMode.system;
     final themeSetting = await settings.find(SettingKeys.themeMode);
     if (themeSetting is Success<AppSetting?>) {
       switch ((themeSetting.value?.value ?? 'system').toLowerCase()) {
-        case 'dark': theme = ThemeMode.dark;
-        case 'light': theme = ThemeMode.light;
-        default: theme = ThemeMode.system;
+        case 'dark':
+          theme = ThemeMode.dark;
+        case 'light':
+          theme = ThemeMode.light;
+        default:
+          theme = ThemeMode.system;
       }
     }
 
-    return AppContainer._(database: database, customers: customers, wallets: wallets, pointsOfSale: pointsOfSale, categories: categories, cards: cards, messages: messages, transferTemplates: transferTemplates, transactions: transactions, sales: sales, auditLogs: auditLogs, licenses: licenses, settings: settings, unitOfWork: uow, customerService: customerService, balanceService: balanceService, catalogService: catalogService, walletCatalog: walletCatalog, posCatalog: posCatalog, posRegistry: posRegistry, posProfile: posProfile, inventoryService: inventoryService, saleService: saleService, advanceService: advanceService, broadcastService: broadcastService, promotions: promotions, promotionProgress: promotionProgress, systemHealth: systemHealth, voucherOps: voucherOps, pendingAlarm: pendingAlarm, messageParser: parser, transferProcessor: processor, licenseService: licenseService, backupService: backupService, maintenanceService: maintenanceService, lowStockAlerts: lowStockAlerts, stockAlertNotifier: stockAlertNotifier, dailyPosSummary: dailyPosSummary, mergeService: mergeService, identityLinkService: identityLinkService, settlementService: settlementService, recoveryService: recoveryService, deliveryWorker: deliveryWorker, posOrderDeliveryWorker: posOrderDeliveryWorker, retryService: retryService, pendingReview: pendingReview, smsBridge: smsBridge, smsHandler: smsHandler, deliveryKeepAlive: deliveryKeepAlive, notificationBridge: notificationBridge, notificationSources: notificationSources, notificationHandler: notificationHandler, clock: clock, ids: ids, themeModeNotifier: ValueNotifier<ThemeMode>(theme));
+    return AppContainer._(
+        database: database,
+        customers: customers,
+        wallets: wallets,
+        pointsOfSale: pointsOfSale,
+        categories: categories,
+        cards: cards,
+        messages: messages,
+        transferTemplates: transferTemplates,
+        transactions: transactions,
+        sales: sales,
+        auditLogs: auditLogs,
+        licenses: licenses,
+        settings: settings,
+        unitOfWork: uow,
+        customerService: customerService,
+        balanceService: balanceService,
+        catalogService: catalogService,
+        walletCatalog: walletCatalog,
+        posCatalog: posCatalog,
+        posRegistry: posRegistry,
+        posProfile: posProfile,
+        inventoryService: inventoryService,
+        saleService: saleService,
+        advanceService: advanceService,
+        broadcastService: broadcastService,
+        promotions: promotions,
+        promotionProgress: promotionProgress,
+        systemHealth: systemHealth,
+        voucherOps: voucherOps,
+        pendingAlarm: pendingAlarm,
+        messageParser: parser,
+        transferProcessor: processor,
+        licenseService: licenseService,
+        backupService: backupService,
+        maintenanceService: maintenanceService,
+        lowStockAlerts: lowStockAlerts,
+        stockAlertNotifier: stockAlertNotifier,
+        dailyPosSummary: dailyPosSummary,
+        mergeService: mergeService,
+        identityLinkService: identityLinkService,
+        settlementService: settlementService,
+        recoveryService: recoveryService,
+        deliveryWorker: deliveryWorker,
+        posOrderDeliveryWorker: posOrderDeliveryWorker,
+        retryService: retryService,
+        pendingReview: pendingReview,
+        smsBridge: smsBridge,
+        smsHandler: smsHandler,
+        deliveryKeepAlive: deliveryKeepAlive,
+        notificationBridge: notificationBridge,
+        notificationSources: notificationSources,
+        notificationHandler: notificationHandler,
+        clock: clock,
+        ids: ids,
+        themeModeNotifier: ValueNotifier<ThemeMode>(theme));
   }
 
   Future<void> startBackgroundHandlers() async {
     smsHandler.start();
     await notificationHandler.start();
     await _runRecovery();
-    _recoveryTimer ??= Timer.periodic(const Duration(seconds: 3), (_) => _runRecovery());
+    _recoveryTimer ??=
+        Timer.periodic(const Duration(seconds: 3), (_) => _runRecovery());
     await syncBackgroundDelivery();
   }
 
@@ -416,7 +713,8 @@ final class AppContainer {
       await _runStockAlertSync();
       final enabled = await settings.find(SettingKeys.autoRetryFailedMessages);
       final raw = enabled is Success<AppSetting?> ? enabled.value?.value : null;
-      if (!SettingBool.read(raw, defaultValue: SettingDefaults.autoRetryFailedMessages)) {
+      if (!SettingBool.read(raw,
+          defaultValue: SettingDefaults.autoRetryFailedMessages)) {
         try {
           await deliveryWorker.tick();
           await posOrderDeliveryWorker.tick();
@@ -476,7 +774,8 @@ final class AppContainer {
   Future<void> _syncDailySummaryAlarm() async {
     if (_dailyAlarmSynced || _disposed) return;
     _dailyAlarmSynced = true;
-    final enabledResult = await settings.find(SettingKeys.dailyOpsSummaryAutoSend);
+    final enabledResult =
+        await settings.find(SettingKeys.dailyOpsSummaryAutoSend);
     if (enabledResult is! Success<AppSetting?>) return;
     final enabled = SettingBool.read(
       enabledResult.value?.value,

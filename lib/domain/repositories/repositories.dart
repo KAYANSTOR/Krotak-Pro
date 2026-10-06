@@ -92,6 +92,7 @@ abstract interface class CardRepository {
 abstract interface class TransactionRepository {
   Future<Result<void>> append(Transaction transaction);
   Future<Result<List<Transaction>>> findByCustomer(String customerId);
+  Future<Result<Transaction?>> findById(String id);
   Future<Result<Transaction?>> findByReference(String reference);
   Future<Result<List<Transaction>>> listRecent({int limit = 50});
   Future<Result<List<Transaction>>> listCompleted({String? currencyCode});

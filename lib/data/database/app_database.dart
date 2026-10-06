@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:drift/drift.dart';
 
 part 'app_database.g.dart';
@@ -140,6 +142,40 @@ class AppSettings extends Table {
   Set<Column<Object>> get primaryKey => {key};
 }
 
+/// مهام الرسائل الجماعية. مصدر الحقيقة الوحيد لها وقت التشغيل هو هذه الجداول،
+/// و`app_settings['broadcast_jobs']` القديم يُقرأ مرة واحدة للترحيل فقط.
+@DataClassName('BroadcastJobRow')
+class BroadcastJobs extends Table {
+  TextColumn get id => text()();
+  TextColumn get body => text()();
+  TextColumn get status => text()();
+  DateTimeColumn get createdAt => dateTime()();
+  DateTimeColumn get confirmedAt => dateTime().nullable()();
+  DateTimeColumn get completedAt => dateTime().nullable()();
+  TextColumn get fingerprint => text().nullable()();
+
+  @override
+  Set<Column<Object>> get primaryKey => {id};
+}
+
+@DataClassName('BroadcastRecipientRow')
+class BroadcastRecipients extends Table {
+  TextColumn get jobId => text()();
+  TextColumn get customerId => text()();
+
+  /// ترتيب المستلم داخل المهمة كما رتّبه التصنيف (1-based للعرض).
+  IntColumn get position => integer().withDefault(const Constant(0))();
+  TextColumn get phone => text()();
+  TextColumn get displayName => text()();
+  TextColumn get status => text()();
+  TextColumn get errorCode => text().nullable()();
+  IntColumn get attempts => integer().withDefault(const Constant(0))();
+  DateTimeColumn get sentAt => dateTime().nullable()();
+
+  @override
+  Set<Column<Object>> get primaryKey => {jobId, customerId};
+}
+
 class AuditLogs extends Table {
   TextColumn get id => text()();
   TextColumn get entityType => text()();
@@ -167,13 +203,16 @@ class AuditLogs extends Table {
     Licenses,
     AppSettings,
     AuditLogs,
+    BroadcastJobs,
+    BroadcastRecipients,
   ],
 )
 class AppDatabase extends _$AppDatabase {
   AppDatabase(super.e);
 
+  /// 5 — جداول البث المسمّاة صارت مصدر الحقيقة الوحيد (بدل JSON الإعدادات).
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 5;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -183,10 +222,14 @@ class AppDatabase extends _$AppDatabase {
           await _createIdempotencyIndexes();
           await _createPerformanceIndexes();
           await _createBroadcastTables();
+          await _ensureBroadcastColumns();
           await _applySqlitePragmas();
         },
         onUpgrade: (Migrator migrator, int from, int to) async {
           // Never wipe data. All steps are additive / IF NOT EXISTS / best-effort.
+          // الأعمدة المُضافة تُعاد أولًا وبلا شرط: فهارس الأداء التالية تلمسها،
+          // وملف قديم ناقص عمودًا يجب أن يترقّى بدل أن يفشل فتحه.
+          await _ensureTransferTemplateColumns();
           if (from < 2) {
             await _ensureTransferTemplateColumns();
           }
@@ -204,6 +247,12 @@ class AppDatabase extends _$AppDatabase {
           }
           await _createPerformanceIndexes();
           await _createBroadcastTables();
+          await _ensureBroadcastColumns();
+          if (from < 5) {
+            // ترحيل JSON الإعدادات إلى الجداول المسمّاة — إضافي فقط، ولا يكتب
+            // فوق مهمة موجودة، ولا يحذف النص القديم (مسار رجوع آمن).
+            await _migrateLegacyBroadcastJobs();
+          }
           await _applySqlitePragmas();
         },
         beforeOpen: (details) async {
@@ -211,12 +260,16 @@ class AppDatabase extends _$AppDatabase {
           await _createIdempotencyIndexes();
           await _createPerformanceIndexes();
           await _createBroadcastTables();
+          await _ensureBroadcastColumns();
+          // مؤقّت أمان idempotent: يغطّي أي ملف قاعدة لم يمرّ بمسار الترقية.
+          await _migrateLegacyBroadcastJobs();
           await _applySqlitePragmas();
         },
       );
 
   Future<void> _ensureTransferTemplateColumns() async {
-    await _addColumnIfMissing('incoming_messages', 'last_attempt_at', 'INTEGER');
+    await _addColumnIfMissing(
+        'incoming_messages', 'last_attempt_at', 'INTEGER');
     await _addColumnIfMissing('transfer_templates', 'wallet_id', 'TEXT');
     await _addColumnIfMissing(
       'transfer_templates',
@@ -290,7 +343,8 @@ class AppDatabase extends _$AppDatabase {
       'ON sales (card_id)',
     );
   }
-/// Hot-path indexes for message delivery, recovery, balances, inventory.
+
+  /// Hot-path indexes for message delivery, recovery, balances, inventory.
   Future<void> _createPerformanceIndexes() async {
     await customStatement(
       'CREATE INDEX IF NOT EXISTS idx_audit_logs_entity '
@@ -354,6 +408,7 @@ class AppDatabase extends _$AppDatabase {
       'CREATE TABLE IF NOT EXISTS broadcast_recipients ('
       'job_id TEXT NOT NULL,'
       'customer_id TEXT NOT NULL,'
+      'position INTEGER NOT NULL DEFAULT 0,'
       'phone TEXT NOT NULL,'
       'display_name TEXT NOT NULL,'
       'status TEXT NOT NULL,'
@@ -371,6 +426,106 @@ class AppDatabase extends _$AppDatabase {
       'CREATE INDEX IF NOT EXISTS idx_broadcast_jobs_fingerprint '
       'ON broadcast_jobs (fingerprint) WHERE fingerprint IS NOT NULL',
     );
+  }
+
+  /// أعمدة جداول البث التي أُضيفت بعد أول إصدار لها — إضافية وidempotent.
+  Future<void> _ensureBroadcastColumns() async {
+    await _addColumnIfMissing(
+      'broadcast_recipients',
+      'position',
+      'INTEGER NOT NULL DEFAULT 0',
+    );
+  }
+
+  /// ينقل مهام البث من `app_settings['broadcast_jobs']` إلى الجداول المسمّاة.
+  ///
+  /// idempotent بالكامل: لا يُدرج مهمة معرّفها موجود أصلًا (فلا يكتب فوق تقدم
+  /// مهمة جارية ولا يكرّرها)، ولا يحذف النص القديم حتى يبقى مسار رجوع كامل.
+  /// الصفوف تُقرأ من app_settings القديم فقط عند اللزوم، ولا يُقرأ وقت التشغيل.
+  Future<void> _migrateLegacyBroadcastJobs() async {
+    final List<QueryRow> rows;
+    try {
+      rows = await customSelect(
+        "SELECT value FROM app_settings WHERE key = 'broadcast_jobs' LIMIT 1",
+      ).get();
+    } catch (_) {
+      return; // لا جدول إعدادات بعد (قاعدة جديدة تكفّلها onCreate).
+    }
+    if (rows.isEmpty) return;
+    final raw = rows.first.read<String?>('value');
+    if (raw == null || raw.trim().isEmpty) return;
+    dynamic decoded;
+    try {
+      decoded = jsonDecode(raw);
+    } catch (_) {
+      return; // نص قديم تالف لا يوقف فتح القاعدة.
+    }
+    if (decoded is! Map) return;
+    final jobs = decoded['jobs'];
+    if (jobs is! List) return;
+
+    for (final row in jobs) {
+      if (row is! Map) continue;
+      final job = Map<String, dynamic>.from(row);
+      final id = (job['id'] ?? '').toString().trim();
+      final body = (job['body'] ?? '').toString();
+      final status = (job['status'] ?? '').toString().trim();
+      final createdAt = DateTime.tryParse((job['createdAt'] ?? '').toString());
+      if (id.isEmpty || status.isEmpty || createdAt == null) continue;
+
+      final exists = await (select(broadcastJobs)
+            ..where((table) => table.id.equals(id)))
+          .getSingleOrNull();
+      if (exists != null) continue;
+
+      await into(broadcastJobs).insert(
+        BroadcastJobsCompanion.insert(
+          id: id,
+          body: body,
+          status: status,
+          createdAt: createdAt.toUtc(),
+          confirmedAt: Value(_dateOrNull(job['confirmedAt'])),
+          completedAt: Value(_dateOrNull(job['completedAt'])),
+          fingerprint: Value(_trimOrNull(job['fingerprint'])),
+        ),
+        mode: InsertMode.insertOrIgnore,
+      );
+
+      final recipients = job['recipients'];
+      if (recipients is! List) continue;
+      for (var index = 0; index < recipients.length; index++) {
+        final item = recipients[index];
+        if (item is! Map) continue;
+        final recipient = Map<String, dynamic>.from(item);
+        final customerId = (recipient['customerId'] ?? '').toString().trim();
+        final state = (recipient['status'] ?? '').toString().trim();
+        if (customerId.isEmpty || state.isEmpty) continue;
+        await into(broadcastRecipients).insert(
+          BroadcastRecipientsCompanion.insert(
+            jobId: id,
+            customerId: customerId,
+            position: Value(index),
+            phone: (recipient['phone'] ?? '').toString().trim(),
+            displayName: (recipient['displayName'] ?? '').toString(),
+            status: state,
+            errorCode: Value(_trimOrNull(recipient['errorCode'])),
+            attempts: Value(int.tryParse('${recipient['attempts'] ?? 0}') ?? 0),
+            sentAt: Value(_dateOrNull(recipient['sentAt'])),
+          ),
+          mode: InsertMode.insertOrIgnore,
+        );
+      }
+    }
+  }
+
+  String? _trimOrNull(Object? value) {
+    final text = value?.toString().trim() ?? '';
+    return text.isEmpty ? null : text;
+  }
+
+  DateTime? _dateOrNull(Object? value) {
+    final parsed = DateTime.tryParse(value?.toString() ?? '');
+    return parsed?.toUtc();
   }
 
   /// WAL + reasonable sync for concurrent readers during recovery ticks.

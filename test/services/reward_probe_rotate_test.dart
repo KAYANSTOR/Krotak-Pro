@@ -2,10 +2,15 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:net_app/domain/services/promotion_reward_template.dart';
 import 'package:net_app/domain/services/reward_probe_rotate.dart';
 
+/// ترتيب طابور المعاينة عبر الفئات: أول كرت مُدخل هو الرأس عند الموضع 1
+/// (`cards.first`)، والمواضع 1-based على `cards` كما تفعل ورقة القالب.
+/// الرأس هو أول كرت يُصرف، وتدوير الطابور ينقل الرأس إلى الذيل.
 void main() {
-  test('rotating a queue moves the head to the tail without swapping one pair', () {
+  test('rotating a queue moves the head to the tail without swapping one pair',
+      () {
     final expires = DateTime.utc(2026, 10, 12);
-    RewardProbeHold hold(String cardId, String categoryId, {String customerId = ''}) {
+    RewardProbeHold hold(String cardId, String categoryId,
+        {String customerId = ''}) {
       return RewardProbeHold(
         categoryId: categoryId,
         cardId: cardId,
@@ -32,6 +37,14 @@ void main() {
       ),
       hold('cross-c', 'cat-3', customerId: 'cust-1'),
     );
+    // الطابور: cross-b (الرأس), cross-a, cross-c.
+    expect(
+      PromotionRewardTemplate.lookupCrossCategoryHold(withThird,
+              customerId: 'cust-1')
+          ?.cards
+          .map((card) => card.cardId),
+      ['cross-b', 'cross-a', 'cross-c'],
+    );
     final rotated = RewardProbeRotate.rotateQueuedCard(
       withThird,
       cardId: 'cross-c',
@@ -42,11 +55,13 @@ void main() {
       rotated,
       customerId: 'cust-1',
     );
-    expect(customer?.cards.map((card) => card.cardId), ['cross-a', 'cross-b', 'cross-c']);
+    // خطوة واحدة: الرأس cross-b إلى الذيل، ويتقدم ما بعده.
+    expect(customer?.cards.map((card) => card.cardId),
+        ['cross-a', 'cross-c', 'cross-b']);
     expect(customer?.cards.map((card) => card.reservationId), [
       'res-cross-a',
-      'res-cross-b',
       'res-cross-c',
+      'res-cross-b',
     ]);
     expect(customer?.expiresAt, expires);
     expect(
@@ -58,6 +73,7 @@ void main() {
       ),
       rotated,
     );
+    // خطوتان إضافيتان على طابور من ثلاثة = دورة كاملة تعيد الترتيب الأصلي.
     final twice = RewardProbeRotate.rotateQueuedCard(
       rotated,
       cardId: 'cross-a',
@@ -65,13 +81,16 @@ void main() {
       customerId: 'cust-1',
     );
     expect(
-      PromotionRewardTemplate.lookupCrossCategoryHold(twice, customerId: 'cust-1')
+      PromotionRewardTemplate.lookupCrossCategoryHold(twice,
+              customerId: 'cust-1')
           ?.cards
           .map((card) => card.cardId),
-      ['cross-c', 'cross-a', 'cross-b'],
+      ['cross-b', 'cross-a', 'cross-c'],
     );
+    expect(twice, withThird);
     expect(
-      PromotionRewardTemplate.lookupHold(rotated, 'cat-1', customerId: 'cust-1')?.cardId,
+      PromotionRewardTemplate.lookupHold(rotated, 'cat-1', customerId: 'cust-1')
+          ?.cardId,
       'own-a',
     );
     expect(
@@ -84,7 +103,8 @@ void main() {
       steps: 1,
     );
     expect(
-      PromotionRewardTemplate.lookupHold(otherCustomer, 'cat-1', customerId: 'cust-1')
+      PromotionRewardTemplate.lookupHold(otherCustomer, 'cat-1',
+              customerId: 'cust-1')
           ?.cards
           .map((card) => card.cardId),
       ['own-a'],

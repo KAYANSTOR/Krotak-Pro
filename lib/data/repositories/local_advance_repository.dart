@@ -56,10 +56,14 @@ final class LocalAdvanceRepository implements AdvanceRepository {
 
   @override
   Future<Result<domain.Advance?>> findById(String id) async {
-    final all = await transactions.listRecent(limit: 1000);
-    if (all is Failure<List<domain.Transaction>>) return Failure(all.error);
-    final tx = (all as Success<List<domain.Transaction>>).value.where((t) => t.id == id && t.type == domain.TransactionType.advance && t.customerId != null).firstOrNull;
-    if (tx == null) return const Success(null);
+    // بحث مباشر بالمعرّف بدل مَسح آخر 1000 حركة: السلفة القديمة تبقى مرئية
+    // دائمًا مهما كبر الدفتر، ولا يُفسَّر النقص في النتيجة بأنها غير موجودة.
+    final all = await transactions.findById(id);
+    if (all is Failure<domain.Transaction?>) return Failure(all.error);
+    final tx = (all as Success<domain.Transaction?>).value;
+    if (tx == null || tx.type != domain.TransactionType.advance || tx.customerId == null) {
+      return const Success(null);
+    }
     final list = await listByCustomer(tx.customerId!);
     if (list is Failure<List<domain.Advance>>) return Failure(list.error);
     for (final advance in (list as Success<List<domain.Advance>>).value) {

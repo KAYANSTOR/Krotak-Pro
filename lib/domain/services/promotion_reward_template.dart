@@ -255,7 +255,8 @@ class PromotionRewardTemplate {
   /// يحفظ حجزاً واحداً لكل فئة، وحجزاً مستقلاً لكل عميل داخل الفئة.
   static String rememberHold(String? raw, RewardProbeHold hold) {
     final next = decodeHoldMap(raw);
-    next[holdStorageKey(hold.categoryId, customerId: hold.customerId)] = hold.toJson();
+    next[holdStorageKey(hold.categoryId, customerId: hold.customerId)] =
+        hold.toJson();
     return jsonEncode(next);
   }
 
@@ -278,20 +279,27 @@ class PromotionRewardTemplate {
   /// طابور بلا عميل يجمع كروت فئات مختلفة. لا يختلط بطوابير العملاء.
   static const crossCategoryHoldKey = '*';
 
+  /// يلحق الكرت بالذيل ويُبقي أول كرت مُدخل رأسًا للطابور (`cards.first`).
   static String enqueueHold(String? raw, RewardProbeHold hold) {
     final customerQueue = hold.customerId.trim().isNotEmpty;
-    final window = customerQueue ? customerCategoryHoldDuration : categoryHoldDuration;
-    final limit = customerQueue ? customerCategoryQueueLimit : categoryQueueLimit;
-    final existing = lookupHold(raw, hold.categoryId, customerId: hold.customerId);
-    if (existing == null || !existing.isActiveAt(hold.expiresAt.subtract(window))) {
+    final window =
+        customerQueue ? customerCategoryHoldDuration : categoryHoldDuration;
+    final limit =
+        customerQueue ? customerCategoryQueueLimit : categoryQueueLimit;
+    final existing =
+        lookupHold(raw, hold.categoryId, customerId: hold.customerId);
+    if (existing == null ||
+        !existing.isActiveAt(hold.expiresAt.subtract(window))) {
       return rememberHold(raw, hold);
     }
     final cards = <RewardProbeHeldCard>[
       for (final card in existing.cards)
         if (card.cardId != hold.cardId) card,
-      RewardProbeHeldCard(cardId: hold.cardId, reservationId: hold.reservationId),
+      RewardProbeHeldCard(
+          cardId: hold.cardId, reservationId: hold.reservationId),
     ];
-    final capped = cards.length > limit ? cards.sublist(cards.length - limit) : cards;
+    final capped =
+        cards.length > limit ? cards.sublist(cards.length - limit) : cards;
     return rememberHold(
       raw,
       RewardProbeHold(
@@ -308,6 +316,7 @@ class PromotionRewardTemplate {
   }
 
   /// يضيف كرتاً لطابور الصرف عبر الفئات. مع عميل لا يختلط بالطابور المشترك.
+  /// الكرت الجديد يُلحق بالذيل؛ الرأس يبقى أول كرت مُدخل وهو أول ما يُصرف.
   static String enqueueCrossCategoryHold(String? raw, RewardProbeHold hold) {
     final customerId = hold.customerId.trim();
     final existing = lookupCrossCategoryHold(
@@ -322,7 +331,8 @@ class PromotionRewardTemplate {
     final window = customerId.isEmpty
         ? sharedCrossCategoryHoldDuration
         : customerCrossCategoryHoldDuration;
-    if (existing == null || !existing.isActiveAt(hold.expiresAt.subtract(window))) {
+    if (existing == null ||
+        !existing.isActiveAt(hold.expiresAt.subtract(window))) {
       return rememberHold(
         raw,
         RewardProbeHold(
@@ -343,7 +353,8 @@ class PromotionRewardTemplate {
     final limit = customerId.isEmpty
         ? sharedCrossCategoryQueueLimit
         : customerCrossCategoryQueueLimit;
-    final capped = cards.length > limit ? cards.sublist(cards.length - limit) : cards;
+    final capped =
+        cards.length > limit ? cards.sublist(cards.length - limit) : cards;
     return rememberHold(
       raw,
       RewardProbeHold(
@@ -359,7 +370,8 @@ class PromotionRewardTemplate {
     );
   }
 
-  static RewardProbeHold? lookupCrossCategoryHold(String? raw, {String? customerId}) {
+  static RewardProbeHold? lookupCrossCategoryHold(String? raw,
+      {String? customerId}) {
     return lookupHold(raw, crossCategoryHoldKey, customerId: customerId);
   }
 
@@ -367,7 +379,8 @@ class PromotionRewardTemplate {
     return clearHold(raw, crossCategoryHoldKey, customerId: customerId);
   }
 
-  static String clearHold(String? raw, String categoryId, {String? customerId}) {
+  static String clearHold(String? raw, String categoryId,
+      {String? customerId}) {
     final next = decodeHoldMap(raw);
     next.remove(holdStorageKey(categoryId, customerId: customerId));
     return jsonEncode(next);
@@ -694,7 +707,8 @@ class PromotionRewardTemplate {
       if (fromCross != null) return fromCross;
       return clearHold(raw, categoryId, customerId: customerId);
     }
-    if (remaining.isEmpty) return clearHold(raw, categoryId, customerId: customerId);
+    if (remaining.isEmpty)
+      return clearHold(raw, categoryId, customerId: customerId);
     return rememberHold(
       raw,
       RewardProbeHold(
@@ -716,7 +730,8 @@ class PromotionRewardTemplate {
     final key = holdStorageKey(categoryId, customerId: customerId);
     final item = decodeHoldMap(raw)[key];
     if (item == null) return null;
-    return RewardProbeHold.fromJson(categoryId.trim(), item, customerId: customerId);
+    return RewardProbeHold.fromJson(categoryId.trim(), item,
+        customerId: customerId);
   }
 
   /// حجز العميل داخل الفئة يسبق طابوره عبر الفئات، ثم حجز الفئة، ثم الطابور المشترك.
@@ -753,7 +768,8 @@ class PromotionRewardTemplate {
     if (cross == null || !cross.isActiveAt(now)) return null;
     final matching = [
       for (final card in cross.cards)
-        if (card.categoryId == categoryId.trim() || card.categoryId.isEmpty) card,
+        if (card.categoryId == categoryId.trim() || card.categoryId.isEmpty)
+          card,
     ];
     if (matching.isEmpty) return null;
     return RewardProbeHold(
@@ -772,7 +788,8 @@ class PromotionRewardTemplate {
     required String customerId,
     required String cardId,
   }) {
-    if (categoryId.trim() == crossCategoryHoldKey || cardId.isEmpty) return null;
+    if (categoryId.trim() == crossCategoryHoldKey || cardId.isEmpty)
+      return null;
     if (customerId.isNotEmpty) {
       final personal = lookupCrossCategoryHold(raw, customerId: customerId);
       if (personal != null && personal.holdsCard(cardId)) {
@@ -1033,7 +1050,12 @@ class RewardProbeHold {
   /// فارغ يعني حجز الفئة لكل العملاء. غير الفارغ يخص عميلاً واحداً.
   final String customerId;
 
-  /// طابور صرف العميل. الفارغ يعني كرت الرأس فقط، للتوافق مع مراحل 62 و63.
+  /// طابور الصرف. الفارغ يعني كرت الرأس فقط، للتوافق مع مراحل 62 و63.
+  ///
+  /// عقد الترتيب والتنسيق (تفترضه ورقة القالب وكل عمليات الطابور):
+  /// - المصفوفة **تتضمن الرأس** في أول عنصر، وهو الكرت الذي يُصرف أولًا.
+  /// - مواضع المشغّل 1-based على هذه المصفوفة، فالرأس موضعه 1.
+  /// - أول كرت مُدخل يبقى الرأس، والكرت الجديد يُلحق بالذيل.
   final List<RewardProbeHeldCard> queue;
 
   List<RewardProbeHeldCard> get cards {
@@ -1056,10 +1078,12 @@ class RewardProbeHold {
 
   Map<String, Object?> toJson() => {
         'cardId': cards.isEmpty ? cardId : cards.first.cardId,
-        'reservationId': cards.isEmpty ? reservationId : cards.first.reservationId,
+        'reservationId':
+            cards.isEmpty ? reservationId : cards.first.reservationId,
         'expiresAt': expiresAt.toUtc().toIso8601String(),
         if (customerId.trim().isNotEmpty) 'customerId': customerId.trim(),
-        if (cards.length > 1 || cards.any((card) => card.categoryId.trim().isNotEmpty))
+        if (cards.length > 1 ||
+            cards.any((card) => card.categoryId.trim().isNotEmpty))
           'queue': [for (final card in cards) card.toJson()],
       };
 
@@ -1092,9 +1116,11 @@ class RewardProbeHold {
       }
     }
     if (queue.isEmpty && cardId.isNotEmpty && reservationId.isNotEmpty) {
-      queue.add(RewardProbeHeldCard(cardId: cardId, reservationId: reservationId));
+      queue.add(
+          RewardProbeHeldCard(cardId: cardId, reservationId: reservationId));
     }
-    if (categoryId.trim().isEmpty || queue.isEmpty || expires == null) return null;
+    if (categoryId.trim().isEmpty || queue.isEmpty || expires == null)
+      return null;
     return RewardProbeHold(
       categoryId: categoryId,
       cardId: queue.first.cardId,
@@ -1172,14 +1198,16 @@ class RewardProbeReceipt {
         'body': body,
       };
 
-  static RewardProbeReceipt? fromJson(String scope, Map<dynamic, dynamic> json) {
+  static RewardProbeReceipt? fromJson(
+      String scope, Map<dynamic, dynamic> json) {
     final to = json['to']?.toString().trim() ?? '';
     final state = json['state']?.toString().trim() ?? '';
     if (to.isEmpty || state.isEmpty) return null;
     final rawId = json['requestId'];
     final requestId = rawId is int ? rawId : int.tryParse('${rawId ?? ''}');
     final rawCode = json['resultCode'];
-    final resultCode = rawCode is int ? rawCode : int.tryParse('${rawCode ?? ''}');
+    final resultCode =
+        rawCode is int ? rawCode : int.tryParse('${rawCode ?? ''}');
     return RewardProbeReceipt(
       scope: scope,
       to: to,

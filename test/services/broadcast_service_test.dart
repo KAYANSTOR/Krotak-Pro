@@ -3,7 +3,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:net_app/core/clock.dart';
 import 'package:net_app/core/id_generator.dart';
 import 'package:net_app/core/result.dart';
-import 'package:net_app/data/database/app_database.dart' hide Customer, Transaction;
+import 'package:net_app/data/database/app_database.dart'
+    hide Customer, Transaction;
 import 'package:net_app/data/database/drift_unit_of_work.dart';
 import 'package:net_app/data/repositories/local_broadcast_repository.dart';
 import 'package:net_app/data/repositories/local_repositories.dart';
@@ -24,9 +25,11 @@ final class _RecordingSender implements MessageSender {
   _RecordingSender({Set<String>? failFor}) : failFor = failFor ?? <String>{};
 
   @override
-  Future<Result<void>> send({required String destination, required String body}) async {
+  Future<Result<void>> send(
+      {required String destination, required String body}) async {
     if (failFor.contains(destination)) {
-      return const Failure(AppFailure(code: 'sms_send_failed', message: 'denied'));
+      return const Failure(
+          AppFailure(code: 'sms_send_failed', message: 'denied'));
     }
     sent.add((destination, body));
     return const Success(null);
@@ -57,7 +60,7 @@ void main() {
     sender = _RecordingSender();
     broadcast = LocalBroadcastService(
       customers: customers,
-      jobs: LocalBroadcastRepository(settings: settings),
+      jobs: LocalBroadcastRepository(database: database),
       settings: settings,
       auditLogs: auditLogs,
       messageSender: sender,
@@ -106,9 +109,11 @@ void main() {
 
   test('refuses send without explicit confirmation phrase', () async {
     await addCustomer('علي', '0777123456');
-    final result = await broadcast.confirm(body: 'مرحبا', confirmationPhrase: 'نعم');
+    final result =
+        await broadcast.confirm(body: 'مرحبا', confirmationPhrase: 'نعم');
     expect(result, isA<Failure<BroadcastJob>>());
-    expect((result as Failure<BroadcastJob>).error.code, 'broadcast_confirmation_required');
+    expect((result as Failure<BroadcastJob>).error.code,
+        'broadcast_confirmation_required');
     expect(sender.sent, isEmpty);
   });
 
@@ -116,7 +121,8 @@ void main() {
     await addCustomer('علي', '0777123456');
     await addCustomer('فاطمة', '+967777654321');
 
-    final confirmed = await broadcast.confirm(body: 'صيانة الليلة', confirmationPhrase: 'إرسال');
+    final confirmed = await broadcast.confirm(
+        body: 'صيانة الليلة', confirmationPhrase: 'إرسال');
     expect(confirmed, isA<Success<BroadcastJob>>());
     final job = (confirmed as Success<BroadcastJob>).value;
     expect(job.total, 2);
@@ -126,17 +132,22 @@ void main() {
     final done = (ran as Success<BroadcastJob>).value;
     expect(done.status, BroadcastJobStatus.completed);
     expect(done.sentCount, 2);
-    expect(sender.sent.map((e) => e.$1), containsAll(['777123456', '777654321']));
+    expect(
+        sender.sent.map((e) => e.$1), containsAll(['777123456', '777654321']));
 
     final logs = await auditLogs.findByEntity('broadcast', job.id);
     expect((logs as Success).value, isNotEmpty);
   });
 
-  test('does not create a second job for the same body and recipients', () async {
+  test('does not create a second job for the same body and recipients',
+      () async {
     await addCustomer('علي', '0777123456');
-    final first = await broadcast.confirm(body: 'نفس النص', confirmationPhrase: 'إرسال');
-    final second = await broadcast.confirm(body: 'نفس النص', confirmationPhrase: 'إرسال');
-    expect((first as Success<BroadcastJob>).value.id, (second as Success<BroadcastJob>).value.id);
+    final first =
+        await broadcast.confirm(body: 'نفس النص', confirmationPhrase: 'إرسال');
+    final second =
+        await broadcast.confirm(body: 'نفس النص', confirmationPhrase: 'إرسال');
+    expect((first as Success<BroadcastJob>).value.id,
+        (second as Success<BroadcastJob>).value.id);
   });
 
   test('marks partial failure when some numbers reject send', () async {
@@ -144,7 +155,8 @@ void main() {
     await addCustomer('فاشل', '0777111111');
     sender.failFor.add('777111111');
 
-    final confirmed = await broadcast.confirm(body: 'تنبيه', confirmationPhrase: 'إرسال');
+    final confirmed =
+        await broadcast.confirm(body: 'تنبيه', confirmationPhrase: 'إرسال');
     final job = (confirmed as Success<BroadcastJob>).value;
     final ran = await broadcast.run(job.id);
     final done = (ran as Success<BroadcastJob>).value;
@@ -153,7 +165,8 @@ void main() {
     expect(done.failedCount, 1);
   });
 
-  test('debtor audience only targets customers with outstanding debt', () async {
+  test('debtor audience only targets customers with outstanding debt',
+      () async {
     final debtor = await addCustomer('مدين', '0777123456');
     await addCustomer('بلا دين', '0777000111');
     await LocalTransactionRepository(database).append(

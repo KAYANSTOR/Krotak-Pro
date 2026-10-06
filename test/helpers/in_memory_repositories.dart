@@ -466,6 +466,14 @@ final class InMemoryTransactionRepository implements TransactionRepository {
       Success(_items.where((t) => t.customerId == customerId).toList());
 
   @override
+  Future<Result<Transaction?>> findById(String id) async {
+    for (final t in _items) {
+      if (t.id == id) return Success(t);
+    }
+    return const Success(null);
+  }
+
+  @override
   Future<Result<Transaction?>> findByReference(String reference) async {
     for (final t in _items) {
       if (t.reference == reference) return Success(t);
