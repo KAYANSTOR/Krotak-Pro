@@ -16,6 +16,7 @@ import '../../domain/services/reward_probe_rotate_span.dart';
 import '../../domain/services/reward_probe_rotate_span_steps.dart';
 import '../../domain/services/reward_probe_rotate_open_span_steps.dart';
 import '../../domain/services/reward_probe_reverse_open_span.dart';
+import '../../domain/services/reward_probe_swap_open_span.dart';
 import '../../platform/sms_bridge.dart';
 import '../app_scope.dart';
 import '../theme/net_tokens.dart';
@@ -1141,6 +1142,102 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
     });
   }
 
+
+  /// يبدّل طرفي مقطع بين موضعين مدخلين. الكرت الظاهر يحدد الطابور ويقع داخل المقطع.
+  Future<void> _swapOpenSpanSelectedHold() async {
+    final card = _liveCard;
+    final startPosition = int.tryParse(_spanFrom.text.trim());
+    final endPosition = int.tryParse(_placePosition.text.trim());
+    if (card == null ||
+        _queuedCardIds.length < 2 ||
+        startPosition == null ||
+        endPosition == null ||
+        startPosition < 1 ||
+        endPosition < 1) {
+      return;
+    }
+    final visibleIndex = _queuedCardIds.indexOf(card.cardId);
+    final start = startPosition < endPosition ? startPosition : endPosition;
+    final end = startPosition < endPosition ? endPosition : startPosition;
+    if (visibleIndex < 0 || end > _queuedCardIds.length) {
+      setState(() {
+        _status = 'الموضع خارج طول الطابور';
+        _statusIsError = true;
+      });
+      return;
+    }
+    if (start == end) {
+      setState(() {
+        _status = 'طرفا المقطع هما نفس الموضع';
+        _statusIsError = false;
+      });
+      return;
+    }
+    if (visibleIndex < start - 1 || visibleIndex > end - 1) {
+      setState(() {
+        _status = 'الكرت الظاهر خارج المقطع المختار';
+        _statusIsError = true;
+      });
+      return;
+    }
+    final c = AppScope.of(context);
+    setState(() => _busy = true);
+    final current = await c.settings.find(SettingKeys.promotionRewardProbeHolds);
+    final raw = current is Success<AppSetting?> ? current.value?.value : null;
+    final now = c.clock.now();
+    final encoded = RewardProbeSwapOpenSpan.swapOpenSpan(
+      raw,
+      cardId: card.cardId,
+      startPosition: start,
+      endPosition: end,
+      customerId: _holdCustomerId,
+    );
+    await c.settings.save(
+      AppSetting(
+        key: SettingKeys.promotionRewardProbeHolds,
+        value: encoded,
+        updatedAt: now,
+      ),
+    );
+    var stored = PromotionRewardTemplate.lookupCrossCategoryHold(
+      encoded,
+      customerId: _holdCustomerId,
+    );
+    if (stored == null || !stored.holdsCard(card.cardId)) {
+      stored = PromotionRewardTemplate.lookupHold(
+        encoded,
+        card.categoryId,
+        customerId: _holdCustomerId,
+      );
+    }
+    await c.auditLogs.append(
+      AuditLog(
+        id: c.ids.next('reward-probe-hold'),
+        entityType: 'promotion_reward_template',
+        entityId: card.cardId,
+        action: 'reward_probe_card_open_span_swapped',
+        occurredAt: now,
+        payloadJson: '{"customerId":"${_holdCustomerId ?? ''}","start":$start,"end":$end,"queue":${stored?.cards.length ?? 0}}',
+      ),
+    );
+    if (!mounted) return;
+    final ids = [for (final item in stored?.cards ?? const <RewardProbeHeldCard>[]) item.cardId];
+    final expected = List<String>.of(_queuedCardIds);
+    final left = expected[start - 1];
+    expected[start - 1] = expected[end - 1];
+    expected[end - 1] = left;
+    setState(() {
+      _busy = false;
+      _holdReservationId = stored?.cardFor(card.cardId)?.reservationId ?? _holdReservationId;
+      _holdQueueCount = stored?.cards.length ?? _holdQueueCount;
+      _queuedCardIds = ids;
+      _status = _sameOrder(ids, expected)
+          ? 'بُدّل الموضع $start مع $end، وبقي ${_holdQueueCount} في الطابور'
+          : 'تعذر تبديل الموضعين';
+      _statusIsError = !_sameOrder(ids, expected);
+    });
+  }
+
   /// يدوّر مقطعًا بين موضعين مدخلين بعدد خطوات. الكرت الظاهر يحدد الطابور ويقع داخل المقطع.
   Future<void> _rotateOpenSpanStepsSelectedHold() async {
     final card = _liveCard;
@@ -2105,6 +2202,17 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
                           icon: const Icon(Icons.swap_vert),
                           label: const Text(
                             'عكس مقطع بين موضعين',
+                            style: TextStyle(fontFamily: NetTypography.family),
+                          ),
+                        ),
+                      ),
+                      Align(
+                        alignment: AlignmentDirectional.centerStart,
+                        child: TextButton.icon(
+                          onPressed: _busy || _probing ? null : _swapOpenSpanSelectedHold,
+                          icon: const Icon(Icons.swap_horiz),
+                          label: const Text(
+                            'تبديل طرفي مقطع بين موضعين',
                             style: TextStyle(fontFamily: NetTypography.family),
                           ),
                         ),
