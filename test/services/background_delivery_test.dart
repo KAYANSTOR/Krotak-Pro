@@ -28,6 +28,7 @@ void main() {
   const smsChannel = MethodChannel('com.kayan.net/sms');
   const notificationsChannel = MethodChannel('com.kayan.net/notifications');
   const alertsChannel = MethodChannel('com.kayan.net/alerts');
+  const diagnosticsChannel = MethodChannel('com.kayan.net/diagnostics');
   const keepAliveChannel = MethodChannel('com.kayan.net/keepalive');
 
   late AppDatabase database;
@@ -82,6 +83,10 @@ void main() {
       return true;
     });
 
+    // قنوات فحص النظام: الحاوية تنادي جدولة الملخص اليومي كأثر جانبي على
+    // الجهاز؛ نرصدها هنا حتى لا تبقى بلا ردّ داخل منطقة الاختبار.
+    _messenger.setMockMethodCallHandler(diagnosticsChannel, (call) async => true);
+
     // حالة حقيقية للخدمة: التشغيل ناجح، والحالة تُقرأ من نفس القناة.
     var active = false;
     _messenger.setMockMethodCallHandler(keepAliveChannel, (call) async {
@@ -110,6 +115,7 @@ void main() {
       'com.kayan.net/notifications',
       'com.kayan.net/notifications_stream',
       'com.kayan.net/alerts',
+      'com.kayan.net/diagnostics',
       'com.kayan.net/keepalive',
     ]) {
       _messenger.setMockMethodCallHandler(MethodChannel(name), null);

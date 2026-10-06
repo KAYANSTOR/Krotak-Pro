@@ -1,6 +1,24 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:net_app/core/result.dart';
+import 'package:net_app/domain/entities/setting.dart';
+import 'package:net_app/domain/repositories/repositories.dart';
 import 'package:net_app/domain/services/outbound_template_renderer.dart';
+
+final class _Settings implements SettingsRepository {
+  @override
+  Future<Result<AppSetting?>> find(String key) async => Success(
+        key == SettingKeys.networkName
+            ? AppSetting(
+                key: key,
+                value: 'شبكة الاختبار',
+                updatedAt: DateTime.utc(2026, 10, 5),
+              )
+            : null,
+      );
+
+  @override
+  Future<Result<void>> save(AppSetting setting) async => const Success(null);
+}
 
 void main() {
   test('strict render succeeds when all placeholders resolved', () {
@@ -28,5 +46,14 @@ void main() {
       'hello {a} and {b} and {a}',
     );
     expect(left.toSet(), {'a', 'b'});
+  });
+
+  test('voucher delivery resolves the saved network name', () async {
+    final result = await OutboundTemplateRenderer(settings: _Settings())
+        .renderVoucherDelivery(serialNumber: '111', secretCode: '222');
+
+    expect(result, isA<Success<String>>());
+    expect((result as Success<String>).value, contains('شبكة الاختبار'));
+    expect((result as Success<String>).value, isNot(contains('NET')));
   });
 }

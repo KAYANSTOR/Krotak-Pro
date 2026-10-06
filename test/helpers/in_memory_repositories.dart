@@ -95,6 +95,13 @@ final class InMemoryAuditLogRepository implements AuditLogRepository {
   }
 
   @override
+  Future<Result<List<AuditLog>>> listRecent({int limit = 2000}) async {
+    final list = List<AuditLog>.from(logs)
+      ..sort((a, b) => b.occurredAt.compareTo(a.occurredAt));
+    return Success(list.take(limit).toList());
+  }
+
+  @override
   Future<Result<List<AuditLog>>> findByEntity(String entityType, String entityId) async {
     return Success(
       logs.where((l) => l.entityType == entityType && l.entityId == entityId).toList(),
@@ -132,6 +139,15 @@ final class InMemoryUnitOfWork implements UnitOfWork {
 final class InMemoryCustomerRepository implements CustomerRepository {
   final Map<String, Customer> _customers = {};
   final Map<String, CustomerIdentifier> _identifiers = {};
+
+  @override
+  Future<Result<List<CustomerAccountSnapshot>>> listAccountSnapshots({
+    String query = '',
+    String currencyCode = 'YER',
+    int? limit,
+    int offset = 0,
+  }) async =>
+      const Success(<CustomerAccountSnapshot>[]);
 
   @override
   Future<Result<Customer?>> findById(String id) async => Success(_customers[id]);

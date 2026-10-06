@@ -4,7 +4,6 @@ import 'package:net_app/core/clock.dart';
 import 'package:net_app/core/id_generator.dart';
 import 'package:net_app/domain/domain.dart';
 import 'package:net_app/domain/ledger.dart';
-import 'package:net_app/domain/repositories/unit_of_work.dart';
 import 'package:net_app/domain/services/local_customer_balance_service.dart';
 
 import '../helpers/in_memory_repositories.dart';

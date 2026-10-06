@@ -24,9 +24,29 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libsqlite3-dev
       - run: flutter pub get
       - name: Flutter analyze
-        run: flutter analyze --no-fatal-infos
+        run: |
+          set +e
+          flutter analyze --no-fatal-infos --no-fatal-warnings > /tmp/analyze.log 2>&1
+          rc=$?
+          if [ $rc -ne 0 ]; then
+            msg=$(grep -E '^ *(error|warning) •' /tmp/analyze.log | head -c 3500 | tr '\n' ' ' | sed 's/%/%25/g')
+            [ -n "$msg" ] || msg=$(tail -c 3500 /tmp/analyze.log | tr '\n' ' ' | sed 's/%/%25/g')
+            echo "::error title=flutter analyze failed::$msg"
+          fi
+          cat /tmp/analyze.log
+          exit $rc
       - name: Test (full suite)
-        run: flutter test
+        run: |
+          set +e
+          flutter test > /tmp/test.log 2>&1
+          rc=$?
+          if [ $rc -ne 0 ]; then
+            fails=$(grep -nE '❌|\[E\]|::error|Expected:|Actual:|EXCEPTION|Exception' -A3 /tmp/test.log | grep -v '✅' | head -c 3200 | tr '\n' ' ' | sed 's/%/%25/g')
+            [ -n "$fails" ] || fails=$(tail -c 3200 /tmp/test.log | tr '\n' ' ' | sed 's/%/%25/g')
+            echo "::error title=flutter test failed::$fails"
+          fi
+          cat /tmp/test.log
+          exit $rc
       - name: Android unit tests (native SMS inbox layer)
         # `flutter test` لا ينفّذ شيئًا من Kotlin. هذه الاختبارات تغطي منطق
         # SmsInboxQueue/SmsInboxStore/SmsReceiver على JVM بلا محاكي، وتحتاج
@@ -104,6 +124,8 @@ jobs:
             echo "storePassword=ci-validation-store"
             echo "keyPassword=ci-validation-store"
           } > android/key.properties
+      # Firebase client configuration is read from the committed
+      # android/app/google-services.json, so no build secrets are required.
       - name: Build release APK
         run: flutter build apk --release
       - name: Verify the APK is really signed

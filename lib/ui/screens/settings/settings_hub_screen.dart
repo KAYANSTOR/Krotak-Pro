@@ -4,28 +4,30 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../core/app_brand.dart';
+import '../../../application/account_session.dart';
+import '../../../platform/system_diagnostics_bridge.dart';
 import '../../../core/result.dart';
 import '../../../domain/entities/setting.dart';
 import '../../app_scope.dart';
 import '../../theme/kayan_palette.dart';
-import '../../theme/net_semantic_colors.dart';
 import '../../theme/net_theme_schedule.dart';
 import '../../theme/net_tokens.dart';
 import '../../widgets/async_views.dart';
 import '../../widgets/dashboard/theme_mode_sheet.dart';
 import '../../widgets/net/net_surface_card.dart';
+import '../../widgets/settings/account_profile_card.dart';
 import '../../widgets/settings/settings_cards.dart';
 import '../../widgets/settings/settings_section_header.dart';
 import '../pos_screen.dart';
 import '../system_check_screen.dart';
 import '../wallets_screen.dart';
+import '../inventory_screen.dart';
 import 'backup_restore_screen.dart';
 import 'clean_logs_screen.dart';
 import 'deep_clean_screen.dart';
 import 'export_ledger_screen.dart';
 import 'low_stock_settings_screen.dart';
 import 'network_name_settings_screen.dart';
-import 'renew_subscription_screen.dart';
 import 'outbound_message_templates_screen.dart';
 import 'sim_settings_screen.dart';
 import 'template_simulation_screen.dart';
@@ -68,6 +70,8 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
   static const _walletsKeywords =
       'المحافظ نقاط البيع إشعارات المحافظ طلبات رصيد نقاط البيع حد يومي ملخص العمليات اليومي التسوية التلقائية مصادر الإشعارات الحسابات سقف الدين قوالب المحفظة';
   static const _maintenanceKeywords = 'تنظيف السجلات تصدير السجل الأرشفة نسخ احتياطي استعادة بيانات تنظيف عميق فهارس';
+  static const _accountKeywords =
+      'الحساب حساب الشبكة التسجيل تسجيل الدخول الرقم كلمة المرور الاشتراك التجريبي إشعارات الإدارة الخروج العمولات المبيعات الفوترة';
   static const _aboutKeywords =
       'عن التطبيق المبرمج الحقوق كيان سوفت إصدار كروتك ${AppBrand.latinName} الموقع';
 
@@ -78,6 +82,7 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
   }
 
   bool get _anySectionVisible =>
+      _sectionVisible(_accountKeywords) ||
       _sectionVisible(_systemKeywords) ||
       _sectionVisible(_licenseKeywords) ||
       _sectionVisible(_themeKeywords) ||
@@ -130,59 +135,6 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
     );
   }
 
-  Widget _readinessCard(BuildContext context) {
-    final net = context.netColors;
-    final palette = KayanPalette.of(context);
-    final pills = <({String label, bool ok, IconData icon})>[
-      (label: 'المعالجة التلقائية', ok: _autoSms, icon: Icons.bolt_rounded),
-      (label: 'تنبيه التدخل', ok: _interventionAlert, icon: Icons.notifications_active_rounded),
-      (label: 'سلفني', ok: _salafni, icon: Icons.card_giftcard_rounded),
-      (label: 'المظهر الداكن', ok: _darkMode, icon: Icons.dark_mode_rounded),
-    ];
-    return NetSurfaceCard(
-      margin: const EdgeInsets.only(top: NetSpacing.sm, bottom: NetSpacing.sm),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(children: [
-            Icon(Icons.health_and_safety_rounded, size: NetSizes.iconSm, color: palette.primary),
-            const SizedBox(width: NetSpacing.sm),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('جاهزية التشغيل', style: TextStyle(fontFamily: NetTypography.family, fontWeight: FontWeight.w800, fontSize: 14.5, color: palette.textPrimary)),
-                  Text(
-                    _lastRecoveryAt == null
-                        ? 'ملخص سريع — لم تُسجَّل بعد دورة استرداد. التفاصيل من «فحص النظام»'
-                        : 'آخر دورة استرداد/تسليم: ${_formatRecoveryAt(_lastRecoveryAt!)}',
-                    style: TextStyle(fontFamily: NetTypography.family, fontSize: 11.5, color: palette.textSecondary),
-                  ),
-                ],
-              ),
-            ),
-          ]),
-          const SizedBox(height: NetSpacing.sm),
-          Wrap(
-            spacing: NetSpacing.sm,
-            runSpacing: NetSpacing.sm,
-            children: [
-              for (final pill in pills)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: NetSpacing.sm, vertical: NetSpacing.xs),
-                  decoration: BoxDecoration(color: pill.ok ? net.successContainer : palette.surfaceVariant, borderRadius: NetRadii.pillAll),
-                  child: Row(mainAxisSize: MainAxisSize.min, children: [
-                    Icon(pill.ok ? Icons.check_circle_rounded : Icons.cancel_outlined, size: 13, color: pill.ok ? net.success : palette.textSecondary),
-                    const SizedBox(width: NetSpacing.xs),
-                    Text(pill.label, style: TextStyle(fontFamily: NetTypography.family, fontSize: 11.5, fontWeight: FontWeight.w700, color: pill.ok ? net.success : palette.textSecondary)),
-                  ]),
-                ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
 
   Future<void> _load() async {
     final c = AppScope.of(context);
@@ -302,6 +254,36 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
     if (mounted) await _load();
   }
 
+  /// تسجيل الخروج من حساب الشبكة: يُغلق كل الشاشات ويعود إلى بوابة الدخول.
+  Future<void> _confirmSignOut() async {
+    final session = AccountSession.maybeInstance;
+    if (session == null) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('تسجيل الخروج من الحساب'),
+        content: const Text(
+          'سيتم مسح جلسة الحساب من هذا الجهاز، وستحتاج إلى إدخال رقم الهاتف وكلمة '
+          'المرور مرة أخرى. بياناتك المحلية (الكروت والمبيعات والحسابات) لا تُمس.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('إلغاء'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('خروج'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    await session.signOut();
+    if (!mounted) return;
+    Navigator.of(context).popUntil((route) => route.isFirst);
+  }
+
   Future<void> _openLowStock() async {
     await Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LowStockSettingsScreen()));
     if (mounted) await _load();
@@ -328,17 +310,17 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
                           child: ListView(
                             padding: const EdgeInsets.fromLTRB(16, 4, 16, 40),
                             children: [
-                              _readinessCard(context),
                               _searchField(context),
                               if (!_anySectionVisible)
                                 Padding(
                                   padding: const EdgeInsets.symmetric(vertical: 24),
                                   child: AsyncEmptyView(message: 'لا توجد إعدادات مطابقة للبحث', icon: Icons.search_off_rounded, hint: 'جرّب كلمة أخرى مثل: الرسائل، المظهر، المحافظ', compact: true),
                                 ),
+                              if (_sectionVisible(_accountKeywords))
+                                AccountProfileCard(networkName: _networkName, onEditNetworkName: _openNetworkName, onSignOut: _confirmSignOut),
                               if (_sectionVisible(_systemKeywords)) const SettingsSectionHeader(title: 'النظام'),
                               if (_sectionVisible(_systemKeywords))
                                 SettingsGroupCard(children: [
-                                  SettingsGroupNavRow(icon: Icons.badge_outlined, title: 'اسم الشبكة', subtitle: 'الاسم الحالي: '+_networkName, searchText: 'النظام الشبكة الاسم', onTap: _openNetworkName),
                                   SettingsGroupSwitchRow(icon: Icons.check_circle_outline, title: 'المعالجة التلقائية للرسائل', subtitle: _autoSms
                                       ? 'مفعّل أثناء تشغيل التطبيق — الاستقبال في الخلفية يعتمد على أذونات الجهاز وOEM'
                                       : 'متوقف — تُحفظ الرسائل دون معالجة تجارية', value: _autoSms, onChanged: (v) async { setState(() => _autoSms = v); await _saveBool(SettingKeys.smsAutoProcessingEnabled, v); }),
@@ -346,6 +328,7 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
                                   SettingsGroupSwitchRow(icon: Icons.history, title: 'معالجة الرسائل القديمة (عند التوقف)', subtitle: 'عند فتح التطبيق مجدداً فقط — لا تضمن المعالجة والتطبيق مغلق أو بعد Force-stop', value: _oldMsgs, onChanged: (v) async { setState(() => _oldMsgs = v); await _saveBool(SettingKeys.processOldMessagesOnResume, v); }),
                                   SettingsGroupSwitchRow(icon: Icons.notifications_active_outlined, title: 'تنبيه العمليات التي تتطلب تدخلاً', subtitle: _interventionAlert ? 'يصدر تنبيه صوتي عند وجود عملية معلّقة تحتاج تدخلاً يدوياً' : 'التنبيه الصوتي معطّل — الرسائل المعلّقة تظهر في القائمة دون صوت', value: _interventionAlert, onChanged: (v) async { setState(() => _interventionAlert = v); await _saveBool(SettingKeys.pendingAttentionAlertEnabled, v); }),
                                   SettingsGroupNavRow(icon: Icons.notifications_active_outlined, title: 'تنبيهات انخفاض مخزون الكروت', subtitle: 'سيتم تنبيهك عندما يقل مخزون أي فئة عن '+_lowStock.toString()+' كرت', onTap: _openLowStock),
+                                  SettingsGroupNavRow(icon: Icons.style_outlined, title: 'إدارة الكروت والفئات', subtitle: 'إنشاء الفئات واستيراد الكروت ومراجعة المخزون', searchText: 'الكروت الفئات المخزون توليد', onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const InventoryScreen()))),
                                   SettingsGroupNavRow(icon: Icons.sim_card_outlined, title: 'شرائح الاتصال', subtitle: 'اختيار شريحة الاستقبال والإرسال', onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SimSettingsScreen()))),
                                   SettingsGroupNavRow(icon: Icons.health_and_safety_outlined, title: 'فحص النظام', subtitle: 'جاهزية الأذونات والخدمات', searchText: 'فحص جاهزية الأذونات الخدمات', onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SystemCheckScreen()))),
                                 ]),
@@ -364,18 +347,13 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
                                   SettingsGroupNavRow(icon: Icons.notifications_none_outlined, title: 'إشعارات المحافظ', subtitle: 'مصادر إشعارات التطبيقات ومنح إذن الوصول', searchText: 'إشعارات المحافظ مصادر الوصول', onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const WalletNotificationSettingsScreen()))),
                                   SettingsGroupSwitchRow(icon: Icons.account_balance_outlined, title: 'طلبات رصيد نقاط البيع', subtitle: _posBalanceRequests ? 'مفعّل — يتم الرد تلقائياً على طلب رصيد نقطة البيع برسالة تحتوي الرصيد والدين' : 'متوقف — طلبات رصيد نقاط البيع تُترك للمراجعة اليدوية', value: _posBalanceRequests, onChanged: (v) async { setState(() => _posBalanceRequests = v); await _saveBool(SettingKeys.posBalanceRequestsEnabled, v); }),
                                   SettingsGroupNavRow(icon: Icons.pin_outlined, title: 'الحد اليومي لطلبات رصيد نقاط البيع', subtitle: 'الحد الحالي: '+_posBalanceLimit.toString()+' طلب يومياً لكل نقطة بيع', searchText: 'حد يومي طلبات رصيد نقاط البيع', onTap: _openPosBalanceLimit),
-                                  SettingsGroupSwitchRow(icon: Icons.summarize_outlined, title: 'ملخص العمليات اليومي', subtitle: _dailySummary ? 'مفعّل — سيتم إرسال ملخص يومي الساعة 12 ليلاً لكل عملاء نقاط البيع' : 'متوقف — لن تُرسل ملخصات يومية لعملاء نقاط البيع', value: _dailySummary, onChanged: (v) async { setState(() => _dailySummary = v); await _saveBool(SettingKeys.dailyOpsSummaryAutoSend, v); }),
+                                  SettingsGroupSwitchRow(icon: Icons.summarize_outlined, title: 'ملخص العمليات اليومي', subtitle: _dailySummary ? 'مفعّل — يُجدول فحص منتصف الليل ثم يُرسل ملخص الأمس مرة واحدة لكل نقطة بيع' : 'متوقف — لن تُرسل ملخصات يومية لنقاط البيع', value: _dailySummary, onChanged: (v) async { setState(() => _dailySummary = v); await _saveBool(SettingKeys.dailyOpsSummaryAutoSend, v); final bridge = SystemDiagnosticsBridge(); if (v) { await bridge.scheduleDailySummary(); } else { await bridge.cancelDailySummary(); } }),
                                   SettingsGroupSwitchRow(icon: Icons.handshake_outlined, title: 'التسوية التلقائية', subtitle: _autoPosSettlement ? 'مفعّل — سيتم التسوية التلقائية لنقاط البيع عند استلام حوالة عبر المحافظ إلى النظام' : 'متوقف — تُسجَّل الحوالات دون تسوية تلقائية لحسابات نقاط البيع', value: _autoPosSettlement, onChanged: (v) async { setState(() => _autoPosSettlement = v); await _saveBool(SettingKeys.autoPosSettlementEnabled, v); }),
                                 ]),
                               if (_sectionVisible(_themeKeywords)) const SettingsSectionHeader(title: 'المظهر'),
                               if (_sectionVisible(_themeKeywords))
                                 SettingsGroupCard(children: [
                                   SettingsGroupNavRow(icon: Icons.dark_mode_outlined, title: 'الوضع الداكن', subtitle: NetThemeSchedule.label(_themeMode), onTap: _openThemePicker),
-                                ]),
-                              if (_sectionVisible(_licenseKeywords)) const SettingsSectionHeader(title: 'الاشتراك'),
-                              if (_sectionVisible(_licenseKeywords))
-                                SettingsGroupCard(children: [
-                                  SettingsGroupNavRow(icon: Icons.workspace_premium_outlined, title: 'تجديد الاشتراك', subtitle: 'الباقة ورصيد الرسائل', onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const RenewSubscriptionScreen()))),
                                 ]),
                               if (_sectionVisible(_maintenanceKeywords)) const SettingsSectionHeader(title: 'الصيانة'),
                               if (_sectionVisible(_maintenanceKeywords))

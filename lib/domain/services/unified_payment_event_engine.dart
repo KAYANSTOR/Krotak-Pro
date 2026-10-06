@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import '../../core/id_generator.dart';
 import '../../core/result.dart';
 import '../entities/audit.dart';
@@ -61,10 +63,22 @@ final class UnifiedPaymentEventEngine implements PaymentEventEngine {
       );
     }
 
+    PaymentSourceDiagnosis? sourceDiagnosis;
     if (sourceGuard != null) {
-      final sourceAuthorization = await sourceGuard!.authorize(event);
-      if (sourceAuthorization is Failure<void>) {
-        return _rejectUnauthorized(event, sourceAuthorization.error);
+      final diagnosisResult = await sourceGuard!.diagnose(event);
+      if (diagnosisResult is Failure<PaymentSourceDiagnosis>) {
+        return Failure(diagnosisResult.error);
+      }
+      sourceDiagnosis = (diagnosisResult as Success<PaymentSourceDiagnosis>).value;
+      if (!sourceDiagnosis.authorized) {
+        return _rejectUnauthorized(
+          event,
+          AppFailure(
+            code: sourceDiagnosis.failureCode ?? RejectionCodes.other,
+            message: sourceDiagnosis.failureMessage ?? 'Payment source rejected',
+          ),
+          diagnosis: sourceDiagnosis,
+        );
       }
     }
 
@@ -79,19 +93,30 @@ final class UnifiedPaymentEventEngine implements PaymentEventEngine {
     }
 
     final provisional = event.toProvisionalMessage(id: ids.next('msg'));
-    final parseResult = parser.parse(provisional);
+    final parseResult = _parseForAuthorizedSource(provisional, sourceDiagnosis?.activeTemplateIds.toSet());
     final parsed = parseResult is Success<ParsedTransfer>
         ? parseResult.value
         : null;
 
-    // A trusted source may only use templates linked to that same source.
     if (parsed != null && sourceGuard != null) {
-      final templateAuthorization = await sourceGuard!.authorize(
+      final templateDiagnosis = await sourceGuard!.diagnose(
         event,
         matchedTemplateId: parsed.templateId,
       );
-      if (templateAuthorization is Failure<void>) {
-        return _rejectUnauthorized(event, templateAuthorization.error);
+      if (templateDiagnosis is Failure<PaymentSourceDiagnosis>) {
+        return Failure(templateDiagnosis.error);
+      }
+      sourceDiagnosis =
+          (templateDiagnosis as Success<PaymentSourceDiagnosis>).value;
+      if (!sourceDiagnosis.authorized) {
+        return _rejectUnauthorized(
+          event,
+          AppFailure(
+            code: sourceDiagnosis.failureCode ?? RejectionCodes.other,
+            message: sourceDiagnosis.failureMessage ?? 'Payment source rejected',
+          ),
+          diagnosis: sourceDiagnosis,
+        );
       }
     }
 
@@ -134,6 +159,13 @@ final class UnifiedPaymentEventEngine implements PaymentEventEngine {
     if (parseResult is Failure<ParsedTransfer>) {
       await messages.updateStatus(message.id, MessageProcessingStatus.rejected);
       await templatePerformance?.recordUnmatched();
+      await _persistPipelineDiagnostic(
+        event: event,
+        messageId: message.id,
+        stage: 'parser',
+        diagnosis: sourceDiagnosis,
+        failure: parseResult.error,
+      );
       return Failure(parseResult.error);
     }
 
@@ -141,12 +173,18 @@ final class UnifiedPaymentEventEngine implements PaymentEventEngine {
     if (parsedTransfer == null) {
       await messages.updateStatus(message.id, MessageProcessingStatus.rejected);
       await templatePerformance?.recordUnmatched();
-      return const Failure(
-        AppFailure(
-          code: 'message_not_parsed',
-          message: 'Inbound payment message could not be parsed',
-        ),
+      const failure = const AppFailure(
+        code: 'message_not_parsed',
+        message: 'Inbound payment message could not be parsed',
       );
+      await _persistPipelineDiagnostic(
+        event: event,
+        messageId: message.id,
+        stage: 'parser',
+        diagnosis: sourceDiagnosis,
+        failure: failure,
+      );
+      return Failure(failure);
     }
 
     await templatePerformance?.recordMatch(parsedTransfer.templateId ?? '');
@@ -165,6 +203,13 @@ final class UnifiedPaymentEventEngine implements PaymentEventEngine {
       instantCharge: parsedTransfer.instantCharge,
     );
     await messages.updateStatus(message.id, MessageProcessingStatus.parsed);
+    await _persistPipelineDiagnostic(
+      event: event,
+      messageId: message.id,
+      stage: 'parsed',
+      diagnosis: sourceDiagnosis,
+      parsed: boundParse,
+    );
     final trace = MessagePipelineTrace(
       messageId: message.id,
       receivedAt: message.receivedAt,
@@ -180,14 +225,37 @@ final class UnifiedPaymentEventEngine implements PaymentEventEngine {
       );
       if (balanceResult is Failure<void>) {
         await messages.updateStatus(message.id, MessageProcessingStatus.failed);
+        await _persistPipelineDiagnostic(
+          event: event,
+          messageId: message.id,
+          stage: 'balance_request_processor',
+          diagnosis: sourceDiagnosis,
+          parsed: boundParse,
+          failure: balanceResult.error,
+        );
         return Failure(balanceResult.error);
       }
       await messages.updateStatus(message.id, MessageProcessingStatus.processed);
+      await _persistPipelineDiagnostic(
+        event: event,
+        messageId: message.id,
+        stage: 'processed',
+        diagnosis: sourceDiagnosis,
+        parsed: boundParse,
+      );
       return const Success(null);
     }
 
     final auto = await _autoProcessingEnabled();
     if (!auto) {
+      await messages.updateStatus(message.id, MessageProcessingStatus.pending);
+      await _persistPipelineDiagnostic(
+        event: event,
+        messageId: message.id,
+        stage: 'pending_auto_processing_disabled',
+        diagnosis: sourceDiagnosis,
+        parsed: boundParse,
+      );
       return const Success(null);
     }
 
@@ -199,6 +267,13 @@ final class UnifiedPaymentEventEngine implements PaymentEventEngine {
         // ignore: discarded_futures
         m.persist(trace);
       }
+      await _persistPipelineDiagnostic(
+        event: event,
+        messageId: message.id,
+        stage: 'processed',
+        diagnosis: sourceDiagnosis,
+        parsed: boundParse,
+      );
       return Success(processResult.value);
     }
     final m = metrics;
@@ -206,20 +281,112 @@ final class UnifiedPaymentEventEngine implements PaymentEventEngine {
       // ignore: discarded_futures
       m.persist(trace);
     }
-    return Failure((processResult as Failure<Transaction>).error);
+    final failure = (processResult as Failure<Transaction>).error;
+    await _markFailedIfStillParsed(message.id);
+    await _persistPipelineDiagnostic(
+      event: event,
+      messageId: message.id,
+      stage: 'processor',
+      diagnosis: sourceDiagnosis,
+      parsed: boundParse,
+      failure: failure,
+    );
+    return Failure(failure);
   }
 
-  /// يحفظ رسالة **مرفوضة** عندما تفشل حدود الثقة في المصدر (رقم غير مهيّأ،
-  /// نقطة بيع بلا قالب نشط، أو قالب لا يخص المصدر).
+  Result<ParsedTransfer> _parseForAuthorizedSource(
+    IncomingMessage message,
+    Set<String>? templateIds,
+  ) {
+    if (templateIds == null) return parser.parse(message);
+    if (parser is SourceScopedMessageParser) {
+      return (parser as SourceScopedMessageParser).parseForSource(
+        message,
+        templateIds: templateIds,
+      );
+    }
+    return parser.parse(message);
+  }
+
+  Future<void> _markFailedIfStillParsed(String messageId) async {
+    try {
+      final current = await messages.findById(messageId);
+      if (current is Success<IncomingMessage?> &&
+          current.value?.status == MessageProcessingStatus.parsed) {
+        await messages.updateStatus(messageId, MessageProcessingStatus.failed);
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _persistPipelineDiagnostic({
+    required PaymentEvent event,
+    required String messageId,
+    required String stage,
+    PaymentSourceDiagnosis? diagnosis,
+    ParsedTransfer? parsed,
+    AppFailure? failure,
+  }) async {
+    final logs = auditLogs;
+    if (logs == null) return;
+    try {
+      await logs.append(
+        AuditLog(
+          id: ids.next('audit'),
+          entityType: 'message',
+          entityId: messageId,
+          action: 'pipeline_diagnostic',
+          occurredAt: event.receivedAt,
+          payloadJson: jsonEncode({
+            'stage': stage,
+            'messageId': messageId,
+            'channel': event.channel.name,
+            'rawSource': event.sourceKey,
+            'normalizedSource': event.sourceKey
+                .trim()
+                .replaceAll(RegExp(r'\s+'), '')
+                .toLowerCase(),
+            'packageName': event.packageName,
+            'source': diagnosis?.toJson(),
+            'parser': parsed == null
+                ? null
+                : {
+                    'templateId': parsed.templateId,
+                    'amountMinorUnits': parsed.amount.minorUnits,
+                    'currency': parsed.amount.currencyCode,
+                    'customerIdentifier': parsed.customerIdentifier,
+                    'identifierType': parsed.identifierType.name,
+                    'reference': parsed.reference,
+                    'posId': parsed.posId,
+                    'quantity': parsed.quantity,
+                  },
+            'processorResult': failure == null ? 'success_or_pending' : 'failure',
+            'failureCode': failure?.code,
+            'reason': failure?.message,
+          }),
+        ),
+      );
+    } catch (_) {}
+  }
+
+  /// يحفظ رسالة **مرفوضة** عندما تفشل حدود الثقة في المصدر لسبب **يخص مصدراً
+  /// أنشأه المشغّل بنفسه** (نقطة بيع نشطة بلا قالب مرتبط، قالب لا يخص
+  /// المصدر) — هذه حالات تشخيصية مفيدة، فتُحفظ ليراها المشغّل ويصلحها.
   ///
-  /// قبل ذلك كانت هذه الحالات تُرجع فشلًا بلا أي أثر محفوظ، فلا تظهر الرسالة
-  /// في «المعلّقة» ولا في «المرفوضة» ولا في أي تقرير — وهو ما يجعل الحالة
-  /// الميدانية غير قابلة للتفسير للمشغّل. الآن تُحفَظ بنفس بصمة منع التكرار
-  /// فلا تتكرر عند وصول نفس الرسالة مرة أخرى، وبلا أي عمل دفتري.
+  /// أما حين يكون السبب `RejectionCodes.unknownSender` — أي أن المُرسل لا
+  /// يطابق أي محفظة نشطة ولا أي نقطة بيع نشطة مضافة في النظام أصلاً — فهذه
+  /// رسالة من جهة خارج نطاق النظام تماماً (رسالة شخصية، رمز تحقق، إلخ)،
+  /// ولا تُحفظ ولا يُسجَّل لها أي أثر: لا صف في قاعدة البيانات ولا سجل
+  /// تدقيق ولا ظهور في أي شاشة. هذا هو الحد الفاصل بين «مصدر معروف لديك
+  /// لكنه معطّل الآن» (يُحفظ) و«مصدر لا علاقة له بنظامك إطلاقاً» (يُتجاهل).
   Future<Result<Transaction?>> _rejectUnauthorized(
     PaymentEvent event,
-    AppFailure failure,
-  ) async {
+    AppFailure failure, {
+    PaymentSourceDiagnosis? diagnosis,
+  }) async {
+    if (failure.code == RejectionCodes.unknownSender) {
+      return Failure(failure);
+    }
+
     final provisional = event.toProvisionalMessage(id: ids.next('msg'));
     final fingerprint = fingerprints.compute(event: event, parsed: null);
     final existing = await messages.findByExternalReference(fingerprint.key);
@@ -247,10 +414,24 @@ final class UnifiedPaymentEventEngine implements PaymentEventEngine {
           entityId: provisional.id,
           action: failure.code,
           occurredAt: event.receivedAt,
+          payloadJson: jsonEncode({
+            'code': failure.code,
+            'reason': failure.message,
+            'messageId': provisional.id,
+            'channel': event.channel.name,
+            'source': diagnosis?.toJson(),
+          }),
         ),
       );
     }
 
+    await _persistPipelineDiagnostic(
+      event: event,
+      messageId: provisional.id,
+      stage: 'source_guard',
+      diagnosis: diagnosis,
+      failure: failure,
+    );
     return Failure(failure);
   }
 
@@ -264,12 +445,17 @@ final class UnifiedPaymentEventEngine implements PaymentEventEngine {
       customerIdentifier: event.sourceKey,
     );
     await messages.save(message);
-    return const Failure(
-      AppFailure(
-        code: RejectionCodes.blacklisted,
-        message: 'Blocked number — processing skipped before parse',
-      ),
+    final failure = const AppFailure(
+      code: RejectionCodes.blacklisted,
+      message: 'Blocked number — processing skipped before parse',
     );
+    await _persistPipelineDiagnostic(
+      event: event,
+      messageId: message.id,
+      stage: 'blocked_number',
+      failure: failure,
+    );
+    return Failure(failure);
   }
 
   Future<bool> _autoProcessingEnabled() async {

@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../../core/app_brand.dart';
-import '../home_shell.dart';
 import '../theme/kayan_colors.dart';
 import '../theme/net_tokens.dart';
+import 'account_root_screen.dart';
 
 /// شاشة إقلاع Flutter بعد الإطار الأصلي لأندرويد:
 /// ظهور الأيقونة والاسم بحركة قصيرة ثم الانتقال للواجهة الرئيسية.
@@ -67,7 +67,8 @@ class _NetSplashScreenState extends State<NetSplashScreen>
     Navigator.of(context).pushReplacement(
       PageRouteBuilder<void>(
         transitionDuration: const Duration(milliseconds: 420),
-        pageBuilder: (_, __, ___) => const HomeShell(),
+        // بوابة الحساب: تسجيل/دخول ثم التطبيق أو شاشة الإيقاف.
+        pageBuilder: (_, __, ___) => const AccountRootScreen(),
         transitionsBuilder: (_, animation, __, child) {
           return FadeTransition(
             opacity: CurvedAnimation(parent: animation, curve: Curves.easeOut),

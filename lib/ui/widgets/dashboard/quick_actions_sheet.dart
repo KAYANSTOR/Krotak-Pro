@@ -78,9 +78,9 @@ class QuickActionsSheet extends StatelessWidget {
         ),
       if (onGenerateCards != null)
         _QuickAction(
-          icon: Icons.style_rounded,
-          label: 'توليد كروت',
-          hint: 'إضافة مخزون',
+          icon: Icons.settings_suggest_rounded,
+          label: 'الإعدادات',
+          hint: 'إعدادات الكروت والرسائل',
           onTap: onGenerateCards!,
         ),
       if (onBroadcast != null)

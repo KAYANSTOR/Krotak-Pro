@@ -7,13 +7,16 @@ import '../core/app_brand.dart';
 import '../core/clock.dart';
 import '../core/id_generator.dart';
 import '../core/result.dart';
-import '../data/database/app_database.dart' hide Customer, Card, Sale, TransferTemplate, AppSetting;
+import '../data/database/app_database.dart' hide Customer, Card, Sale, TransferTemplate, AppSetting, Wallet;
 import '../data/database/database_provider.dart';
 import '../data/database/drift_unit_of_work.dart';
 import '../data/repositories/local_repositories.dart';
 import '../domain/entities/message.dart';
 import '../domain/entities/setting.dart';
+import '../domain/entities/wallet.dart';
+import '../domain/repositories/repositories.dart' show CustomerHistoryMover;
 import '../domain/services/local_account_merge_service.dart';
+import '../domain/services/local_identity_link_service.dart';
 import '../data/repositories/local_broadcast_repository.dart';
 import '../domain/services/local_advance_service.dart';
 import '../domain/services/local_broadcast_service.dart';
@@ -28,10 +31,12 @@ import '../domain/services/local_message_retry_service.dart';
 import '../domain/services/local_promotion_catalog.dart';
 import '../domain/services/local_promotion_progress_service.dart';
 import '../domain/services/local_pos_account_registry.dart';
+import '../domain/services/local_pos_auto_settlement_service.dart';
 import '../domain/services/local_pos_balance_request_service.dart';
 import '../domain/services/local_pos_profile_service.dart';
 import '../domain/services/local_pos_daily_summary_service.dart';
 import '../domain/services/local_system_health_service.dart';
+import '../platform/system_diagnostics_bridge.dart';
 import '../domain/services/local_voucher_ops_service.dart';
 import '../domain/services/pending_attention_alarm_service.dart';
 import '../domain/services/pending_message_review_service.dart';
@@ -57,7 +62,6 @@ import '../platform/notification_bridge.dart';
 import '../platform/stock_alert_bridge.dart';
 import '../platform/sms_bridge.dart';
 import '../platform/contact_picker_bridge.dart';
-import '../platform/system_diagnostics_bridge.dart';
 import 'delivery_keep_alive_controller.dart';
 import 'incoming_notification_handler.dart';
 import 'incoming_sms_handler.dart';
@@ -72,7 +76,7 @@ final class AppContainer {
     required this.inventoryService, required this.saleService, required this.advanceService, required this.broadcastService,
     required this.promotions, required this.promotionProgress, required this.systemHealth, required this.voucherOps,
     required this.pendingAlarm, required LocalMessageParser messageParser, required this.transferProcessor,
-    required this.licenseService, required this.backupService, required this.maintenanceService, required this.lowStockAlerts, required this.stockAlertNotifier, required this.dailyPosSummary, required this.mergeService, required this.settlementService,
+    required this.licenseService, required this.backupService, required this.maintenanceService, required this.lowStockAlerts, required this.stockAlertNotifier, required this.dailyPosSummary, required this.mergeService, required this.identityLinkService, required this.settlementService,
     required this.recoveryService, required this.deliveryWorker, required this.posOrderDeliveryWorker, required this.retryService, required this.pendingReview, required this.smsBridge,
     required this.smsHandler, required this.notificationBridge, required this.notificationSources,
     required this.notificationHandler, required this.deliveryKeepAlive, required this.clock, required this.ids, required this.themeModeNotifier,
@@ -120,6 +124,7 @@ final class AppContainer {
   final NativeStockAlertNotifier stockAlertNotifier;
   final LocalPosDailySummaryService dailyPosSummary;
   final LocalAccountMergeService mergeService;
+  final LocalIdentityLinkService identityLinkService;
   final LocalSettlementService settlementService;
   final LocalMessageRecoveryService recoveryService;
   final MessageDeliveryWorker deliveryWorker;
@@ -142,6 +147,7 @@ final class AppContainer {
   bool _recoveryBusy = false;
   bool _recoveryQueued = false;
   bool _dailySummaryBusy = false;
+  bool _dailyAlarmSynced = false;
   bool _disposed = false;
   DateTime? _lastStockSyncAt;
   static const Duration _stockSyncInterval = Duration(seconds: 30);
@@ -214,7 +220,20 @@ final class AppContainer {
     final broadcastService = LocalBroadcastService(customers: customers, jobs: broadcastJobs, settings: settings, auditLogs: auditLogs, messageSender: messageSender, clock: clock, ids: ids, transactions: transactions, posRegistry: posRegistry, sendDelay: Duration.zero);
     final advanceService = LocalAdvanceService(advances: advanceRepository, customers: customers, categories: categories, cards: cards, inventory: inventoryService, transactions: transactions, sales: sales, auditLogs: auditLogs, settings: settings, unitOfWork: uow, messageSender: messageSender, clock: clock, ids: ids, posRegistry: posRegistry);
     final contactDirectory = ContactPickerBridge();
-    final processor = LocalTransferProcessor(messages: messages, customers: customers, balances: balanceService, auditLogs: auditLogs, unitOfWork: uow, clock: clock, ids: ids, categories: categories, cards: cards, inventory: inventoryService, transactions: transactions, reservedSales: saleService, messageSender: messageSender, settings: settings, advanceService: advanceService, customerService: customerService, contactDirectory: contactDirectory, posRegistry: posRegistry, categoryCommissionStore: categoryCommissionStore, sales: sales);
+    final posAutoSettlement = LocalPosAutoSettlementService(
+      posRegistry: posRegistry,
+      settings: settings,
+      customers: customers,
+      transactions: transactions,
+      balances: balanceService,
+      messages: messages,
+      auditLogs: auditLogs,
+      clock: clock,
+      ids: ids,
+      templates: transferTemplates,
+      messageSender: messageSender,
+    );
+    final processor = LocalTransferProcessor(messages: messages, customers: customers, balances: balanceService, auditLogs: auditLogs, unitOfWork: uow, clock: clock, ids: ids, categories: categories, cards: cards, inventory: inventoryService, transactions: transactions, reservedSales: saleService, messageSender: messageSender, settings: settings, advanceService: advanceService, customerService: customerService, contactDirectory: contactDirectory, contactWriter: contactDirectory, posRegistry: posRegistry, categoryCommissionStore: categoryCommissionStore, sales: sales, posAutoSettlement: posAutoSettlement);
     final licenseService = LocalLicenseService(licenses: licenses, clock: clock);
     final Directory backupDirectory;
     final File? databaseFile;
@@ -255,7 +274,8 @@ final class AppContainer {
       clock: clock,
       notifier: stockAlertNotifier,
     );
-    final mergeService = LocalAccountMergeService(customers: customers, transactions: transactions, auditLogs: auditLogs, unitOfWork: uow, clock: clock, ids: ids);
+    final mergeService = LocalAccountMergeService(customers: customers, transactions: transactions, auditLogs: auditLogs, unitOfWork: uow, clock: clock, ids: ids, historyMovers: [transactions, sales].whereType<CustomerHistoryMover>().toList());
+    final identityLinkService = LocalIdentityLinkService(customers: customers, customerService: customerService, mergeService: mergeService);
     final settlementService = LocalSettlementService(customers: customers, transactions: transactions, auditLogs: auditLogs, unitOfWork: uow, clock: clock, ids: ids);
     final retryService = LocalMessageRetryService(auditLogs: auditLogs, messages: messages, clock: clock, ids: ids);
     final notificationBridge = NotificationBridge();
@@ -268,6 +288,10 @@ final class AppContainer {
       templates: transferTemplates,
     );
     final notificationSources = LocalPaymentSourceRegistry(settings: settings, clock: clock);
+    final enrichedWallets = await walletCatalog.listEnriched();
+    if (enrichedWallets is Success<List<Wallet>>) {
+      await notificationSources.ensureWalletSources(enrichedWallets.value);
+    }
     final sourceGuard = PaymentSourceGuard(wallets: wallets, templates: transferTemplates, notificationSources: notificationSources, posAccounts: posRegistry);
     final posBalanceRequests = LocalPosBalanceRequestService(posRegistry: posRegistry, balances: balanceService, settings: settings, auditLogs: auditLogs, messageSender: messageSender, clock: clock, ids: ids);
     final dailyPosSummary = LocalPosDailySummaryService(
@@ -286,7 +310,7 @@ final class AppContainer {
     final recoveryService = LocalMessageRecoveryService(messages: messages, parser: parser, processor: processor, sourceGuard: sourceGuard, retryService: retryService, settings: settings, auditLogs: auditLogs);
     final deliveryWorker = MessageDeliveryWorker(messages: messages, auditLogs: auditLogs, cards: cards, messageSender: messageSender, retryService: retryService, clock: clock, ids: ids, metrics: pipelineMetrics);
     final posOrderDeliveryWorker = PosOrderDeliveryWorker(messages: messages, auditLogs: auditLogs, cards: cards, settings: settings, posRegistry: posRegistry, messageSender: messageSender, retryService: retryService, clock: clock, ids: ids);
-    final pendingReview = PendingMessageReviewService(messages: messages, parser: parser, customers: customers, customerService: customerService, balances: balanceService, auditLogs: auditLogs, unitOfWork: uow, clock: clock, ids: ids, sourceGuard: sourceGuard);
+    final pendingReview = PendingMessageReviewService(messages: messages, parser: parser, customers: customers, customerService: customerService, balances: balanceService, auditLogs: auditLogs, unitOfWork: uow, clock: clock, ids: ids, sourceGuard: sourceGuard, transactions: transactions);
     final smsHandler = IncomingSmsHandler(
       bridge: smsBridge,
       messages: messages,
@@ -314,7 +338,7 @@ final class AppContainer {
       }
     }
 
-    return AppContainer._(database: database, customers: customers, wallets: wallets, pointsOfSale: pointsOfSale, categories: categories, cards: cards, messages: messages, transferTemplates: transferTemplates, transactions: transactions, sales: sales, auditLogs: auditLogs, licenses: licenses, settings: settings, unitOfWork: uow, customerService: customerService, balanceService: balanceService, catalogService: catalogService, walletCatalog: walletCatalog, posCatalog: posCatalog, posRegistry: posRegistry, posProfile: posProfile, inventoryService: inventoryService, saleService: saleService, advanceService: advanceService, broadcastService: broadcastService, promotions: promotions, promotionProgress: promotionProgress, systemHealth: systemHealth, voucherOps: voucherOps, pendingAlarm: pendingAlarm, messageParser: parser, transferProcessor: processor, licenseService: licenseService, backupService: backupService, maintenanceService: maintenanceService, lowStockAlerts: lowStockAlerts, stockAlertNotifier: stockAlertNotifier, dailyPosSummary: dailyPosSummary, mergeService: mergeService, settlementService: settlementService, recoveryService: recoveryService, deliveryWorker: deliveryWorker, posOrderDeliveryWorker: posOrderDeliveryWorker, retryService: retryService, pendingReview: pendingReview, smsBridge: smsBridge, smsHandler: smsHandler, deliveryKeepAlive: deliveryKeepAlive, notificationBridge: notificationBridge, notificationSources: notificationSources, notificationHandler: notificationHandler, clock: clock, ids: ids, themeModeNotifier: ValueNotifier<ThemeMode>(theme));
+    return AppContainer._(database: database, customers: customers, wallets: wallets, pointsOfSale: pointsOfSale, categories: categories, cards: cards, messages: messages, transferTemplates: transferTemplates, transactions: transactions, sales: sales, auditLogs: auditLogs, licenses: licenses, settings: settings, unitOfWork: uow, customerService: customerService, balanceService: balanceService, catalogService: catalogService, walletCatalog: walletCatalog, posCatalog: posCatalog, posRegistry: posRegistry, posProfile: posProfile, inventoryService: inventoryService, saleService: saleService, advanceService: advanceService, broadcastService: broadcastService, promotions: promotions, promotionProgress: promotionProgress, systemHealth: systemHealth, voucherOps: voucherOps, pendingAlarm: pendingAlarm, messageParser: parser, transferProcessor: processor, licenseService: licenseService, backupService: backupService, maintenanceService: maintenanceService, lowStockAlerts: lowStockAlerts, stockAlertNotifier: stockAlertNotifier, dailyPosSummary: dailyPosSummary, mergeService: mergeService, identityLinkService: identityLinkService, settlementService: settlementService, recoveryService: recoveryService, deliveryWorker: deliveryWorker, posOrderDeliveryWorker: posOrderDeliveryWorker, retryService: retryService, pendingReview: pendingReview, smsBridge: smsBridge, smsHandler: smsHandler, deliveryKeepAlive: deliveryKeepAlive, notificationBridge: notificationBridge, notificationSources: notificationSources, notificationHandler: notificationHandler, clock: clock, ids: ids, themeModeNotifier: ValueNotifier<ThemeMode>(theme));
   }
 
   Future<void> startBackgroundHandlers() async {
@@ -440,11 +464,32 @@ final class AppContainer {
     if (_disposed || _dailySummaryBusy) return;
     _dailySummaryBusy = true;
     try {
+      await _syncDailySummaryAlarm();
       await dailyPosSummary.sendDue();
     } catch (_) {
       // Background summary delivery must never interrupt SMS recovery.
     } finally {
       _dailySummaryBusy = false;
+    }
+  }
+
+  Future<void> _syncDailySummaryAlarm() async {
+    if (_dailyAlarmSynced || _disposed) return;
+    _dailyAlarmSynced = true;
+    final enabledResult = await settings.find(SettingKeys.dailyOpsSummaryAutoSend);
+    if (enabledResult is! Success<AppSetting?>) return;
+    final enabled = SettingBool.read(
+      enabledResult.value?.value,
+      defaultValue: SettingDefaults.dailyOpsSummaryAutoSend,
+    );
+    // جدولة التنبيه اليومي أثرٌ جانبي على الجهاز فقط: لا ننتظر رد المنصّة هنا
+    // حتى لا تتعطّل حلقة الاسترداد (وتسليم الكروت) إذا تأخّر الردّ أو غاب
+    // المنفّذ الأصلي، تماماً كباقي مسارات الإرسال التي لا توقف الدورة.
+    final bridge = SystemDiagnosticsBridge();
+    if (enabled) {
+      unawaited(bridge.scheduleDailySummary());
+    } else {
+      unawaited(bridge.cancelDailySummary());
     }
   }
 

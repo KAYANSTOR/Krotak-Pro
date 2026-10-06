@@ -66,6 +66,16 @@ final class LocalSystemHealthService {
       p['foregroundServiceActive'] ?? p['foregroundOk'] ?? p['canScheduleExactAlarms'],
     );
     final foregroundKnown = p['foregroundServiceActive'] != null || p['foregroundOk'] != null;
+    final manufacturer = (p['manufacturer']?.toString() ?? '').toLowerCase();
+    final samsung = manufacturer.contains('samsung');
+    final oemBackgroundState = switch (p['oemBackgroundState']) {
+      'configured_by_user' => CapabilityState.configuredByUser,
+      'manual_required' => CapabilityState.manualRequired,
+      'unsupported' => CapabilityState.unavailable,
+      true => CapabilityState.granted,
+      false => CapabilityState.denied,
+      _ => CapabilityState.unknown,
+    };
 
     return [
       SystemCapability(
@@ -99,10 +109,10 @@ final class LocalSystemHealthService {
         title: 'قراءة شرائح الاتصال (Dual SIM)',
         detail: 'التعرف على الشرائح لاختيار شريحة القراءة/الإرسال.',
         severity: CapabilitySeverity.recommended,
-        state: dualSim == CapabilityState.unknown
-            ? CapabilityState.granted
-            : dualSim,
-        actionLabel: 'فتح إعدادات التطبيق',
+        state: dualSim,
+        actionLabel: dualSim == CapabilityState.granted
+            ? null
+            : 'فتح إعدادات التطبيق',
         settingsAction: 'open_app_settings',
       ),
       SystemCapability(
@@ -119,12 +129,17 @@ final class LocalSystemHealthService {
       ),
       SystemCapability(
         id: 'autostart',
-        title: 'التشغيل التلقائي (MIUI / HyperOS / Samsung)',
-        detail:
-            'السماح بتشغيل التطبيق بعد إعادة التشغيل على واجهات الشركات المصنّعة.',
+        title: samsung
+            ? 'العمل بالخلفية — Samsung'
+            : 'التشغيل التلقائي / قيود الخلفية (OEM)',
+        detail: samsung
+            ? 'أضف Krotak Pro إلى Never sleeping apps من إعدادات Samsung.'
+            : 'السماح للتطبيق بالعمل بعد إعادة التشغيل وفق سياسة الشركة المصنّعة.',
         severity: CapabilitySeverity.recommended,
-        state: CapabilityState.unknown,
-        actionLabel: 'فتح إعدادات التشغيل التلقائي',
+        state: oemBackgroundState,
+        actionLabel: oemBackgroundState == CapabilityState.configuredByUser
+            ? null
+            : 'فتح إعدادات الخلفية',
         settingsAction: 'open_autostart',
       ),
       SystemCapability(
@@ -132,10 +147,10 @@ final class LocalSystemHealthService {
         title: 'الوصول إلى جهات الاتصال',
         detail: 'اختياري — يساعد على عرض أسماء العملاء من دفتر الهاتف.',
         severity: CapabilitySeverity.optional,
-        state: contacts == CapabilityState.unknown
-            ? CapabilityState.denied
-            : contacts,
-        actionLabel: 'فتح إعدادات التطبيق',
+        state: contacts,
+        actionLabel: contacts == CapabilityState.granted
+            ? null
+            : 'فتح إعدادات التطبيق',
         settingsAction: 'open_app_settings',
       ),
       SystemCapability(

@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import '../../core/result.dart';
 import '../entities/audit.dart';
 import '../entities/message.dart';
@@ -107,6 +109,8 @@ final class RejectedMessageItem {
     this.phone,
     this.reference,
     this.auditAction,
+    this.diagnostic,
+    this.archivedByOperator = false,
   });
 
   final IncomingMessage message;
@@ -117,6 +121,10 @@ final class RejectedMessageItem {
   final String? phone;
   final String? reference;
   final String? auditAction;
+  final Map<String, dynamic>? diagnostic;
+
+  /// أُرشفت يدوياً من المشغّل (زر «أرشفة») دون أن تُحل فعلياً.
+  final bool archivedByOperator;
 }
 
 final class RejectedMessageCatalog {
@@ -129,6 +137,25 @@ final class RejectedMessageCatalog {
   final MessageRepository messages;
   final AuditLogRepository auditLogs;
   final MessageParser parser;
+
+  /// علامة أرشفة يدوية — لا تغيّر حالة الرسالة في قاعدة البيانات (تبقى
+  /// `rejected`)، فقط تُخفيها من القائمة النشطة وتُظهرها في تبويب الأرشيف.
+  static const archivedByOperatorAction = 'rejected_message_archived_by_operator';
+
+  /// يؤرشف رسالة مرفوضة يدوياً دون محاولة حلّها.
+  Future<Result<void>> archive(
+    String messageId, {
+    required String auditId,
+    required DateTime occurredAt,
+  }) {
+    return auditLogs.append(AuditLog(
+      id: auditId,
+      entityType: 'message',
+      entityId: messageId,
+      action: archivedByOperatorAction,
+      occurredAt: occurredAt,
+    ));
+  }
 
   static const _rejectActions = {
     'sms_delivery_failed',
@@ -184,6 +211,8 @@ final class RejectedMessageCatalog {
 
     String? action;
     String? payloadReason;
+    Map<String, dynamic>? diagnostic;
+    var archivedByOperator = false;
     final audits = await auditLogs.findByEntity('message', m.id).timeout(
       const Duration(seconds: 10),
       onTimeout: () => const Failure(
@@ -194,7 +223,42 @@ final class RejectedMessageCatalog {
       ),
     );
     if (audits is Success<List<AuditLog>>) {
-      final logs = audits.value;
+      archivedByOperator =
+          audits.value.any((l) => l.action == archivedByOperatorAction);
+      // علامة الأرشفة ليست سبب رفض: تُستبعد حتى لا تحلّ محل السبب الحقيقي
+      // في الاحتياط `last` أدناه.
+      final logs = audits.value
+          .where((l) => l.action != archivedByOperatorAction)
+          .toList(growable: false);
+      final diagnosticLogs = logs.where((l) => l.action == 'pipeline_diagnostic').toList()
+        ..sort((a, b) => b.occurredAt.compareTo(a.occurredAt));
+      if (diagnosticLogs.isNotEmpty) {
+        try {
+          final raw = diagnosticLogs.first.payloadJson;
+          if (raw != null && raw.isNotEmpty) {
+            final decoded = jsonDecode(raw);
+            if (decoded is Map) {
+              diagnostic = Map<String, dynamic>.from(decoded);
+              final code = diagnostic['failureCode']?.toString().trim();
+              if (code != null && code.isNotEmpty) action = code;
+              final reason = diagnostic['reason']?.toString().trim();
+              if (reason != null && reason.isNotEmpty) payloadReason = reason;
+              final parsed = diagnostic['parser'];
+              if (parsed is Map) {
+                final amountMinor = (parsed['amountMinorUnits'] as num?)?.toInt();
+                final currency = parsed['currency']?.toString();
+                if (amountMinor != null && currency != null && currency.isNotEmpty) {
+                  amount = Money(minorUnits: amountMinor, currencyCode: currency);
+                }
+                final identifier = parsed['customerIdentifier']?.toString();
+                if (identifier != null && identifier.isNotEmpty) phone = identifier;
+                final parsedReference = parsed['reference']?.toString();
+                if (parsedReference != null && parsedReference.isNotEmpty) reference = parsedReference;
+              }
+            }
+          }
+        } catch (_) {}
+      }
       final relevant = logs.where((l) => _rejectActions.contains(l.action)).toList()
         ..sort((a, b) => b.occurredAt.compareTo(a.occurredAt));
       if (relevant.isNotEmpty) {
@@ -207,6 +271,13 @@ final class RejectedMessageCatalog {
         action = last.action;
         payloadReason = _payloadField(last.payloadJson, 'reason');
       }
+    }
+
+    if (diagnostic != null) {
+      final code = diagnostic['failureCode']?.toString().trim();
+      final reason = diagnostic['reason']?.toString().trim();
+      if (code != null && code.isNotEmpty) action = code;
+      if (reason != null && reason.isNotEmpty) payloadReason = reason;
     }
 
     if (action == null && parse is Failure<ParsedTransfer>) {
@@ -226,6 +297,8 @@ final class RejectedMessageCatalog {
       phone: phone ?? m.customerIdentifier,
       reference: reference,
       auditAction: action,
+      diagnostic: diagnostic,
+      archivedByOperator: archivedByOperator,
     );
   }
 

@@ -2,6 +2,7 @@ package com.kayan.net_app
 
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
+import android.content.ContentValues
 import android.content.Context
 import android.content.IntentFilter
 import android.Manifest
@@ -98,6 +99,13 @@ class MainActivity : FlutterActivity(), SmsListener {
 
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, notificationMethodChannelName).setMethodCallHandler { call, result ->
             when (call.method) {
+                "isAccessGranted" -> result.success(isNotificationAccessGranted())
+                "openAccessSettings" -> try {
+                    startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+                    result.success(true)
+                } catch (e: Exception) {
+                    result.error("settings_failed", e.message, null)
+                }
                 "setAllowedPackages" -> {
                     val packages = call.argument<List<String>>("packages")?.toSet() ?: emptySet()
                     getSharedPreferences(NotificationListener.PREFS, MODE_PRIVATE)
@@ -211,6 +219,21 @@ class MainActivity : FlutterActivity(), SmsListener {
                         }
                     }
                 }
+                "upsertContactByPhone" -> {
+                    val phone = call.argument<String>("phone")
+                    val displayName = call.argument<String>("displayName")
+                    if (phone.isNullOrBlank()) {
+                        result.success(false)
+                    } else if (!hasContactsWritePermission()) {
+                        result.success(false)
+                    } else {
+                        try {
+                            result.success(upsertContactByPhone(phone, displayName ?: phone))
+                        } catch (e: Exception) {
+                            result.error("contact_write_failed", e.message, null)
+                        }
+                    }
+                }
                 "pickContact" -> try {
                     val intent = Intent(Intent.ACTION_PICK, ContactsContract.Contacts.CONTENT_URI)
                     pendingContactResult = result
@@ -227,6 +250,21 @@ class MainActivity : FlutterActivity(), SmsListener {
                     result.success(true)
                 } catch (e: Exception) {
                     result.error("settings_failed", e.message, null)
+                }
+                "confirmAutoStartReviewed" -> {
+                    getSharedPreferences(OEM_PREFS, MODE_PRIVATE)
+                        .edit()
+                        .putBoolean(autoStartReviewKey(), true)
+                        .apply()
+                    result.success(true)
+                }
+                "scheduleDailySummary" -> {
+                    DailySummaryScheduler.schedule(applicationContext)
+                    result.success(true)
+                }
+                "cancelDailySummary" -> {
+                    DailySummaryScheduler.cancel(applicationContext)
+                    result.success(true)
                 }
                 "openAutoStartSettings" -> try {
                     openOemAutostartSettings()
@@ -300,6 +338,7 @@ class MainActivity : FlutterActivity(), SmsListener {
             "manufacturer" to Build.MANUFACTURER,
             "model" to Build.MODEL,
             "sdk" to Build.VERSION.SDK_INT,
+            "oemBackgroundState" to oemBackgroundState(),
         )
     }
 
@@ -350,6 +389,33 @@ class MainActivity : FlutterActivity(), SmsListener {
 
     private fun hasContactsPermission(): Boolean =
         ContextCompat.checkSelfPermission(this, Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED
+
+    private fun hasContactsWritePermission(): Boolean =
+        hasContactsPermission() &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_CONTACTS) == PackageManager.PERMISSION_GRANTED
+
+    private fun upsertContactByPhone(rawPhone: String, rawName: String): Boolean {
+        val phone = rawPhone.trim()
+        val name = rawName.trim().ifEmpty { phone }
+        if (lookupContactByPhone(phone) != null) return true
+        val resolver = contentResolver
+        val rawContact = resolver.insert(ContactsContract.RawContacts.CONTENT_URI, ContentValues())
+            ?: return false
+        val rawContactId = rawContact.lastPathSegment ?: return false
+        val nameValues = ContentValues().apply {
+            put(ContactsContract.Data.RAW_CONTACT_ID, rawContactId)
+            put(ContactsContract.Data.MIMETYPE, ContactsContract.CommonDataKinds.StructuredName.CONTENT_ITEM_TYPE)
+            put(ContactsContract.CommonDataKinds.StructuredName.DISPLAY_NAME, name)
+        }
+        if (resolver.insert(ContactsContract.Data.CONTENT_URI, nameValues) == null) return false
+        val phoneValues = ContentValues().apply {
+            put(ContactsContract.Data.RAW_CONTACT_ID, rawContactId)
+            put(ContactsContract.Data.MIMETYPE, ContactsContract.CommonDataKinds.Phone.CONTENT_ITEM_TYPE)
+            put(ContactsContract.CommonDataKinds.Phone.NUMBER, phone)
+            put(ContactsContract.CommonDataKinds.Phone.TYPE, ContactsContract.CommonDataKinds.Phone.TYPE_MOBILE)
+        }
+        return resolver.insert(ContactsContract.Data.CONTENT_URI, phoneValues) != null
+    }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         if (requestCode == REQUEST_PICK_CONTACT) {
@@ -501,6 +567,20 @@ class MainActivity : FlutterActivity(), SmsListener {
     }
 
     private fun openOemAutostartSettings() {
+        if (Build.MANUFACTURER.equals("samsung", ignoreCase = true)) {
+            for (intent in OemBackgroundSettings.samsungBackgroundIntents(packageName)) {
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                if (packageManager.resolveActivity(intent, PackageManager.MATCH_DEFAULT_ONLY) != null) {
+                    try {
+                        startActivity(intent)
+                        return
+                    } catch (_: Exception) {
+                        // جرّب المسار التالي
+                    }
+                }
+            }
+        }
+
         val intents = listOf(
             Intent().setComponent(ComponentName("com.miui.securitycenter", "com.miui.permcenter.autostart.AutoStartManagementActivity")),
             Intent().setComponent(ComponentName("com.letv.android.letvsafe", "com.letv.android.letvsafe.AutobootManageActivity")),
@@ -511,19 +591,43 @@ class MainActivity : FlutterActivity(), SmsListener {
             Intent().setComponent(ComponentName("com.vivo.permissionmanager", "com.vivo.permissionmanager.activity.BgStartUpManagerActivity")),
             Intent().setComponent(ComponentName("com.iqoo.secure", "com.iqoo.secure.ui.phoneoptimize.AddWhiteListActivity")),
             Intent().setComponent(ComponentName("com.iqoo.secure", "com.iqoo.secure.ui.phoneoptimize.BgStartUpManager")),
-            Intent().setComponent(ComponentName("com.samsung.android.lool", "com.samsung.android.sm.ui.battery.BatteryActivity")),
             Intent().setComponent(ComponentName("com.asus.mobilemanager", "com.asus.mobilemanager.autostart.AutoStartActivity")),
         )
         for (intent in intents) {
             try {
-                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 packageManager.resolveActivity(intent, PackageManager.MATCH_DEFAULT_ONLY) ?: continue
                 startActivity(intent)
                 return
             } catch (_: Exception) {
             }
         }
-        throw Exception("No OEM autostart settings found")
+        startActivity(OemBackgroundSettings.batterySettingsIntent())
+    }
+
+    private fun oemBackgroundState(): String {
+        if (Build.MANUFACTURER.equals("samsung", ignoreCase = true)) {
+            return if (getSharedPreferences(OEM_PREFS, MODE_PRIVATE)
+                    .getBoolean(autoStartReviewKey(), false)) {
+                "configured_by_user"
+            } else {
+                "manual_required"
+            }
+        }
+        return "manual_required"
+    }
+
+    private fun autoStartReviewKey(): String {
+        val versionCode = try {
+            val info = packageManager.getPackageInfo(packageName, 0)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                info.longVersionCode
+            } else {
+                @Suppress("DEPRECATION") info.versionCode.toLong()
+            }
+        } catch (_: Exception) {
+            0L
+        }
+        return "autostart_reviewed_v1_$versionCode"
     }
 
     override fun onSmsReceived(sender: String, body: String, timestampMillis: Long) {
@@ -542,10 +646,12 @@ class MainActivity : FlutterActivity(), SmsListener {
     }
 
     private fun isNotificationAccessGranted(): Boolean {
-        val enabled = Settings.Secure.getString(contentResolver, "enabled_notification_listeners") ?: return false
-        return enabled.split(":").any {
-            ComponentName.unflattenFromString(it) == NotificationListener.component(this)
-        }
+        val enabled = Settings.Secure.getString(contentResolver, "enabled_notification_listeners")
+            ?: return false
+        return NotificationAccessChecker.isGranted(
+            enabled,
+            NotificationListener.component(this),
+        )
     }
 
     // شرط الصلاحية الواحد في المشروع (نفس ما تستخدمه خدمة الخلفية).
@@ -597,17 +703,22 @@ class MainActivity : FlutterActivity(), SmsListener {
         val granted = ContextCompat.checkSelfPermission(
             this,
             Manifest.permission.READ_CONTACTS,
-        ) == PackageManager.PERMISSION_GRANTED
+        ) == PackageManager.PERMISSION_GRANTED &&
+            ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.WRITE_CONTACTS,
+            ) == PackageManager.PERMISSION_GRANTED
         if (granted) return true
         ActivityCompat.requestPermissions(
             this,
-            arrayOf(Manifest.permission.READ_CONTACTS),
+            arrayOf(Manifest.permission.READ_CONTACTS, Manifest.permission.WRITE_CONTACTS),
             REQUEST_CONTACTS,
         )
         return false
     }
 
     companion object {
+        private const val OEM_PREFS = "net_oem_diagnostics"
         private const val REQUEST_SMS = 1001
         private const val REQUEST_POST_NOTIFICATIONS = 1002
         private const val REQUEST_PHONE_STATE = 1003

@@ -1,3 +1,5 @@
+import 'money.dart';
+
 enum CustomerStatus { active, provisional, blacklisted, merged, archived }
 
 enum CustomerIdentifierType { phoneNumber, username, externalReference }
@@ -75,4 +77,21 @@ final class CustomerPhoneSuggestion {
 
   bool get isSellable =>
       status == CustomerStatus.active || status == CustomerStatus.provisional;
+}
+
+/// صف قائمة الحسابات: عميل + رصيد مجمّع + هوية أساسية في استعلام محدود.
+final class CustomerAccountSnapshot {
+  const CustomerAccountSnapshot({
+    required this.customer,
+    this.balance,
+    this.primaryPhone,
+    this.altId,
+    this.altLabel,
+  });
+
+  final Customer customer;
+  final Money? balance;
+  final String? primaryPhone;
+  final String? altId;
+  final String? altLabel;
 }

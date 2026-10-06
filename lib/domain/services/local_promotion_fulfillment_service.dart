@@ -10,6 +10,7 @@ import '../phone_normalizer.dart';
 import '../repositories/repositories.dart';
 import '../repositories/unit_of_work.dart';
 import 'local_promotion_catalog.dart';
+import 'promotion_reward_template.dart';
 import 'local_promotion_progress_service.dart';
 import 'services.dart';
 
@@ -132,21 +133,37 @@ final class LocalPromotionFulfillmentService {
     }
 
     final now = clock.now();
-    final reserved = await inventory.reserveAvailableCard(
+    final holds = await settings.find(SettingKeys.promotionRewardProbeHolds);
+    if (holds is Failure<AppSetting?>) return Failure(holds.error);
+    final holdRaw = (holds as Success<AppSetting?>).value?.value;
+    final held = await _claimProbeHold(
       categoryId: categoryId,
-      reservationId: ids.next('promo-res'),
+      customerId: customerId,
+      raw: holdRaw,
       now: now,
-      expiresAt: now.add(const Duration(minutes: 5)),
     );
-    if (reserved is Failure<Card>) {
-      return Failure(
-        AppFailure(
-          code: 'reward_stock_unavailable',
-          message: reserved.error.message,
-        ),
+    if (held is Failure<Card?>) return Failure(held.error);
+    final claimed = (held as Success<Card?>).value;
+    final Card card;
+    if (claimed != null) {
+      card = claimed;
+    } else {
+      final reserved = await inventory.reserveAvailableCard(
+        categoryId: categoryId,
+        reservationId: ids.next('promo-res'),
+        now: now,
+        expiresAt: now.add(const Duration(minutes: 5)),
       );
+      if (reserved is Failure<Card>) {
+        return Failure(
+          AppFailure(
+            code: 'reward_stock_unavailable',
+            message: reserved.error.message,
+          ),
+        );
+      }
+      card = (reserved as Success<Card>).value;
     }
-    final card = (reserved as Success<Card>).value;
     final sale = Sale(
       id: ids.next('promo-sale'),
       customerId: customerId,
@@ -157,6 +174,29 @@ final class LocalPromotionFulfillmentService {
     );
     final marked = await cards.markSold(card.id, sale.id);
     if (marked is Failure<void>) return Failure(marked.error);
+    final consumed = (held as Success<Card?>).value == null
+        ? null
+        : PromotionRewardTemplate.claimHold(
+            holdRaw,
+            categoryId,
+            now,
+            customerId: customerId,
+          );
+    if (consumed != null) {
+      final cleared = await settings.save(
+        AppSetting(
+          key: SettingKeys.promotionRewardProbeHolds,
+          value: PromotionRewardTemplate.consumeHold(
+            holdRaw,
+            categoryId,
+            customerId: consumed.customerId,
+            cardId: card.id,
+          ),
+          updatedAt: now,
+        ),
+      );
+      if (cleared is Failure<void>) return Failure(cleared.error);
+    }
 
     final txn = Transaction(
       id: ids.next('promo-txn'),
@@ -219,12 +259,20 @@ final class LocalPromotionFulfillmentService {
       );
       return;
     }
-    final body = await _renderTemplate({
+    final amount = (amountMinor / 100).toStringAsFixed(2);
+    final customer = await customers.findById(customerId);
+    final customerName = customer is Success<Customer?>
+        ? (customer.value?.displayName ?? '')
+        : '';
+    final body = await _renderTemplate(promotionId, customerId, {
       'title': promotionTitle,
+      'promotion_name': promotionTitle,
       'serial': card.serialNumber,
       'secret': card.secretCode,
       'code': card.secretCode,
-      'amount': (amountMinor / 100).toStringAsFixed(2),
+      'amount': amount,
+      'reward_value': amount,
+      'customer_name': customerName,
     });
     final sent = await sender.send(destination: destination, body: body);
     await auditLogs.append(
@@ -253,15 +301,72 @@ final class LocalPromotionFulfillmentService {
     return PhoneNormalizer.canonicalize(primary.value) ?? primary.value;
   }
 
-  Future<String> _renderTemplate(Map<String, String> values) async {
-    final result = await settings.find(SettingKeys.promotionRewardSmsTemplate);
-    final raw = result is Success<AppSetting?> ? result.value?.value : null;
-    var output = (raw != null && raw.trim().isNotEmpty)
-        ? raw
-        : defaultRewardSmsTemplate;
+  Future<String> _renderTemplate(
+    String promotionId,
+    String customerId,
+    Map<String, String> values,
+  ) async {
+    final global = await settings.find(SettingKeys.promotionRewardSmsTemplate);
+    final perOffer = await settings.find(SettingKeys.promotionRewardSmsTemplates);
+    final perCustomer =
+        await settings.find(SettingKeys.promotionRewardCustomerSmsTemplates);
+    final perCustomerGlobal = await settings.find(
+      SettingKeys.promotionRewardCustomerGlobalSmsTemplates,
+    );
+    final globalRaw = global is Success<AppSetting?> ? global.value?.value : null;
+    final mapRaw = perOffer is Success<AppSetting?> ? perOffer.value?.value : null;
+    final customerRaw =
+        perCustomer is Success<AppSetting?> ? perCustomer.value?.value : null;
+    final customerGlobalRaw = perCustomerGlobal is Success<AppSetting?>
+        ? perCustomerGlobal.value?.value
+        : null;
+    var output = PromotionRewardTemplate.resolve(
+      perCustomer: PromotionRewardTemplate.lookupCustomer(
+        customerRaw,
+        promotionId,
+        customerId,
+      ),
+      perOffer: PromotionRewardTemplate.lookup(mapRaw, promotionId),
+      perCustomerGlobal: PromotionRewardTemplate.lookupGlobalCustomer(
+        customerGlobalRaw,
+        customerId,
+      ),
+      global: globalRaw,
+      fallback: defaultRewardSmsTemplate,
+    );
     values.forEach((name, value) {
       output = output.replaceAll('{$name}', value);
     });
     return output;
+  }
+
+  /// يستخدم حجز المعاينة إن كان الكرت ما يزال محجوزاً بنفس المعرّف. غير ذلك لا يحجز شيئاً هنا.
+  Future<Result<Card?>> _claimProbeHold({
+    required String categoryId,
+    required String customerId,
+    required String? raw,
+    required DateTime now,
+  }) async {
+    final hold = PromotionRewardTemplate.claimHold(
+      raw,
+      categoryId,
+      now,
+      customerId: customerId,
+    );
+    if (hold == null) return const Success(null);
+    for (final item in hold.cards) {
+      final found = await cards.findById(item.cardId);
+      if (found is Failure<Card?>) return Failure(found.error);
+      final card = (found as Success<Card?>).value;
+      final reservation = card?.reservation;
+      if (card == null ||
+          card.categoryId != categoryId ||
+          card.status != CardStatus.reserved ||
+          reservation?.reservationId != item.reservationId) {
+        continue;
+      }
+      return Success(card);
+    }
+    return const Success(null);
   }
 }

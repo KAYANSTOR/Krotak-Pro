@@ -4,8 +4,10 @@ import '../../core/result.dart';
 import '../../domain/entities/message.dart';
 import '../../domain/entities/money.dart';
 import '../../domain/entities/setting.dart';
+import '../../domain/rejection_codes.dart';
 import '../../domain/services/rejected_message_catalog.dart';
 import '../app_scope.dart';
+import '../routing/app_routes.dart';
 import '../theme/kayan_palette.dart';
 import '../theme/net_semantic_colors.dart';
 import '../widgets/async_views.dart';
@@ -33,6 +35,9 @@ class _RejectedMessagesScreenState extends State<RejectedMessagesScreen> {
   List<RejectedMessageItem> _items = const [];
   String _filter = RejectionCategories.all;
   int _newCount = 0;
+
+  /// معرّف الرسالة قيد إعادة المحاولة حالياً (لتعطيل زرّها فقط أثناء العمل).
+  String? _retryingId;
 
   /// تبويب الأرشيف — الرسائل التي تمت معالجتها/استعادتها بنجاح (قراءة فقط).
   bool _showArchive = false;
@@ -87,9 +92,25 @@ class _RejectedMessagesScreenState extends State<RejectedMessagesScreen> {
       if (result is Failure<List<RejectedMessageItem>>) {
         throw StateError(result.error.message);
       }
-      final items = (result as Success<List<RejectedMessageItem>>).value;
+      final all = (result as Success<List<RejectedMessageItem>>).value;
+      // المؤرشفة يدوياً تُنقل لتبويب الأرشيف وتبقى حالتها `rejected` في القاعدة.
+      final items = all.where((i) => !i.archivedByOperator).toList();
       final newCount = items.where((i) => i.isNew).length;
-      final archive = <RejectedMessageItem>[];
+      final archive = <RejectedMessageItem>[
+        for (final i in all.where((i) => i.archivedByOperator))
+          RejectedMessageItem(
+            message: i.message,
+            category: i.category,
+            reason: 'أُرشفت يدوياً',
+            isNew: false,
+            amount: i.amount,
+            phone: i.phone,
+            reference: i.reference,
+            auditAction: i.auditAction,
+            diagnostic: i.diagnostic,
+            archivedByOperator: true,
+          ),
+      ];
       for (final status in [
         MessageProcessingStatus.processed,
         MessageProcessingStatus.recovered,
@@ -140,6 +161,94 @@ class _RejectedMessagesScreenState extends State<RejectedMessagesScreen> {
         _error = 'تعذر تحميل الرسائل المرفوضة: $error';
       });
     }
+  }
+
+  /// إعادة محاولة رسالة مرفوضة: تعيد تشغيل نفس مسار الاعتماد الكامل الآن
+  /// (تحقق من المصدر ثم القالب ثم إيداع). إن نجحت تُعتمد وتختفي من القائمة؛
+  /// وإن فشلت تُعرض رسالة السبب الجديد فوراً، وتبقى الرسالة في الأرشيف.
+  Future<void> _retry(RejectedMessageItem item) async {
+    final id = item.message.id;
+    setState(() => _retryingId = id);
+    try {
+      final result = await AppScope.of(context).pendingReview.retryRejected(id);
+      if (!mounted) return;
+      if (result is Success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('تمت إعادة المعالجة واعتماد الرسالة بنجاح')),
+        );
+        await _load(markViewed: false);
+      } else if (result is Failure) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('تعذّرت إعادة المعالجة: ${(result as Failure).error.message}')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _retryingId = null);
+    }
+  }
+
+  /// أرشفة يدوية: تُخرج الرسالة من القائمة النشطة دون حلّها (مفيدة للرسائل
+  /// غير ذات الصلة). لا تُحذف — تظهر في تبويب الأرشيف.
+  Future<void> _archive(RejectedMessageItem item) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          title: const Text(
+            'أرشفة الرسالة؟',
+            style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w800),
+          ),
+          content: const Text(
+            'ستنتقل إلى الأرشيف دون معالجتها ولن يُسجَّل إيداع.',
+            style: TextStyle(fontFamily: 'Tajawal', height: 1.5),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('إلغاء', style: TextStyle(fontFamily: 'Tajawal')),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('أرشفة', style: TextStyle(fontFamily: 'Tajawal')),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    final c = AppScope.of(context);
+    final r = await RejectedMessageCatalog(
+      messages: c.messages,
+      auditLogs: c.auditLogs,
+      parser: c.messageParser,
+    ).archive(
+      item.message.id,
+      auditId: c.ids.next('audit'),
+      occurredAt: c.clock.now(),
+    );
+    if (!mounted) return;
+    if (r is Failure) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('تعذّرت الأرشفة: ${(r as Failure).error.message}')),
+      );
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('تمت أرشفة الرسالة')),
+    );
+    await _load(markViewed: false);
+  }
+
+  /// يفتح «بيع مباشر» مع تعبئة الجوال والمبلغ من الرسالة قدر الإمكان، حتى
+  /// يستطيع المشغّل تسليم الكرت يدوياً فوراً دون انتظار إصلاح سبب الرفض.
+  void _manual(RejectedMessageItem item) {
+    final phone = item.phone;
+    AppRoutes.openDirectSalePrefilled(
+      context,
+      phone: phone != null && RegExp(r'^7\d{8}$').hasMatch(phone) ? phone : null,
+      amountMinor: item.amount?.minorUnits,
+    );
   }
 
   List<String> get _availableCategories {
@@ -376,7 +485,15 @@ class _RejectedMessagesScreenState extends State<RejectedMessagesScreen> {
                                       ...dayItems.map(
                                         (item) => Padding(
                                           padding: const EdgeInsets.only(bottom: 10),
-                                          child: _RejectedCard(item: item),
+                                          child: _RejectedCard(
+                                            item: item,
+                                            busy: _retryingId == item.message.id,
+                                            onRetry: item.auditAction == RejectionCodes.duplicateTransaction
+                                                ? null
+                                                : () => _retry(item),
+                                            onManual: () => _manual(item),
+                                            onArchive: () => _archive(item),
+                                          ),
                                         ),
                                       ),
                                     ],
@@ -517,9 +634,24 @@ class _SummaryBanner extends StatelessWidget {
 }
 
 class _RejectedCard extends StatelessWidget {
-  const _RejectedCard({required this.item, this.archived = false});
+  const _RejectedCard({
+    required this.item,
+    this.archived = false,
+    this.busy = false,
+    this.onRetry,
+    this.onManual,
+    this.onArchive,
+  });
   final RejectedMessageItem item;
   final bool archived;
+
+  /// أثناء تنفيذ إعادة المحاولة لهذه الرسالة تحديداً (تعطيل زرّيها).
+  final bool busy;
+
+  /// null يعني: إعادة المحاولة غير متاحة لهذه الرسالة (مثل التكرار).
+  final VoidCallback? onRetry;
+  final VoidCallback? onManual;
+  final VoidCallback? onArchive;
 
   String _fmtTime(DateTime t) {
     final local = t.toLocal();
@@ -624,6 +756,10 @@ class _RejectedCard extends StatelessWidget {
               ],
             ],
           ),
+          if (item.diagnostic != null) ...[
+            const SizedBox(height: 10),
+            _DiagnosticPanel(diagnostic: item.diagnostic!),
+          ],
           if (archived) ...[
             const SizedBox(height: 8),
             Align(
@@ -635,7 +771,7 @@ class _RejectedCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
-                  'تمت المعالجة',
+                  item.archivedByOperator ? 'مؤرشفة' : 'تمت المعالجة',
                   style: TextStyle(
                     fontFamily: 'Tajawal',
                     fontSize: 11,
@@ -646,6 +782,154 @@ class _RejectedCard extends StatelessWidget {
               ),
             ),
           ],
+          if (!archived) ...[
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: busy ? null : onRetry,
+                    icon: busy
+                        ? const SizedBox(
+                            width: 14,
+                            height: 14,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.refresh_rounded, size: 16),
+                    label: const Text(
+                      'إعادة المحاولة',
+                      style: TextStyle(fontFamily: 'Tajawal', fontSize: 12),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      side: BorderSide(color: context.kayan.primary),
+                      foregroundColor: context.kayan.primary,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: TextButton.icon(
+                    onPressed: busy ? null : onManual,
+                    icon: const Icon(Icons.storefront_outlined, size: 16),
+                    label: const Text(
+                      'معالجة يدوية',
+                      style: TextStyle(fontFamily: 'Tajawal', fontSize: 12),
+                    ),
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      foregroundColor: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            if (onArchive != null)
+              Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: TextButton.icon(
+                  onPressed: busy ? null : onArchive,
+                  icon: const Icon(Icons.archive_outlined, size: 16),
+                  label: const Text(
+                    'أرشفة',
+                    style: TextStyle(fontFamily: 'Tajawal', fontSize: 12),
+                  ),
+                  style: TextButton.styleFrom(
+                    foregroundColor: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+
+class _DiagnosticPanel extends StatelessWidget {
+  const _DiagnosticPanel({required this.diagnostic});
+  final Map<String, dynamic> diagnostic;
+
+  @override
+  Widget build(BuildContext context) {
+    final source = diagnostic['source'] is Map
+        ? Map<String, dynamic>.from(diagnostic['source'] as Map)
+        : const <String, dynamic>{};
+    final parser = diagnostic['parser'] is Map
+        ? Map<String, dynamic>.from(diagnostic['parser'] as Map)
+        : const <String, dynamic>{};
+
+    String display(Object? raw) {
+      final value = raw?.toString().trim() ?? '';
+      return value.isEmpty ? '—' : value;
+    }
+
+    final rows = <(String, String)>[
+      ('القناة', display(diagnostic['channel'])),
+      ('المصدر', display(diagnostic['rawSource'])),
+      ('المصدر بعد التطبيع', display(diagnostic['normalizedSource'])),
+      ('المحفظة المطابقة', display(source['walletName'])),
+      ('حالة المحفظة', display(source['walletStatus'])),
+      ('حالة المصدر', source['sourceEnabled'] == true ? 'مفعّل' : 'غير مفعّل'),
+      ('القالب المطابق', display(source['matchedTemplateName'] ?? parser['templateId'])),
+      ('معرّف القالب', display(source['matchedTemplateId'] ?? parser['templateId'])),
+      ('المبلغ', display(parser['amountMinorUnits'])),
+      ('رقم العميل', display(parser['customerIdentifier'])),
+      ('المرجع', display(parser['reference'])),
+      ('المرحلة الأخيرة', display(diagnostic['stage'])),
+      ('السبب النهائي', display(diagnostic['reason'] ?? diagnostic['failureCode'])),
+    ];
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.45),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'تشخيص مسار الرسالة',
+            style: TextStyle(
+              fontFamily: 'Tajawal',
+              fontWeight: FontWeight.w800,
+              fontSize: 12.5,
+              color: Theme.of(context).colorScheme.onSurface,
+            ),
+          ),
+          const SizedBox(height: 6),
+          for (final row in rows)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 2),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(
+                    width: 105,
+                    child: Text(
+                      row.$1,
+                      style: TextStyle(
+                        fontFamily: 'Tajawal',
+                        fontSize: 11,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: Text(
+                      row.$2,
+                      style: const TextStyle(
+                        fontFamily: 'Tajawal',
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
         ],
       ),
     );

@@ -26,7 +26,12 @@ final class DefaultWalletTemplatesSeeder {
   final Clock clock;
   final IdGenerator ids;
 
-  static const seededKey = 'default_wallet_templates_seeded_v2';
+  static const seededKey = 'default_wallet_templates_seeded_v3';
+
+  // Legacy JAIB default before the provider changed the separator from `-` to
+  // a space between the sender name and phone number.
+  static const _legacyJaibSharedPattern =
+      'اضيف {amount} ر.ي تحويل مشترك رص:{ref} ر.ي من {account}-{phone}';
 
   /// Idempotent: skips the **insert** pass when [seededKey] is set, otherwise
   /// inserts missing templates keyed by stable id `tpl-default-{senderId}-{variant}`.
@@ -93,13 +98,78 @@ final class DefaultWalletTemplatesSeeder {
 
     // إصلاح الربط: قالب بمرسل معروف لكنه بلا محفظة (أو محفظة محذوفة) = رسائل
     // تلك المحفظة تُرفض بـ`no_source_template` رغم ظهور القالب.
-    for (final t in all) {
+    for (final original in all) {
+      var t = original;
+      var templateChanged = false;
+      final jaibSharedId = 'tpl-default-jaib-ar-shared';
+      if (t.id == jaibSharedId && t.pattern == _legacyJaibSharedPattern) {
+        t = t.copyWith(
+          pattern: _specs
+              .firstWhere((spec) => spec.senderCode == 'JAIB' && spec.variant == 'ar-shared')
+              .pattern,
+          sampleBody: 'اضيف 100 ر.ي تحويل مشترك رص:10615 ر.ي من جارالله الكبودي 773086403',
+        );
+        templateChanged = true;
+      }
+
+      // v3: توحيد اسم قالب Jaib الإنجليزي.
+      if (t.id == 'tpl-default-jaib-en-received' && t.name == 'JAIB — received (EN)') {
+        t = t.copyWith(name: 'Jaib — received (EN)');
+        templateChanged = true;
+      }
+
+      // v3: استبدال قوالب جوالي القديمة بقالب الاستلام المعتمد (واحد فقط).
+      if (t.senderCode?.trim().toUpperCase() == 'JAWALI') {
+        final jawaly = _specs.firstWhere(
+          (spec) => spec.senderCode == 'JAWALI' && spec.variant == 'ar-received',
+        );
+        // القالب الأساسي (shared أو ar-received) يُحدَّث للنمط الجديد.
+        if (t.id == 'tpl-default-jawali-ar-shared' ||
+            t.id == 'tpl-default-jawali-ar-received') {
+          if (t.pattern != jawaly.pattern ||
+              t.name != jawaly.name ||
+              !t.isActive) {
+            t = t.copyWith(
+              name: jawaly.name,
+              pattern: jawaly.pattern,
+              sampleBody: jawaly.sampleBody,
+              priority: jawaly.priority,
+              isActive: true,
+            );
+            templateChanged = true;
+          }
+        } else if (t.id.startsWith('tpl-default-jawali-') && t.isActive) {
+          // أوقف القوالب الافتراضية الزائدة.
+          t = t.copyWith(isActive: false);
+          templateChanged = true;
+        }
+      }
+
       final code = t.senderCode?.trim().toUpperCase();
-      if (code == null || code.isEmpty) continue;
+      if (code == null || code.isEmpty) {
+        if (templateChanged) {
+          final saved = await templates.save(t);
+          if (saved is Failure<void>) return Failure(saved.error);
+          changed += 1;
+        }
+        continue;
+      }
       final wallet = bySender[code];
-      if (wallet == null) continue;
+      if (wallet == null) {
+        if (templateChanged) {
+          final saved = await templates.save(t);
+          if (saved is Failure<void>) return Failure(saved.error);
+          changed += 1;
+        }
+        continue;
+      }
       final current = t.walletId?.trim();
       if (current != null && current.isNotEmpty && knownWalletIds.contains(current)) {
+        if (templateChanged) {
+          final saved = await templates.save(t);
+          if (saved is Failure<void>) return Failure(saved.error);
+          changed += 1;
+        }
         continue;
       }
       final saved = await templates.save(t.copyWith(walletId: wallet.id));
@@ -122,9 +192,9 @@ final class DefaultWalletTemplatesSeeder {
       name: 'جيب — تحويل مشترك',
       priority: 10,
       pattern:
-          'اضيف {amount} ر.ي تحويل مشترك رص:{ref} ر.ي من {account}-{phone}',
+          'اضيف {amount} ر.ي تحويل مشترك رص:{ref} ر.ي من {account} {phone}',
       sampleBody:
-          'اضيف 5000 ر.ي تحويل مشترك رص:5500.36 ر.ي من وليد العمري-770455491',
+          'اضيف 100 ر.ي تحويل مشترك رص:10615 ر.ي من جارالله الكبودي 773086403',
     ),
     _TplSpec(
       senderCode: 'JAIB',
@@ -137,36 +207,19 @@ final class DefaultWalletTemplatesSeeder {
     _TplSpec(
       senderCode: 'JAIB',
       variant: 'en-received',
-      name: 'JAIB — received (EN)',
+      name: 'Jaib — received (EN)',
       priority: 30,
       pattern: 'You have received {amount} YER from {phone} your balance {ref}',
       sampleBody: 'You have received 10 YER from 779776919 your balance 20',
     ),
+    // قالب جوالي الوحيد المعتمد — يطابق رسائل الاستلام الفعلية.
     _TplSpec(
       senderCode: 'JAWALI',
-      variant: 'ar-shared',
-      name: 'جوالي — تحويل مشترك',
+      variant: 'ar-received',
+      name: 'جوالي — استلمت مبلغ',
       priority: 10,
-      pattern:
-          'اضيف {amount} ر.ي تحويل مشترك رص:{ref} ر.ي من {account}-{phone}',
-      sampleBody:
-          'اضيف 650 ر.ي تحويل مشترك رص:650 ر.ي من غير معروف-773303455',
-    ),
-    _TplSpec(
-      senderCode: 'JAWALI',
-      variant: 'ar-phone-only',
-      name: 'جوالي — تحويل (رقم فقط)',
-      priority: 20,
-      pattern: 'اضيف {amount} ر.ي تحويل مشترك رص:{ref} ر.ي من {phone}',
-      sampleBody: 'اضيف 650 ر.ي تحويل مشترك رص:650 ر.ي من 773303455',
-    ),
-    _TplSpec(
-      senderCode: 'JAWALI',
-      variant: 'en-received',
-      name: 'JAWALI — received (EN)',
-      priority: 30,
-      pattern: 'You have received {amount} YER from {phone} your balance {ref}',
-      sampleBody: 'You have received 50 YER from 773303455 your balance 100',
+      pattern: 'استلمت مبلغ {amount} YER من {phone} رصيدك هو.{ref}',
+      sampleBody: 'استلمت مبلغ 500 YER من 737725368 رصيدك هو.99150',
     ),
     _TplSpec(
       senderCode: 'ONE CASH',

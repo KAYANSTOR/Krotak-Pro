@@ -40,6 +40,15 @@ abstract final class SettingKeys {
   static const pendingAttentionAlertEnabled = 'pending_attention_alert_enabled';
   static const promotionsCatalog = 'promotions_catalog';
   static const promotionRewardSmsTemplate = 'promotion_reward_sms_template';
+  static const promotionRewardSmsTemplates = 'promotion_reward_sms_templates';
+  static const promotionRewardCustomerSmsTemplates =
+      'promotion_reward_customer_sms_templates';
+  static const promotionRewardCustomerGlobalSmsTemplates =
+      'promotion_reward_customer_global_sms_templates';
+  static const promotionRewardProbeReceipts =
+      'promotion_reward_probe_receipts';
+  static const promotionRewardProbeHolds =
+      'promotion_reward_probe_holds';
 
   static const voucherDeliverySmsTemplate = 'voucher_delivery_sms_template';
   static const posCustomerCardDeliveryTemplate = 'pos_customer_card_delivery_template';
@@ -56,8 +65,31 @@ abstract final class SettingKeys {
   static const lowStockActiveJson = 'low_stock_active_json';
 
   static const customOutboundTemplates = 'custom_outbound_templates';
+
+  /// خريطة JSON: مفتاح قالب النظام ← معرّف القالب المخصّص الفعّال بدلاً منه.
+  static const activeOutboundTemplates = 'active_outbound_templates';
+
+  /// نص قالب النظام الأصلي المحفوظ أثناء استبداله بقالب مخصّص فعّال.
+  static String outboundSystemOriginal(String systemKey) =>
+      'outbound_system_original:$systemKey';
   static const walletExtras = 'wallet_extras';
   static const defaultWalletsSeeded = 'default_wallets_seeded';
+
+  // ── حساب الشبكة (Cloud account) ─────────────────────────────────────
+  /// معرّف الحساب في Firebase (نفس المعرّف المستخدم في لوحة الإدارة).
+  static const cloudAccountUid = 'cloud_account_uid';
+
+  /// رمز تجديد جلسة Firebase — يُخزَّن محلياً على الجهاز فقط.
+  static const cloudRefreshToken = 'cloud_refresh_token';
+  static const cloudPhone = 'cloud_phone';
+  static const cloudNetworkName = 'cloud_network_name';
+  static const cloudIsTrial = 'cloud_is_trial';
+  static const cloudIsActive = 'cloud_is_active';
+  static const cloudSubscriptionEnd = 'cloud_subscription_end';
+  static const cloudTrialWarning = 'cloud_trial_warning';
+
+  /// وقت آخر قراءة للإشعارات العامة (لتمييز غير المقروء).
+  static const cloudGlobalSeenAt = 'cloud_global_seen_at';
 }
 
 abstract final class SettingDefaults {
@@ -81,7 +113,7 @@ abstract final class SettingDefaults {
   static const promotionRewardSmsTemplate =
       'مكافأة عرض {title}\nالرقم: {serial}\nالرمز: {secret}';
   static const voucherDeliverySmsTemplate =
-      'رقم الكرت: {serial}\nالرمز: {code}';
+      'نشكرك على استخدامك شبكة {NETWORK_NAME}.\nكود الكرت: {CARD_CODE}\nفئة: {CARD_VALUE} ر.ي\nالرمز: {code}';
   static const posCustomerCardDeliveryTemplate =
       'شبكة {NETWORK_NAME}\nالفئة: {category}\n{cards}';
   static const posOrderSuccessTemplate =

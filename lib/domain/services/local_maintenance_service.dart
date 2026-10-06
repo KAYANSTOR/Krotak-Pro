@@ -4,15 +4,28 @@ import '../../data/database/app_database.dart' hide IncomingMessage;
 import '../entities/message.dart';
 import '../repositories/repositories.dart';
 
+/// Published retention windows. Financial ledger, cards, and customers are never auto-purged.
+final class RetentionPolicy {
+  const RetentionPolicy();
+
+  static const int rejectedDays = 30;
+  static const int processedDays = 3;
+  static const int failedMaxDays = 30;
+
+  static const String summaryAr =
+      'تُحذف رسائل المعالجة بعد 3 أيام، والمرفوضة وبعد أقصى المحاولات بعد 30 يوماً. '
+      'دفتر الحسابات والكروت والعملاء وسجل التدقيق لا تُحذف تلقائياً.';
+}
+
 /// Smart retention purge + SQLite deep clean (VACUUM / ANALYZE).
 final class LocalMaintenanceService {
   const LocalMaintenanceService({
     required this.messages,
     required this.clock,
     this.database,
-    this.rejectedRetention = const Duration(days: 30),
-    this.processedRetention = const Duration(days: 3),
-    this.failedMaxRetention = const Duration(days: 30),
+    this.rejectedRetention = const Duration(days: RetentionPolicy.rejectedDays),
+    this.processedRetention = const Duration(days: RetentionPolicy.processedDays),
+    this.failedMaxRetention = const Duration(days: RetentionPolicy.failedMaxDays),
   });
 
   final MessageRepository messages;
@@ -83,6 +96,52 @@ final class LocalMaintenanceService {
     );
   }
 
+
+  /// Logical SQLite size from page_count * page_size, plus reclaimable freelist.
+  Future<Result<DatabaseSizeReport>> inspectDatabase() async {
+    final db = database;
+    if (db == null) {
+      return const Failure(
+        AppFailure(code: 'size_unavailable', message: 'Database not available'),
+      );
+    }
+    try {
+      final pageSize = await _pragmaInt(db, 'page_size');
+      final pageCount = await _pragmaInt(db, 'page_count');
+      final freelist = await _pragmaInt(db, 'freelist_count');
+      final messages = await _count(db, 'incoming_messages');
+      return Success(
+        DatabaseSizeReport(
+          pageSize: pageSize,
+          pageCount: pageCount,
+          freelistCount: freelist,
+          incomingMessageCount: messages,
+        ),
+      );
+    } catch (e) {
+      return Failure(
+        AppFailure(code: 'size_failed', message: e.toString()),
+      );
+    }
+  }
+
+  Future<int> _pragmaInt(AppDatabase db, String name) async {
+    final rows = await db.customSelect('PRAGMA $name').get();
+    if (rows.isEmpty) return 0;
+    final row = rows.first.data;
+    final value = row.values.isEmpty ? 0 : row.values.first;
+    if (value is int) return value;
+    return int.tryParse('$value') ?? 0;
+  }
+
+  Future<int> _count(AppDatabase db, String table) async {
+    final rows = await db.customSelect('SELECT COUNT(*) AS c FROM $table').get();
+    if (rows.isEmpty) return 0;
+    final value = rows.first.data['c'];
+    if (value is int) return value;
+    return int.tryParse('$value') ?? 0;
+  }
+
   /// Rebuilds SQLite indexes / statistics (VACUUM + ANALYZE + PRAGMA optimize).
   Future<Result<DeepCleanReport>> runDeepClean() async {
     final db = database;
@@ -124,4 +183,33 @@ final class MaintenanceReport {
 final class DeepCleanReport {
   const DeepCleanReport({required this.durationMs});
   final int durationMs;
+}
+
+final class DatabaseSizeReport {
+  const DatabaseSizeReport({
+    required this.pageSize,
+    required this.pageCount,
+    required this.freelistCount,
+    required this.incomingMessageCount,
+  });
+
+  final int pageSize;
+  final int pageCount;
+  final int freelistCount;
+  final int incomingMessageCount;
+
+  int get logicalBytes => pageSize * pageCount;
+  int get reclaimableBytes => pageSize * freelistCount;
+
+  String get logicalLabel => formatBytes(logicalBytes);
+  String get reclaimableLabel => formatBytes(reclaimableBytes);
+}
+
+String formatBytes(int bytes) {
+  if (bytes < 1024) return '$bytes بايت';
+  final kb = bytes / 1024;
+  if (kb < 1024) return '${kb.toStringAsFixed(1)} ك.ب';
+  final mb = kb / 1024;
+  if (mb < 1024) return '${mb.toStringAsFixed(2)} م.ب';
+  return '${(mb / 1024).toStringAsFixed(2)} ج.ب';
 }

@@ -8,6 +8,7 @@ import 'package:net_app/domain/entities/setting.dart';
 import 'package:net_app/domain/entities/transaction.dart';
 import 'package:net_app/domain/repositories/repositories.dart';
 import 'package:net_app/domain/entities/wallet.dart';
+import 'package:net_app/domain/rejection_codes.dart';
 import 'package:net_app/domain/services/payment_fingerprint_service.dart';
 import 'package:net_app/domain/services/payment_source_guard.dart';
 import 'package:net_app/domain/services/services.dart';
@@ -190,7 +191,7 @@ void main() {
       expect(processor.calls, 0);
       expect(
         messages.store.values.single.status,
-        MessageProcessingStatus.parsed,
+        MessageProcessingStatus.pending,
       );
     });
 
@@ -224,7 +225,10 @@ void main() {
   });
 
   group('UnifiedPaymentEventEngine untrusted source', () {
-    test('persists the rejected message instead of dropping it silently',
+    // مصدر لا علاقة له بالنظام إطلاقاً (لا محفظة ولا نقطة بيع تطابقه): يجب
+    // ألا يُحفظ أي أثر له — لا رسالة، لا سجل تدقيق — حتى لا "يلتقط" النظام
+    // رسائل أشخاص أو جهات لم يُضِفهم المشغّل إلى محافظه أو نقاط بيعه.
+    test('drops a message from a completely unrecognized sender without persisting anything',
         () async {
       final messages = _FakeMessages();
       final audit = InMemoryAuditLogRepository();
@@ -251,18 +255,77 @@ void main() {
       expect(result, isA<Failure<Transaction?>>());
       expect(
         (result as Failure<Transaction?>).error.code,
-        'untrusted_payment_source',
+        RejectionCodes.unknownSender,
+      );
+      expect(messages.store, isEmpty);
+      expect(audit.logs, isEmpty);
+    });
+
+    // مصدر معروف للنظام (محفظة نشطة اسم مرسِلها يطابق الرسالة) لكن بلا قالب
+    // نشط مرتبط بها: هذه حالة تشخيصية يريدها المشغّل ليكتشف سبب التعطّل، لذا
+    // تبقى تُحفظ كمرفوضة كما كانت (بخلاف المصدر غير المعروف تماماً أعلاه).
+    test('still persists the rejected message for a recognized-but-misconfigured source',
+        () async {
+      final messages = _FakeMessages();
+      final audit = InMemoryAuditLogRepository();
+      final engine = UnifiedPaymentEventEngine(
+        messages: messages,
+        parser: _FailingParser(),
+        processor: _FakeProcessor(),
+        ids: SequentialIdGenerator(),
+        sourceGuard: PaymentSourceGuard(
+          wallets: _SingleWallet(
+            Wallet(
+              id: 'w1',
+              name: 'محفظة',
+              status: WalletStatus.active,
+              createdAt: DateTime.utc(2026, 1, 1),
+              senderId: 'Jaib',
+            ),
+          ),
+          templates: InMemoryTransferTemplateRepository(),
+        ),
+        auditLogs: audit,
+      );
+      final event = PaymentEvent(
+        channel: PaymentChannel.sms,
+        sourceKey: 'Jaib',
+        body: '10 كرت 100',
+        receivedAt: DateTime.utc(2026, 9, 22),
+      );
+
+      final result = await engine.ingest(event);
+
+      expect(result, isA<Failure<Transaction?>>());
+      expect(
+        (result as Failure<Transaction?>).error.code,
+        'no_source_template',
       );
       final saved = messages.store.values.single;
       expect(saved.status, MessageProcessingStatus.rejected);
-      expect(saved.externalReference, isNotNull);
-      expect(audit.logs.single.action, 'untrusted_payment_source');
+      expect(audit.logs.any((log) => log.action == 'no_source_template'), isTrue);
+      expect(audit.logs.any((log) => log.action == 'pipeline_diagnostic'), isTrue);
 
       // نفس الرسالة مرة أخرى بنفس البصمة لا تُنشئ صفًا ثانيًا.
       await engine.ingest(event);
       expect(messages.store, hasLength(1));
     });
   });
+}
+
+final class _SingleWallet implements WalletRepository {
+  _SingleWallet(this.wallet);
+  final Wallet wallet;
+
+  @override
+  Future<Result<Wallet?>> findById(String id) async =>
+      Success(id == wallet.id ? wallet : null);
+
+  @override
+  Future<Result<List<Wallet>>> listAll() async => Success([wallet]);
+
+  @override
+  Future<Result<void>> save(Wallet wallet) async => const Success(null);
 }
 
 final class _NoWallets implements WalletRepository {

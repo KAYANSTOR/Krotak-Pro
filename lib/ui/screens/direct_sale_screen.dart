@@ -7,7 +7,16 @@ import '../widgets/dashboard/direct_sale_sheet.dart';
 /// Prefer [DirectSaleSheet.show] from callers that already have a surface
 /// (e.g. Dashboard). This screen exists for deep links / AppRoutes.
 class DirectSaleScreen extends StatefulWidget {
-  const DirectSaleScreen({super.key});
+  const DirectSaleScreen({
+    super.key,
+    this.initialPhone,
+    this.initialAmountMinor,
+    this.initialName,
+  });
+
+  final String? initialPhone;
+  final int? initialAmountMinor;
+  final String? initialName;
 
   @override
   State<DirectSaleScreen> createState() => _DirectSaleScreenState();
@@ -21,7 +30,12 @@ class _DirectSaleScreenState extends State<DirectSaleScreen> {
   }
 
   Future<void> _openSheet() async {
-    final result = await DirectSaleSheet.show(context);
+    final result = await DirectSaleSheet.show(
+      context,
+      initialPhone: widget.initialPhone,
+      initialAmountMinor: widget.initialAmountMinor,
+      initialName: widget.initialName,
+    );
     if (!mounted) return;
     Navigator.of(context).pop(result);
   }

@@ -31,6 +31,16 @@ abstract interface class CustomerRepository {
   });
 
   Future<Result<List<CustomerIdentifier>>> listIdentifiers(String customerId);
+
+  /// قائمة حسابات بلقطة مجمّعة (رصيد + هاتف) بثلاثة استعلامات بدل N+1.
+  /// [limit]/[offset] بعد استبعاد الحسابات المدمجة حتى لا تُقرأ كل الصفوف.
+  Future<Result<List<CustomerAccountSnapshot>>> listAccountSnapshots({
+    String query = '',
+    String currencyCode = 'YER',
+    int? limit,
+    int offset = 0,
+  });
+
   Future<Result<void>> save(Customer customer);
   Future<Result<void>> saveIdentifier(CustomerIdentifier identifier);
 }
@@ -75,11 +85,7 @@ abstract interface class CardRepository {
   Future<Result<void>> releaseReservation(String cardId, String reservationId);
   Future<Result<void>> markSold(String cardId, String saleId);
   Future<Result<void>> restoreAvailable(String cardId);
-
-  /// يحذف كرتاً واحداً نهائياً ويرجع عدد الصفوف المحذوفة (0 إذا لم يوجد).
   Future<Result<int>> delete(String id);
-
-  /// يحذف مجموعة كروت ويرجع عدد الصفوف المحذوفة فعلياً.
   Future<Result<int>> deleteMany(List<String> ids);
 }
 
@@ -89,6 +95,15 @@ abstract interface class TransactionRepository {
   Future<Result<Transaction?>> findByReference(String reference);
   Future<Result<List<Transaction>>> listRecent({int limit = 50});
   Future<Result<List<Transaction>>> listCompleted({String? currencyCode});
+}
+
+/// ينقل سجلات حساب إلى حساب آخر (عند دمج حسابين) — منفصلة عن واجهات
+/// المستودعات حتى لا يُجبر كل تنفيذ تجريبي على تطبيقها.
+abstract interface class CustomerHistoryMover {
+  Future<Result<int>> reassignCustomer({
+    required String fromCustomerId,
+    required String toCustomerId,
+  });
 }
 
 abstract interface class SaleRepository {
@@ -112,7 +127,6 @@ abstract interface class MessageRepository {
   Future<Result<List<IncomingMessage>>> pendingProcessing();
   Future<Result<List<IncomingMessage>>> listByStatus(MessageProcessingStatus status);
   Future<Result<int>> countByStatus(MessageProcessingStatus status);
-  /// Live COUNT for a status. Emits immediately then on every table change.
   Stream<int> watchCountByStatus(MessageProcessingStatus status);
   Future<Result<List<IncomingMessage>>> listRecent({int limit = 100});
   Future<Result<void>> updateStatus(String id, MessageProcessingStatus status);
@@ -143,4 +157,5 @@ abstract interface class AuditLogRepository {
 
   /// Phase 16 — lookup by entity id, action, or payload fragment.
   Future<Result<List<AuditLog>>> search({required String query, int limit = 200});
+  Future<Result<List<AuditLog>>> listRecent({int limit = 2000});
 }

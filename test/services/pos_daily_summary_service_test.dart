@@ -340,6 +340,9 @@ final class _Audits implements AuditLogRepository {
     entries.add(log);
     return const Success(null);
   }
+  @override
+  Future<Result<List<AuditLog>>> listRecent({int limit = 2000}) async =>
+      Success((entries.toList()..sort((a, b) => b.occurredAt.compareTo(a.occurredAt))).take(limit).toList());
 
   @override
   Future<Result<List<AuditLog>>> findByEntity(

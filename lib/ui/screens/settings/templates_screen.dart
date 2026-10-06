@@ -95,11 +95,25 @@ class _TemplatesScreenState extends State<TemplatesScreen> {
       }
     }
 
-    final r = widget.posId != null
-        ? await c.transferTemplates.listAll()
-        : widget.walletId == null
-            ? await c.transferTemplates.listAll()
-            : await c.transferTemplates.listByWallet(widget.walletId);
+    // دائماً listAll ثم نُصفّي محلياً حتى تظهر القوالب المربوطة بالمحفظة
+    // أو بمرسل المحفظة حتى لو walletId ناقص عند الحفظ.
+    final r = await c.transferTemplates.listAll();
+    String? walletSender;
+    if (widget.walletId != null && wallets is Success<List<Wallet>>) {
+      for (final w in wallets.value) {
+        if (w.id == widget.walletId) {
+          walletSender = (w.senderId ?? '').trim().toUpperCase();
+          if (walletSender!.isEmpty) {
+            final n = w.name.trim();
+            if (n == 'جيب') walletSender = 'JAIB';
+            if (n == 'جوالي') walletSender = 'JAWALI';
+            if (n == 'ون كاش') walletSender = 'ONE CASH';
+            if (n == 'فلوسك') walletSender = 'FLOOSAK';
+          }
+          break;
+        }
+      }
+    }
     final counts = _groupKey == null
         ? null
         : await LocalTransferTemplateActivationService(c.transferTemplates)
@@ -110,11 +124,23 @@ class _TemplatesScreenState extends State<TemplatesScreen> {
       _walletNames = names;
       if (r is Success<List<TransferTemplate>>) {
         // ترتيب حسب الأولوية تصاعدياً (الأقل = أعلى أولوية) كما في الفيديو
-        final list = List<TransferTemplate>.from(
-          widget.posId == null
-              ? r.value
-              : r.value.where((t) => t.posId == widget.posId),
-        );
+        Iterable<TransferTemplate> filtered = r.value;
+        if (widget.posId != null) {
+          filtered = filtered.where((t) => t.posId == widget.posId);
+        } else if (widget.walletId != null) {
+          final wid = widget.walletId;
+          final sender = walletSender;
+          filtered = filtered.where((t) {
+            if (t.walletId == wid) return true;
+            if (sender != null &&
+                sender.isNotEmpty &&
+                (t.senderCode ?? '').trim().toUpperCase() == sender) {
+              return true;
+            }
+            return false;
+          });
+        }
+        final list = List<TransferTemplate>.from(filtered);
         list.sort((a, b) => a.priority.compareTo(b.priority));
         _items = list;
       } else {

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../../domain/entities/setting.dart';
+import '../../../domain/ledger.dart';
+import '../../../domain/services/pos_statement_pdf_rows.dart';
 import '../../../domain/services/report_pdf_service.dart';
 import '../../services/report_pdf_export.dart';
 import 'package:flutter/services.dart';
@@ -433,10 +435,12 @@ class _PosAccountsLedgerScreenState extends State<PosAccountsLedgerScreen> {
     List<_SettlementRow> settlements = const [];
     final txns = await c.transactions.findByCustomer(acc.customerId);
     if (txns is Success<List<Transaction>>) {
+      final linkedAt = row.pos.createdAt;
       settlements = [
         for (final t in txns.value)
           if (t.type == TransactionType.settlement &&
-              t.status == TransactionStatus.completed)
+              t.status == TransactionStatus.completed &&
+              !t.createdAt.isBefore(linkedAt))
             _SettlementRow(txn: t, label: 'تسوية مالية'),
       ]..sort((a, b) => b.txn.createdAt.compareTo(a.txn.createdAt));
     }
@@ -648,6 +652,67 @@ class _PosLedgerSheet extends StatelessWidget {
   final List<_SettlementRow> settlements;
   final VoidCallback onSettle;
 
+
+  Future<void> _exportStatementPdf(BuildContext context) async {
+    final acc = row.account;
+    if (acc == null) return;
+    final name = row.customerName ?? row.pos.name;
+    final c = AppScope.of(context);
+    final network = await c.settings.find(SettingKeys.networkName);
+    var networkName = 'Krotak Pro';
+    if (network is Success<AppSetting?>) {
+      final setting = network.value;
+      if (setting != null && setting.value.trim().isNotEmpty) {
+        networkName = setting.value.trim();
+      }
+    }
+    final ledger = await c.transactions.findByCustomer(acc.customerId);
+    if (!context.mounted) return;
+    if (ledger is! Success<List<Transaction>>) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('تعذّر قراءة دفتر نقطة البيع')),
+      );
+      return;
+    }
+    final phone = acc.notifyPhone ?? acc.identifiers.firstOrNull ?? '';
+    final PosStatementLedgerSlice slice;
+    try {
+      slice = slicePosStatementLedger(
+        ledger.value,
+        linkedAt: row.pos.createdAt,
+      );
+    } on MixedCurrencyLedger {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('دفتر نقطة البيع يحتوي عملات مختلطة')),
+      );
+      return;
+    }
+    final rows = buildPosStatementPdfRows(
+      balanceMinor: balanceMinor,
+      creditLimitMinor: acc.creditLimitMinorUnits,
+      phone: phone,
+      lines: slice.lines,
+      openingBalanceMinor: slice.openingBalanceMinor,
+      excludedCount: slice.excludedCount,
+    );
+    final bytes = await (await ReportPdfService.instance()).buildLedgerStatement(
+      title: '$name — كشف حساب نقطة البيع',
+      accountLabel: phone.isEmpty ? name : '$name · $phone',
+      networkName: networkName,
+      generatedAt: c.clock.now(),
+      balanceLabel: balanceMinor < 0
+          ? 'المديونية الحالية ${(balanceMinor.abs() / 100).toStringAsFixed(2)}'
+          : 'الرصيد الدائن الحالي ${(balanceMinor / 100).toStringAsFixed(2)}',
+      rows: rows,
+    );
+    if (!context.mounted) return;
+    await saveReportPdf(
+      context: context,
+      bytes: bytes,
+      fileStem: 'pos_statement_${row.pos.id}',
+    );
+  }
+
   String _fmt(DateTime t) {
     final l = t.toLocal();
     final hh = l.hour.toString().padLeft(2, '0');
@@ -729,7 +794,19 @@ class _PosLedgerSheet extends StatelessWidget {
             ),
           ],
         ),
-        const SizedBox(height: NetSpacing.lg),
+        const SizedBox(height: NetSpacing.md),
+        OutlinedButton.icon(
+          style: OutlinedButton.styleFrom(
+            minimumSize: const Size.fromHeight(50),
+          ),
+          onPressed: () => _exportStatementPdf(context),
+          icon: const Icon(Icons.picture_as_pdf_outlined, size: 20),
+          label: const Text(
+            'تصدير كشف الدفتر PDF ومشاركته',
+            style: TextStyle(fontFamily: NetTypography.family),
+          ),
+        ),
+        const SizedBox(height: NetSpacing.sm),
         FilledButton.icon(
           style: FilledButton.styleFrom(
             minimumSize: const Size.fromHeight(50),

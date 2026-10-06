@@ -19,7 +19,7 @@ final class DefaultOutboundTemplatesSeeder {
   final Clock clock;
 
   /// Bump when new catalog keys are added so existing installs backfill.
-  static const seededKey = 'default_outbound_templates_seeded_v4';
+  static const seededKey = 'default_outbound_templates_seeded_v5';
 
   /// Legacy bodies from released versions. We migrate only these exact system
   /// defaults; custom operator templates are never overwritten.

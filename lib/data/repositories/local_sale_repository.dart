@@ -1,9 +1,24 @@
 part of local_repositories;
 
-final class LocalSaleRepository implements SaleRepository {
+final class LocalSaleRepository implements SaleRepository, CustomerHistoryMover {
   const LocalSaleRepository(this.database);
 
   final AppDatabase database;
+
+  @override
+  Future<Result<int>> reassignCustomer({
+    required String fromCustomerId,
+    required String toCustomerId,
+  }) async {
+    try {
+      final moved = await (database.update(database.sales)
+            ..where((table) => table.customerId.equals(fromCustomerId)))
+          .write(SalesCompanion(customerId: Value(toCustomerId)));
+      return Success(moved);
+    } catch (error) {
+      return Failure(_failure('sale_reassign_failed', error));
+    }
+  }
 
   @override
   Future<Result<void>> save(domain.Sale sale) async {

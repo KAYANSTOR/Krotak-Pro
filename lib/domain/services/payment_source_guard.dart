@@ -3,9 +3,82 @@ import '../entities/message.dart';
 import '../entities/payment_event.dart';
 import '../entities/pos_account.dart';
 import '../entities/wallet.dart';
+import '../rejection_codes.dart';
 import '../repositories/repositories.dart';
 import 'local_payment_source_registry.dart';
 import 'local_pos_account_registry.dart';
+
+
+/// Diagnostic evidence for a payment-source decision. Logical authorization
+/// failures remain data so the rejected-message UI can explain the exact stage.
+final class PaymentSourceDiagnosis {
+  const PaymentSourceDiagnosis({
+    required this.channel,
+    required this.rawSource,
+    required this.normalizedSource,
+    required this.packageName,
+    required this.authorized,
+    required this.activeTemplateIds,
+    required this.sourceEnabled,
+    this.walletId,
+    this.walletName,
+    this.walletStatus,
+    this.walletSourceMode,
+    this.posId,
+    this.posName,
+    this.posStatus,
+    this.matchedTemplateId,
+    this.matchedTemplateName,
+    this.matchedTemplateWalletId,
+    this.matchedTemplatePosId,
+    this.failureCode,
+    this.failureMessage,
+  });
+
+  final PaymentChannel channel;
+  final String rawSource;
+  final String normalizedSource;
+  final String? packageName;
+  final bool authorized;
+  final List<String> activeTemplateIds;
+  final bool sourceEnabled;
+  final String? walletId;
+  final String? walletName;
+  final WalletStatus? walletStatus;
+  final WalletSourceMode? walletSourceMode;
+  final String? posId;
+  final String? posName;
+  final PointOfSaleStatus? posStatus;
+  final String? matchedTemplateId;
+  final String? matchedTemplateName;
+  final String? matchedTemplateWalletId;
+  final String? matchedTemplatePosId;
+  final String? failureCode;
+  final String? failureMessage;
+
+  Map<String, Object?> toJson() => {
+        'channel': channel.name,
+        'rawSource': rawSource,
+        'normalizedSource': normalizedSource,
+        'packageName': packageName,
+        'authorized': authorized,
+        'sourceEnabled': sourceEnabled,
+        'walletId': walletId,
+        'walletName': walletName,
+        'walletStatus': walletStatus?.name,
+        'walletSourceMode': walletSourceMode?.name,
+        'posId': posId,
+        'posName': posName,
+        'posStatus': posStatus?.name,
+        'activeTemplateIds': activeTemplateIds,
+        'matchedTemplateId': matchedTemplateId,
+        'matchedTemplateName': matchedTemplateName,
+        'matchedTemplateWalletId': matchedTemplateWalletId,
+        'matchedTemplatePosId': matchedTemplatePosId,
+        'failureCode': failureCode,
+        'failureMessage': failureMessage,
+      };
+}
 
 /// Authorizes inbound payment events against explicitly configured payment sources.
 /// Commercial processing is never allowed merely because an SMS body matches a
@@ -24,6 +97,106 @@ final class PaymentSourceGuard {
   final LocalPaymentSourceRegistry? notificationSources;
   final LocalPosAccountRegistry? posAccounts;
 
+  Future<Result<PaymentSourceDiagnosis>> diagnose(
+    PaymentEvent event, {
+    String? matchedTemplateId,
+  }) async {
+    final auth = await authorize(event, matchedTemplateId: matchedTemplateId);
+    final configured = await templates.listAll();
+    if (configured is Failure<List<TransferTemplate>>) return Failure(configured.error);
+    final allTemplates = (configured as Success<List<TransferTemplate>>).value;
+
+    if (event.channel == PaymentChannel.manual) {
+      return Success(PaymentSourceDiagnosis(
+        channel: event.channel,
+        rawSource: event.sourceKey,
+        normalizedSource: _normalize(event.sourceKey),
+        packageName: event.packageName?.trim(),
+        authorized: true,
+        activeTemplateIds: allTemplates
+            .where((t) => t.isActive)
+            .map((t) => t.id)
+            .toList(growable: false),
+        sourceEnabled: true,
+        matchedTemplateId: matchedTemplateId,
+        matchedTemplateName: matchedTemplateId == null
+            ? null
+            : allTemplates.where((t) => t.id == matchedTemplateId).firstOrNull?.name,
+      ));
+    }
+
+    Wallet? wallet;
+    PosAccount? pos;
+    var sourceEnabled = true;
+    List<TransferTemplate> sourceTemplates = const [];
+
+    if (event.channel == PaymentChannel.sms && posAccounts != null) {
+      final result = await posAccounts!.findByIdentifier(event.sourceKey);
+      if (result is Failure<PosAccount?>) return Failure(result.error);
+      pos = (result as Success<PosAccount?>).value;
+      if (pos != null && pos.status == PointOfSaleStatus.active) {
+        sourceTemplates = allTemplates.where((t) => t.isActive && t.posId == pos!.posId).toList(growable: false);
+      }
+    }
+
+    if (pos == null) {
+      final listed = await wallets.listAll();
+      if (listed is Failure<List<Wallet>>) return Failure(listed.error);
+      final active = (listed as Success<List<Wallet>>).value.where((w) => w.status == WalletStatus.active).toList(growable: false);
+      if (event.channel == PaymentChannel.sms) {
+        wallet = active.where((w) {
+          final sender = w.senderId?.trim();
+          if (sender == null || sender.isEmpty) return false;
+          return _senderMatches(_normalize(event.sourceKey), _normalize(sender));
+        }).firstOrNull;
+      } else if (event.channel == PaymentChannel.notification) {
+        final packageName = event.packageName?.trim();
+        if (packageName != null && packageName.isNotEmpty) {
+          wallet = active.where((w) =>
+              w.sourceMode == WalletSourceMode.notification &&
+              w.packageName?.trim() == packageName).firstOrNull;
+          if (wallet != null && notificationSources != null) {
+            final sources = await notificationSources!.list();
+            if (sources is Failure<List<PaymentSource>>) return Failure(sources.error);
+            sourceEnabled = (sources as Success<List<PaymentSource>>).value.any(
+              (source) => source.packageName == packageName && source.enabled,
+            );
+          }
+        }
+      }
+      if (wallet != null && sourceEnabled) {
+        sourceTemplates = allTemplates.where((t) => t.isActive && t.walletId == wallet!.id).toList(growable: false);
+      }
+    }
+
+    final matched = matchedTemplateId == null
+        ? null
+        : allTemplates.where((t) => t.id == matchedTemplateId).firstOrNull;
+    final error = auth is Failure<void> ? auth.error : null;
+    return Success(PaymentSourceDiagnosis(
+      channel: event.channel,
+      rawSource: event.sourceKey,
+      normalizedSource: _normalize(event.sourceKey),
+      packageName: event.packageName?.trim(),
+      authorized: auth is Success<void>,
+      activeTemplateIds: sourceTemplates.map((t) => t.id).toList(growable: false),
+      sourceEnabled: sourceEnabled,
+      walletId: wallet?.id,
+      walletName: wallet?.name,
+      walletStatus: wallet?.status,
+      walletSourceMode: wallet?.sourceMode,
+      posId: pos?.posId,
+      posName: pos?.name,
+      posStatus: pos?.status,
+      matchedTemplateId: matched?.id,
+      matchedTemplateName: matched?.name,
+      matchedTemplateWalletId: matched?.walletId,
+      matchedTemplatePosId: matched?.posId,
+      failureCode: error?.code,
+      failureMessage: error?.message,
+    ));
+  }
+
   Future<Result<void>> authorize(
     PaymentEvent event, {
     String? matchedTemplateId,
@@ -40,7 +213,7 @@ final class PaymentSourceGuard {
       final pos = (posResult as Success<PosAccount?>).value;
       if (pos != null) {
         if (pos.status != PointOfSaleStatus.active) {
-          return const Failure(AppFailure(code: 'untrusted_payment_source', message: 'Point of sale is not active'));
+          return const Failure(AppFailure(code: RejectionCodes.unknownSender, message: 'Point of sale is not active'));
         }
         final posTemplates = allTemplates.where((t) => t.isActive && t.posId == pos.posId).toList(growable: false);
         if (posTemplates.isEmpty) {
@@ -74,7 +247,7 @@ final class PaymentSourceGuard {
       final package = event.packageName?.trim();
       if (package == null || package.isEmpty) {
         return const Failure(AppFailure(
-          code: 'untrusted_payment_source',
+          code: RejectionCodes.unknownSender,
           message: 'Notification source is not configured',
         ));
       }
@@ -94,7 +267,7 @@ final class PaymentSourceGuard {
 
     if (wallet == null) {
       return const Failure(AppFailure(
-        code: 'untrusted_payment_source',
+        code: RejectionCodes.unknownSender,
         message: 'Payment source is not linked to an active configured wallet',
       ));
     }
@@ -121,7 +294,14 @@ final class PaymentSourceGuard {
   bool _senderMatches(String incoming, String configured) {
     if (incoming.isEmpty || configured.isEmpty) return false;
     if (incoming == configured) return true;
-    if (incoming.contains(configured) || configured.contains(incoming)) {
+    // احتواء جزئي مسموح (JAIB داخل JAIB-PROMO) لكن بشرط ألا يقلّ الجزء المحتوى
+    // عن 3 أحرف؛ وإلا طابق مرسلٌ من حرف أو حرفين (مثل «A» أو «AI») أي محفظة
+    // معرّفها يحتوي ذلك الحرف، وهي ثغرة انتحال مصدر دفع.
+    const minPartialLength = 3;
+    if (configured.length >= minPartialLength && incoming.contains(configured)) {
+      return true;
+    }
+    if (incoming.length >= minPartialLength && configured.contains(incoming)) {
       return true;
     }
     final incDigits = incoming.replaceAll(RegExp(r'[^0-9]'), '');

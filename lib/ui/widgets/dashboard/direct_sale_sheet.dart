@@ -19,14 +19,34 @@ import '../../theme/net_tokens.dart';
 /// طبقة العرض فقط: نفس `sellManual` ونفس الـoperationId — بلا أي تغيير منطقي.
 /// الإضافات الواجهية: اختيار الرقم من جهات اتصال الجهاز وكشف عميل موجود مسبقًا.
 class DirectSaleSheet extends StatefulWidget {
-  const DirectSaleSheet({super.key});
+  const DirectSaleSheet({
+    super.key,
+    this.initialPhone,
+    this.initialAmountMinor,
+    this.initialName,
+  });
 
-  static Future<bool?> show(BuildContext context) {
+  /// قيم مبدئية اختيارية — تُستخدم عند فتح البيع اليدوي لمعالجة رسالة مرفوضة
+  /// أو معلّقة يدوياً بدل إدخال الرقم والمبلغ من الصفر.
+  final String? initialPhone;
+  final int? initialAmountMinor;
+  final String? initialName;
+
+  static Future<bool?> show(
+    BuildContext context, {
+    String? initialPhone,
+    int? initialAmountMinor,
+    String? initialName,
+  }) {
     return showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => const DirectSaleSheet(),
+      builder: (ctx) => DirectSaleSheet(
+        initialPhone: initialPhone,
+        initialAmountMinor: initialAmountMinor,
+        initialName: initialName,
+      ),
     );
   }
 
@@ -58,6 +78,17 @@ class _DirectSaleSheetState extends State<DirectSaleSheet> {
   @override
   void initState() {
     super.initState();
+    final phone = widget.initialPhone;
+    if (phone != null && phone.isNotEmpty) _phoneCtrl.text = phone;
+    final amountMinor = widget.initialAmountMinor;
+    if (amountMinor != null && amountMinor > 0) {
+      final major = amountMinor / 100.0;
+      _amountCtrl.text = amountMinor % 100 == 0
+          ? major.toInt().toString()
+          : major.toStringAsFixed(2);
+    }
+    final name = widget.initialName;
+    if (name != null && name.isNotEmpty) _nameCtrl.text = name;
     _phoneCtrl.addListener(_onPhoneChanged);
   }
 

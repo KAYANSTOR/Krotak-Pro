@@ -158,6 +158,13 @@ abstract interface class MessageParser {
   Result<ParsedTransfer> parse(IncomingMessage message);
 }
 
+abstract interface class SourceScopedMessageParser {
+  Result<ParsedTransfer> parseForSource(
+    IncomingMessage message, {
+    required Set<String> templateIds,
+  });
+}
+
 abstract interface class MessageSender {
   Future<Result<void>> send({required String destination, required String body});
 }

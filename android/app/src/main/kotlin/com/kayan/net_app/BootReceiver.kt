@@ -24,6 +24,7 @@ class BootReceiver : BroadcastReceiver() {
             return
         }
         Log.i(TAG, "boot/package event action=$action — recovery + auto-start")
+        DailySummaryScheduler.rescheduleIfEnabled(context)
         try {
             context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
                 .edit()

@@ -79,6 +79,10 @@ final class _MemAudit implements AuditLogRepository {
   }
 
   @override
+  Future<Result<List<AuditLog>>> listRecent({int limit = 2000}) async =>
+      Success((items.toList()..sort((a, b) => b.occurredAt.compareTo(a.occurredAt))).take(limit).toList());
+
+  @override
   Future<Result<List<AuditLog>>> findByEntity(String entityType, String entityId) async {
     return Success(items.where((e) => e.entityType == entityType && e.entityId == entityId).toList());
   }

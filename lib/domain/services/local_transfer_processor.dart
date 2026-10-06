@@ -20,6 +20,7 @@ import 'local_customer_identity_resolver.dart';
 import 'contact_directory.dart';
 import 'services.dart';
 import 'local_pos_account_registry.dart';
+import 'local_pos_auto_settlement_service.dart';
 import 'local_category_commission_store.dart';
 import 'pos_wholesale_pricing.dart';
 import 'pos_order_message_renderer.dart';
@@ -47,9 +48,11 @@ final class LocalTransferProcessor implements TransferProcessor {
     this.advanceService,
     this.customerService,
     this.contactDirectory,
+    this.contactWriter,
     this.posRegistry,
     this.categoryCommissionStore,
     this.sales,
+    this.posAutoSettlement,
     this.reservationTtl = const Duration(minutes: 5),
   });
 
@@ -71,9 +74,15 @@ final class LocalTransferProcessor implements TransferProcessor {
   final AdvanceService? advanceService;
   final CustomerService? customerService;
   final ContactDirectory? contactDirectory;
+  final ContactWriter? contactWriter;
   final LocalPosAccountRegistry? posRegistry;
   final LocalCategoryCommissionStore? categoryCommissionStore;
   final SaleRepository? sales;
+
+  /// عند عدم مطابقة المبلغ لأي فئة كرت: إن كان المصدر حساب نقطة بيع، تُستخدم
+  /// هذه الخدمة لإضافة المبلغ إلى رصيده (تسوية الدين القائم إن وُجد) بدل رفض
+  /// الرسالة، وترسل له رسالة التسوية. راجع [_creditWithoutCategory].
+  final LocalPosAutoSettlementService? posAutoSettlement;
   final Duration reservationTtl;
 
   List<CardCategory>? _categoryCache;
@@ -318,25 +327,26 @@ final class LocalTransferProcessor implements TransferProcessor {
       return Failure<Transaction>(failure);
     }
 
-    // If account was provisional but the phone is now in contacts, promote
-    // to a full customer and adopt the contact display name.
+    // A depositor is always a full active customer. The device phone book is
+    // only a convenience for naming and synchronization, never an eligibility
+    // gate for deposits or Salafni.
     final liveCustomer = resolution.customer;
     if (!isPosOrder &&
         liveCustomer != null &&
         liveCustomer.status == CustomerStatus.provisional &&
-        customerService != null &&
-        contactDirectory != null) {
-      final match = await contactDirectory!.findByPhone(
-        transfer.customerIdentifier,
-      );
-      if (match != null && match.displayName.trim().isNotEmpty) {
+        customerService != null) {
         final promoted = await customerService!.promoteToActive(liveCustomer.id);
         if (promoted is Success<Customer>) {
-          final named = promoted.value.copyWith(
-            displayName: match.displayName.trim(),
-            updatedAt: clock.now(),
-          );
-          await customers.save(named);
+          final match = await contactDirectory?.findByPhone(transfer.customerIdentifier);
+          final named = match != null && match.displayName.trim().isNotEmpty
+              ? promoted.value.copyWith(
+                  displayName: match.displayName.trim(),
+                  updatedAt: clock.now(),
+                )
+              : promoted.value;
+          if (named.displayName != promoted.value.displayName) {
+            await customers.save(named);
+          }
           resolutionResult = await _resolver.resolve(
             identifierValue: transfer.customerIdentifier,
             identifierType: transfer.identifierType,
@@ -350,13 +360,33 @@ final class LocalTransferProcessor implements TransferProcessor {
               id: ids.next('audit'),
               entityType: 'customer',
               entityId: named.id,
-              action: 'promoted_from_contacts',
+              action: 'promoted_to_active_on_deposit',
               occurredAt: clock.now(),
               payloadJson:
-                  '{\"phone\":\"${transfer.customerIdentifier}\",\"displayName\":\"${match.displayName.trim()}\"}',
+                  '{\"phone\":\"${transfer.customerIdentifier}\"}',
             ),
           );
         }
+    }
+
+    final activeCustomer = resolution.customer;
+    if (!isPosOrder && activeCustomer != null && contactWriter != null) {
+      final contactResult = await contactWriter!.upsertPhone(
+        phone: transfer.customerIdentifier,
+        displayName: activeCustomer.displayName,
+      );
+      if (contactResult is Failure<void>) {
+        await auditLogs.append(
+          AuditLog(
+            id: ids.next('audit'),
+            entityType: 'customer',
+            entityId: activeCustomer.id,
+            action: 'device_contact_sync_failed',
+            occurredAt: clock.now(),
+            payloadJson:
+                '{\"phone\":\"${transfer.customerIdentifier}\",\"error\":\"${contactResult.error.code}\"}',
+          ),
+        );
       }
     }
 
@@ -555,6 +585,15 @@ final class LocalTransferProcessor implements TransferProcessor {
     }
     final matches = (matchResult as Success<List<CardCategory>>).value;
     if (matches.isEmpty) {
+      // نقطة بيع: إيداع بلا فئة كرت مطابقة يُسوَّى إلى رصيدها مباشرة (يسدد
+      // ديناً قائماً إن وُجد) مع رسالة تسوية، بصرف النظر عن إعداد «الفئات
+      // المعرّفة فقط» — فهذا تصرف واضح لا يحتاج مراجعة بشرية.
+      final settled = await posAutoSettlement?.trySettle(
+        transfer: transfer,
+        message: message,
+      );
+      if (settled != null) return settled;
+
       final categoryOnly = await _processCategoryAmountsOnly();
       if (categoryOnly) {
         const failure = AppFailure(
@@ -571,19 +610,14 @@ final class LocalTransferProcessor implements TransferProcessor {
         );
         return const Failure<Transaction>(failure);
       }
-      const failure = AppFailure(
-        code: 'unmatched_amount',
-        message: 'No active card category matches the transfer amount',
-      );
-      await _persistTerminalFailure(
-        messageId: message.id,
-        status: MessageProcessingStatus.rejected,
-        action: 'transfer_unmatched_amount',
-        error: failure,
+
+      // خارج وضع «الفئات المعرّفة فقط»: بدل رفض إيداع عميل عادي لا تطابق
+      // قيمته أي فئة كرت نشطة، يُضاف المبلغ إلى رصيده مباشرة.
+      return _creditWithoutMatchingCategory(
+        message: message,
         transfer: transfer,
-        deliveryPhone: destination,
+        customerId: customer.id,
       );
-      return const Failure<Transaction>(failure);
     }
     if (matches.length > 1) {
       const failure = AppFailure(
@@ -769,6 +803,7 @@ final class LocalTransferProcessor implements TransferProcessor {
         .renderVoucherDelivery(
       serialNumber: card.serialNumber,
       secretCode: card.secretCode,
+      cardValue: (category.faceValue.minorUnits / 100).toString(),
     );
     if (rendered is Failure<String>) {
       await auditLogs.append(
@@ -1184,6 +1219,46 @@ final class LocalTransferProcessor implements TransferProcessor {
     return Success<Transaction>(saleLedger);
   }
 
+  /// عندما لا تطابق قيمة الإيداع أي فئة كرت نشطة (ولم يكن تسوية نقطة بيع)،
+  /// يُضاف المبلغ مباشرة إلى رصيد العميل بدل رفض الرسالة.
+  Future<Result<Transaction>> _creditWithoutMatchingCategory({
+    required IncomingMessage message,
+    required ParsedTransfer transfer,
+    required String customerId,
+  }) async {
+    final ref = transfer.reference.trim().isNotEmpty
+        ? 'no-category-credit:${transfer.reference.trim()}'
+        : 'no-category-credit:${message.id}';
+    final credit = await balances.credit(
+      customerId: customerId,
+      amount: transfer.amount,
+      reference: ref,
+    );
+    if (credit is Failure<Transaction>) {
+      await _persistTerminalFailure(
+        messageId: message.id,
+        status: MessageProcessingStatus.failed,
+        action: 'transfer_credit_without_category_failed',
+        error: credit.error,
+        transfer: transfer,
+      );
+      return Failure<Transaction>(credit.error);
+    }
+    final tx = (credit as Success<Transaction>).value;
+    await messages.updateStatus(message.id, MessageProcessingStatus.processed);
+    await auditLogs.append(
+      AuditLog(
+        id: ids.next('audit'),
+        entityType: 'message',
+        entityId: message.id,
+        action: 'transfer_credited_no_category',
+        occurredAt: clock.now(),
+        payloadJson:
+            '{"transactionId":"${tx.id}","customerId":"$customerId","minorUnits":${transfer.amount.minorUnits},"currency":"${transfer.amount.currencyCode}"}',
+      ),
+    );
+    return Success<Transaction>(tx);
+  }
 
   Future<Result<List<CardCategory>>> _matchActiveCategory(Money amount) async {
     final categoriesRepo = categories!;
@@ -1225,20 +1300,18 @@ final class LocalTransferProcessor implements TransferProcessor {
       );
     }
     final phone = transfer.customerIdentifier.trim();
-    // Contacts decide identity: in phonebook => full customer with name;
-    // otherwise provisional ledger-only account.
+    // The first deposit is sufficient to register and approve the customer.
+    // Phone-book lookup can improve the display name but never changes status.
     var displayName = phone;
-    var status = CustomerStatus.provisional;
     final match = await contactDirectory?.findByPhone(phone);
     if (match != null && match.displayName.trim().isNotEmpty) {
       displayName = match.displayName.trim();
-      status = CustomerStatus.active;
     }
     final created = await service.create(
       displayName: displayName,
       identifierType: CustomerIdentifierType.phoneNumber,
       identifierValue: phone,
-      status: status,
+      status: CustomerStatus.active,
     );
     if (created is Success<Customer>) return created;
     if (created is Failure<Customer> &&

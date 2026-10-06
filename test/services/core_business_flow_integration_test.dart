@@ -3,7 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:net_app/core/clock.dart';
 import 'package:net_app/core/id_generator.dart';
 import 'package:net_app/core/result.dart';
-import 'package:net_app/data/database/app_database.dart' hide Customer, Card, Sale, TransferTemplate, CardCategory, Transaction, IncomingMessage, AuditLog;
+import 'package:net_app/data/database/app_database.dart' hide Customer, Card, Sale, TransferTemplate, CardCategory, Transaction, IncomingMessage, AuditLog, AppSetting;
 import 'package:net_app/data/database/drift_unit_of_work.dart';
 import 'package:net_app/data/repositories/local_repositories.dart';
 import 'package:net_app/domain/entities/audit.dart';
@@ -11,11 +11,15 @@ import 'package:net_app/domain/entities/card.dart';
 import 'package:net_app/domain/entities/customer.dart';
 import 'package:net_app/domain/entities/message.dart';
 import 'package:net_app/domain/entities/money.dart';
+import 'package:net_app/domain/entities/pos_account.dart';
+import 'package:net_app/domain/entities/setting.dart';
 import 'package:net_app/domain/entities/transaction.dart';
 import 'package:net_app/domain/services/local_card_inventory_service.dart';
 import 'package:net_app/domain/services/local_catalog_services.dart';
 import 'package:net_app/domain/services/local_customer_balance_service.dart';
 import 'package:net_app/domain/services/local_customer_service.dart';
+import 'package:net_app/domain/services/local_pos_account_registry.dart';
+import 'package:net_app/domain/services/local_pos_auto_settlement_service.dart';
 import 'package:net_app/domain/services/local_sale_service.dart';
 import 'package:net_app/domain/services/local_transfer_processor.dart';
 import 'package:net_app/domain/services/services.dart';
@@ -37,6 +41,7 @@ void main() {
   late LocalCardCatalogService catalogService;
   late LocalCardInventoryService inventoryService;
   late LocalSaleService saleService;
+  late LocalSettingsRepository settings;
   late _FakeMessageSender sender;
   late LocalTransferProcessor processor;
 
@@ -58,6 +63,7 @@ void main() {
     catalogService = LocalCardCatalogService(categories: categories, cards: cards, auditLogs: auditLogs, unitOfWork: unitOfWork, clock: clock, ids: ids);
     inventoryService = LocalCardInventoryService(categories: categories, cards: cards, unitOfWork: unitOfWork);
     saleService = LocalSaleService(customers: customers, categories: categories, cards: cards, sales: sales, transactions: transactions, balances: balanceService, inventory: inventoryService, auditLogs: auditLogs, unitOfWork: unitOfWork, clock: clock, ids: ids);
+    settings = LocalSettingsRepository(database);
     sender = _FakeMessageSender();
     processor = LocalTransferProcessor(
       messages: messages,
@@ -73,6 +79,7 @@ void main() {
       transactions: transactions,
       reservedSales: saleService,
       messageSender: sender,
+      settings: settings,
     );
   });
 
@@ -128,6 +135,108 @@ void main() {
     expect((available as Success<List<Card>>).value, hasLength(1));
     expect(sender.calls, 0);
     expect((audits as Success<List<AuditLog>>).value.any((item) => item.action == 'transfer_unmatched_amount_pending'), isTrue);
+  });
+
+  // بخلاف الوضع الافتراضي أعلاه (معالجة مبالغ الفئات المعرّفة فقط)، حين
+  // يُعطَّل هذا الإعداد يُضاف مبلغ الإيداع غير المطابق لأي فئة إلى رصيد
+  // العميل مباشرة بدل تعليقه أو رفضه.
+  test('unmatched transfer amount is credited to the customer balance when category-only mode is off', () async {
+    await settings.save(AppSetting(
+      key: SettingKeys.processCategoryAmountsOnly,
+      value: 'false',
+      updatedAt: clock.now(),
+    ));
+    final customer = await seedCustomer();
+    await seedCategoryAndCard(minorUnits: 500, categoryId: 'cat-500');
+    await seedMessage('m2');
+
+    final result = await processor.process(transfer('m2', 200));
+
+    final balance = await balanceService.getBalance(customerId: customer.id, currencyCode: 'YER');
+    final available = await cards.findAvailableByCategory('cat-500');
+    final audits = await auditLogs.findByEntity('message', 'm2');
+    expect(result, isA<Success<Transaction>>());
+    expect((balance as Success<Money>).value.minorUnits, 200);
+    expect((available as Success<List<Card>>).value, hasLength(1));
+    expect(sender.calls, 0);
+    final saved = await messages.findById('m2');
+    expect((saved as Success<IncomingMessage?>).value?.status, MessageProcessingStatus.processed);
+    expect((audits as Success<List<AuditLog>>).value.any((item) => item.action == 'transfer_credited_no_category'), isTrue);
+  });
+
+  // نقطة بيع مدينة بمبلغ سابق: إيداع لا يطابق أي فئة كرت يُسوَّى إلى دينها
+  // القائم (لا يُعلَّق ولا يُرفض ولا يُضاف كرصيد عادي)، وتصلها رسالة تسوية
+  // تذكر المبلغ المسوَّى والمتبقي من الدين.
+  test('unmatched amount from a POS account settles its outstanding debt and notifies it', () async {
+    final posCustomer = (await customerService.create(
+      displayName: 'نقطة بيع الوادي',
+      identifierType: CustomerIdentifierType.phoneNumber,
+      identifierValue: '733111222',
+    ) as Success<Customer>)
+        .value;
+    // دين قائم قدره 20 (بالوحدة الرئيسية) قبل أي تسوية.
+    await balanceService.debit(customerId: posCustomer.id, amount: Money(minorUnits: 2000, currencyCode: 'YER'), reference: 'seed-debt');
+
+    final posRegistry = LocalPosAccountRegistry(settings: settings, clock: clock);
+    await posRegistry.save(PosAccount(
+      posId: 'pos-1',
+      customerId: posCustomer.id,
+      name: 'نقطة بيع الوادي',
+      identifiers: const ['770333444'],
+      notifyPhone: '770333444',
+    ));
+    final settlementProcessor = LocalTransferProcessor(
+      messages: messages,
+      customers: customers,
+      balances: balanceService,
+      auditLogs: auditLogs,
+      unitOfWork: unitOfWork,
+      clock: clock,
+      ids: ids,
+      categories: categories,
+      cards: cards,
+      inventory: inventoryService,
+      transactions: transactions,
+      reservedSales: saleService,
+      messageSender: sender,
+      settings: settings,
+      posRegistry: posRegistry,
+      posAutoSettlement: LocalPosAutoSettlementService(
+        posRegistry: posRegistry,
+        settings: settings,
+        customers: customers,
+        transactions: transactions,
+        balances: balanceService,
+        messages: messages,
+        auditLogs: auditLogs,
+        clock: clock,
+        ids: ids,
+        messageSender: sender,
+      ),
+    );
+    await seedCategoryAndCard(minorUnits: 500, categoryId: 'cat-500');
+    final saved = await messages.save(IncomingMessage(id: 'm3', sender: '770333444', body: 'transfer', receivedAt: clock.now(), status: MessageProcessingStatus.parsed, externalReference: 'bank:REF-m3', customerIdentifier: '770333444'));
+    expect(saved, isA<Success<void>>());
+
+    final result = await settlementProcessor.process(ParsedTransfer(
+      messageId: 'm3',
+      amount: Money(minorUnits: 1500, currencyCode: 'YER'),
+      customerIdentifier: '770333444',
+      identifierType: TransferIdentifierType.phone,
+      reference: 'REF-m3',
+    ));
+
+    expect(result, isA<Success<Transaction>>());
+    final balance = await balanceService.getBalance(customerId: posCustomer.id, currencyCode: 'YER');
+    // -2000 + 1500 = -500 => لا يزال ديناً قائماً قدره 5 وحدات رئيسية.
+    expect((balance as Success<Money>).value.minorUnits, -500);
+    final available = await cards.findAvailableByCategory('cat-500');
+    expect((available as Success<List<Card>>).value, hasLength(1)); // لم يُصرف كرت
+    expect(sender.calls, 1);
+    expect(sender.lastBody, contains('15')); // المبلغ المسوَّى بالوحدة الرئيسية
+    expect(sender.lastBody, contains('5')); // المتبقي بالوحدة الرئيسية
+    final audits = await auditLogs.findByEntity('pos_account', 'pos-1');
+    expect((audits as Success<List<AuditLog>>).value.any((item) => item.action == 'settled'), isTrue);
   });
 
   test('matching category without stock is rejected without financial mutation', () async {

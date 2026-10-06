@@ -66,4 +66,22 @@ final class SystemDiagnosticsBridge {
       await _channel.invokeMethod<void>('openAutoStartSettings');
     } catch (_) {}
   }
+
+  Future<void> confirmAutoStartReviewed() async {
+    try {
+      await _channel.invokeMethod<void>('confirmAutoStartReviewed');
+    } catch (_) {}
+  }
+
+  Future<void> scheduleDailySummary() async {
+    try {
+      await _channel.invokeMethod<void>('scheduleDailySummary');
+    } catch (_) {}
+  }
+
+  Future<void> cancelDailySummary() async {
+    try {
+      await _channel.invokeMethod<void>('cancelDailySummary');
+    } catch (_) {}
+  }
 }

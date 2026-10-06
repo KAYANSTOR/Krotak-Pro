@@ -1,9 +1,24 @@
 part of local_repositories;
 
-final class LocalTransactionRepository implements TransactionRepository {
+final class LocalTransactionRepository implements TransactionRepository, CustomerHistoryMover {
   const LocalTransactionRepository(this.database);
 
   final AppDatabase database;
+
+  @override
+  Future<Result<int>> reassignCustomer({
+    required String fromCustomerId,
+    required String toCustomerId,
+  }) async {
+    try {
+      final moved = await (database.update(database.transactions)
+            ..where((table) => table.customerId.equals(fromCustomerId)))
+          .write(TransactionsCompanion(customerId: Value(toCustomerId)));
+      return Success(moved);
+    } catch (error) {
+      return Failure(_failure('transaction_reassign_failed', error));
+    }
+  }
 
   @override
   Future<Result<void>> append(domain.Transaction transaction) async {

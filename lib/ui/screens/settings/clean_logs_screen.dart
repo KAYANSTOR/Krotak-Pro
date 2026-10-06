@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/result.dart';
 import '../../../domain/entities/message.dart';
+import '../../../domain/services/local_maintenance_service.dart';
 import '../../app_scope.dart';
 import '../../theme/kayan_colors.dart';
 import '../../theme/kayan_palette.dart';
@@ -22,6 +23,7 @@ class _CleanLogsScreenState extends State<CleanLogsScreen> {
   int _pending = 0;
   int _rejected = 0;
   int _failed = 0;
+  DatabaseSizeReport? _size;
   String? _status;
   bool _recovering = false;
   bool _purging = false;
@@ -41,9 +43,11 @@ class _CleanLogsScreenState extends State<CleanLogsScreen> {
     final pending = await c.messages.pendingProcessing();
     final rejected = await c.messages.listByStatus(MessageProcessingStatus.rejected);
     final failed = await c.messages.listByStatus(MessageProcessingStatus.failed);
+    final size = await c.maintenanceService.inspectDatabase();
     if (!mounted) return;
     setState(() {
       _loading = false;
+      _size = size is Success<DatabaseSizeReport> ? size.value : null;
       if (pending is Failure || rejected is Failure || failed is Failure) {
         _error = 'تعذر قراءة السجلات';
         return;
@@ -201,7 +205,9 @@ class _CleanLogsScreenState extends State<CleanLogsScreen> {
                             border: Border.all(color: palette.border),
                           ),
                           child: Text(
-                            'يدوي فقط — لا جدولة خلفية. التنظيف الذكي يحذف فقط: المرفوض (>30 يوم)، المكتمل (>3 أيام)، والمستنفد (>30 يوم). لا يمس المبيعات أو القيود المحاسبية.',
+                            _size == null
+                                ? RetentionPolicy.summaryAr
+                                : 'حجم القاعدة: ${_size!.logicalLabel} · قابل للاسترجاع بعد التنظيف العميق: ${_size!.reclaimableLabel} · الرسائل المخزنة: ${_size!.incomingMessageCount}.\n${RetentionPolicy.summaryAr}',
                             style: TextStyle(
                               fontFamily: 'Tajawal',
                               fontSize: 13,

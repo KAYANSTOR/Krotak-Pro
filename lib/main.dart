@@ -4,21 +4,40 @@ import 'dart:ui';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:sqlite3_flutter_libs/sqlite3_flutter_libs.dart';
 
 import 'application/app_container.dart';
+import 'application/account_session.dart';
+import 'platform/remote_push_notification_service.dart';
 import 'core/app_brand.dart';
 import 'core/result.dart';
 import 'domain/entities/message.dart';
 import 'domain/entities/setting.dart';
+import 'ui/app_reloader.dart';
 import 'ui/app_scope.dart';
-import 'ui/home_shell.dart';
 import 'ui/screens/net_splash_screen.dart';
+import 'ui/screens/account_notifications_screen.dart';
 import 'ui/theme/kayan_theme.dart';
 import 'ui/theme/net_theme_schedule.dart';
 
+const _defaultTemplates = [
+  TransferTemplate(
+    id: 'tpl-default',
+    name: 'تحويل افتراضي',
+    pattern: 'تم تحويل {amount} ريال الى {phone} برقم العملية {ref}',
+    isActive: true,
+  ),
+];
+
+final GlobalKey<NavigatorState> _appNavigatorKey = GlobalKey<NavigatorState>();
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  if (RemotePushNotificationService.isConfigured) {
+    FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+  }
 
   // Load the bundled native sqlite3 library before Drift/NativeDatabase is used.
   await applyWorkaroundToOpenSqlite3OnOldAndroidVersions();
@@ -35,21 +54,29 @@ Future<void> main() async {
     return true;
   };
 
-  const defaultTemplates = [
-    TransferTemplate(
-      id: 'tpl-default',
-      name: 'تحويل افتراضي',
-      pattern: 'تم تحويل {amount} ريال الى {phone} برقم العملية {ref}',
-      isActive: true,
-    ),
-  ];
-
-  final container = await AppContainer.bootstrap(templates: defaultTemplates);
+  final container = await AppContainer.bootstrap(templates: _defaultTemplates);
   final themeRaw = await _loadThemeMode(container);
   _NetAppState.seedPersistedThemeRaw(themeRaw);
   AppScope.register(container);
+  // جلسة حساب الشبكة: تسجيل/دخول + مزامنة حالة الحساب مع لوحة الإدارة.
+  AccountSession.attach(AccountSession(settings: container.settings, sales: container.sales));
   runApp(NetApp(container: container));
+  if (RemotePushNotificationService.isConfigured) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(RemotePushNotificationService.instance.start(onMessage: _handleRemoteMessage));
+    });
+  }
   unawaited(_startBackgroundHandlersSafely(container));
+}
+
+void _handleRemoteMessage(RemoteMessage message) {
+  final route = message.data['route']?.toString();
+  if (route != '/account-notifications') return;
+  final navigator = _appNavigatorKey.currentState;
+  if (navigator == null) return;
+  navigator.push(
+    MaterialPageRoute<void>(builder: (_) => const AccountNotificationsScreen()),
+  );
 }
 
 Future<void> _startBackgroundHandlersSafely(AppContainer container) async {
@@ -78,9 +105,53 @@ class NetApp extends StatefulWidget {
 }
 
 class _NetAppState extends State<NetApp> with WidgetsBindingObserver {
+  /// الحاوية الحالية — تتبدّل عند [_reload] (مثلاً بعد استعادة نسخة احتياطية).
+  late AppContainer _container;
+
+  /// مفتاح «جيل» الشجرة: تغييره يُسقط كل الشاشات والحالات القديمة ويبدأ من البداية.
+  Key _generation = UniqueKey();
+  bool _reloading = false;
+
+  /// يغلق الحاوية الحالية (بما فيها قاعدة البيانات)، يفتح حاوية جديدة من الملف
+  /// الحالي، ثم يعيد بناء التطبيق كله — بديل «أغلق التطبيق وافتحه».
+  Future<void> _reload() async {
+    if (_reloading) return;
+    _reloading = true;
+    try {
+      final old = _container;
+      AppScope.unregister(old);
+      try {
+        await old.dispose();
+      } catch (error, stackTrace) {
+        // قاعدة البيانات أُغلقت أصلاً أثناء الاستعادة — إغلاقها ثانية غير مؤثر.
+        debugPrint('Old container dispose during reload: $error');
+        debugPrintStack(stackTrace: stackTrace);
+      }
+      final next = await AppContainer.bootstrap(templates: _defaultTemplates);
+      NetThemeRawCache.raw = await _loadThemeMode(next);
+      AppScope.register(next);
+      // الحاوية تغيّرت (استعادة نسخة احتياطية) — جلسة الحساب تُعاد بناؤها
+      // على مخزن الإعدادات الجديد مع بقاء بيانات الحساب نفسها.
+      AccountSession.attach(AccountSession(settings: next.settings, sales: next.sales));
+      if (!mounted) {
+        await next.dispose();
+        return;
+      }
+      setState(() {
+        _container = next;
+        _generation = UniqueKey();
+      });
+      unawaited(_startBackgroundHandlersSafely(next));
+    } finally {
+      _reloading = false;
+    }
+  }
+
   @override
   void initState() {
     super.initState();
+    _container = widget.container;
+    AppReloader.register(this, _reload);
     WidgetsBinding.instance.addObserver(this);
     _ticker = NetThemeAutoTicker(_applyAutoTheme);
     _ticker.start();
@@ -96,8 +167,8 @@ class _NetAppState extends State<NetApp> with WidgetsBindingObserver {
     final mode = NetThemeSchedule.parse(NetThemeRawCache.raw);
     if (mode != NetThemeMode.auto) return;
     final resolved = NetThemeSchedule.resolve(mode, now);
-    if (widget.container.themeModeNotifier.value != resolved) {
-      widget.container.themeModeNotifier.value = resolved;
+    if (_container.themeModeNotifier.value != resolved) {
+      _container.themeModeNotifier.value = resolved;
     }
   }
 
@@ -111,8 +182,9 @@ class _NetAppState extends State<NetApp> with WidgetsBindingObserver {
   void dispose() {
     _ticker.stop();
     WidgetsBinding.instance.removeObserver(this);
-    AppScope.unregister(widget.container);
-    widget.container.dispose();
+    AppReloader.unregister(this);
+    AppScope.unregister(_container);
+    _container.dispose();
     super.dispose();
   }
 
@@ -123,19 +195,22 @@ class _NetAppState extends State<NetApp> with WidgetsBindingObserver {
     unawaited(widget.container.handleAppLifecycle(state));
     if (state == AppLifecycleState.resumed) {
       // Phase 5: faster delivery recovery when returning to the app (and after boot open).
-      unawaited(widget.container.runRecoveryPass());
+      unawaited(_container.runRecoveryPass());
       // إشعار المخزون الحي: يزامن مع المخزون الفعلي عند كل عودة للتطبيق حتى لا
       // يبقى تنبيه قديم بعد إعادة التعبئة، ويظهر مباشرة بعد إعادة تشغيل الهاتف.
-      unawaited(widget.container.lowStockAlerts.syncDeviceAlert());
+      unawaited(_container.lowStockAlerts.syncDeviceAlert());
     }
   }
 
   @override
-  Widget build(BuildContext context) => AppScope(
-        container: widget.container,
+  Widget build(BuildContext context) => KeyedSubtree(
+        key: _generation,
+        child: AppScope(
+        container: _container,
         child: ValueListenableBuilder<ThemeMode>(
-          valueListenable: widget.container.themeModeNotifier,
+          valueListenable: _container.themeModeNotifier,
           builder: (context, mode, _) => MaterialApp(
+            navigatorKey: _appNavigatorKey,
             title: AppBrand.name,
             debugShowCheckedModeBanner: false,
             theme: buildKayanLightTheme(),
@@ -161,6 +236,7 @@ class _NetAppState extends State<NetApp> with WidgetsBindingObserver {
             },
             home: const NetSplashScreen(),
           ),
+        ),
         ),
       );
 }

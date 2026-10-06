@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/result.dart';
+import '../../core/contact_admin.dart';
 import '../../domain/entities/card.dart' as domain;
 import '../../domain/entities/customer.dart';
 import '../../domain/entities/license.dart' as domain;
@@ -22,6 +23,7 @@ import '../widgets/dashboard/sales_period_sheet.dart';
 import '../widgets/net/net_alert_banner.dart';
 import '../widgets/net/net_balance_card.dart';
 import '../widgets/net/net_dashboard_header.dart';
+import 'account_notifications_screen.dart';
 import '../widgets/net/net_metric_card.dart';
 import '../widgets/net/net_recent_transaction_card.dart';
 import '../widgets/net/net_service_tile.dart';
@@ -84,11 +86,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
   /// Locally dismissed alert banners (presentation-only state).
   final Set<String> _dismissedAlerts = <String>{};
 
+  // يجب أن تُطابق هذه القائمة تماماً مصدر `PendingMessageReviewService
+  // .listPending()` — هو ما تفتحه أيقونة التنبيهات فعلياً. كانت تشمل
+  // `rejected`/`failed` سابقاً فيظهر عدد في الأيقونة لرسائل لا تعرضها
+  // الشاشة المفتوحة (لهما بطاقة/شاشة مستقلة أصلاً: `rejectedCount` أدناه
+  // و«الرسائل الفاشلة»)، بينما كانت تتجاهل حالة `pending` الصريحة فلا
+  // تُحسب أصلاً. التطابق هنا يضمن أن رقم الأيقونة = ما يظهر فعلاً عند فتحها.
   static const _attentionStatuses = <MessageProcessingStatus>[
-    MessageProcessingStatus.rejected,
     MessageProcessingStatus.received,
     MessageProcessingStatus.parsed,
-    MessageProcessingStatus.failed,
+    MessageProcessingStatus.pending,
   ];
 
   @override
@@ -159,18 +166,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ];
 
       var attentionCount = 0;
-      var rejectedCount = 0;
       var attentionFailed = false;
       for (final status in _attentionStatuses) {
         final r = await c.messages.listByStatus(status);
         if (r is Success<List<IncomingMessage>>) {
           attentionCount += r.value.length;
-          if (status == MessageProcessingStatus.rejected) {
-            rejectedCount = r.value.length;
-          }
         } else {
           attentionFailed = true;
         }
+      }
+
+      // مستقلة عن عدّاد التنبيهات أعلاه: لها بطاقتها الخاصة (`_rejectedCount`
+      // / `onRejectedTap`) ولا تفتحها أيقونة التنبيهات.
+      var rejectedCount = 0;
+      final rejectedResult =
+          await c.messages.listByStatus(MessageProcessingStatus.rejected);
+      if (rejectedResult is Success<List<IncomingMessage>>) {
+        rejectedCount = rejectedResult.value.length;
+      } else {
+        attentionFailed = true;
       }
 
       var accounts = 0;
@@ -301,8 +315,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
     await AppRoutes.openHelp(context);
   }
 
+  void _contactAdmin() => AdminContact.openWhatsApp(context);
+
   Future<void> _openAttentionMessages() async {
     await AppRoutes.openAttentionMessages(context);
+    _notifyMutation();
+  }
+
+  Future<void> _openAdminNotifications() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => const AccountNotificationsScreen()),
+    );
     _notifyMutation();
   }
 
@@ -390,7 +413,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   : _dateLabel,
               onSettings: _openSettings,
               onHelp: _openHelp,
-              onNotifications: _openAttentionMessages,
+              onContactAdmin: _contactAdmin,
+              onNotifications: _openAdminNotifications,
               notificationsCount: _attentionMessagesCount,
               subscriptionLabel: _subscriptionLabel,
               remainingMessages: _remainingMessages,
@@ -468,11 +492,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   onTap: () => widget.onNavigateToTab?.call('offers'),
                 ),
                 NetServiceBigTile(
-                  label: 'توليد كروت',
-                  description: 'إضافة مخزون جديد',
-                  icon: Icons.style_rounded,
+                  label: 'إعدادات التطبيق',
+                  description: 'ضبط الكروت والرسائل والمحافظ',
+                  icon: Icons.settings_suggest_rounded,
                   tint: net.success,
-                  onTap: () => widget.onNavigateToTab?.call('cards'),
+                  onTap: _openSettings,
                 ),
               ],
             ),
@@ -611,7 +635,10 @@ class _MessageStatusCard extends StatelessWidget {
         NetSpacing.xs,
       ),
       padding: EdgeInsets.zero,
-      onTap: onAttentionTap,
+      // كانت هذه البطاقة تفتح دائماً «الرسائل المعلّقة» حتى عندما تعرض عدّاد
+      // المرفوضة، فتظهر شاشة فارغة (رسائل مرفوضة لا تُحسب معلّقة). التبويب
+      // الآن يتبع الشارة المعروضة فعلاً: مرفوضة إن وُجدت، وإلا معلّقة.
+      onTap: rejectedCount > 0 ? onRejectedTap : onAttentionTap,
       child: Padding(
         padding: const EdgeInsets.symmetric(
           horizontal: NetSpacing.md,

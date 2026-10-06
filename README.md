@@ -1,157 +1,180 @@
-# Krotak Pro — كروتك برو
+# كروتك برو — Krotak Pro
+> تطبيق Flutter عربي لإدارة بيع كروت الإنترنت، التحويلات، الرسائل، العملاء، المحافظ، ونقاط البيع مع تخزين محلي أولاً.
 
-تطبيق Android عربي لإدارة بيع كروت الإنترنت والتحويلات عبر SMS، مع إدارة العملاء والمحافظ ونقاط البيع والمخزون والتقارير. التطبيق **محلي أولاً (Offline-first)**؛ تُحفظ البيانات على الجهاز في قاعدة Drift/SQLite، بينما يتكامل مع Android عبر جسر Native لاستقبال وإرسال الرسائل وتشغيل مهام الاسترداد.
+## 📖 نظرة عامة
 
-> **الحالة الحالية:** الإصدار `1.0.13+13`. معظم المسارات البرمجية الأساسية مكتملة ومغطاة بالاختبارات وعمليات CI موثقة. ما يزال التحقق الميداني على جهاز Android حقيقي مطلوبًا قبل اعتبار الإطلاق النهائي مثبتًا بالكامل.
+`Krotak Pro` تطبيق Android مبني بـ Flutter، واسم الحزمة في manifest هو `net_app`، بينما الاسم الظاهر هو `Krotak Pro` (`pubspec.yaml`، `android/app/src/main/AndroidManifest.xml`).
 
-## ما الذي يقدمه التطبيق؟
+يبدأ التطبيق بقاعدة SQLite محلية مبنية على Drift، ويُنشئ ملف قاعدة البيانات باسم `net.sqlite` (`lib/application/app_container_impl.dart`).
 
-### إدارة الكروت والمخزون
+يوجد مسار اختياري للحساب والسحابة عبر عميل Firebase REST للمصادقة وFirestore (`lib/data/cloud/firebase_rest_client.dart`، `lib/core/cloud_config.dart`).
 
-- إنشاء فئات الكروت مع السعر ونسبة العمولة، وتعديلها مع حفظ النسبة وعدم فقدانها.
-- استيراد الكروت من النصوص وCSV/TXT وPDF، مع تحليل مسبق يوضح الصالح والمكرر والأسطر المرفوضة.
-- تخطي الكروت المكررة بدل إيقاف الدفعة كاملة.
-- حالات واضحة للكرت: متاح، محجوز، مباع، أو مستهلك بحسب مسار العملية.
-- حذف كرت واحد أو عدة كروت بعد تأكيد صريح، مع تحذير عند تحديد كروت محجوزة أو مباعة وسجل تدقيق للعملية.
-- تنبيه حي عند انخفاض المخزون، يبقى ظاهرًا حتى إعادة التزويد فوق العتبة.
+واجهة التطبيق عربية وتستخدم اتجاه RTL وثيمات مخصصة ومكوّنات واجهة مشتركة (`lib/main.dart`، `lib/ui/theme/`، `lib/ui/widgets/net/`).
 
-### العملاء والحسابات
+هذا المستند يصف ما يثبته المستودع الحالي فقط؛ لا يُفترض منه وجود خدمة منشورة أو إعداد غير موجود في الملفات.
 
-- إنشاء حسابات العملاء بالاسم ورقم الهاتف والهوية المستخدمة في المطابقة.
-- دفتر حساب محلي للرصيد والحركات والمدفوعات والديون والتسويات.
-- دعم البيع النقدي والآجل والهدايا، مع حفظ أثر تدقيقي لكل عملية.
-- منع حذف العملاء حفاظًا على سلامة السجل المالي والتاريخي.
-- اختيار العملاء من جهات اتصال الجهاز عند توفر الصلاحية.
-- تصدير كشف الحساب كنص أو صورة ومشاركته من داخل التطبيق.
+## 🎯 المشكلة والحل
 
-### المحافظ والتحويلات عبر SMS
+- المشكلة التجارية أو الجمهور المستهدف بالتفصيل: **غير موثّق في المستودع**.
+- الحل المثبت في التنفيذ هو تطبيق محلي لإدارة العملاء، المحافظ، البطاقات، المبيعات، الرسائل الواردة، وقواعد نقاط البيع (`lib/domain/`، `lib/ui/screens/`).
+- يعالج التطبيق الرسائل الواردة ويربطها بمسار التحويل والتسليم، مع حالات انتظار وفشل ورفض وسجل تدقيق (`lib/domain/services/message_parser.dart`، `lib/domain/services/message_delivery_worker.dart`، `lib/ui/screens/pending_messages_screen.dart`).
+- يوفّر تكاملاً Android للرسائل النصية والإشعارات وجهات الاتصال، مع بقاء تفاصيل التشغيل الميداني حسب صلاحيات الجهاز (`android/app/src/main/AndroidManifest.xml`، `lib/platform/`).
 
-- استقبال رسائل المحافظ وتحليلها وفق قوالب قابلة للتخصيص.
-- مطابقة المبلغ والمرسل والمرجع، مع تطبيع الحروف العربية والمسافات حول الفواصل.
-- منع التكرار باستخدام البصمة والمعرّف الخارجي وطبقة idempotency.
-- إرسال تأكيدات SMS للعميل، ورسائل الرفض أو النقص أو نجاح التسليم بحسب القالب.
-- دعم الرسائل المعلّقة عند غموض الفئة؛ يستطيع المشغّل اختيار الفئة ثم إعادة المعالجة بدل الرفض المباشر.
-- سجل تدقيق للعمليات الحساسة ومسارات الاسترداد.
+## ✨ الميزات الرئيسية
 
-### نقاط البيع POS
+- ✅ إدارة العملاء وأرقامهم ودمج سجل حسابين (`lib/ui/screens/customers_screen.dart`، `lib/ui/screens/customer_detail_screen.dart`، `lib/domain/services/account_merge_service.dart`).
+- ✅ إدارة المحافظ ومصادر الدفع وقوالب التحويل (`lib/ui/screens/wallets_screen.dart`، `lib/ui/screens/settings/wallet_notification_settings_screen.dart`، `lib/domain/entities/transfer_template.dart`).
+- ✅ إدارة فئات البطاقات ومخزونها واستيراد البطاقات ومعالجة الحجز والبيع (`lib/ui/screens/inventory_screen.dart`، `lib/ui/widgets/dashboard/card_stock_sheet.dart`، `lib/domain/services/card_import_service.dart`، `lib/domain/services/inventory_and_sale_service.dart`).
+- ✅ تنفيذ البيع المباشر وإيصال العملية واستعادة البطاقة عند مسار الإلغاء (`lib/ui/screens/direct_sale_screen.dart`، `lib/domain/services/manual_sale_service.dart`، `lib/ui/widgets/net/net_transaction_detail_sheet.dart`).
+- ✅ إدارة نقاط البيع، حساباتها، كشف دفترها، وتسعير الجملة (`lib/ui/screens/pos_screen.dart`، `lib/ui/screens/reports/pos_accounts_ledger_screen.dart`، `lib/ui/screens/reports/pos_report_screen.dart`، `lib/domain/services/pos_wholesale_pricing.dart`).
+- ✅ استقبال SMS وتحليل الرسائل وإرسال الرسائل الصادرة عبر جسر Android (`android/app/src/main/kotlin/com/kayan/net_app/SmsReceiver.kt`، `lib/platform/sms_bridge.dart`، `lib/domain/services/message_parser.dart`، `lib/domain/services/outgoing_dispatch_queue.dart`).
+- ✅ التقاط إشعارات تطبيقات دفع مسموحة وإدارتها كمصادر قابلة للتفعيل أو التعطيل (`android/app/src/main/kotlin/com/kayan/net_app/NotificationListener.kt`، `lib/ui/screens/settings/wallet_notification_settings_screen.dart`، `lib/domain/services/notification_parser.dart`).
+- ✅ متابعة الرسائل المعلقة والفاشلة والمرفوضة مع إعادة المعالجة ومسار مراجعة (`lib/ui/screens/pending_messages_screen.dart`، `lib/ui/screens/failed_messages_screen.dart`، `lib/ui/screens/rejected_messages_screen.dart`).
+- ✅ العروض والمكافآت والترويج وقوالب مكافأة العملاء (`lib/ui/screens/offers_screen.dart`، `lib/ui/screens/offers_wizard_sheet.dart`، `lib/domain/services/promotion_fulfillment_service.dart`، `lib/ui/widgets/customer_promotion_progress.dart`).
+- ✅ الإذاعة الجماعية للعملاء مع وظائف ومستلمين وحالات في قاعدة البيانات (`lib/ui/screens/broadcast_screen.dart`، `lib/domain/services/broadcast_service.dart`، `lib/data/database/app_database.dart`).
+- ✅ التقارير الزمنية وتقارير نقاط البيع وسجل العمليات وتصدير تقرير PDF (`lib/ui/screens/reports/sales_period_report_screen.dart`، `lib/ui/screens/transactions_log_screen.dart`، `lib/ui/services/report_pdf_export.dart`).
+- ✅ النسخ الاحتياطي والاستعادة المحلية مع تشفير AES-GCM واشتقاق مفتاح PBKDF2 وفحص بصمة المحتوى (`lib/domain/services/local_backup_service.dart`، `lib/ui/screens/settings/backup_restore_screen.dart`).
+- ✅ فحص النظام وإعدادات البطارية والأذونات والتحقق من الجهاز وأرقام الحظر (`lib/ui/screens/system_check_screen.dart`، `lib/ui/screens/settings/battery_settings_screen.dart`، `lib/ui/widgets/permissions_onboarding.dart`، `lib/ui/screens/settings/device_verification_screen.dart`، `lib/ui/screens/settings/blocked_numbers_screen.dart`).
+- ✅ حساب سحابي وتزامن حالة الحساب وإشعارات Firebase عند تهيئة قيم العميل (`lib/ui/screens/account_auth_screen.dart`، `lib/domain/services/cloud_account_service.dart`، `lib/platform/remote_push_notification_service.dart`).
 
-- شاشة مستقلة لإنشاء وتعديل وتعطيل نقاط البيع مع سقف الدين ونسبة العمولة ورقم الإشعار.
-- ربط نقطة البيع بحساب عميل قائم بعد تأكيد واضح، من دون إنشاء دفتر مالي موازٍ.
-- كتالوج قوالب واردة لنقطة البيع يُزرع تلقائيًا ويُكمل الناقص فقط دون إعادة تفعيل قالب أوقفه المشغّل.
-- تفعيل أو إيقاف قالب منفرد أو مجموعة القوالب مع عدّاد «نشط من الإجمالي».
-- طلب رصيد نقطة البيع، وتسليم كرت لعميل نقطة البيع برسائل مستقلة للعميل ونقطة البيع.
-- الشحن الفوري، طلب عدة كروت، أسعار الجملة، التسوية التلقائية، والملخص اليومي بحسب الإعدادات والقوالب المنفذة في المشروع.
-- إرسال ملخص عمليات اليوم السابق مرة واحدة لكل نقطة بيع مع قفل تكرار وسجل تدقيق.
+## 🛠️ التقنيات
 
-### الرسائل والقوالب
+| المجال | التقنية | دليلها |
+|---|---|---|
+| واجهة التطبيق | Flutter وDart | `pubspec.yaml`، `lib/main.dart` |
+| توطين وواجهة عربية | `flutter_localizations` وRTL | `pubspec.yaml`، `lib/main.dart` |
+| التخزين المحلي | Drift فوق SQLite | `pubspec.yaml`، `lib/data/database/app_database.dart` |
+| تشغيل SQLite | `sqlite3_flutter_libs` | `pubspec.yaml` |
+| ملفات الجهاز | `path` و`path_provider` | `pubspec.yaml`، `lib/application/app_container_impl.dart` |
+| الصلاحيات | `permission_handler` | `pubspec.yaml`، `lib/platform/system_diagnostics_bridge.dart` |
+| التشفير | `cryptography` | `pubspec.yaml`، `lib/domain/services/local_backup_service.dart` |
+| اختيار الملفات | `file_picker` | `pubspec.yaml`، `lib/ui/screens/settings/backup_restore_screen.dart` |
+| PDF والمشاركة | `pdf` و`share_plus` | `pubspec.yaml`، `lib/ui/services/report_pdf_export.dart` |
+| فتح الروابط | `url_launcher` | `pubspec.yaml`، `lib/ui/screens/help_center_screen.dart` |
+| Firebase | `firebase_core` و`firebase_messaging` وREST APIs | `pubspec.yaml`، `lib/data/cloud/`، `lib/platform/remote_push_notification_service.dart` |
+| إشعارات محلية | `flutter_local_notifications` | `pubspec.yaml`، `lib/platform/notification_bridge.dart` |
+| Android | Kotlin وAndroid Gradle Plugin | `android/settings.gradle.kts`، `android/app/build.gradle.kts` |
+| الخطوط | Tajawal | `pubspec.yaml`، `assets/fonts/` |
+| توليد كود Drift | `build_runner` و`drift_dev` | `pubspec.yaml`، `lib/data/database/app_database.g.dart` |
+| الاختبارات | `flutter_test` | `pubspec.yaml`، `test/` |
 
-- قوالب منفصلة للتحويلات والمحافظ ونقاط البيع والرسائل الصادرة.
-- البحث الموحد داخل القوالب، وعدّادات لكل تبويب، وعمليات جماعية للتفعيل والإيقاف.
-- تحذير من المتغيرات غير المعروفة قبل إرسالها حرفيًا للعميل.
-- قوالب للنجاح والرفض ونقص المخزون والتسوية وطلبات الرصيد والتسليم الفوري والملخص اليومي.
-
-### التقارير والرقابة
-
-- تقارير المبيعات والتحويلات والأرصدة والعمولات والتسويات.
-- تقارير منفصلة لنقاط البيع مبنية على الحساب المالي المشترك كمصدر حقيقة واحد.
-- شاشة رسائل معلّقة لمعالجة الحالات التي تحتاج قرارًا يدويًا.
-- سجل تدقيق للأحداث المالية، وحذف الكروت، وإرسال الرسائل، والاسترداد.
-
-### النسخ الاحتياطي والاسترداد
-
-- إنشاء نسخة احتياطية محلية مشفرة بكلمة مرور تشمل قاعدة البيانات والإعدادات.
-- استعراض النسخ الموجودة واستعادة نسخة محددة من داخل الإعدادات.
-- تنسيق النسخ الحالي `Krotak-backup-<timestamp>.krt` مع قراءة صيغ النسخ القديمة للتوافق.
-- تنظيف عميق للملفات المؤقتة والنسخ القديمة وفق مسار الصيانة.
-
-### Android والتشغيل الخلفي
-
-- استقبال SMS عبر `SmsReceiver` وإرسال الرسائل عبر الجسر الأصلي.
-- الاسترداد عند العودة للتطبيق وبعد انقطاع العملية، مع حماية من التكرار المالي.
-- الاستمرار بعد إعادة تشغيل الهاتف عبر `BootReceiver` عندما يسمح النظام بذلك.
-- إشعار Android مستمر لتنبيه انخفاض المخزون مع تحديث تلقائي عند تغير المخزون.
-- طلب صلاحيات SMS وجهات الاتصال والإشعارات وتحسين البطارية من مسارات واضحة داخل التطبيق.
-- شاشة افتتاحية Splash جديدة بتدرج كيان الأخضر–الأزرق البنفسجي وشعار Krotak المطابق للأيقونة.
-
-## المعمارية
+## 🏗️ هيكل المشروع
 
 ```text
-Flutter UI / RTL Arabic
-        ↓
-AppContainer — composition root
-        ↓
-Domain entities + services + use cases
-        ↓
-Repositories
-        ↓
-Drift SQLite — local source of truth
-        ↓
-Android Native bridge
-SmsReceiver / BootReceiver / NotificationListener
-MethodChannel + EventChannel
+.
+├── pubspec.yaml                         # الاعتماديات والإصدار والأصول
+├── pubspec.lock                         # غير موجود في المستودع
+├── lib/
+│   ├── main.dart                         # نقطة دخول Flutter
+│   ├── application/                      # تركيب الخدمات والمستودعات
+│   ├── core/                             # النتائج والهوية وإعداد السحابة
+│   ├── domain/                           # الكيانات وقواعد العمل والخدمات
+│   ├── data/
+│   │   ├── database/                     # Drift/SQLite والمخطط المولّد
+│   │   ├── repositories/                  # مستودعات التخزين المحلي
+│   │   └── cloud/                         # Firebase REST
+│   ├── platform/                         # MethodChannel وEventChannel وجسور Android
+│   └── ui/                               # الشاشات والثيم والمكونات
+├── android/
+│   ├── app/src/main/AndroidManifest.xml  # الصلاحيات والمستقبلات والخدمة
+│   └── app/src/main/kotlin/              # SMS وBoot والإشعارات وMainActivity
+├── assets/                               # الأيقونات والخطوط
+├── docs/                                 # قرارات المنتج وسجل التقدم والتوقيع
+├── test/                                 # اختبارات وحدة وتكامل وWidget وSmoke
+├── tools/                                # توليد الأيقونات وتجهيز توقيع Android
+└── .github/workflows/                    # CI والتحليل التشخيصي
 ```
 
-المشروع مقسّم إلى طبقات المجال والتطبيق والبنية التحتية وواجهة المستخدم. الخدمات المحلية مثل `LocalTransferProcessor` و`LocalPosProfileService` و`LocalBackupService` تنفذ حالات الاستخدام، بينما تتولى المستودعات القراءة والكتابة إلى Drift. التطبيق يفرض RTL وواجهة عربية، ويدعم الوضعين الفاتح والداكن.
+ملفات بنية البيانات الأساسية هي `customers` و`customer_identifiers` و`wallets` و`point_of_sales` و`card_categories` و`cards` و`transactions` و`sales` و`transfer_templates` و`incoming_messages` و`licenses` و`app_settings` و`audit_logs` (`lib/data/database/app_database.dart`).
 
-## التشغيل محليًا
+ويضيف المصدر جدولَي `broadcast_jobs` و`broadcast_recipients` عبر تهيئة SQLite (`lib/data/database/app_database.dart`).
 
-يتطلب المشروع Flutter SDK وAndroid SDK مناسبين لنسخة Flutter المستخدمة في بيئة التطوير.
+## 🚀 التشغيل المحلي
+
+### المتطلبات المثبتة في المستودع
+
+- Flutter SDK بقناة stable؛ يثبت CI الإصدار `3.35.5` (`.github/workflows/ci.yml`، `.github/workflows/diagnose-analyze.yml`).
+- Dart SDK بإصدار يطابق القيد `^3.6.0` (`pubspec.yaml`).
+- Android SDK وJDK 17 مطلوبان بحسب إعداد Gradle وKotlin (`android/app/build.gradle.kts`).
+- ملف `local.properties` مع `flutter.sdk` مطلوب لتهيئة Gradle (`android/settings.gradle.kts`).
+
+### الأوامر المثبتة
 
 ```bash
 flutter pub get
-dart run build_runner build --delete-conflicting-outputs
+```
+
+لا يعرّف المستودع أمراً نصياً لـ `build_runner` في CI أو scripts؛ توجد الاعتمادية وملف Drift المولّد (`pubspec.yaml`، `lib/data/database/app_database.g.dart`).
+
+```bash
 flutter run
 ```
 
-لإنشاء APK إصدار:
+يبني الأمر التالي APK إصداراً، لكن إعداد التوقيع المحلي يرفض البناء إذا غاب `android/key.properties`، إلا مع خيار الاختبار الصريح الموجود في Gradle (`android/app/build.gradle.kts`):
 
 ```bash
 flutter build apk --release
+flutter build apk --release -PallowDebugRelease=true
 ```
 
-تُطلب صلاحيات SMS من داخل لوحة التحكم، وقد يطلب Android أيضًا صلاحية جهات الاتصال والإشعارات وتعطيل تحسين البطارية حتى تعمل المعالجة الخلفية بالشكل المقصود.
-
-## الاختبارات والتحقق
+للتحقق المحلي كما تستخدمه CI:
 
 ```bash
-flutter analyze --no-fatal-infos
+flutter analyze --no-fatal-infos --no-fatal-warnings
 flutter test
 ```
 
-تشمل الاختبارات خدمات الاستيراد، المطابقة، منع التكرار، الرصيد، الرسائل، نقاط البيع، العمولات، الحذف، النسخ الاحتياطي، الإشعارات، والتسليم. نجحت عمليات CI الموثقة في تحليل المشروع ومجموعة الاختبارات وبناء APK إصدارًا في المراحل الأخيرة.
+لا يوجد في المستودع أمر مستقل لتشغيل Backend أو خادم ويب؛ التطبيق Android/Flutter (`pubspec.yaml`، `android/`).
 
-يبقى التحقق التالي ميدانيًا: استقبال وإرسال SMS على جهاز حقيقي، التشغيل بعد إعادة تشغيل الهاتف، صلاحيات الإشعارات وتحسين البطارية، وصحة القص البصري للأيقونة وSplash عبر كثافات Android المختلفة. كما أن الملخص اليومي لنقاط البيع يعتمد حاليًا على دورة الخلفية الموجودة أثناء تشغيل التطبيق؛ لا يوجد ادعاء بضمان إيقاظ OS-level في وقت محدد بعد قتل التطبيق بالكامل.
+## 🔐 متغيرات البيئة
 
-## الهوية والملفات المهمة
+لا يوجد ملف `.env.example` أو `.env.*.example` في المستودع، ولذلك لا يمكن توثيق جدول متغيرات بيئة تطبيقية مطابق لذلك المثال.
 
-| العنصر | القيمة أو المسار |
+| الاسم | الغرض المثبت | مطلوب/اختياري |
+|---|---|---|
+| `.env.example` | غير موجود في المستودع | غير منطبق |
+| متغيرات `--dart-define` | مفاتيح إعداد عميل Firebase في وقت البناء؛ يثبتها `lib/core/cloud_config.dart` فقط | اختيارية للتكوين السحابي؛ لا يعمل تسجيل الحساب دون قيم التكوين |
+| متغيرات توقيع `tools/setup_upload_keystore.sh` | تجهيز ملف توقيع Android من Base64 وكلمات مرور ومُعرّف المفتاح | مطلوبة لذلك السكربت فقط؛ القيم السرية غير موثقة هنا |
+
+أسماء مفاتيح Firebase المعرفة في الكود هي `KROTAK_FIREBASE_API_KEY` و`KROTAK_FIREBASE_PROJECT_ID` و`KROTAK_FIREBASE_AUTH_DOMAIN` (`lib/core/cloud_config.dart`).
+
+وأسماء متغيرات سكربت التوقيع هي `APK_KEYSTORE_B64` و`APK_KEYSTORE_PASSWORD` و`APK_KEY_PASSWORD` و`APK_KEY_ALIAS` (`tools/setup_upload_keystore.sh`). لا تُضع قيم هذه المتغيرات في README أو المستودع.
+
+## 📜 الأوامر المتاحة
+
+| الأمر | ما يفعله وفق التعريف/الملفات |
 |---|---|
-| اسم التطبيق | Krotak Pro — كروتك برو |
-| المطوّر | جارالله الكبودي |
-| الشركة | شركة كيان سوفت |
-| الموقع | [www.ye.kayan-soft.online](https://www.ye.kayan-soft.online) |
-| الإصدار | `1.0.13+13` |
-| الأيقونة | `assets/icon/krotak_icon.png` و`assets/icon/app_icon.png` |
-| شاشة الإقلاع | `android/app/src/main/res/drawable/launch_background.xml` |
-| هوية التطبيق | `lib/core/app_brand.dart` |
-| سجل التقدم | [`docs/progress.md`](docs/progress.md) |
-| قرارات المنتج | [`docs/product-decisions.md`](docs/product-decisions.md) |
+| `flutter pub get` | تثبيت اعتماديات Dart/Flutter؛ مستخدم في CI (`.github/workflows/ci.yml`) |
+| `flutter run` | تشغيل تطبيق Flutter؛ يرد في توثيق التوقيع (`docs/signing-and-updates-ar.md`) |
+| `flutter analyze --no-fatal-infos --no-fatal-warnings` | تحليل Dart مع عدم جعل المعلومات والتحذيرات قاتلة في CI (`.github/workflows/ci.yml`) |
+| `flutter test` | تشغيل اختبارات Flutter (`.github/workflows/ci.yml`) |
+| `flutter build apk --release` | بناء APK إصدار (`.github/workflows/ci.yml`، `android/app/build.gradle.kts`) |
+| `flutter build apk --release -PallowDebugRelease=true` | بناء إصدار محلي موقّع debug وفق الفرع الصريح في Gradle (`android/app/build.gradle.kts`) |
+| `sh ./tools/setup_upload_keystore.sh` | إنشاء `android/key.properties` مؤقتاً وتشغيل بناء APK من متغيرات التوقيع (`tools/setup_upload_keystore.sh`) |
+| `python3 tools/apply_krotak_icon.py` | إعادة توليد موارد الأيقونة؛ يوضح `tools/README.md` أن الناتج مرفوع مسبقاً ولا تشغله CI |
 
-## بنية المستودع
+## 🌐 النشر
 
-```text
-lib/core/                 الهوية والإعدادات المشتركة
-lib/domain/               الكيانات والخدمات وقواعد العمل
-lib/data/                 Drift والمستودعات المحلية
-lib/platform/             جسور Android والقنوات الأصلية
-lib/ui/                   الشاشات والمكونات والثيم
-android/                  Manifest وNative receivers وموارد launcher/Splash
-assets/icon/              الأيقونة النهائية وأصل شاشة «عن التطبيق»
-docs/                     تقارير المراحل وقرارات المنتج والتدقيق
-test/                     اختبارات الوحدات والتكامل وواجهات smoke
-tools/                    أدوات توليد موارد Android
-```
+- يعرّف CI وظيفة بناء APK ورفع artifact باسم يعتمد على وضع التوقيع (`.github/workflows/ci.yml`).
+- يمكن لـ CI توزيع APK إلى Firebase App Distribution عند توفر إعدادات وأسرار GitHub المطلوبة (`.github/workflows/ci.yml`).
+- يمكن لـ CI نشر GitHub Release على فرع `main` عند نجاح التوقيع المستقر (`.github/workflows/ci.yml`).
+- يعرّف CI اختبار Firebase Test Lab من نوع Robo عند توفر إعداداته (`.github/workflows/ci.yml`).
+- إعدادات Vercel وNetlify وDocker وFirebase Hosting غير موجودة في الملفات المفحوصة.
+- رابط Demo أو رابط تطبيق حي منشور: **غير موثّق في المستودع**.
 
-## سجل العمل
+## 🔒 الأمان
 
-التغييرات التفصيلية لكل مرحلة موجودة في [`docs/progress.md`](docs/progress.md)، بما في ذلك Phase 41 الخاصة بقوالب نقاط البيع والرسائل، وPhase 40 الخاصة بالأيقونة واستيراد الملفات وحذف الكروت، وPhase 39 الخاصة بالملخص اليومي لنقاط البيع.
+- صلاحيات Android المعلنة تشمل SMS وجهات الاتصال والإشعارات والبدء بعد الإقلاع وخدمة foreground وقفل الاستيقاظ وتجاهل تحسين البطارية (`android/app/src/main/AndroidManifest.xml`).
+- يستقبل `SmsReceiver` رسائل SMS، ويستعيد مسار العمل بعد الإقلاع عبر `BootReceiver`، ويستقبل إشعارات الحزم المسموحة عبر `NotificationListener` (`android/app/src/main/kotlin/com/kayan/net_app/`).
+- يحتفظ التطبيق بسجل تدقيق للكيانات والرسائل وعمليات البيع (`lib/domain/entities/audit.dart`، `lib/data/database/app_database.dart`، `lib/domain/services/message_delivery_worker.dart`).
+- يطبق التخزين المحلي فهارس فريدة لمنع التكرار للمعرّفات والبطاقات والحجوزات والرسائل والمعاملات والمبيعات (`lib/data/database/app_database.dart`).
+- يحمي ملف النسخ الاحتياطي بكلمة مرور عبر AES-GCM وPBKDF2 وSHA-256 للتحقق من السلامة (`lib/domain/services/local_backup_service.dart`).
+- يتضمن التطبيق حظر أرقام وفحص جهاز وتحكم مصادر إشعارات الدفع (`lib/domain/services/blocked_number_service.dart`، `lib/domain/services/device_verification_service.dart`، `lib/domain/services/payment_source_registry.dart`).
+- توجد مصادقة سحابية عبر Firebase REST وجلسة محلية تتضمن المعرّف ورمز التجديد في الكود (`lib/data/cloud/firebase_rest_client.dart`).
+- لا توجد ملفات `firestore.rules` أو ملفات RLS في المستودع؛ قواعد الخادم التفصيلية: **غير موثّق في المستودع**.
+- لا يحتوي المستودع على ملف ترخيص أو سياسة خصوصية منشورة بحسب الفحص؛ لا يُستنتج مستوى أمان تشغيلي يتجاوز ما يطبقه الكود.
+
+## 📄 الترخيص
+
+- ملف `LICENSE` أو `COPYING` غير موجود في المستودع.
+- نوع الترخيص وحقوق النشر: **غير موثّق في المستودع**.
