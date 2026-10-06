@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:net_flutter/domain/services/promotion_reward_template.dart';
-import 'package:net_flutter/domain/services/reward_probe_place.dart';
+import 'package:net_app/domain/services/promotion_reward_template.dart';
+import 'package:net_app/domain/services/reward_probe_place.dart';
 
 void main() {
   test('placing a queued card moves only that card and keeps reservations', () {
