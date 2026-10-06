@@ -10,6 +10,7 @@ import '../../domain/services/local_promotion_fulfillment_service.dart';
 import '../../domain/services/promotion_reward_template.dart';
 import '../../domain/services/reward_probe_place.dart';
 import '../../domain/services/reward_probe_swap.dart';
+import '../../domain/services/reward_probe_rotate.dart';
 import '../../platform/sms_bridge.dart';
 import '../app_scope.dart';
 import '../theme/net_tokens.dart';
@@ -797,6 +798,76 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
     });
   }
 
+
+  /// يدوّر الطابور الذي يحمل الكرت الظاهر بعدد خطوات يدخله المشغّل.
+  Future<void> _rotateSelectedHold() async {
+    final card = _liveCard;
+    final steps = int.tryParse(_placePosition.text.trim());
+    if (card == null || _queuedCardIds.length < 2 || steps == null || steps < 1) {
+      return;
+    }
+    final shift = steps % _queuedCardIds.length;
+    if (shift == 0) {
+      setState(() {
+        _status = 'التدوير بعدد يساوي طول الطابور لا يغيّر الترتيب';
+        _statusIsError = false;
+      });
+      return;
+    }
+    final c = AppScope.of(context);
+    setState(() => _busy = true);
+    final current = await c.settings.find(SettingKeys.promotionRewardProbeHolds);
+    final raw = current is Success<AppSetting?> ? current.value?.value : null;
+    final now = c.clock.now();
+    final encoded = RewardProbeRotate.rotateQueuedCard(
+      raw,
+      cardId: card.cardId,
+      steps: steps,
+      customerId: _holdCustomerId,
+    );
+    await c.settings.save(
+      AppSetting(
+        key: SettingKeys.promotionRewardProbeHolds,
+        value: encoded,
+        updatedAt: now,
+      ),
+    );
+    var stored = PromotionRewardTemplate.lookupCrossCategoryHold(
+      encoded,
+      customerId: _holdCustomerId,
+    );
+    if (stored == null || !stored.holdsCard(card.cardId)) {
+      stored = PromotionRewardTemplate.lookupHold(
+        encoded,
+        card.categoryId,
+        customerId: _holdCustomerId,
+      );
+    }
+    await c.auditLogs.append(
+      AuditLog(
+        id: c.ids.next('reward-probe-hold'),
+        entityType: 'promotion_reward_template',
+        entityId: card.cardId,
+        action: 'reward_probe_card_rotated',
+        occurredAt: now,
+        payloadJson: '{"customerId":"${_holdCustomerId ?? ''}","steps":$steps,"queue":${stored?.cards.length ?? 0}}',
+      ),
+    );
+    if (!mounted) return;
+    final ids = [for (final item in stored?.cards ?? const <RewardProbeHeldCard>[]) item.cardId];
+    final expected = [..._queuedCardIds.sublist(shift), ..._queuedCardIds.sublist(0, shift)];
+    setState(() {
+      _busy = false;
+      _holdReservationId = stored?.cardFor(card.cardId)?.reservationId ?? _holdReservationId;
+      _holdQueueCount = stored?.cards.length ?? _holdQueueCount;
+      _queuedCardIds = ids;
+      _status = _sameOrder(ids, expected)
+          ? 'دُوّر الطابور $shift خطوات، وبقي ${_holdQueueCount} في الطابور'
+          : 'تعذر تدوير الطابور';
+      _statusIsError = !_sameOrder(ids, expected);
+    });
+  }
+
   /// يعكس ترتيب الطابور الذي يحمل الكرت الظاهر دون تحرير حجزه.
   Future<void> _reverseSelectedHold() async {
     final card = _liveCard;
@@ -1444,6 +1515,18 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
                           icon: const Icon(Icons.swap_horiz),
                           label: Text(
                             'تبديل الكرت الظاهر مع الموضع',
+                            style: const TextStyle(fontFamily: NetTypography.family),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Align(
+                        alignment: AlignmentDirectional.centerStart,
+                        child: TextButton.icon(
+                          onPressed: _busy || _probing ? null : _rotateSelectedHold,
+                          icon: const Icon(Icons.rotate_left),
+                          label: Text(
+                            'تدوير الطابور بعدد الخطوات',
                             style: const TextStyle(fontFamily: NetTypography.family),
                           ),
                         ),
