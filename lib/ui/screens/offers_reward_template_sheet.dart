@@ -9,6 +9,7 @@ import '../../domain/entities/setting.dart';
 import '../../domain/services/local_promotion_fulfillment_service.dart';
 import '../../domain/services/promotion_reward_template.dart';
 import '../../domain/services/reward_probe_place.dart';
+import '../../domain/services/reward_probe_swap.dart';
 import '../../platform/sms_bridge.dart';
 import '../app_scope.dart';
 import '../theme/net_tokens.dart';
@@ -726,6 +727,76 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
     });
   }
 
+  /// يبادل الكرت الظاهر مع كرت الموضع المدخل دون إزاحة بقية الطابور.
+  Future<void> _swapSelectedHold() async {
+    final card = _liveCard;
+    final position = int.tryParse(_placePosition.text.trim());
+    if (card == null || _queuedCardIds.length < 2 || position == null || position < 1) {
+      return;
+    }
+    final currentIndex = _queuedCardIds.indexOf(card.cardId);
+    if (currentIndex == (position - 1).clamp(0, _queuedCardIds.length - 1)) {
+      setState(() {
+        _status = 'الكرت الظاهر في الموضع $position أصلاً';
+        _statusIsError = false;
+      });
+      return;
+    }
+    final c = AppScope.of(context);
+    setState(() => _busy = true);
+    final current = await c.settings.find(SettingKeys.promotionRewardProbeHolds);
+    final raw = current is Success<AppSetting?> ? current.value?.value : null;
+    final now = c.clock.now();
+    final encoded = RewardProbeSwap.swapQueuedCard(
+      raw,
+      cardId: card.cardId,
+      position: position,
+      customerId: _holdCustomerId,
+    );
+    await c.settings.save(
+      AppSetting(
+        key: SettingKeys.promotionRewardProbeHolds,
+        value: encoded,
+        updatedAt: now,
+      ),
+    );
+    var stored = PromotionRewardTemplate.lookupCrossCategoryHold(
+      encoded,
+      customerId: _holdCustomerId,
+    );
+    if (stored == null || !stored.holdsCard(card.cardId)) {
+      stored = PromotionRewardTemplate.lookupHold(
+        encoded,
+        card.categoryId,
+        customerId: _holdCustomerId,
+      );
+    }
+    await c.auditLogs.append(
+      AuditLog(
+        id: c.ids.next('reward-probe-hold'),
+        entityType: 'promotion_reward_template',
+        entityId: card.cardId,
+        action: 'reward_probe_card_swapped',
+        occurredAt: now,
+        payloadJson: '{"customerId":"${_holdCustomerId ?? ''}","position":$position,"queue":${stored?.cards.length ?? 0}}',
+      ),
+    );
+    if (!mounted) return;
+    final ids = [for (final item in stored?.cards ?? const <RewardProbeHeldCard>[]) item.cardId];
+    final nextIndex = ids.indexOf(card.cardId);
+    final target = (position - 1).clamp(0, ids.isEmpty ? 0 : ids.length - 1);
+    setState(() {
+      _busy = false;
+      _holdReservationId = stored?.cardFor(card.cardId)?.reservationId ?? _holdReservationId;
+      _holdQueueCount = stored?.cards.length ?? _holdQueueCount;
+      _queuedCardIds = ids;
+      _status = nextIndex == target
+          ? 'بُودل الكرت الظاهر مع الموضع ${nextIndex + 1}، وبقي ${_holdQueueCount} في الطابور'
+          : 'تعذر تبديل الكرت الظاهر مع الموضع المطلوب';
+      _statusIsError = nextIndex != target;
+    });
+  }
+
   /// يعكس ترتيب الطابور الذي يحمل الكرت الظاهر دون تحرير حجزه.
   Future<void> _reverseSelectedHold() async {
     final card = _liveCard;
@@ -1364,6 +1435,18 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
                             ),
                           ),
                         ],
+                      ),
+                      const SizedBox(height: 4),
+                      Align(
+                        alignment: AlignmentDirectional.centerStart,
+                        child: TextButton.icon(
+                          onPressed: _busy || _probing ? null : _swapSelectedHold,
+                          icon: const Icon(Icons.swap_horiz),
+                          label: Text(
+                            'تبديل الكرت الظاهر مع الموضع',
+                            style: const TextStyle(fontFamily: NetTypography.family),
+                          ),
+                        ),
                       ),
                     ],
                     if (_holdNextPayout && _holdQueueCount > 0) ...[
