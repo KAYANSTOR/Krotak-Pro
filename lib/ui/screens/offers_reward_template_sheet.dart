@@ -28,6 +28,7 @@ import '../../domain/services/reward_probe_swap_open_span_interior_steps_back.da
 import '../../domain/services/reward_probe_swap_open_span_interior_neighbor_steps_back.dart';
 import '../../domain/services/reward_probe_swap_open_span_interior_neighbor_steps.dart';
 import '../../domain/services/reward_probe_swap_open_span_interior_mirror_steps.dart';
+import '../../domain/services/reward_probe_rotate_open_span_interior_mirror_steps.dart';
 import '../../platform/sms_bridge.dart';
 import '../app_scope.dart';
 import '../theme/net_tokens.dart';
@@ -2321,6 +2322,119 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
     });
   }
 
+
+  /// يدوّر الكرت الظاهر مع الكرتين المقابلتين خطوة نحو الأعلى. الطرفان لا يتحركان.
+  Future<void> _rotateOpenSpanInteriorMirrorStepsSelectedHold() async {
+    final card = _liveCard;
+    final startPosition = int.tryParse(_spanFrom.text.trim());
+    final endPosition = int.tryParse(_placePosition.text.trim());
+    final steps = int.tryParse(_spanSteps.text.trim());
+    if (card == null ||
+        _queuedCardIds.length < 5 ||
+        startPosition == null ||
+        endPosition == null ||
+        steps == null ||
+        startPosition < 1 ||
+        endPosition < 1 ||
+        steps < 1) {
+      return;
+    }
+    final visibleIndex = _queuedCardIds.indexOf(card.cardId);
+    final start = startPosition < endPosition ? startPosition : endPosition;
+    final end = startPosition < endPosition ? endPosition : startPosition;
+    if (visibleIndex < 0 || end > _queuedCardIds.length) {
+      setState(() {
+        _status = 'الموضع خارج طول الطابور';
+        _statusIsError = true;
+      });
+      return;
+    }
+    if (end - start < 4) {
+      setState(() {
+        _status = 'لا يكفي كروت داخل المقطع لتدوير الكرت الظاهر مع مقابليه';
+        _statusIsError = false;
+      });
+      return;
+    }
+    if (visibleIndex <= start - 1 || visibleIndex >= end - 1) {
+      setState(() {
+        _status = 'الكرت الظاهر يجب أن يقع بين طرفي المقطع';
+        _statusIsError = true;
+      });
+      return;
+    }
+    if (visibleIndex - steps <= start - 1 || visibleIndex + steps >= end - 1) {
+      setState(() {
+        _status = 'عدد الخطوات يخرج التدوير من داخل المقطع';
+        _statusIsError = false;
+      });
+      return;
+    }
+    final c = AppScope.of(context);
+    setState(() => _busy = true);
+    final current = await c.settings.find(SettingKeys.promotionRewardProbeHolds);
+    final raw = current is Success<AppSetting?> ? current.value?.value : null;
+    final now = c.clock.now();
+    final encoded = RewardProbeRotateOpenSpanInteriorMirrorSteps
+        .rotateOpenSpanInteriorMirrorSteps(
+      raw,
+      cardId: card.cardId,
+      startPosition: start,
+      endPosition: end,
+      steps: steps,
+      customerId: _holdCustomerId,
+    );
+    await c.settings.save(
+      AppSetting(
+        key: SettingKeys.promotionRewardProbeHolds,
+        value: encoded,
+        updatedAt: now,
+      ),
+    );
+    var stored = PromotionRewardTemplate.lookupCrossCategoryHold(
+      encoded,
+      customerId: _holdCustomerId,
+    );
+    if (stored == null || !stored.holdsCard(card.cardId)) {
+      stored = PromotionRewardTemplate.lookupHold(
+        encoded,
+        card.categoryId,
+        customerId: _holdCustomerId,
+      );
+    }
+    await c.auditLogs.append(
+      AuditLog(
+        id: c.ids.next('reward-probe-hold'),
+        entityType: 'promotion_reward_template',
+        entityId: card.cardId,
+        action: 'reward_probe_card_open_span_interior_mirror_rotated_steps',
+        occurredAt: now,
+        payloadJson: '{"customerId":"${_holdCustomerId ?? ''}","start":$start,"end":$end,"steps":$steps,"queue":${stored?.cards.length ?? 0}}',
+      ),
+    );
+    if (!mounted) return;
+    final ids = [for (final item in stored?.cards ?? const <RewardProbeHeldCard>[]) item.cardId];
+    final expected = List<String>.of(_queuedCardIds);
+    final lower = visibleIndex - steps;
+    final higher = visibleIndex + steps;
+    final lowerCard = expected[lower];
+    final visibleCard = expected[visibleIndex];
+    final higherCard = expected[higher];
+    expected[lower] = higherCard;
+    expected[visibleIndex] = lowerCard;
+    expected[higher] = visibleCard;
+    setState(() {
+      _busy = false;
+      _holdReservationId = stored?.cardFor(card.cardId)?.reservationId ?? _holdReservationId;
+      _holdQueueCount = stored?.cards.length ?? _holdQueueCount;
+      _queuedCardIds = ids;
+      _status = _sameOrder(ids, expected)
+          ? 'دُوّر الكرت الظاهر مع الكرتين المقابلتين خطوة نحو الأعلى على مسافة $steps داخل المقطع من $start إلى $end، وبقي ${_holdQueueCount} في الطابور'
+          : 'تعذر تدوير الكرت الظاهر مع الكرتين المقابلتين داخل المقطع';
+      _statusIsError = !_sameOrder(ids, expected);
+    });
+  }
+
   /// يبدّل طرفي مقطع بين موضعين مدخلين. الكرت الظاهر يحدد الطابور ويقع داخل المقطع.
   Future<void> _swapOpenSpanSelectedHold() async {
     final card = _liveCard;
@@ -3513,6 +3627,17 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
                           icon: const Icon(Icons.swap_horiz),
                           label: const Text(
                             'تبديل الكرتين المقابلتين بعدد خطوات حول الكرت الظاهر داخل المقطع',
+                            style: TextStyle(fontFamily: NetTypography.family),
+                          ),
+                        ),
+                      ),
+                      Align(
+                        alignment: AlignmentDirectional.centerStart,
+                        child: TextButton.icon(
+                          onPressed: _busy || _probing ? null : _rotateOpenSpanInteriorMirrorStepsSelectedHold,
+                          icon: const Icon(Icons.rotate_right),
+                          label: const Text(
+                            'تدوير الكرت الظاهر مع الكرتين المقابلتين خطوة نحو الأعلى داخل المقطع',
                             style: TextStyle(fontFamily: NetTypography.family),
                           ),
                         ),
