@@ -23,6 +23,8 @@ import '../../domain/services/reward_probe_delay_open_span_interior.dart';
 import '../../domain/services/reward_probe_delay_open_span_interior_steps.dart';
 import '../../domain/services/reward_probe_advance_open_span_interior_steps.dart';
 import '../../domain/services/reward_probe_swap_open_span.dart';
+import '../../domain/services/reward_probe_swap_open_span_interior_steps.dart';
+import '../../domain/services/reward_probe_swap_open_span_interior_steps_back.dart';
 import '../../platform/sms_bridge.dart';
 import '../app_scope.dart';
 import '../theme/net_tokens.dart';
@@ -1773,6 +1775,219 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
     });
   }
 
+
+  /// يبدّل الكرت الظاهر مع كرت بعدد خطوات نحو الطرف الأعلى داخل مقطع مدخل دون تحريك الطرفين.
+  Future<void> _swapOpenSpanInteriorStepsSelectedHold() async {
+    final card = _liveCard;
+    final startPosition = int.tryParse(_spanFrom.text.trim());
+    final endPosition = int.tryParse(_placePosition.text.trim());
+    final steps = int.tryParse(_spanSteps.text.trim());
+    if (card == null ||
+        _queuedCardIds.length < 4 ||
+        startPosition == null ||
+        endPosition == null ||
+        steps == null ||
+        startPosition < 1 ||
+        endPosition < 1 ||
+        steps < 1) {
+      return;
+    }
+    final visibleIndex = _queuedCardIds.indexOf(card.cardId);
+    final start = startPosition < endPosition ? startPosition : endPosition;
+    final end = startPosition < endPosition ? endPosition : startPosition;
+    if (visibleIndex < 0 || end > _queuedCardIds.length) {
+      setState(() {
+        _status = 'الموضع خارج طول الطابور';
+        _statusIsError = true;
+      });
+      return;
+    }
+    if (end - start < 3) {
+      setState(() {
+        _status = 'لا يكفي كروت داخل المقطع للتبديل';
+        _statusIsError = false;
+      });
+      return;
+    }
+    if (visibleIndex <= start - 1 || visibleIndex >= end - 1) {
+      setState(() {
+        _status = 'الكرت الظاهر يجب أن يقع بين طرفي المقطع';
+        _statusIsError = true;
+      });
+      return;
+    }
+    if (visibleIndex + steps >= end - 1) {
+      setState(() {
+        _status = 'عدد الخطوات يخرج التبديل من داخل المقطع';
+        _statusIsError = false;
+      });
+      return;
+    }
+    final c = AppScope.of(context);
+    setState(() => _busy = true);
+    final current = await c.settings.find(SettingKeys.promotionRewardProbeHolds);
+    final raw = current is Success<AppSetting?> ? current.value?.value : null;
+    final now = c.clock.now();
+    final encoded = RewardProbeSwapOpenSpanInteriorSteps.swapOpenSpanInteriorSteps(
+      raw,
+      cardId: card.cardId,
+      startPosition: start,
+      endPosition: end,
+      steps: steps,
+      customerId: _holdCustomerId,
+    );
+    await c.settings.save(
+      AppSetting(
+        key: SettingKeys.promotionRewardProbeHolds,
+        value: encoded,
+        updatedAt: now,
+      ),
+    );
+    var stored = PromotionRewardTemplate.lookupCrossCategoryHold(
+      encoded,
+      customerId: _holdCustomerId,
+    );
+    if (stored == null || !stored.holdsCard(card.cardId)) {
+      stored = PromotionRewardTemplate.lookupHold(
+        encoded,
+        card.categoryId,
+        customerId: _holdCustomerId,
+      );
+    }
+    await c.auditLogs.append(
+      AuditLog(
+        id: c.ids.next('reward-probe-hold'),
+        entityType: 'promotion_reward_template',
+        entityId: card.cardId,
+        action: 'reward_probe_card_open_span_interior_swapped_steps',
+        occurredAt: now,
+        payloadJson: '{"customerId":"${_holdCustomerId ?? ''}","start":$start,"end":$end,"steps":$steps,"queue":${stored?.cards.length ?? 0}}',
+      ),
+    );
+    if (!mounted) return;
+    final ids = [for (final item in stored?.cards ?? const <RewardProbeHeldCard>[]) item.cardId];
+    final expected = List<String>.of(_queuedCardIds);
+    final partner = expected[visibleIndex + steps];
+    expected[visibleIndex + steps] = expected[visibleIndex];
+    expected[visibleIndex] = partner;
+    setState(() {
+      _busy = false;
+      _holdReservationId = stored?.cardFor(card.cardId)?.reservationId ?? _holdReservationId;
+      _holdQueueCount = stored?.cards.length ?? _holdQueueCount;
+      _queuedCardIds = ids;
+      _status = _sameOrder(ids, expected)
+          ? 'بُدّل الكرت الظاهر مع كرت يبعد $steps خطوة نحو الأعلى داخل المقطع من $start إلى $end، وبقي ${_holdQueueCount} في الطابور'
+          : 'تعذر تبديل الكرت الظاهر بعدد خطوات داخل المقطع';
+      _statusIsError = !_sameOrder(ids, expected);
+    });
+  }
+
+  /// يبدّل الكرت الظاهر مع كرت بعدد خطوات نحو الطرف الأدنى داخل مقطع مدخل دون تحريك الطرفين.
+  Future<void> _swapOpenSpanInteriorStepsBackSelectedHold() async {
+    final card = _liveCard;
+    final startPosition = int.tryParse(_spanFrom.text.trim());
+    final endPosition = int.tryParse(_placePosition.text.trim());
+    final steps = int.tryParse(_spanSteps.text.trim());
+    if (card == null ||
+        _queuedCardIds.length < 4 ||
+        startPosition == null ||
+        endPosition == null ||
+        steps == null ||
+        startPosition < 1 ||
+        endPosition < 1 ||
+        steps < 1) {
+      return;
+    }
+    final visibleIndex = _queuedCardIds.indexOf(card.cardId);
+    final start = startPosition < endPosition ? startPosition : endPosition;
+    final end = startPosition < endPosition ? endPosition : startPosition;
+    if (visibleIndex < 0 || end > _queuedCardIds.length) {
+      setState(() {
+        _status = 'الموضع خارج طول الطابور';
+        _statusIsError = true;
+      });
+      return;
+    }
+    if (end - start < 3) {
+      setState(() {
+        _status = 'لا يكفي كروت داخل المقطع للتبديل';
+        _statusIsError = false;
+      });
+      return;
+    }
+    if (visibleIndex <= start - 1 || visibleIndex >= end - 1) {
+      setState(() {
+        _status = 'الكرت الظاهر يجب أن يقع بين طرفي المقطع';
+        _statusIsError = true;
+      });
+      return;
+    }
+    if (visibleIndex - steps <= start - 1) {
+      setState(() {
+        _status = 'عدد الخطوات يخرج التبديل من داخل المقطع';
+        _statusIsError = false;
+      });
+      return;
+    }
+    final c = AppScope.of(context);
+    setState(() => _busy = true);
+    final current = await c.settings.find(SettingKeys.promotionRewardProbeHolds);
+    final raw = current is Success<AppSetting?> ? current.value?.value : null;
+    final now = c.clock.now();
+    final encoded = RewardProbeSwapOpenSpanInteriorStepsBack.swapOpenSpanInteriorStepsBack(
+      raw,
+      cardId: card.cardId,
+      startPosition: start,
+      endPosition: end,
+      steps: steps,
+      customerId: _holdCustomerId,
+    );
+    await c.settings.save(
+      AppSetting(
+        key: SettingKeys.promotionRewardProbeHolds,
+        value: encoded,
+        updatedAt: now,
+      ),
+    );
+    var stored = PromotionRewardTemplate.lookupCrossCategoryHold(
+      encoded,
+      customerId: _holdCustomerId,
+    );
+    if (stored == null || !stored.holdsCard(card.cardId)) {
+      stored = PromotionRewardTemplate.lookupHold(
+        encoded,
+        card.categoryId,
+        customerId: _holdCustomerId,
+      );
+    }
+    await c.auditLogs.append(
+      AuditLog(
+        id: c.ids.next('reward-probe-hold'),
+        entityType: 'promotion_reward_template',
+        entityId: card.cardId,
+        action: 'reward_probe_card_open_span_interior_swapped_steps_back',
+        occurredAt: now,
+        payloadJson: '{"customerId":"${_holdCustomerId ?? ''}","start":$start,"end":$end,"steps":$steps,"queue":${stored?.cards.length ?? 0}}',
+      ),
+    );
+    if (!mounted) return;
+    final ids = [for (final item in stored?.cards ?? const <RewardProbeHeldCard>[]) item.cardId];
+    final expected = List<String>.of(_queuedCardIds);
+    final partner = expected[visibleIndex - steps];
+    expected[visibleIndex - steps] = expected[visibleIndex];
+    expected[visibleIndex] = partner;
+    setState(() {
+      _busy = false;
+      _holdReservationId = stored?.cardFor(card.cardId)?.reservationId ?? _holdReservationId;
+      _holdQueueCount = stored?.cards.length ?? _holdQueueCount;
+      _queuedCardIds = ids;
+      _status = _sameOrder(ids, expected)
+          ? 'بُدّل الكرت الظاهر مع كرت يبعد $steps خطوة نحو الأدنى داخل المقطع من $start إلى $end، وبقي ${_holdQueueCount} في الطابور'
+          : 'تعذر تبديل الكرت الظاهر بعدد خطوات نحو الأدنى داخل المقطع';
+      _statusIsError = !_sameOrder(ids, expected);
+    });
+  }
+
   /// يبدّل طرفي مقطع بين موضعين مدخلين. الكرت الظاهر يحدد الطابور ويقع داخل المقطع.
   Future<void> _swapOpenSpanSelectedHold() async {
     final card = _liveCard;
@@ -2914,6 +3129,29 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
                           ),
                         ),
                       ),
+                      Align(
+                        alignment: AlignmentDirectional.centerStart,
+                        child: TextButton.icon(
+                          onPressed: _busy || _probing ? null : _swapOpenSpanInteriorStepsSelectedHold,
+                          icon: const Icon(Icons.swap_vert),
+                          label: const Text(
+                            'تبديل الكرت الظاهر مع كرت بعدد خطوات داخل المقطع',
+                            style: TextStyle(fontFamily: NetTypography.family),
+                          ),
+                        ),
+                      ),
+                      Align(
+                        alignment: AlignmentDirectional.centerStart,
+                        child: TextButton.icon(
+                          onPressed: _busy || _probing ? null : _swapOpenSpanInteriorStepsBackSelectedHold,
+                          icon: const Icon(Icons.swap_vert_circle_outlined),
+                          label: const Text(
+                            'تبديل الكرت الظاهر مع كرت بعدد خطوات نحو الطرف الأدنى داخل المقطع',
+                            style: TextStyle(fontFamily: NetTypography.family),
+                          ),
+                        ),
+                      ),
+
                     ],
                     if (_holdNextPayout && _holdQueueCount > 0) ...[
                       const SizedBox(height: 4),
