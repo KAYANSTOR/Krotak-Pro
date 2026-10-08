@@ -36,6 +36,7 @@ import '../../domain/services/reward_probe_shift_open_span_interior_mirror_gap_s
 import '../../domain/services/reward_probe_shift_open_span_interior_mirror_gap_count_steps.dart';
 import '../../domain/services/reward_probe_shift_open_span_interior_mirror_gap_count_steps_back.dart';
 import '../../domain/services/reward_probe_reverse_open_span_interior_mirror_gap.dart';
+import '../../domain/services/reward_probe_reverse_open_span_interior_mirror_edge_gap.dart';
 import '../../domain/services/reward_probe_shift_open_span_interior_mirror_gap_steps_back.dart';
 import '../../platform/sms_bridge.dart';
 import '../app_scope.dart';
@@ -3052,6 +3053,133 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
 
   /// يزيح الكروت بين الكرتين المقابلتين بعدد خطوات نحو الأدنى. الظاهر والمقابلتان والطرفان لا يتحركون.
 
+
+  Future<void> _reverseOpenSpanInteriorMirrorEdgeGapSelectedHold() async {
+    final card = _liveCard;
+    final startPosition = int.tryParse(_spanFrom.text.trim());
+    final endPosition = int.tryParse(_placePosition.text.trim());
+    final steps = int.tryParse(_spanSteps.text.trim());
+    if (card == null ||
+        _queuedCardIds.length < 13 ||
+        startPosition == null ||
+        endPosition == null ||
+        steps == null ||
+        startPosition < 1 ||
+        endPosition < 1 ||
+        steps < 3) {
+      return;
+    }
+    final visibleIndex = _queuedCardIds.indexOf(card.cardId);
+    final start = startPosition < endPosition ? startPosition : endPosition;
+    final end = startPosition < endPosition ? endPosition : startPosition;
+    if (visibleIndex < 0 || end > _queuedCardIds.length) {
+      setState(() {
+        _status = 'الموضع خارج طول الطابور';
+        _statusIsError = true;
+      });
+      return;
+    }
+    if (end - start < 12) {
+      setState(() {
+        _status = 'لا يكفي كروت داخل المقطع لعكس ما بين الكرتين المقابلتين والطرفين';
+        _statusIsError = false;
+      });
+      return;
+    }
+    if (visibleIndex <= start - 1 || visibleIndex >= end - 1) {
+      setState(() {
+        _status = 'الكرت الظاهر يجب أن يقع بين طرفي المقطع';
+        _statusIsError = true;
+      });
+      return;
+    }
+    if (visibleIndex - steps <= start - 1 || visibleIndex + steps >= end - 1) {
+      setState(() {
+        _status = 'عدد الخطوات يخرج الكرتين المقابلتين من داخل المقطع';
+        _statusIsError = false;
+      });
+      return;
+    }
+    if (visibleIndex - steps < start + 2 || visibleIndex + steps > end - 4) {
+      setState(() {
+        _status = 'لا يكفي كرتان بين الكرت المقابل وطرف المقطع';
+        _statusIsError = false;
+      });
+      return;
+    }
+    final c = AppScope.of(context);
+    setState(() => _busy = true);
+    final current = await c.settings.find(SettingKeys.promotionRewardProbeHolds);
+    final raw = current is Success<AppSetting?> ? current.value?.value : null;
+    final now = c.clock.now();
+    final encoded = RewardProbeReverseOpenSpanInteriorMirrorEdgeGap
+        .reverseOpenSpanInteriorMirrorEdgeGap(
+      raw,
+      cardId: card.cardId,
+      startPosition: start,
+      endPosition: end,
+      steps: steps,
+      customerId: _holdCustomerId,
+    );
+    await c.settings.save(
+      AppSetting(
+        key: SettingKeys.promotionRewardProbeHolds,
+        value: encoded,
+        updatedAt: now,
+      ),
+    );
+    var stored = PromotionRewardTemplate.lookupCrossCategoryHold(
+      encoded,
+      customerId: _holdCustomerId,
+    );
+    if (stored == null || !stored.holdsCard(card.cardId)) {
+      stored = PromotionRewardTemplate.lookupHold(
+        encoded,
+        card.categoryId,
+        customerId: _holdCustomerId,
+      );
+    }
+    await c.auditLogs.append(
+      AuditLog(
+        id: c.ids.next('reward-probe-hold'),
+        entityType: 'promotion_reward_template',
+        entityId: card.cardId,
+        action: 'reward_probe_card_open_span_interior_mirror_edge_gap_reversed',
+        occurredAt: now,
+        payloadJson: '{"customerId":"${_holdCustomerId ?? ''}","start":$start,"end":$end,"steps":$steps,"queue":${stored?.cards.length ?? 0}}',
+      ),
+    );
+    if (!mounted) return;
+    final ids = [for (final item in stored?.cards ?? const <RewardProbeHeldCard>[]) item.cardId];
+    final expected = List<String>.of(_queuedCardIds);
+    final lower = visibleIndex - steps;
+    final higher = visibleIndex + steps;
+    void reverseRange(int from, int to) {
+      if (to - from < 1) return;
+      var left = from;
+      var right = to;
+      while (left < right) {
+        final swap = expected[left];
+        expected[left] = expected[right];
+        expected[right] = swap;
+        left++;
+        right--;
+      }
+    }
+    reverseRange(start, lower - 1);
+    reverseRange(higher + 1, end - 2);
+    setState(() {
+      _busy = false;
+      _holdReservationId = stored?.cardFor(card.cardId)?.reservationId ?? _holdReservationId;
+      _holdQueueCount = stored?.cards.length ?? _holdQueueCount;
+      _queuedCardIds = ids;
+      _status = _sameOrder(ids, expected)
+          ? 'عُكست الكروت بين الكرتين المقابلتين وطرفي المقطع من $start إلى $end بمسافة $steps، وبقي ${_holdQueueCount} في الطابور'
+          : 'تعذر عكس الكروت بين الكرتين المقابلتين وطرفي المقطع';
+      _statusIsError = !_sameOrder(ids, expected);
+    });
+  }
+
   Future<void> _reverseOpenSpanInteriorMirrorGapSelectedHold() async {
     final card = _liveCard;
     final startPosition = int.tryParse(_spanFrom.text.trim());
@@ -4697,6 +4825,17 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
                           icon: const Icon(Icons.swap_horiz),
                           label: const Text(
                             'عكس الكروت بين الكرتين المقابلتين والكرت الظاهر داخل المقطع',
+                            style: TextStyle(fontFamily: NetTypography.family),
+                          ),
+                        ),
+                      ),
+                      Align(
+                        alignment: AlignmentDirectional.centerStart,
+                        child: TextButton.icon(
+                          onPressed: _busy || _probing ? null : _reverseOpenSpanInteriorMirrorEdgeGapSelectedHold,
+                          icon: const Icon(Icons.swap_horiz),
+                          label: const Text(
+                            'عكس الكروت بين الكرتين المقابلتين وطرفي المقطع',
                             style: TextStyle(fontFamily: NetTypography.family),
                           ),
                         ),
