@@ -4,6 +4,7 @@ import '../entities/broadcast.dart';
 import '../entities/card.dart';
 import '../entities/customer.dart';
 import '../entities/message.dart';
+import '../entities/license.dart';
 import '../entities/payment_event.dart';
 import '../entities/money.dart';
 import '../entities/transaction.dart';
@@ -189,6 +190,8 @@ abstract interface class PaymentEventEngine {
 }
 
 abstract interface class LicenseService {
+  Future<Result<License>> current();
+  Future<Result<License>> activateToken(String rawToken);
   Future<Result<void>> verifyOnline();
 }
 

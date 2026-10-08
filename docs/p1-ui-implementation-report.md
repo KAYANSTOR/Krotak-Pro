@@ -22,7 +22,7 @@ flutter build web      → يُذكر أدناه حسب بيئة البناء
 | قوالب التحويل | `TransferTemplateRepository` + CRUD قائمة |
 | تصدير السجل | CSV من المعاملات + نسخ للحافظة |
 | تنظيف السجلات | عدّادات + استعادة معلّق عبر recovery (لا حذف جماعي في Domain) |
-| تجديد/تفعيل | `licenseService.activateOffline` |
+| تجديد/تفعيل | `licenseService.activateToken` عبر رمز Ed25519 موقّع |
 | مركز المساعدة | مواضيع offline ثابتة |
 | Wallets/POS | قائمة + إنشاء (من P0، ما زالت مربوطة) |
 | Widget smoke tests | Offers, Help, Async views |

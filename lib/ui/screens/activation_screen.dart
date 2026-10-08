@@ -17,13 +17,13 @@ class ActivationScreen extends StatefulWidget {
 }
 
 class _ActivationScreenState extends State<ActivationScreen> {
-  final _idCtrl = TextEditingController();
+  final _tokenCtrl = TextEditingController();
   bool _busy = false;
   String? _status;
 
   @override
   void dispose() {
-    _idCtrl.dispose();
+    _tokenCtrl.dispose();
     super.dispose();
   }
 
@@ -33,16 +33,12 @@ class _ActivationScreenState extends State<ActivationScreen> {
       _status = null;
     });
     final c = AppScope.of(context);
-    final id = _idCtrl.text.trim().isEmpty ? c.ids.next('lic') : _idCtrl.text.trim();
-    final r = await c.licenseService.activateOffline(
-      licenseId: id,
-      expiresAt: null,
-    );
+    final r = await c.licenseService.activateToken(_tokenCtrl.text);
     if (!mounted) return;
     setState(() {
       _busy = false;
       _status = r is Success<License>
-          ? 'مفعّل بشكل دائم: ${r.value.id}'
+          ? 'تم تفعيل الترخيص بنجاح: ${r.value.id}'
           : (r as Failure).error.message;
     });
   }
@@ -62,7 +58,7 @@ class _ActivationScreenState extends State<ActivationScreen> {
         children: [
           NetInlineNotice(
             message:
-                'التفعيل محلي (offline-first). التحقق عبر الإنترنت اختياري وغير مربوط بخادم حاليًا.',
+                'أدخل رمز الترخيص الذي أصدرته الإدارة. الرمز موقّع ولا يقبل التعديل أو التفعيل الوهمي.',
             icon: Icons.wifi_off_rounded,
           ),
           const SizedBox(height: NetSpacing.lg),
@@ -71,9 +67,10 @@ class _ActivationScreenState extends State<ActivationScreen> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 TextField(
-                  controller: _idCtrl,
+                  controller: _tokenCtrl,
                   decoration: const InputDecoration(
-                    labelText: 'معرّف الترخيص (اختياري)',
+                    labelText: 'رمز الترخيص',
+                    hintText: 'KRT1.…',
                   ),
                 ),
                 const SizedBox(height: NetSpacing.lg),
@@ -85,7 +82,7 @@ class _ActivationScreenState extends State<ActivationScreen> {
                           height: 18,
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
-                      : const Text('تفعيل دائم'),
+                      : const Text('تحقق وتفعيل'),
                 ),
               ],
             ),

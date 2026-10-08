@@ -23,12 +23,14 @@ import '../system_check_screen.dart';
 import '../wallets_screen.dart';
 import '../inventory_screen.dart';
 import 'backup_restore_screen.dart';
+import '../activation_screen.dart';
 import 'clean_logs_screen.dart';
 import 'deep_clean_screen.dart';
 import 'export_ledger_screen.dart';
 import 'low_stock_settings_screen.dart';
 import 'network_name_settings_screen.dart';
 import 'outbound_message_templates_screen.dart';
+import 'renew_subscription_screen.dart';
 import 'sim_settings_screen.dart';
 import 'template_simulation_screen.dart';
 import 'wallet_notification_settings_screen.dart';
@@ -318,6 +320,24 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
                                 ),
                               if (_sectionVisible(_accountKeywords))
                                 AccountProfileCard(networkName: _networkName, onEditNetworkName: _openNetworkName, onSignOut: _confirmSignOut),
+                              if (_sectionVisible(_licenseKeywords)) const SettingsSectionHeader(title: 'الترخيص والاشتراك'),
+                              if (_sectionVisible(_licenseKeywords))
+                                SettingsGroupCard(children: [
+                                  SettingsGroupNavRow(
+                                    icon: Icons.verified_user_outlined,
+                                    title: 'تفعيل الترخيص',
+                                    subtitle: 'إدخال رمز ترخيص موقّع صادر من الإدارة',
+                                    searchText: 'تفعيل رمز مفتاح ترخيص',
+                                    onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ActivationScreen())),
+                                  ),
+                                  SettingsGroupNavRow(
+                                    icon: Icons.autorenew_rounded,
+                                    title: 'تجديد الاشتراك',
+                                    subtitle: 'تثبيت رمز التجديد الجديد والتحقق من صلاحيته',
+                                    searchText: 'تجديد اشتراك رمز مفتاح',
+                                    onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const RenewSubscriptionScreen())),
+                                  ),
+                                ]),
                               if (_sectionVisible(_systemKeywords)) const SettingsSectionHeader(title: 'النظام'),
                               if (_sectionVisible(_systemKeywords))
                                 SettingsGroupCard(children: [

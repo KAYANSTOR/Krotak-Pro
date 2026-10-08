@@ -17,10 +17,17 @@ class RenewSubscriptionScreen extends StatefulWidget {
 }
 
 class _RenewSubscriptionScreenState extends State<RenewSubscriptionScreen> {
+  final _tokenCtrl = TextEditingController();
   bool _loading = true;
   String? _current;
   String? _status;
   bool _busy = false;
+
+  @override
+  void dispose() {
+    _tokenCtrl.dispose();
+    super.dispose();
+  }
 
   @override
   void initState() {
@@ -41,21 +48,17 @@ class _RenewSubscriptionScreenState extends State<RenewSubscriptionScreen> {
     });
   }
 
-  Future<void> _extend(int days) async {
+  Future<void> _activateRenewal() async {
     setState(() {
       _busy = true;
       _status = null;
     });
-    final c = AppScope.of(context);
-    final r = await c.licenseService.activateOffline(
-      licenseId: c.ids.next('lic'),
-      expiresAt: c.clock.now().add(Duration(days: days)),
-    );
+    final r = await AppScope.of(context).licenseService.activateToken(_tokenCtrl.text);
     if (!mounted) return;
     setState(() {
       _busy = false;
       _status = r is Success<License>
-          ? 'تم التجديد حتى ${r.value.expiresAt}'
+          ? 'تم تحديث الترخيص حتى ${r.value.expiresAt ?? 'غير محدد'}'
           : (r as Failure).error.message;
     });
     await _load();
@@ -110,14 +113,18 @@ class _RenewSubscriptionScreenState extends State<RenewSubscriptionScreen> {
                   ),
                 ),
                 const SizedBox(height: NetSpacing.lg),
-                FilledButton(
-                  onPressed: _busy ? null : () => _extend(30),
-                  child: const Text('تجديد 30 يومًا (محلي)'),
+                TextField(
+                  controller: _tokenCtrl,
+                  maxLines: 3,
+                  decoration: const InputDecoration(
+                    labelText: 'رمز التجديد الصادر من الإدارة',
+                    hintText: 'KRT1.…',
+                  ),
                 ),
-                const SizedBox(height: NetSpacing.sm),
-                OutlinedButton(
-                  onPressed: _busy ? null : () => _extend(365),
-                  child: const Text('تجديد سنة (محلي)'),
+                const SizedBox(height: NetSpacing.md),
+                FilledButton(
+                  onPressed: _busy ? null : _activateRenewal,
+                  child: const Text('تحقق وتحديث الترخيص'),
                 ),
                 if (_status != null) ...[
                   const SizedBox(height: NetSpacing.md),

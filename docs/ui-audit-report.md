@@ -45,7 +45,7 @@ Commit قاعدة المراجعة     → 82ed9f0 (قبل دمج الحسابا
 | **TransactionsLogScreen** | غير موجود | لا | لا | لا | لا | — | reports |
 | **RejectedMessagesScreen** | غير موجود | لا | لا | لا | لا | — | reports/messages |
 | **SuspendedMessagesScreen** | غير موجود | لا | لا | لا | لا | — | reports/messages |
-| **SettingsScreen** (+ فرعية) | `SettingsScreen` | جزئي جدًا | لا | `activateOffline` + `createBackup` فقط | Busy + نص | لا SIM/قوالب/بطارية/تصدير/تجديد اشتراك كما في Kotlin | settings |
+| **SettingsScreen** (+ فرعية) | `SettingsScreen` | جزئي جدًا | لا | `activateToken` الموقّع + `createBackup` | Busy + نص | لا SIM/قوالب/بطارية/تصدير/تجديد اشتراك كما في Kotlin | settings |
 | **BatterySettingsScreen** | غير موجود | لا | لا | لا | لا | — | settings |
 | **SimSettingsScreen** | غير موجود | لا | لا | لا | لا | — | settings |
 | **CustomerTemplatesScreen** | غير موجود | لا | لا | لا | لا | — | settings |

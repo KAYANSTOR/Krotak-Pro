@@ -65,7 +65,7 @@ jobs:
       - run: flutter pub get
       - name: Prepare stable keystore from GitHub Secrets
         id: stable-signing
-        if: github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         env:
           APK_KEYSTORE_B64: ${{ secrets.APK_KEYSTORE_B64 }}
           APK_KEYSTORE_PASSWORD: ${{ secrets.APK_KEYSTORE_PASSWORD }}
@@ -74,9 +74,8 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "${APK_KEYSTORE_B64}" ] || [ -z "${APK_KEYSTORE_PASSWORD}" ] || [ -z "${APK_KEY_PASSWORD}" ] || [ -z "${APK_KEY_ALIAS}" ]; then
-            echo "mode=validation" >> "${GITHUB_OUTPUT}"
-            echo "Commercial signing secrets are not configured; using disposable CI validation signing."
-            exit 0
+            echo "Commercial signing secrets are required for main builds; refusing to create an update-incompatible APK."
+            exit 1
           fi
           mkdir -p android/app/keystore
           printf '%s' "${APK_KEYSTORE_B64}" | base64 -d > android/app/keystore/upload.jks

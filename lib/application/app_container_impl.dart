@@ -172,8 +172,8 @@ final class AppContainer {
     final transactions = LocalTransactionRepository(database);
     final sales = LocalSaleRepository(database);
     final auditLogs = LocalAuditLogRepository(database);
-    final licenses = LocalLicenseRepository(database);
     final settings = LocalSettingsRepository(database);
+    final licenses = LocalLicenseRepository(database, settings: settings);
     final advanceRepository = LocalAdvanceRepository(transactions: transactions, sales: sales);
     final balanceService = LocalCustomerBalanceService(customers: customers, transactions: transactions, auditLogs: auditLogs, unitOfWork: uow, clock: clock, ids: ids, advances: advanceRepository);
     final customerService = LocalCustomerService(customers: customers, auditLogs: auditLogs, unitOfWork: uow, clock: clock, ids: ids);

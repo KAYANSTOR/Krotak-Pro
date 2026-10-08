@@ -1,4 +1,6 @@
 abstract final class SettingKeys {
+  /// رمز الترخيص الموقّع؛ يحفظ محليًا ولا يدخل لقطة النسخ الاحتياطي.
+  static const licenseToken = 'license_token';
   static const defaultCurrency = 'default_currency';
   static const reservationMinutes = 'reservation_minutes';
   static const preferredSimSlot = 'preferred_sim_slot';
