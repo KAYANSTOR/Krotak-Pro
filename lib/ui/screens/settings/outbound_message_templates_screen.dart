@@ -4,9 +4,11 @@ import 'package:flutter/material.dart';
 
 import '../../../core/result.dart';
 import '../../../domain/entities/setting.dart';
+import '../../../domain/repositories/repositories.dart';
 import '../../../domain/services/default_outbound_templates_seeder.dart';
-import '../../../domain/services/local_advance_service.dart';
 import '../../../domain/services/outbound_template_activation.dart';
+import '../../../domain/services/outbound_template_catalog.dart';
+import '../../../domain/services/outbound_template_renderer.dart';
 import '../../app_scope.dart';
 import '../../theme/kayan_palette.dart';
 import '../../widgets/async_views.dart';
@@ -86,69 +88,26 @@ class _OutboundMessageTemplatesScreenState
     return !_active.containsKey(t.keyName);
   }
 
-  static final _tabsData = <_TabDef>[
-    _TabDef('رسائل العملاء', [
-      _Tpl(SettingKeys.voucherDeliverySmsTemplate, 'تسليم الكرت للعميل', SettingDefaults.voucherDeliverySmsTemplate, const ['serial', 'code', 'CARD_CODE', 'CARD_VALUE', 'CURRENCY', 'NETWORK_NAME']),
-      _Tpl(SettingKeys.customerDebtPaymentTemplate, 'تأكيد سداد دين العميل', SettingDefaults.customerDebtPaymentTemplate, const ['amount', 'balance', 'CURRENCY']),
-    ]),
-    _TabDef('رسائل العروض', [
-      _Tpl(SettingKeys.promotionRewardSmsTemplate, 'مكافأة العرض', SettingDefaults.promotionRewardSmsTemplate, const ['title', 'serial', 'secret', 'promotion_name', 'reward_value']),
-    ]),
-    _TabDef('رسائل النظام', [
-      _Tpl(SettingKeys.lowStockAlertTemplate, 'تنبيه انخفاض مخزون الكروت', SettingDefaults.lowStockAlertTemplate, const ['category', 'count']),
-    ]),
-    _TabDef('نقاط البيع', [
-      _Tpl(
-        SettingKeys.posCustomerCardDeliveryTemplate,
-        'تسليم كرت لعميل نقطة البيع',
-        SettingDefaults.posCustomerCardDeliveryTemplate,
-        const [
-          'NETWORK_NAME',
-          'CARD_VALUE',
-          'CURRENCY',
-          'serial',
-          'code',
-          'secret',
-          'SECRET',
-          'CODE',
-          'cards',
-          'QUANTITY_TEXT',
-          'CUSTOMER_PHONE',
-          'category',
-        ],
-      ),
-      _Tpl(
-        SettingKeys.posOrderSuccessTemplate,
-        'تأكيد تنفيذ طلب نقطة البيع',
-        SettingDefaults.posOrderSuccessTemplate,
-        const [
-          'POS_NAME',
-          'CUSTOMER_PHONE',
-          'CARD_VALUE',
-          'CURRENCY',
-          'QUANTITY_TEXT',
-          'TOTAL',
-          'AMOUNT',
-          'NETWORK_NAME',
-          'category',
-        ],
-      ),
-      _Tpl(SettingKeys.posBalanceResponseTemplate, 'رد رصيد نقطة البيع', SettingDefaults.posBalanceResponseTemplate, const ['pos', 'balance', 'debt']),
-      _Tpl(SettingKeys.posCreditLimitExceededTemplate, 'تجاوز سقف دين نقطة البيع', SettingDefaults.posCreditLimitExceededTemplate, const ['pos', 'limit']),
-      _Tpl(SettingKeys.dailyPosSummaryTemplate, 'ملخص العمليات اليومي لنقاط البيع', SettingDefaults.dailyPosSummaryTemplate, const ['pos', 'sales', 'transfers', 'balance']),
-      _Tpl(SettingKeys.posSettlementSuccessTemplate, 'تأكيد تسوية حساب نقاط البيع', SettingDefaults.posSettlementSuccessTemplate, const ['pos', 'amount', 'SETTLEMENT_AMOUNT', 'REMAINING_BALANCE']),
-      _Tpl(SettingKeys.posSettlementFailedTemplate, 'فشل تسوية نقطة البيع', SettingDefaults.posSettlementFailedTemplate, const ['pos', 'reason']),
-      _Tpl(SettingKeys.posSettlementUnknownTemplate, 'تسوية غير مؤكدة', SettingDefaults.posSettlementUnknownTemplate, const ['pos']),
-      _Tpl(SettingKeys.posRequestRejectedTemplate, 'إشعار رفض طلب نقطة البيع', SettingDefaults.posRequestRejectedTemplate, const ['pos', 'reason']),
-      _Tpl(SettingKeys.posCustomerSmsTailTemplate, 'إضافة اسم نقطة البيع في الرسائل', SettingDefaults.posCustomerSmsTailTemplate, const ['pos', 'pos_name', 'CURRENCY']),
-      _Tpl(SettingKeys.posInstantChargeConfirmTemplate, 'تأكيد إرسال شحن فوري', SettingDefaults.posInstantChargeConfirmTemplate, const ['amount', 'phone', 'CARD_VALUE', 'CURRENCY']),
-    ]),
-    _TabDef('سلفني', [
-      _Tpl(SettingKeys.salafniAcceptedTemplate, 'قبول سلفني', LocalAdvanceService.defaultAccepted, const ['amount', 'serial', 'code']),
-      _Tpl(SettingKeys.salafniRejectedTemplate, 'رفض سلفني', LocalAdvanceService.defaultRejected, const ['reason']),
-      _Tpl(SettingKeys.salafniSettledTemplate, 'تسديد سلفني', LocalAdvanceService.defaultSettled, const ['amount', 'remaining']),
-    ]),
-  ];
+  /// التبويبات مشتقّة من العقد المركزي [OutboundTemplateCatalog].
+  ///
+  /// لا تُعرّف أي قائمة قوالب يدويًا هنا: العنوان والمتغيرات والنص الأولي كلها
+  /// من [OutboundTemplateDefinition]، فتبقى واجهة الإعدادات والزرع والتحقق
+  /// والاختبارات على عقد واحد.
+  static final _tabsData = _buildTabs();
+
+  static List<_TabDef> _buildTabs() => <_TabDef>[
+        for (final category in OutboundTemplateCategory.tabOrder)
+          _TabDef(category.tabLabel, <_Tpl>[
+            for (final definition in OutboundTemplateCatalog.definitions)
+              if (definition.category == category)
+                _Tpl(
+                  definition.key,
+                  definition.title,
+                  definition.initialBody,
+                  definition.variables.toList(growable: false),
+                ),
+          ]),
+      ];
 
   @override
   void initState() {
@@ -223,9 +182,13 @@ class _OutboundMessageTemplatesScreenState
             final tab = (entry['tab'] as num?)?.toInt() ?? 0;
             final index = tab.clamp(0, _tabsData.length - 1);
             final key = _customKey(id);
-            final body = (entry['body'] as String?) ?? '';
             final targetRaw = (entry['target'] as String?)?.trim();
             final target = (targetRaw != null && _systemTpl(targetRaw) != null) ? targetRaw : null;
+            // النص يُقرأ من مصدره الوحيد `custom:<id>`، وليس من السجل.
+            final bodyResult = await c.settings.find(key);
+            final body = bodyResult is Success<AppSetting?>
+                ? (bodyResult.value?.value ?? '')
+                : '';
             next[key] = body;
             (custom[index] ??= <_Tpl>[]).add(
               _Tpl(key, title, body, const ['CARD_CODE', 'CARD_VALUE', 'CURRENCY', 'NETWORK_NAME', 'amount', 'balance', 'pos', 'reason'], isCustom: true, target: target),
@@ -249,14 +212,9 @@ class _OutboundMessageTemplatesScreenState
           .firstOrNull;
       final sys = _systemTpl(entry.key);
       if (match == null || sys == null) continue;
-      final sentNow = next[entry.key] ?? sys.fallback;
-      final wanted = next[match.keyName] ?? match.fallback;
-      if (sentNow.trim() != wanted.trim()) {
-        // انحراف (عدّل شاشة أخرى المفتاح مباشرة): أعد المُرسَل إلى القالب الفعّال.
-        await activation.syncActiveBody(entry.key, entry.value, wanted);
-      }
+      // قالب النظام لم يُلمس: بطاقة قالب النظام تعرض نص النظام الحقيقي،
+      // وبطاقة القالب المخصّص تعرض نص القالب المخصّص الفعّال.
       active[entry.key] = entry.value;
-      next[entry.key] = await activation.originalBody(entry.key) ?? sys.fallback;
     }
 
     if (!mounted) return;
@@ -268,7 +226,7 @@ class _OutboundMessageTemplatesScreenState
     });
   }
 
-  static String _customKey(String id) => 'custom:$id';
+  static String _customKey(String id) => SettingKeys.customOutboundBody(id);
 
   List<_Tpl> _tabItems(int index) => <_Tpl>[
         ..._tabsData[index].items,
@@ -284,11 +242,13 @@ class _OutboundMessageTemplatesScreenState
   }) async {
     final c = AppScope.of(context);
     final id = c.ids.next('tpl').replaceAll(':', '-');
+    // السجل يحمل **metadata فقط** (المعرّف/الاسم/التبويب/الهدف).
+    // نص القالب له مصدر واحد وحيد: مفتاح `custom:<id>` في الإعدادات.
+    // لا يُخزَّن النص في السجل أبدًا حتى لا يوجد مصدران متنافسان.
     final entry = <String, Object?>{
       'id': id,
       'title': title,
       'tab': tabIndex,
-      'body': body,
       'target': target,
     };
 
@@ -346,14 +306,27 @@ class _OutboundMessageTemplatesScreenState
     return list;
   }
 
-  Future<void> _writeRegistry(List<Map<String, Object?>> list) async {
+  Future<Result<void>> _writeRegistry(List<Map<String, Object?>> list) async {
     final c = AppScope.of(context);
-    await c.settings.save(
+    return c.settings.save(
       AppSetting(
         key: SettingKeys.customOutboundTemplates,
         value: jsonEncode(list),
         updatedAt: c.clock.now(),
       ),
+    );
+  }
+
+  /// يُزيل نص القالب المخصّص من مصدره الوحيد.
+  ///
+  /// إن كان المخزن يدعم الحذف الفعلي([SettingsPurge]) يُحذف المفتاح، وإلا
+  /// تُكتب قيمة فارغة — والاثنتان تمنعان الإرسال تمامًا فلا يبقى أثر فعّال.
+  Future<Result<void>> _purgeCustomBody(String key) async {
+    final c = AppScope.of(context);
+    final repo = c.settings;
+    if (repo is SettingsPurge) return repo.delete(key);
+    return repo.save(
+      AppSetting(key: key, value: '', updatedAt: c.clock.now()),
     );
   }
 
@@ -364,13 +337,16 @@ class _OutboundMessageTemplatesScreenState
     if (target == null || !mounted) return;
     final sys = _systemTpl(target);
     if (sys == null) return;
-    if (t.target != target) await _setTarget(t, target);
-    final body = _values[t.keyName] ?? t.fallback;
+    if (t.target != target) {
+      final targetSaved = await _setTarget(t, target);
+      if (targetSaved is Failure<void>) {
+        if (mounted) _snack(targetSaved.error.message);
+        return;
+      }
+    }
     final r = await _activation.activate(
       systemKey: target,
       customId: t.customId,
-      customBody: body,
-      systemFallback: sys.fallback,
     );
     if (!mounted) return;
     if (r is Failure<void>) {
@@ -383,7 +359,7 @@ class _OutboundMessageTemplatesScreenState
 
   /// إلغاء الاستبدال: يعود قالب النظام الأصلي هو المُرسَل.
   Future<void> _activateSystem(_Tpl t) async {
-    final r = await _activation.revert(systemKey: t.keyName, systemFallback: t.fallback);
+    final r = await _activation.revert(systemKey: t.keyName);
     if (!mounted) return;
     if (r is Failure<void>) {
       _snack(r.error.message);
@@ -393,12 +369,12 @@ class _OutboundMessageTemplatesScreenState
     _snack('تم تفعيل القالب الافتراضي «${t.title}»');
   }
 
-  Future<void> _setTarget(_Tpl t, String target) async {
+  Future<Result<void>> _setTarget(_Tpl t, String target) async {
     final list = await _readRegistry();
     for (final e in list) {
       if (_customKey((e['id'] as String?) ?? '') == t.keyName) e['target'] = target;
     }
-    await _writeRegistry(list);
+    return _writeRegistry(list);
   }
 
   /// يختار القالب (من نفس التبويب) الذي سيستبدله القالب المخصّص.
@@ -430,10 +406,18 @@ class _OutboundMessageTemplatesScreenState
     if (wasActive && t.target != null) {
       final old = _systemTpl(t.target!);
       if (old != null) {
-        await _activation.revert(systemKey: old.keyName, systemFallback: old.fallback);
+        final reverted = await _activation.revert(systemKey: old.keyName);
+        if (reverted is Failure<void>) {
+          if (mounted) _snack(reverted.error.message);
+          return;
+        }
       }
     }
-    await _setTarget(t, target);
+    final targetSaved = await _setTarget(t, target);
+    if (targetSaved is Failure<void>) {
+      if (mounted) _snack(targetSaved.error.message);
+      return;
+    }
     await _load();
     if (wasActive && mounted) {
       final fresh = _tabItems(_custom.entries.firstWhere((e) => e.value.any((x) => x.keyName == t.keyName)).key)
@@ -447,7 +431,12 @@ class _OutboundMessageTemplatesScreenState
     if (_isActive(t) && t.target != null) {
       final sys = _systemTpl(t.target!);
       if (sys != null) {
-        await _activation.revert(systemKey: sys.keyName, systemFallback: sys.fallback);
+        // إلغاء التفعيل قبل حذف النص: لا يبقى مؤشر يشير إلى قالب محذوف.
+        final reverted = await _activation.revert(systemKey: sys.keyName);
+        if (reverted is Failure<void>) {
+          if (mounted) _snack(reverted.error.message);
+          return;
+        }
       }
     }
     final existing = await c.settings.find(SettingKeys.customOutboundTemplates);
@@ -464,36 +453,33 @@ class _OutboundMessageTemplatesScreenState
       }
     }
     list.removeWhere((e) => _customKey((e['id'] as String?) ?? '') == t.keyName);
-    await c.settings.save(
+    final registrySaved = await c.settings.save(
       AppSetting(
         key: SettingKeys.customOutboundTemplates,
         value: jsonEncode(list),
         updatedAt: c.clock.now(),
       ),
     );
+    if (registrySaved is Failure<void>) {
+      if (mounted) _snack(registrySaved.error.message);
+      return;
+    }
+    // حذف نص القالب نفسه: لا يبقى مفتاح يتيم قابل للقراءة بعد اختفاء تعريفه.
+    final purge = await _purgeCustomBody(t.keyName);
+    if (purge is Failure<void>) {
+      if (mounted) _snack(purge.error.message);
+      return;
+    }
     if (mounted) _snack('تم حذف القالب');
     await _load();
   }
 
   Future<void> _save(String key, String value) async {
     final c = AppScope.of(context);
-    Result<void> r;
-    if (key.startsWith('custom:')) {
-      // القالب المخصّص: السجل هو مصدر النص (يُقرأ منه عند كل تحميل)، فيُحدَّث هو
-      // والمفتاح معاً، ثم يُحدَّث المُرسَل فعلياً إن كان القالب فعّالاً.
-      final list = await _readRegistry();
-      for (final e in list) {
-        if (_customKey((e['id'] as String?) ?? '') == key) e['body'] = value;
-      }
-      await _writeRegistry(list);
-      r = await c.settings.save(AppSetting(key: key, value: value, updatedAt: c.clock.now()));
-      final tpl = _custom.values.expand((l) => l).where((t) => t.keyName == key).firstOrNull;
-      if (r is Success<void> && tpl?.target != null) {
-        r = await _activation.syncActiveBody(tpl!.target!, tpl.customId, value);
-      }
-    } else {
-      r = await _activation.saveSystemBody(key, value);
-    }
+    // نص قالب النظام أو المخصص يُحفظ في مفتاحه الوحيد، دون نسخة في السجل.
+    final r = await c.settings.save(
+      AppSetting(key: key, value: value, updatedAt: c.clock.now()),
+    );
     if (!mounted) return;
     if (r is Failure<void>) { _snack(r.error.message); return; }
     setState(() => _values[key] = value);
@@ -505,18 +491,20 @@ class _OutboundMessageTemplatesScreenState
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m, style: const TextStyle(fontFamily: 'Tajawal'))));
   }
 
-  String _preview(String body) {
-    return body
-        .replaceAll('{serial}', '1234567').replaceAll('{code}', '987654').replaceAll('{secret}', '987654')
-        .replaceAll('{CARD_CODE}', '1234567').replaceAll('{CARD_VALUE}', '10').replaceAll('{CURRENCY}', 'ر.ي')
-        .replaceAll('{NETWORK_NAME}', 'kayan').replaceAll('{amount}', '1000').replaceAll('{balance}', '5000')
-        .replaceAll('{title}', 'عرض تجريبي').replaceAll('{promotion_name}', 'عرض تجريبي').replaceAll('{reward_value}', '100')
-        .replaceAll('{pos}', 'الأمل').replaceAll('{pos_name}', 'الأمل').replaceAll('{debt}', '0').replaceAll('{limit}', '50000')
-        .replaceAll('{sales}', '25000').replaceAll('{transfers}', '3').replaceAll('{reason}', 'رصيد غير كافٍ')
-        .replaceAll('{remaining}', '0').replaceAll('{category}', '100 ر.ي').replaceAll('{count}', '2')
-        .replaceAll('{SETTLEMENT_AMOUNT}', '3000').replaceAll('{REMAINING_BALANCE}', '0')
-        .replaceAll('{QUANTITY_TEXT}', 'الكرت').replaceAll('{QUANTITY}', '1').replaceAll('{CUSTOMER_PHONE}', '779776919')
-        .replaceAll('{POS_NAME}', 'الأمل').replaceAll('{TOTAL}', '90').replaceAll('{AMOUNT}', '90').replaceAll('{cards}', 'رقم الكرت: 1234567\\nالرمز: 987654');
+  /// تستخدم المعاينة المتغيرات المسموحة للقالب الذي سيُستبدل فعلياً.
+  String _preview(String body, {String? templateKey}) {
+    if (body.trim().isEmpty) return '—';
+    final definition = templateKey == null
+        ? null
+        : OutboundTemplateCatalog.byKey(templateKey);
+    final rendered = OutboundTemplateRenderer.renderStrict(
+      template: body,
+      values: definition == null
+          ? OutboundTemplateCatalog.previewSamples
+          : OutboundTemplateCatalog.previewValuesFor(definition),
+    );
+    if (rendered is Success<String>) return rendered.value;
+    return '⛔ لن تُرسل هذه الرسالة: ${(rendered as Failure<String>).error.message}';
   }
 
   String _variableLabel(String variable) => const <String, String>{
@@ -648,7 +636,17 @@ class _OutboundMessageTemplatesScreenState
                     Container(width: double.infinity, padding: const EdgeInsets.all(14), decoration: BoxDecoration(color: palette.primary.withValues(alpha: 0.06), borderRadius: BorderRadius.circular(12)), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                       Row(children: [Icon(Icons.phone_android_rounded, size: 16, color: palette.textSecondary), const SizedBox(width: 6), Text('شاشة هاتف العميل المستلم', style: TextStyle(fontFamily: 'Tajawal', fontSize: 12, color: palette.textSecondary))]),
                       const SizedBox(height: 8),
-                      Text(body.isEmpty ? '—' : _preview(body), style: const TextStyle(fontFamily: 'Tajawal', height: 1.45)),
+                      Text(
+                        body.isEmpty
+                            ? '—'
+                            : _preview(
+                                body,
+                                templateKey: item?.isCustom == true
+                                    ? item?.target
+                                    : (item?.keyName ?? effectiveTarget()),
+                              ),
+                        style: const TextStyle(fontFamily: 'Tajawal', height: 1.45),
+                      ),
                     ])),
                   ]))),
                   const SizedBox(height: 12),
@@ -845,7 +843,7 @@ class _OutboundMessageTemplatesScreenState
             ),
           ),
         const SizedBox(height: 8),
-        Container(width: double.infinity, padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: palette.primary.withValues(alpha: 0.04), borderRadius: BorderRadius.circular(12)), child: Text(_preview(body), style: TextStyle(fontFamily: 'Tajawal', height: 1.45, color: palette.textSecondary, fontSize: 13))),
+        Container(width: double.infinity, padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: palette.primary.withValues(alpha: 0.04), borderRadius: BorderRadius.circular(12)), child: Text(_preview(body, templateKey: t.isCustom ? t.target : t.keyName), style: TextStyle(fontFamily: 'Tajawal', height: 1.45, color: palette.textSecondary, fontSize: 13))),
       ]),
     ))));
   }

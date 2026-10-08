@@ -11,6 +11,7 @@ import '../entities/transaction.dart';
 import '../phone_normalizer.dart';
 import '../repositories/repositories.dart';
 import 'local_pos_account_registry.dart';
+import 'outbound_template_renderer.dart';
 import 'services.dart';
 
 /// Sends the configured daily POS operational summary from the same customer
@@ -226,14 +227,31 @@ final class LocalPosDailySummaryService {
         continue;
       }
 
-      final body = _render(
-        template,
-        pos: account.name,
-        salesMinorUnits: salesMinorUnits,
-        transferMinorUnits: transferMinorUnits,
-        balanceMinorUnits:
+      final rendered = OutboundTemplateRenderer.renderStrict(
+        template: template,
+        values: <String, String>{
+          'pos': account.name,
+          'pos_name': account.name,
+          'POS_NAME': account.name,
+          'sales': _displayMinor(salesMinorUnits),
+          'transfers': _displayMinor(transferMinorUnits),
+          'balance': _displayMinor(
             (balanceResult as Success).value.minorUnits,
+          ),
+          'CURRENCY': 'ر.ي',
+        },
       );
+      if (rendered is Failure<String>) {
+        failed++;
+        errors.add('${account.posId}:${rendered.error.code}');
+        await _auditFailure(
+          account: account,
+          day: summaryDay,
+          code: rendered.error.code,
+        );
+        continue;
+      }
+      final body = (rendered as Success<String>).value;
 
       final sendResult = await messageSender.send(
         destination: destination,
@@ -317,15 +335,11 @@ final class LocalPosDailySummaryService {
     );
   }
 
-  Future<Result<String>> _loadTemplate() async {
-    final found = await settings.find(SettingKeys.dailyPosSummaryTemplate);
-    if (found is Failure<AppSetting?>) return Failure(found.error);
-    final value = (found as Success<AppSetting?>).value?.value.trim();
-    if (value == null || value.isEmpty) {
-      return const Success(SettingDefaults.dailyPosSummaryTemplate);
-    }
-    return Success(value);
-  }
+  /// نص الملخص اليومي من مركز القوالب فقط — لا نص بديل وقت التشغيل.
+  Future<Result<String>> _loadTemplate() =>
+      OutboundTemplateRenderer(settings: settings).loadRegisteredBody(
+        SettingKeys.dailyPosSummaryTemplate,
+      );
 
   String? _destinationFor(PosAccount account) {
     final candidates = <String>[
@@ -358,28 +372,6 @@ final class LocalPosDailySummaryService {
     }
 
     return total;
-  }
-
-  String _render(
-    String template, {
-    required String pos,
-    required int salesMinorUnits,
-    required int transferMinorUnits,
-    required int balanceMinorUnits,
-  }) {
-    final values = <String, String>{
-      'pos': pos,
-      'sales': _displayMinor(salesMinorUnits),
-      'transfers': _displayMinor(transferMinorUnits),
-      'balance': _displayMinor(balanceMinorUnits),
-      'CURRENCY': 'ر.ي',
-    };
-
-    var result = template;
-    for (final entry in values.entries) {
-      result = result.replaceAll('{${entry.key}}', entry.value);
-    }
-    return result;
   }
 
   String _displayMinor(int minorUnits) =>

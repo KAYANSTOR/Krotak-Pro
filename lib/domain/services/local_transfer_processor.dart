@@ -142,6 +142,9 @@ final class LocalTransferProcessor implements TransferProcessor {
             '{"debt":$currentDebt,"charge":$chargeMinorUnits,"limit":$limit,"remaining":$remaining}',
       ),
     );
+    // إشعار نقطة البيع من قالبه المسجّل في الإعدادات (لا نص مضمّن هنا).
+    // فشل الإشعار لا يُلغي رفض الطلب: القاعدة المالية مُطبَّقة فعلًا.
+    await posAutoSettlement?.notifyCreditLimitExceeded(posAccount);
     return Failure(failure);
   }
 
@@ -1691,15 +1694,17 @@ final class LocalTransferProcessor implements TransferProcessor {
       );
     }
     final batchTemplate = await OutboundTemplateRenderer(settings: settings)
-        .renderFromSettings(
+        .renderRegistered(
       key: SettingKeys.posCustomerCardDeliveryTemplate,
-      fallback:
-          'تم تنفيذ طلب {quantity} كروت بنجاح\n{cards}',
       values: {
         'quantity': '${sold.length}',
         'QUANTITY': '${sold.length}',
         'cards': lines.join('\n'),
         'CARDS': lines.join('\n'),
+        'category': category.name,
+        'category_name': category.name,
+        'CARD_VALUE': (category.faceValue.minorUnits / 100).toString(),
+        'CURRENCY': 'ر.ي',
       },
     );
     if (batchTemplate is Failure<String>) {

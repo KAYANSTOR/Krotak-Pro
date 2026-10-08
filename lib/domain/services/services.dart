@@ -254,17 +254,6 @@ final class CardImportDraft {
   bool get hasSecret => secretCode.trim().isNotEmpty;
 }
 
-/// Fallback voucher body only — prefer [OutboundTemplateRenderer.renderVoucherDelivery]
-/// so operators can edit the template and unresolved placeholders are blocked.
-String cardDeliverySmsBody({required String serialNumber, required String secretCode}) {
-  final serial = serialNumber.trim();
-  final secret = secretCode.trim();
-  if (secret.isEmpty) {
-    return 'بطاقة الإنترنت\nالرقم: $serial';
-  }
-  return 'بطاقة الإنترنت\nالرقم: $serial\nالرمز: $secret';
-}
-
 final class UnresolvedDomainDecision implements Exception {
   const UnresolvedDomainDecision(this.decision);
   final String decision;

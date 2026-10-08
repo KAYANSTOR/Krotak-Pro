@@ -152,6 +152,16 @@ abstract interface class SettingsRepository {
   Future<Result<void>> save(AppSetting setting);
 }
 
+/// قدرة إضافية اختيارية على حذف مفتاح إعداد بالكامل.
+///
+/// تُستخدم لتنظيف آثار القوالب المخصّصة المحذوفة فلا تبقى مفاتيح يتيمة
+/// (`custom:<id>`) قابلة للقراءة بعد اختفاء تعريفها من السجل.
+/// التنفيذات التي لا توفّرها تبقى متوافقة: شاشة القوالب تكتب قيمة فارغة
+/// بدلًا من الحذف، والقيمة الفارغة يُرفض الإرسال بها تمامًا كالمفتاح الغائب.
+abstract interface class SettingsPurge {
+  Future<Result<void>> delete(String key);
+}
+
 abstract interface class AuditLogRepository {
   Future<Result<void>> append(AuditLog log);
   Future<Result<List<AuditLog>>> findByEntity(String entityType, String entityId);

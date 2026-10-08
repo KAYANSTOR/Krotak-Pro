@@ -5,7 +5,11 @@ import 'package:net_app/domain/entities/money.dart';
 import 'package:net_app/domain/entities/pos_account.dart';
 import 'package:net_app/domain/entities/setting.dart';
 import 'package:net_app/domain/repositories/repositories.dart';
+import 'package:net_app/domain/services/outbound_template_catalog.dart';
 import 'package:net_app/domain/services/pos_order_message_renderer.dart';
+
+/// نصوص القوالب الأولية من العقد المركزي — نفس ما يزرعه [DefaultOutboundTemplatesSeeder].
+Map<String, String> _seeded() => OutboundTemplateCatalog.initialBodies();
 
 final class _Settings implements SettingsRepository {
   _Settings([Map<String, String>? values]) : _values = values ?? <String, String>{};
@@ -69,6 +73,7 @@ void main() {
   test('renders customer voucher SMS and POS confirmation separately', () async {
     final renderer = PosOrderMessageRenderer(
       settings: _Settings(<String, String>{
+        ..._seeded(),
         SettingKeys.networkName: 'NET',
       }),
     );
@@ -102,6 +107,7 @@ void main() {
   test('uses persisted custom templates', () async {
     final renderer = PosOrderMessageRenderer(
       settings: _Settings(<String, String>{
+        ..._seeded(),
         SettingKeys.networkName: 'شبكة كيان',
         SettingKeys.posCustomerCardDeliveryTemplate:
             'العميل {CUSTOMER_PHONE} — {NETWORK_NAME} — {cards}',
@@ -127,5 +133,32 @@ void main() {
     expect(value.customerBody, contains('شبكة كيان'));
     expect(value.customerBody, contains('100001'));
     expect(value.posBody, 'تم الطلب للعميل 733123456 من بقالة الأمل بإجمالي 85 ر.ي');
+  });
+
+  test('refuses to render when the settings templates are missing', () async {
+    final renderer = PosOrderMessageRenderer(
+      settings: _Settings(<String, String>{SettingKeys.networkName: 'NET'}),
+    );
+
+    final result = await renderer.render(
+      posAccount: pos,
+      customerPhone: '779776919',
+      posNotificationPhone: '777000111',
+      categoryName: category.name,
+      faceValue: category.faceValue,
+      unitCharge: const Money(minorUnits: 9000, currencyCode: 'YER'),
+      cards: cards,
+      quantity: 2,
+    );
+
+    expect(
+      result,
+      isA<Failure<PosOrderMessages>>(),
+      reason: 'غياب القالب يمنع الإرسال — لا نص بديل',
+    );
+    expect(
+      (result as Failure<PosOrderMessages>).error.code,
+      'outbound_template_missing',
+    );
   });
 }

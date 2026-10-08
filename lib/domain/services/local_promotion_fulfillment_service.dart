@@ -10,6 +10,7 @@ import '../phone_normalizer.dart';
 import '../repositories/repositories.dart';
 import '../repositories/unit_of_work.dart';
 import 'local_promotion_catalog.dart';
+import 'outbound_template_renderer.dart';
 import 'promotion_reward_template.dart';
 import 'local_promotion_progress_service.dart';
 import 'services.dart';
@@ -52,6 +53,8 @@ final class LocalPromotionFulfillmentService {
   final SettingsRepository settings;
   final MessageSender? messageSender;
 
+  /// النص الأولي لقالب مكافأة العرض — موجود في العقد المركزي وحده.
+  /// لا يُستخدم وقت الإرسال: الإرسال يقرأ من الإعدادات حصرًا.
   static const defaultRewardSmsTemplate =
       SettingDefaults.promotionRewardSmsTemplate;
 
@@ -264,7 +267,7 @@ final class LocalPromotionFulfillmentService {
     final customerName = customer is Success<Customer?>
         ? (customer.value?.displayName ?? '')
         : '';
-    final body = await _renderTemplate(promotionId, customerId, {
+    final rendered = await _renderTemplate(promotionId, customerId, {
       'title': promotionTitle,
       'promotion_name': promotionTitle,
       'serial': card.serialNumber,
@@ -274,6 +277,22 @@ final class LocalPromotionFulfillmentService {
       'reward_value': amount,
       'customer_name': customerName,
     });
+    if (rendered is Failure<String>) {
+      // لا إرسال بلا قالب مسجّل — نُسجّل السبب ونكتفي بالكرت المصروف.
+      await auditLogs.append(
+        AuditLog(
+          id: ids.next('audit'),
+          entityType: 'promotion',
+          entityId: promotionId,
+          action: 'reward_sms_skipped',
+          payloadJson:
+              '{"customerId":"$customerId","reason":"${rendered.error.code}"}',
+          occurredAt: clock.now(),
+        ),
+      );
+      return;
+    }
+    final body = (rendered as Success<String>).value;
     final sent = await sender.send(destination: destination, body: body);
     await auditLogs.append(
       AuditLog(
@@ -301,7 +320,7 @@ final class LocalPromotionFulfillmentService {
     return PhoneNormalizer.canonicalize(primary.value) ?? primary.value;
   }
 
-  Future<String> _renderTemplate(
+  Future<Result<String>> _renderTemplate(
     String promotionId,
     String customerId,
     Map<String, String> values,
@@ -320,7 +339,8 @@ final class LocalPromotionFulfillmentService {
     final customerGlobalRaw = perCustomerGlobal is Success<AppSetting?>
         ? perCustomerGlobal.value?.value
         : null;
-    var output = PromotionRewardTemplate.resolve(
+    // الطبقات الأخصّ (عميل داخل عرض → عميل عام) قد تحمل نصًّا مخصّصًا.
+    final specific = PromotionRewardTemplate.resolveLayer(
       perCustomer: PromotionRewardTemplate.lookupCustomer(
         customerRaw,
         promotionId,
@@ -332,12 +352,20 @@ final class LocalPromotionFulfillmentService {
         customerId,
       ),
       global: globalRaw,
-      fallback: defaultRewardSmsTemplate,
+      fallback: '',
     );
-    values.forEach((name, value) {
-      output = output.replaceAll('{$name}', value);
-    });
-    return output;
+    // لا يوجد نص في أي طبقة مخصّصة → القالب العام المسجّل في الإعدادات وحده.
+    // لا نص بديل: إن غاب القالب العام فشل الإرسال.
+    final resolved = specific.template.trim().isEmpty
+        ? await OutboundTemplateRenderer(settings: settings).loadRegisteredBody(
+            SettingKeys.promotionRewardSmsTemplate,
+          )
+        : Success(specific.template);
+    if (resolved is Failure<String>) return Failure(resolved.error);
+    return OutboundTemplateRenderer.renderStrict(
+      template: (resolved as Success<String>).value,
+      values: values,
+    );
   }
 
   /// يستخدم حجز المعاينة إن كان الكرت ما يزال محجوزاً بنفس المعرّف. غير ذلك لا يحجز شيئاً هنا.

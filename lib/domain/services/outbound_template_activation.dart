@@ -5,12 +5,19 @@ import '../../core/result.dart';
 import '../entities/setting.dart';
 import '../repositories/repositories.dart';
 
-/// تفعيل قالب رسالة مخصّص مكان قالب النظام.
+/// تفعيل قالب رسالة مخصّص بدلًا من قالب النظام.
 ///
-/// كل مسارات الإرسال تقرأ مفتاح قالب النظام مباشرة، لذا يكون التفعيل
-/// «كتابة نافذة»: نص القالب المخصّص يُكتب تحت مفتاح النظام نفسه، ويُحفظ
-/// نص النظام الأصلي جانباً ليعود عند إلغاء التفعيل. السجل
-/// [SettingKeys.activeOutboundTemplates] هو مصدر الحقيقة لمن هو الفعّال.
+/// **مصدران لا يتنافسان:**
+/// - قرار «أي قالب يُرسل» → [SettingKeys.activeOutboundTemplates] (مفتاح نظام ← معرّف قالب مخصّص).
+/// - نص القالب المخصّص → [SettingKeys.customOutboundBody] وحده.
+///
+/// قالب النظام **لا يُكتب فوقه أبدًا**، فيبقى نصه الأصلي سليمًا ويعود تلقائيًا
+/// بمجرّد رفع القرار من الخريطة. لذلك:
+/// - التفعيل = كتابة واحدة للخريطة (بعد التحقق من وجود نص القالب).
+/// - الإلغاء = كتابة واحدة للخريطة.
+///
+/// لا توجد حالة نصف مكتملة: لا كتابة على مفتاح قالب النظام، ولا نسخة «أصلية»
+/// موازية يمكن أن تنحرف عن النص الحقيقي.
 final class OutboundTemplateActivation {
   const OutboundTemplateActivation({required this.settings, required this.clock});
 
@@ -27,7 +34,9 @@ final class OutboundTemplateActivation {
       if (decoded is Map) {
         return <String, String>{
           for (final e in decoded.entries)
-            if (e.key is String && e.value is String && (e.value as String).isNotEmpty)
+            if (e.key is String &&
+                e.value is String &&
+                (e.value as String).isNotEmpty)
               e.key as String: e.value as String,
         };
       }
@@ -37,50 +46,34 @@ final class OutboundTemplateActivation {
     return <String, String>{};
   }
 
-  /// نص قالب النظام الأصلي المحفوظ أثناء الاستبدال (أو null).
-  Future<String?> originalBody(String systemKey) async {
-    final r = await settings.find(SettingKeys.outboundSystemOriginal(systemKey));
-    final v = r is Success<AppSetting?> ? r.value?.value : null;
-    return (v == null || v.trim().isEmpty) ? null : v;
-  }
-
-  /// يجعل [customBody] هو النص المُرسَل فعلياً بدل قالب [systemKey].
+  /// يجعل نص القالب المخصّص [customId] هو المُرسَل بدل قالب [systemKey].
+  ///
+  /// يتحقق أولًا من أن نص القالب المخصّص مكتوب فعلًا، فلا تُكتب خريطة تفعيل
+  /// تشير إلى قالب غير موجود (وهو ما كان يُنتج حالة جزئية).
   Future<Result<void>> activate({
     required String systemKey,
     required String customId,
-    required String customBody,
-    required String systemFallback,
   }) async {
-    final body = customBody.trim();
-    if (body.isEmpty) {
-      return const Failure(AppFailure(code: 'template_empty', message: 'لا يمكن تفعيل قالب فارغ'));
+    final body = await settings.find(SettingKeys.customOutboundBody(customId));
+    if (body is Failure<AppSetting?>) return Failure(body.error);
+    final value = (body as Success<AppSetting?>).value?.value.trim() ?? '';
+    if (value.isEmpty) {
+      return const Failure(
+        AppFailure(
+          code: 'template_empty',
+          message: 'لا يمكن تفعيل قالب بلا نص — احفظ نص القالب أولًا',
+        ),
+      );
     }
     final active = await loadActive();
-    if (!active.containsKey(systemKey)) {
-      // أول استبدال: احفظ النص الحالي (قد يكون المشغّل عدّله) ليعود لاحقاً.
-      final cur = await settings.find(systemKey);
-      final current = cur is Success<AppSetting?> ? cur.value?.value : null;
-      final saved = await _save(
-        SettingKeys.outboundSystemOriginal(systemKey),
-        (current == null || current.trim().isEmpty) ? systemFallback : current,
-      );
-      if (saved is Failure<void>) return saved;
-    }
-    final wrote = await _save(systemKey, body);
-    if (wrote is Failure<void>) return wrote;
     active[systemKey] = customId;
     return _writeActive(active);
   }
 
-  /// يلغي الاستبدال: يعود قالب النظام الأصلي هو المُرسَل.
-  Future<Result<void>> revert({
-    required String systemKey,
-    required String systemFallback,
-  }) async {
+  /// يلغي الاستبدال: يعود قالب النظام هو المُرسَل.
+  Future<Result<void>> revert({required String systemKey}) async {
     final active = await loadActive();
     if (!active.containsKey(systemKey)) return const Success(null);
-    final restored = await _save(systemKey, await originalBody(systemKey) ?? systemFallback);
-    if (restored is Failure<void>) return restored;
     active.remove(systemKey);
     return _writeActive(active);
   }
@@ -88,25 +81,11 @@ final class OutboundTemplateActivation {
   /// يُعيد كل القوالب لنصوص النظام (يُستخدم قبل «إصلاح القوالب»).
   Future<Result<void>> clear() => _writeActive(<String, String>{});
 
-  /// حفظ تعديل على قالب نظام: إن كان مستبدلاً يُحفظ كنص أصلي ولا يمسّ المُرسَل.
-  Future<Result<void>> saveSystemBody(String systemKey, String body) async {
-    final active = await loadActive();
-    if (active.containsKey(systemKey)) {
-      return _save(SettingKeys.outboundSystemOriginal(systemKey), body);
-    }
-    return _save(systemKey, body);
-  }
-
-  /// بعد تعديل قالب مخصّص فعّال: يُحدَّث النص المُرسَل فعلياً أيضاً.
-  Future<Result<void>> syncActiveBody(String systemKey, String customId, String body) async {
-    final active = await loadActive();
-    if (active[systemKey] != customId) return const Success(null);
-    return _save(systemKey, body);
-  }
-
-  Future<Result<void>> _writeActive(Map<String, String> active) =>
-      _save(SettingKeys.activeOutboundTemplates, jsonEncode(active));
-
-  Future<Result<void>> _save(String key, String value) =>
-      settings.save(AppSetting(key: key, value: value, updatedAt: clock.now()));
+  Future<Result<void>> _writeActive(Map<String, String> active) => settings.save(
+        AppSetting(
+          key: SettingKeys.activeOutboundTemplates,
+          value: jsonEncode(active),
+          updatedAt: clock.now(),
+        ),
+      );
 }

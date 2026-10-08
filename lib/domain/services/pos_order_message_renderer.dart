@@ -31,17 +31,7 @@ final class PosOrderMessageRenderer {
       );
     }
 
-    final customerTemplate = await _template(
-      SettingKeys.posCustomerCardDeliveryTemplate,
-      SettingDefaults.posCustomerCardDeliveryTemplate,
-    );
-    if (customerTemplate is Failure<String>) return Failure(customerTemplate.error);
-
-    final posTemplate = await _template(
-      SettingKeys.posOrderSuccessTemplate,
-      SettingDefaults.posOrderSuccessTemplate,
-    );
-    if (posTemplate is Failure<String>) return Failure(posTemplate.error);
+    final renderer = OutboundTemplateRenderer(settings: settings);
 
     final networkResult = await settings.find(SettingKeys.networkName);
     final networkName = networkResult is Success<AppSetting?> &&
@@ -64,9 +54,9 @@ final class PosOrderMessageRenderer {
 
     final first = cards.first;
     final quantityText = _quantityText(effectiveQty);
-    final customerBodyResult = _replace(
-      (customerTemplate as Success<String>).value,
-      <String, String>{
+    final customerBodyResult = await renderer.renderRegistered(
+      key: SettingKeys.posCustomerCardDeliveryTemplate,
+      values: <String, String>{
         'serial': first.serialNumber,
         'code': first.secretCode,
         'secret': first.secretCode,
@@ -92,9 +82,9 @@ final class PosOrderMessageRenderer {
       },
     );
 
-    final posBodyResult = _replace(
-      (posTemplate as Success<String>).value,
-      <String, String>{
+    final posBodyResult = await renderer.renderRegistered(
+      key: SettingKeys.posOrderSuccessTemplate,
+      values: <String, String>{
         'pos': posAccount.name,
         'POS_NAME': posAccount.name,
         'pos_name': posAccount.name,
@@ -129,12 +119,17 @@ final class PosOrderMessageRenderer {
     if (posBodyResult is Failure<String>) {
       return Failure(posBodyResult.error);
     }
-    final customerBody = (customerBodyResult as Success<String>).value;
+    final customerBody = await _appendTail(
+      renderer,
+      (customerBodyResult as Success<String>).value,
+      posAccount,
+    );
+    if (customerBody is Failure<String>) return Failure(customerBody.error);
     final posBody = (posBodyResult as Success<String>).value;
 
     return Success(
       PosOrderMessages(
-        customerBody: customerBody,
+        customerBody: (customerBody as Success<String>).value,
         posBody: posBody,
         customerDestination: customerPhone,
         posDestination: posNotificationPhone,
@@ -144,18 +139,25 @@ final class PosOrderMessageRenderer {
     );
   }
 
-  Future<Result<String>> _template(String key, String fallback) async {
-    final result = await settings.find(key);
-    if (result is Failure<AppSetting?>) return Failure(result.error);
-    final value = (result as Success<AppSetting?>).value?.value.trim();
-    return Success(value == null || value.isEmpty ? fallback : value);
-  }
-
-  Result<String> _replace(String body, Map<String, String> values) {
-    return OutboundTemplateRenderer.renderStrict(
-      template: body,
-      values: values,
+  /// يلحق ذيل رسالة العميل (قالب مسجّل) — ولا يُلحق شيئًا إن كان الذيل فارغًا.
+  Future<Result<String>> _appendTail(
+    OutboundTemplateRenderer renderer,
+    String body,
+    PosAccount posAccount,
+  ) async {
+    final tail = await renderer.renderRegistered(
+      key: SettingKeys.posCustomerSmsTailTemplate,
+      values: <String, String>{
+        'pos': posAccount.name,
+        'pos_name': posAccount.name,
+        'POS_NAME': posAccount.name,
+        'CURRENCY': 'ر.ي',
+      },
     );
+    if (tail is Failure<String>) return Failure(tail.error);
+    final suffix = (tail as Success<String>).value;
+    if (suffix.trim().isEmpty) return Success(body);
+    return Success('$body$suffix');
   }
 
   String _currency(Money money) =>

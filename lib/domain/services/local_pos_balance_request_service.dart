@@ -6,6 +6,7 @@ import '../entities/message.dart';
 import '../entities/setting.dart';
 import '../repositories/repositories.dart';
 import 'local_pos_account_registry.dart';
+import 'outbound_template_renderer.dart';
 import 'services.dart';
 
 final class LocalPosBalanceRequestService {
@@ -86,14 +87,20 @@ final class LocalPosBalanceRequestService {
     final debtMinor = balance.minorUnits < 0 ? -balance.minorUnits : 0;
     final debtText = (debtMinor / 100).toStringAsFixed(2);
 
-    final setting = await settings.find(SettingKeys.posBalanceResponseTemplate);
-    final template = setting is Success<AppSetting?> && setting.value != null
-        ? setting.value!.value
-        : SettingDefaults.posBalanceResponseTemplate;
-    final body = template
-        .replaceAll('{pos}', account.name)
-        .replaceAll('{balance}', balanceText)
-        .replaceAll('{debt}', debtText);
+    final rendered = await OutboundTemplateRenderer(settings: settings)
+        .renderRegistered(
+      key: SettingKeys.posBalanceResponseTemplate,
+      values: <String, String>{
+        'pos': account.name,
+        'pos_name': account.name,
+        'POS_NAME': account.name,
+        'balance': balanceText,
+        'debt': debtText,
+        'CURRENCY': 'ر.ي',
+      },
+    );
+    if (rendered is Failure<String>) return Failure(rendered.error);
+    final body = (rendered as Success<String>).value;
 
     final destination = account.notifyPhone ?? message.sender;
     final sent = await messageSender.send(destination: destination, body: body);

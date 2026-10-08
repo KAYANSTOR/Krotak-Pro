@@ -523,6 +523,9 @@ final class AppContainer {
         retryService: retryService,
         clock: clock,
         ids: ids,
+        // قوالب الرسائل تُقرأ من الإعدادات حصرًا — بلا هذا لا يمكن تسليم أي
+        // قسيمة (لا نص بديل في الخدمة).
+        settings: settings,
         metrics: pipelineMetrics);
     final posOrderDeliveryWorker = PosOrderDeliveryWorker(
         messages: messages,

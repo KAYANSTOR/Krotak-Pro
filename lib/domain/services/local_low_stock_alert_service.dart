@@ -6,6 +6,7 @@ import '../../core/result.dart';
 import '../entities/card.dart';
 import '../entities/setting.dart';
 import '../repositories/repositories.dart';
+import 'outbound_template_renderer.dart';
 import 'services.dart';
 
 final class LowStockAlert {
@@ -39,6 +40,8 @@ final class LocalLowStockAlertService {
   /// ناشر إشعار أندرويد الحي — null في الاختبارات وبيئات غير أندرويد.
   final StockAlertNotifier? notifier;
 
+  /// نص التنبيه الافتراضي (زرع أولي فقط — انظر [OutboundTemplateCatalog]).
+  /// لا يُستخدم وقت الإرسال: الإرسال يقرأ من الإعدادات حصرًا.
   static const defaultCustomerTemplate =
       'عذراً، كروت فئة {category} غير متوفرة حالياً (المتبقي: {count}). يرجى التواصل مع الإدارة.';
 
@@ -129,25 +132,27 @@ final class LocalLowStockAlertService {
     await _writeStored(next);
   }
 
-  String renderCustomerMessage({
+  /// نص تنبيه العميل من مركز القوالب فقط — لا نص بديل وقت التشغيل.
+  Future<Result<String>> loadCustomerTemplate() =>
+      OutboundTemplateRenderer(settings: settings).loadRegisteredBody(
+        SettingKeys.lowStockAlertTemplate,
+      );
+
+  /// يستبدل متغيرات تنبيه المخزون في قالب مسجّل ويُرفض إن بقي متغير غير محلول.
+  Result<String> renderCustomerMessage({
+    required String template,
     required String categoryName,
     required int available,
-    String? template,
   }) {
-    final raw = (template != null && template.trim().isNotEmpty)
-        ? template
-        : defaultCustomerTemplate;
-    return raw
-        .replaceAll('{category}', categoryName)
-        .replaceAll('{count}', '$available')
-        .replaceAll('{CARD_VALUE}', categoryName);
-  }
-
-  Future<String> loadCustomerTemplate() async {
-    final found = await settings.find(SettingKeys.lowStockAlertTemplate);
-    final raw = found is Success<AppSetting?> ? found.value?.value : null;
-    if (raw != null && raw.trim().isNotEmpty) return raw;
-    return defaultCustomerTemplate;
+    return OutboundTemplateRenderer.renderStrict(
+      template: template,
+      values: <String, String>{
+        'category': categoryName,
+        'category_name': categoryName,
+        'count': '$available',
+        'CARD_VALUE': categoryName,
+      },
+    );
   }
 
   Future<Result<void>> notifyCustomer({
@@ -162,13 +167,18 @@ final class LocalLowStockAlertService {
         AppFailure(code: 'low_stock_sms_skipped', message: 'No destination or sender'),
       );
     }
-    final template = await loadCustomerTemplate();
-    final body = renderCustomerMessage(
+    final loaded = await loadCustomerTemplate();
+    if (loaded is Failure<String>) return Failure(loaded.error);
+    final rendered = renderCustomerMessage(
+      template: (loaded as Success<String>).value,
       categoryName: categoryName,
       available: available,
-      template: template,
     );
-    return sender.send(destination: dest, body: body);
+    if (rendered is Failure<String>) return Failure(rendered.error);
+    return sender.send(
+      destination: dest,
+      body: (rendered as Success<String>).value,
+    );
   }
 
   Future<List<LowStockAlert>> _readStored() async {

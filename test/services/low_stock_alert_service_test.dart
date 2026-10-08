@@ -6,6 +6,7 @@ import 'package:net_app/domain/entities/money.dart';
 import 'package:net_app/domain/entities/setting.dart';
 import 'package:net_app/domain/repositories/repositories.dart';
 import 'package:net_app/domain/services/local_low_stock_alert_service.dart';
+import 'package:net_app/domain/services/outbound_template_catalog.dart';
 import 'package:net_app/domain/services/services.dart';
 
 import '../helpers/in_memory_repositories.dart';
@@ -20,7 +21,9 @@ void main() {
     final clock = FixedClock(DateTime.utc(2026, 9, 20, 21));
 
     setUp(() {
-      settings = _MemSettings();
+      // نصّ القالب من مصدره الوحيد (الإعدادات) — لا نص بديل وقت الإرسال.
+      settings = _MemSettings()
+        ..values.addAll(OutboundTemplateCatalog.initialBodies());
       categories = _MemCategories();
       cards = InMemoryCardRepository();
       sender = _MemSender();
@@ -143,7 +146,43 @@ void main() {
         available: 0,
         template: 'نفد {category} المتبقي {count}',
       );
-      expect(text, 'نفد 200 المتبقي 0');
+      expect(text, isA<Success<String>>());
+      expect((text as Success<String>).value, 'نفد 200 المتبقي 0');
+    });
+
+    test('renderCustomerMessage refuses an unresolved placeholder', () {
+      final text = service.renderCustomerMessage(
+        categoryName: '200',
+        available: 0,
+        template: 'نفد {category} المتبقي {unknown_var}',
+      );
+      expect(text, isA<Failure<String>>());
+      expect(
+        (text as Failure<String>).error.code,
+        'outbound_unresolved_placeholder',
+      );
+    });
+
+    test('notifyCustomer refuses to send when the template is missing', () async {
+      final bare = LocalLowStockAlertService(
+        settings: _MemSettings(),
+        categories: categories,
+        cards: cards,
+        clock: clock,
+        messageSender: sender,
+      );
+      final sent = await bare.notifyCustomer(
+        destination: '777123456',
+        categoryName: '100',
+        available: 0,
+      );
+      expect(sent, isA<Failure<void>>());
+      expect(
+        (sent as Failure<void>).error.code,
+        'outbound_template_missing',
+        reason: 'لا إرسال بلا قالب مسجّل في الإعدادات',
+      );
+      expect(sender.bodies, isEmpty);
     });
   });
 }

@@ -1,6 +1,7 @@
 part of local_repositories;
 
-final class LocalSettingsRepository implements SettingsRepository {
+final class LocalSettingsRepository
+    implements SettingsRepository, SettingsPurge {
   const LocalSettingsRepository(this.database);
 
   final AppDatabase database;
@@ -30,6 +31,19 @@ final class LocalSettingsRepository implements SettingsRepository {
       return const Success(null);
     } catch (error) {
       return Failure(_failure('setting_save_failed', error));
+    }
+  }
+
+  /// يحذف مفتاح الإعداد بالكامل — فلا يبقى أثر قابل للقراءة لقالب محذوف.
+  @override
+  Future<Result<void>> delete(String key) async {
+    try {
+      await (database.delete(database.appSettings)
+            ..where((table) => table.key.equals(key)))
+          .go();
+      return const Success(null);
+    } catch (error) {
+      return Failure(_failure('setting_delete_failed', error));
     }
   }
 

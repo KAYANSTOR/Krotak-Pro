@@ -55,7 +55,7 @@ jobs:
           set -euo pipefail
           flutter build apk --config-only
           cd android
-          ./gradlew :app:testDebugUnitTest --no-daemon --console=plain
+          ./gradlew :app:testDebugUnitTest -PallowDebugRelease=true --no-daemon --console=plain
       - name: Upload Android unit test reports
         if: always()
         uses: actions/upload-artifact@v7

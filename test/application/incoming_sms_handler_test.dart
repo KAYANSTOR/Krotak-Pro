@@ -26,6 +26,7 @@ import 'package:net_app/domain/entities/customer.dart';
 import 'package:net_app/domain/entities/message.dart';
 import 'package:net_app/domain/entities/money.dart';
 import 'package:net_app/domain/entities/transaction.dart';
+import 'package:net_app/domain/services/default_outbound_templates_seeder.dart';
 import 'package:net_app/domain/services/local_card_inventory_service.dart';
 import 'package:net_app/domain/services/local_catalog_services.dart';
 import 'package:net_app/domain/services/local_customer_balance_service.dart';
@@ -136,6 +137,7 @@ void main() {
     late FixedClock clock;
     late SequentialIdGenerator ids;
     late LocalCustomerService customerService;
+    late LocalSettingsRepository settings;
     late LocalCustomerBalanceService balanceService;
     late LocalCardCatalogService catalogService;
     late LocalCardInventoryService inventoryService;
@@ -148,6 +150,7 @@ void main() {
 
     setUp(() async {
       database = AppDatabase(NativeDatabase.memory());
+      settings = LocalSettingsRepository(database);
       customers = LocalCustomerRepository(database);
       categories = LocalCardCategoryRepository(database);
       cards = LocalCardRepository(database);
@@ -215,6 +218,7 @@ void main() {
         transactions: transactions,
         reservedSales: saleService,
         messageSender: sender,
+        settings: settings,
       );
 
       await customerService.create(
@@ -238,6 +242,12 @@ void main() {
           CardImportDraft(serialNumber: 'SN-IN-3', secretCode: 'PIN-IN-3'),
         ],
       );
+      // قوالب الرسائل الصادرة تُزرع في الإعدادات كما يفعل التطبيق عند الإقلاع:
+      // لا إرسال بلا قالب موجود في الإعدادات.
+      await DefaultOutboundTemplatesSeeder(
+        settings: settings,
+        clock: clock,
+      ).seedIfNeeded();
     });
 
     tearDown(() async => database.close());
@@ -265,7 +275,7 @@ void main() {
         processor: override ?? processor,
         ids: ids,
         sourceGuard: trustedPaymentSourceGuard(),
-        settings: LocalSettingsRepository(database),
+        settings: settings,
       );
     }
 

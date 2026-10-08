@@ -12,6 +12,7 @@ import '../ledger.dart';
 import '../phone_normalizer.dart';
 import '../repositories/repositories.dart';
 import 'local_pos_account_registry.dart';
+import 'outbound_template_renderer.dart';
 import 'services.dart';
 
 /// Applies an incoming wallet transfer as a POS ledger settlement
@@ -78,10 +79,19 @@ final class LocalPosAutoSettlementService {
     }
     final tx = (credited as Success<Transaction>).value;
 
-    final remaining = await _remainingDebt(
+    final remainingResult = await _remainingDebt(
       customerId: account.customerId,
       currencyCode: transfer.amount.currencyCode,
     );
+    if (remainingResult is Failure<int>) {
+      // لم نتمكن من التحقق من المتبقي: الرصيد أُضيف فعلًا، والحركة موثّقة،
+      // لكن لا يجوز إرسال «تسوية ناجحة» برقم غير مؤكد — نُرسل إشعار «غير
+      // مؤكدة» من قالبه المسجّل ونترك الرسالة للمراجعة اليدوية.
+      await messages.updateStatus(message.id, MessageProcessingStatus.failed);
+      await _notifyUnknown(account);
+      return Failure(remainingResult.error);
+    }
+    final remaining = (remainingResult as Success<int>).value;
 
     await auditLogs.append(
       AuditLog(
@@ -134,20 +144,27 @@ final class LocalPosAutoSettlementService {
     return posRegistry.findByIdentifier(identifier);
   }
 
-  Future<int> _remainingDebt({
+  Future<Result<int>> _remainingDebt({
     required String customerId,
     required String currencyCode,
   }) async {
     final rows = await transactions.findByCustomer(customerId);
-    if (rows is! Success<List<Transaction>>) return 0;
+    if (rows is Failure<List<Transaction>>) return Failure(rows.error);
     try {
       final balance = sumCompletedLedger(
-        transactions: rows.value,
+        transactions: (rows as Success<List<Transaction>>).value,
         currencyCode: currencyCode,
       );
-      return balance.minorUnits < 0 ? -balance.minorUnits : 0;
-    } on Object {
-      return 0;
+      return Success(balance.minorUnits < 0 ? -balance.minorUnits : 0);
+    } on Object catch (error) {
+      // تعذّر جمع الدفتر: لا يجوز اعتبار المتبقي صفرًا وإرسال «تسوية ناجحة»
+      // برقم غير صحيح — نُبلّغ الفشل ليتعامل معه المسار الأعلى.
+      return Failure(
+        AppFailure(
+          code: 'pos_settlement_balance_unverified',
+          message: 'تعذّر التحقق من رصيد نقطة البيع بعد التسوية: $error',
+        ),
+      );
     }
   }
 
@@ -159,34 +176,114 @@ final class LocalPosAutoSettlementService {
     final dest = _notifyDestination(account);
     final sender = messageSender;
     if (dest == null || sender == null) return;
-    final raw = await _template(
-      SettingKeys.posSettlementSuccessTemplate,
-      SettingDefaults.posSettlementSuccessTemplate,
-    );
     final amountText = (amount.minorUnits / 100).toStringAsFixed(0);
     final remainingText = (remainingDebt / 100).toStringAsFixed(0);
-    final body = raw
-        .replaceAll('{pos}', account.name)
-        .replaceAll('{amount}', amountText)
-        .replaceAll('{SETTLEMENT_AMOUNT}', amountText)
-        .replaceAll('{remaining}', remainingText)
-        .replaceAll('{REMAINING_BALANCE}', remainingText)
-        .replaceAll('{identifier}', account.identifiers.isEmpty ? '' : account.identifiers.first);
-    await sender.send(destination: dest, body: body);
+    final rendered = await _render(
+      SettingKeys.posSettlementSuccessTemplate,
+      <String, String>{
+        'pos': account.name,
+        'pos_name': account.name,
+        'POS_NAME': account.name,
+        'amount': amountText,
+        'SETTLEMENT_AMOUNT': amountText,
+        'remaining': remainingText,
+        'REMAINING_BALANCE': remainingText,
+        'identifier':
+            account.identifiers.isEmpty ? '' : account.identifiers.first,
+        'CURRENCY': 'ر.ي',
+      },
+    );
+    if (rendered is Failure<String>) return;
+    await sender.send(
+      destination: dest,
+      body: (rendered as Success<String>).value,
+    );
   }
 
   Future<void> _notifyFailure(PosAccount account, {required String reason}) async {
     final dest = _notifyDestination(account);
     final sender = messageSender;
     if (dest == null || sender == null) return;
-    final raw = await _template(
+    final rendered = await _render(
       SettingKeys.posSettlementFailedTemplate,
-      SettingDefaults.posSettlementFailedTemplate,
+      <String, String>{
+        'pos': account.name,
+        'pos_name': account.name,
+        'POS_NAME': account.name,
+        'reason': reason,
+      },
     );
-    final body = raw
-        .replaceAll('{pos}', account.name)
-        .replaceAll('{reason}', reason);
-    await sender.send(destination: dest, body: body);
+    if (rendered is Failure<String>) return;
+    await sender.send(
+      destination: dest,
+      body: (rendered as Success<String>).value,
+    );
+  }
+
+  /// إشعار «تسوية غير مؤكدة» — كان قالبه معروضًا في الإعدادات بلا مستهلك.
+  Future<void> _notifyUnknown(PosAccount account) async {
+    final dest = _notifyDestination(account);
+    final sender = messageSender;
+    if (dest == null || sender == null) return;
+    final rendered = await _render(
+      SettingKeys.posSettlementUnknownTemplate,
+      <String, String>{
+        'pos': account.name,
+        'pos_name': account.name,
+        'POS_NAME': account.name,
+      },
+    );
+    if (rendered is Failure<String>) return;
+    await sender.send(
+      destination: dest,
+      body: (rendered as Success<String>).value,
+    );
+  }
+
+  /// إشعار رفض طلب نقطة البيع — كان قالبه معروضًا في الإعدادات بلا مستهلك.
+  Future<void> notifyRequestRejected(
+    PosAccount account, {
+    required String reason,
+  }) async {
+    final dest = _notifyDestination(account);
+    final sender = messageSender;
+    if (dest == null || sender == null) return;
+    final rendered = await _render(
+      SettingKeys.posRequestRejectedTemplate,
+      <String, String>{
+        'pos': account.name,
+        'pos_name': account.name,
+        'POS_NAME': account.name,
+        'reason': reason,
+      },
+    );
+    if (rendered is Failure<String>) return;
+    await sender.send(
+      destination: dest,
+      body: (rendered as Success<String>).value,
+    );
+  }
+
+  /// إشعار تجاوز سقف الدين — كان قالبه معروضًا في الإعدادات بلا مستهلك.
+  Future<void> notifyCreditLimitExceeded(PosAccount account) async {
+    final dest = _notifyDestination(account);
+    final sender = messageSender;
+    if (dest == null || sender == null) return;
+    final rendered = await _render(
+      SettingKeys.posCreditLimitExceededTemplate,
+      <String, String>{
+        'pos': account.name,
+        'pos_name': account.name,
+        'POS_NAME': account.name,
+        'limit': ((account.creditLimitMinorUnits ?? 0) / 100).toStringAsFixed(0),
+        'CURRENCY': 'ر.ي',
+      },
+    );
+    if (rendered is Failure<String>) return;
+    await sender.send(
+      destination: dest,
+      body: (rendered as Success<String>).value,
+    );
   }
 
   String? _notifyDestination(PosAccount account) {
@@ -198,12 +295,11 @@ final class LocalPosAutoSettlementService {
     return phone;
   }
 
-  Future<String> _template(String key, String fallback) async {
-    final found = await settings.find(key);
-    if (found is Success<AppSetting?>) {
-      final value = found.value?.value.trim();
-      if (value != null && value.isNotEmpty) return value;
-    }
-    return fallback;
-  }
+  /// الإرسال عبر المحرّك المركزي: لا يوجد نص بديل عند غياب القالب.
+  Future<Result<String>> _render(
+    String key,
+    Map<String, String> values,
+  ) =>
+      OutboundTemplateRenderer(settings: settings)
+          .renderRegistered(key: key, values: values);
 }

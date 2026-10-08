@@ -64,14 +64,27 @@ abstract final class SettingKeys {
   static const lowStockAlertTemplate = 'low_stock_alert_template';
   static const lowStockActiveJson = 'low_stock_active_json';
 
+  /// سجل metadata القوالب المخصّصة (معرّف/اسم/تبويب/هدف).
+  ///
+  /// لا يُخزَّن نص القالب هنا أبدًا — النص له مصدر واحد هو
+  /// [customOutboundBody].
   static const customOutboundTemplates = 'custom_outbound_templates';
 
   /// خريطة JSON: مفتاح قالب النظام ← معرّف القالب المخصّص الفعّال بدلاً منه.
+  /// هي المصدر الوحيد لقرار «أي قالب يُرسل».
   static const activeOutboundTemplates = 'active_outbound_templates';
 
-  /// نص قالب النظام الأصلي المحفوظ أثناء استبداله بقالب مخصّص فعّال.
+  /// المصدر الوحيد لنص قالب مخصّص. قالب النظام لا يُكتب فوقه أبدًا، فالاستبدال
+  /// قرار في [activeOutboundTemplates] والنص في هذا المفتاح — ولا ازدواجية.
+  static String customOutboundBody(String customId) =>
+      'custom_outbound_body:$customId';
+
+  /// مفاتيح توافق لبيانات القوالب المحفوظة قبل توحيد المصدر في الإعدادات.
+  static String legacyCustomOutboundBody(String customId) => 'custom:$customId';
+
   static String outboundSystemOriginal(String systemKey) =>
       'outbound_system_original:$systemKey';
+
   static const walletExtras = 'wallet_extras';
   static const defaultWalletsSeeded = 'default_wallets_seeded';
 

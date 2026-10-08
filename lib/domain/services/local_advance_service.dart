@@ -227,19 +227,33 @@ final class LocalAdvanceService implements AdvanceService {
       ));
       return Success(issued);
     }
-    final body = await _render(
+    final rendered = await _render(
       acceptedTemplateKey,
-      defaultAccepted,
       {
         'amount': _money(selectedCategory.faceValue),
         'serial': selectedCard.serialNumber,
         'code': selectedCard.secretCode,
+        'secret': selectedCard.secretCode,
       },
     );
-    Result<void>? send;
-    if (body.trim().isNotEmpty) {
-      send = await messageSender.send(destination: destination, body: body);
+    if (rendered is Failure<String>) {
+      // الكرت مُثبَّت فعلًا (بيع + دفتر + سجل) — لا يُعكس الإصدار، لكن لا
+      // تُرسل رسالة بلا قالب: يُسجَّل السبب للمشغّل.
+      await auditLogs.append(AuditLog(
+        id: ids.next('audit'),
+        entityType: 'advance',
+        entityId: advanceId,
+        action: 'delivery_failed',
+        occurredAt: clock.now(),
+        payloadJson: '{"error":"${rendered.error.code}"}',
+      ));
+      return Success(issued);
     }
+    final body = (rendered as Success<String>).value;
+    final send = await messageSender.send(
+      destination: destination,
+      body: body,
+    );
     if (send is Failure<void>) {
       await auditLogs.append(AuditLog(
         id: ids.next('audit'),
@@ -401,15 +415,20 @@ final class LocalAdvanceService implements AdvanceService {
           Money(minorUnits: pay, currencyCode: amount.currencyCode);
       final settledRemaining =
           Money(minorUnits: nowRemaining, currencyCode: amount.currencyCode);
+      final settledAmountText = _money(settledAmount);
+      final settledRemainingText = _money(settledRemaining);
       notices.add(() async {
         final destination = await _deliveryPhone(customerId);
         if (destination.isEmpty) return;
+        final rendered = await _render(settledTemplateKey, {
+          'amount': settledAmountText,
+          'remaining': settledRemainingText,
+          'CURRENCY': 'ر.ي',
+        });
+        if (rendered is Failure<String>) return;
         await messageSender.send(
           destination: destination,
-          body: await _render(settledTemplateKey, defaultSettled, {
-            'amount': _money(settledAmount),
-            'remaining': _money(settledRemaining),
-          }),
+          body: (rendered as Success<String>).value,
         );
       });
     }
@@ -469,23 +488,10 @@ final class LocalAdvanceService implements AdvanceService {
     return PhoneNormalizer.canonicalize(primary.value) ?? primary.value;
   }
 
-  Future<String> _render(
-      String key, String fallback, Map<String, String> values) async {
-    final result = await settings.find(key);
-    final template = result is Success<AppSetting?> &&
-            result.value?.value.trim().isNotEmpty == true
-        ? result.value!.value
-        : fallback;
-    final rendered = OutboundTemplateRenderer.renderStrict(
-      template: template,
-      values: values,
-    );
-    if (rendered is Failure<String>) {
-      // Prefer not to send broken placeholders; return empty so caller can skip send.
-      return '';
-    }
-    return (rendered as Success<String>).value;
-  }
+  /// نص القالب من مركز القوالب فقط — لا نص بديل عند غياب القالب.
+  Future<Result<String>> _render(String key, Map<String, String> values) =>
+      OutboundTemplateRenderer(settings: settings)
+          .renderRegistered(key: key, values: values);
 
   String _money(Money money) => (money.minorUnits / 100).toStringAsFixed(2);
 
@@ -495,9 +501,9 @@ final class LocalAdvanceService implements AdvanceService {
         customerId == null ? destination : await _deliveryPhone(customerId);
     if (target != null && target.trim().isNotEmpty) {
       final body = await _render(
-          rejectedTemplateKey, defaultRejected, {'reason': message});
-      if (body.trim().isNotEmpty) {
-        await messageSender.send(destination: target, body: body);
+          rejectedTemplateKey, {'reason': message});
+      if (body is Success<String> && body.value.trim().isNotEmpty) {
+        await messageSender.send(destination: target, body: body.value);
       }
     }
     await auditLogs.append(AuditLog(
