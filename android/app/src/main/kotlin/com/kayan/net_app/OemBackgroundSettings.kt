@@ -6,17 +6,30 @@ import android.net.Uri
 import android.provider.Settings
 
 internal object OemBackgroundSettings {
+    data class IntentContract(
+        val action: String,
+        val targetPackage: String? = null,
+        val integerExtras: Map<String, Int> = emptyMap(),
+    )
+
     const val SAMSUNG_PACKAGE = "com.samsung.android.lool"
     const val SAMSUNG_ACTION =
         "com.samsung.android.sm.ACTION_OPEN_CHECKABLE_LISTACTIVITY"
     const val NEVER_SLEEPING_APPS_TYPE = 2
     const val BATTERY_SETTINGS_ACTION = "android.settings.BATTERY_SETTINGS"
 
-    fun samsungNeverSleepingIntent(): Intent =
-        Intent(SAMSUNG_ACTION).apply {
-            setPackage(SAMSUNG_PACKAGE)
-            putExtra("activity_type", NEVER_SLEEPING_APPS_TYPE)
+    fun samsungNeverSleepingIntentContract() = IntentContract(
+        action = SAMSUNG_ACTION,
+        targetPackage = SAMSUNG_PACKAGE,
+        integerExtras = mapOf("activity_type" to NEVER_SLEEPING_APPS_TYPE),
+    )
+
+    fun samsungNeverSleepingIntent(): Intent = samsungNeverSleepingIntentContract().let { contract ->
+        Intent(contract.action).apply {
+            contract.targetPackage?.let { setPackage(it) }
+            contract.integerExtras.forEach { (key, value) -> putExtra(key, value) }
         }
+    }
 
     /** مسارات بديلة لشاشات Samsung Device Care / البطارية. */
     fun samsungBackgroundIntents(packageName: String): List<Intent> = listOf(
@@ -39,5 +52,7 @@ internal object OemBackgroundSettings {
         Intent(BATTERY_SETTINGS_ACTION),
     )
 
-    fun batterySettingsIntent(): Intent = Intent(BATTERY_SETTINGS_ACTION)
+    fun batterySettingsIntentContract() = IntentContract(action = BATTERY_SETTINGS_ACTION)
+
+    fun batterySettingsIntent(): Intent = Intent(batterySettingsIntentContract().action)
 }

@@ -650,7 +650,8 @@ class MainActivity : FlutterActivity(), SmsListener {
             ?: return false
         return NotificationAccessChecker.isGranted(
             enabled,
-            NotificationListener.component(this),
+            packageName,
+            NotificationListener::class.java.name,
         )
     }
 

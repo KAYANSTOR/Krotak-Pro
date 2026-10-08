@@ -6,12 +6,12 @@ import org.junit.Test
 class OemBackgroundSettingsTest {
     @Test
     fun samsungIntentTargetsNeverSleepingApps() {
-        val intent = OemBackgroundSettings.samsungNeverSleepingIntent()
-        assertEquals(OemBackgroundSettings.SAMSUNG_ACTION, intent.action)
-        assertEquals(OemBackgroundSettings.SAMSUNG_PACKAGE, intent.`package`)
+        val contract = OemBackgroundSettings.samsungNeverSleepingIntentContract()
+        assertEquals(OemBackgroundSettings.SAMSUNG_ACTION, contract.action)
+        assertEquals(OemBackgroundSettings.SAMSUNG_PACKAGE, contract.targetPackage)
         assertEquals(
             OemBackgroundSettings.NEVER_SLEEPING_APPS_TYPE,
-            intent.getIntExtra("activity_type", -1),
+            contract.integerExtras["activity_type"],
         )
     }
 
@@ -19,7 +19,7 @@ class OemBackgroundSettingsTest {
     fun batterySettingsIntentIsSafeFallback() {
         assertEquals(
             OemBackgroundSettings.BATTERY_SETTINGS_ACTION,
-            OemBackgroundSettings.batterySettingsIntent().action,
+            OemBackgroundSettings.batterySettingsIntentContract().action,
         )
     }
 }
