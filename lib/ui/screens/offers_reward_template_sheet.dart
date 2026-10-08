@@ -33,6 +33,7 @@ import '../../domain/services/reward_probe_rotate_open_span_interior_mirror_step
 import '../../domain/services/reward_probe_rotate_open_span_interior_mirror_count_steps.dart';
 import '../../domain/services/reward_probe_rotate_open_span_interior_mirror_count_steps_back.dart';
 import '../../domain/services/reward_probe_shift_open_span_interior_mirror_gap_steps.dart';
+import '../../domain/services/reward_probe_shift_open_span_interior_mirror_gap_count_steps.dart';
 import '../../domain/services/reward_probe_shift_open_span_interior_mirror_gap_steps_back.dart';
 import '../../platform/sms_bridge.dart';
 import '../app_scope.dart';
@@ -2919,6 +2920,133 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
 
 
   /// يزيح الكروت بين الكرتين المقابلتين خطوة نحو الأدنى. الظاهر والمقابلتان والطرفان لا يتحركون.
+  Future<void> _shiftOpenSpanInteriorMirrorGapCountStepsSelectedHold() async {
+    final card = _liveCard;
+    final startPosition = int.tryParse(_spanFrom.text.trim());
+    final endPosition = int.tryParse(_placePosition.text.trim());
+    final steps = int.tryParse(_spanSteps.text.trim());
+    if (card == null ||
+        _queuedCardIds.length < 9 ||
+        startPosition == null ||
+        endPosition == null ||
+        steps == null ||
+        startPosition < 1 ||
+        endPosition < 1 ||
+        steps < 3) {
+      return;
+    }
+    final visibleIndex = _queuedCardIds.indexOf(card.cardId);
+    final start = startPosition < endPosition ? startPosition : endPosition;
+    final end = startPosition < endPosition ? endPosition : startPosition;
+    if (visibleIndex < 0 || end > _queuedCardIds.length) {
+      setState(() {
+        _status = 'الموضع خارج طول الطابور';
+        _statusIsError = true;
+      });
+      return;
+    }
+    if (end - start < 8) {
+      setState(() {
+        _status = 'لا يكفي كروت داخل المقطع لإزاحة ما بين الكرتين المقابلتين بعدد خطوات';
+        _statusIsError = false;
+      });
+      return;
+    }
+    if (visibleIndex <= start - 1 || visibleIndex >= end - 1) {
+      setState(() {
+        _status = 'الكرت الظاهر يجب أن يقع بين طرفي المقطع';
+        _statusIsError = true;
+      });
+      return;
+    }
+    if (visibleIndex - steps <= start - 1 || visibleIndex + steps >= end - 1) {
+      setState(() {
+        _status = 'عدد الخطوات يخرج الكرتين المقابلتين من داخل المقطع';
+        _statusIsError = false;
+      });
+      return;
+    }
+    final c = AppScope.of(context);
+    setState(() => _busy = true);
+    final current = await c.settings.find(SettingKeys.promotionRewardProbeHolds);
+    final raw = current is Success<AppSetting?> ? current.value?.value : null;
+    final now = c.clock.now();
+    final encoded = RewardProbeShiftOpenSpanInteriorMirrorGapCountSteps
+        .shiftOpenSpanInteriorMirrorGapCountSteps(
+      raw,
+      cardId: card.cardId,
+      startPosition: start,
+      endPosition: end,
+      steps: steps,
+      customerId: _holdCustomerId,
+    );
+    await c.settings.save(
+      AppSetting(
+        key: SettingKeys.promotionRewardProbeHolds,
+        value: encoded,
+        updatedAt: now,
+      ),
+    );
+    var stored = PromotionRewardTemplate.lookupCrossCategoryHold(
+      encoded,
+      customerId: _holdCustomerId,
+    );
+    if (stored == null || !stored.holdsCard(card.cardId)) {
+      stored = PromotionRewardTemplate.lookupHold(
+        encoded,
+        card.categoryId,
+        customerId: _holdCustomerId,
+      );
+    }
+    await c.auditLogs.append(
+      AuditLog(
+        id: c.ids.next('reward-probe-hold'),
+        entityType: 'promotion_reward_template',
+        entityId: card.cardId,
+        action: 'reward_probe_card_open_span_interior_mirror_gap_shifted_count_steps',
+        occurredAt: now,
+        payloadJson: '{"customerId":"${_holdCustomerId ?? ''}","start":$start,"end":$end,"steps":$steps,"queue":${stored?.cards.length ?? 0}}',
+      ),
+    );
+    if (!mounted) return;
+    final ids = [for (final item in stored?.cards ?? const <RewardProbeHeldCard>[]) item.cardId];
+    final expected = List<String>.of(_queuedCardIds);
+    final lower = visibleIndex - steps;
+    final higher = visibleIndex + steps;
+    final lowerSpan = visibleIndex - 1 - (lower + 1) + 1;
+    final higherSpan = higher - 1 - (visibleIndex + 1) + 1;
+    if (lowerSpan > 1) {
+      final turns = steps % lowerSpan;
+      for (var turn = 0; turn < turns; turn++) {
+        final last = expected[visibleIndex - 1];
+        for (var index = visibleIndex - 1; index > lower + 1; index--) {
+          expected[index] = expected[index - 1];
+        }
+        expected[lower + 1] = last;
+      }
+    }
+    if (higherSpan > 1) {
+      final turns = steps % higherSpan;
+      for (var turn = 0; turn < turns; turn++) {
+        final last = expected[higher - 1];
+        for (var index = higher - 1; index > visibleIndex + 1; index--) {
+          expected[index] = expected[index - 1];
+        }
+        expected[visibleIndex + 1] = last;
+      }
+    }
+    setState(() {
+      _busy = false;
+      _holdReservationId = stored?.cardFor(card.cardId)?.reservationId ?? _holdReservationId;
+      _holdQueueCount = stored?.cards.length ?? _holdQueueCount;
+      _queuedCardIds = ids;
+      _status = _sameOrder(ids, expected)
+          ? 'أُزيحت الكروت بين الكرتين المقابلتين بعدد $steps خطوات نحو الأعلى داخل المقطع من $start إلى $end، وبقي ${_holdQueueCount} في الطابور'
+          : 'تعذر إزاحة الكروت بين الكرتين المقابلتين بعدد خطوات نحو الأعلى داخل المقطع';
+      _statusIsError = !_sameOrder(ids, expected);
+    });
+  }
+
   Future<void> _shiftOpenSpanInteriorMirrorGapStepsBackSelectedHold() async {
     final card = _liveCard;
     final startPosition = int.tryParse(_spanFrom.text.trim());
@@ -4285,6 +4413,17 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
                           icon: const Icon(Icons.swap_vert),
                           label: const Text(
                             'إزاحة الكروت بين الكرتين المقابلتين خطوة نحو الأعلى داخل المقطع',
+                            style: TextStyle(fontFamily: NetTypography.family),
+                          ),
+                        ),
+                      ),
+                      Align(
+                        alignment: AlignmentDirectional.centerStart,
+                        child: TextButton.icon(
+                          onPressed: _busy || _probing ? null : _shiftOpenSpanInteriorMirrorGapCountStepsSelectedHold,
+                          icon: const Icon(Icons.swap_vert),
+                          label: const Text(
+                            'إزاحة الكروت بين الكرتين المقابلتين بعدد خطوات نحو الأعلى داخل المقطع',
                             style: TextStyle(fontFamily: NetTypography.family),
                           ),
                         ),
