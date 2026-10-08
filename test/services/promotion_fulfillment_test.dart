@@ -15,6 +15,7 @@ import 'package:net_app/domain/entities/transaction.dart';
 import 'package:net_app/domain/services/local_card_inventory_service.dart';
 import 'package:net_app/domain/services/local_catalog_services.dart';
 import 'package:net_app/domain/services/local_customer_service.dart';
+import 'package:net_app/domain/services/default_outbound_templates_seeder.dart';
 import 'package:net_app/domain/services/local_promotion_catalog.dart';
 import 'package:net_app/domain/services/local_promotion_fulfillment_service.dart';
 import 'package:net_app/domain/services/local_promotion_progress_service.dart';
@@ -32,7 +33,7 @@ void main() {
   late SequentialIdGenerator ids;
   late _RecordingSender sender;
 
-  setUp(() {
+  setUp(() async {
     database = AppDatabase(NativeDatabase.memory());
     final customers = LocalCustomerRepository(database);
     final categories = LocalCardCategoryRepository(database);
@@ -44,6 +45,11 @@ void main() {
     final uow = DriftUnitOfWork(database);
     clock = FixedClock(DateTime(2026, 9, 16, 12));
     ids = SequentialIdGenerator();
+    final seeded = await DefaultOutboundTemplatesSeeder(
+      settings: settings,
+      clock: clock,
+    ).seedIfNeeded();
+    expect(seeded, isA<Success<void>>());
     sender = _RecordingSender();
     customerService = LocalCustomerService(
       customers: customers,

@@ -26,6 +26,7 @@ import 'package:net_app/domain/entities/pos_account.dart';
 import 'package:net_app/domain/entities/setting.dart';
 import 'package:net_app/domain/entities/transaction.dart';
 import 'package:net_app/domain/entities/wallet.dart';
+import 'package:net_app/domain/services/default_outbound_templates_seeder.dart';
 import 'package:net_app/domain/services/default_pos_templates_seeder.dart';
 import 'package:net_app/domain/services/local_card_inventory_service.dart';
 import 'package:net_app/domain/services/local_catalog_services.dart';
@@ -91,6 +92,11 @@ void main() {
     uow = DriftUnitOfWork(database);
     clock = FixedClock(DateTime(2026, 9, 24, 10));
     ids = SequentialIdGenerator();
+    final outboundSeeded = await DefaultOutboundTemplatesSeeder(
+      settings: settings,
+      clock: clock,
+    ).seedIfNeeded();
+    expect(outboundSeeded, isA<Success<void>>());
 
     customerService = LocalCustomerService(
       customers: customers,

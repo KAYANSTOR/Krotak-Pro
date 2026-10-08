@@ -6,9 +6,12 @@ import 'package:net_app/domain/entities/audit.dart';
 import 'package:net_app/domain/entities/card.dart';
 import 'package:net_app/domain/entities/message.dart';
 import 'package:net_app/domain/entities/money.dart';
+import 'package:net_app/domain/entities/setting.dart';
+import 'package:net_app/domain/repositories/repositories.dart';
 import 'package:net_app/domain/services/local_message_retry_service.dart';
 import 'package:net_app/domain/services/message_delivery_worker.dart';
 import 'package:net_app/domain/services/message_retry_policy.dart';
+import 'package:net_app/domain/services/outbound_template_catalog.dart';
 import 'package:net_app/domain/services/services.dart';
 
 import '../helpers/in_memory_repositories.dart';
@@ -43,11 +46,36 @@ final class _FixedClock implements Clock {
   void advance(Duration d) => _now = _now.add(d);
 }
 
+final class _MemorySettings implements SettingsRepository {
+  final Map<String, String> values = OutboundTemplateCatalog.initialBodies();
+
+  @override
+  Future<Result<AppSetting?>> find(String key) async {
+    final value = values[key];
+    return Success(
+      value == null
+          ? null
+          : AppSetting(
+              key: key,
+              value: value,
+              updatedAt: DateTime.utc(2026, 10, 8),
+            ),
+    );
+  }
+
+  @override
+  Future<Result<void>> save(AppSetting setting) async {
+    values[setting.key] = setting.value;
+    return const Success(null);
+  }
+}
+
 void main() {
   late InMemoryMessageRepository messages;
   late InMemoryAuditLogRepository audits;
   late InMemoryCardRepository cards;
   late _RecordingSender sender;
+  late _MemorySettings settings;
   late LocalMessageRetryService retry;
   late _FixedClock clock;
   late MessageDeliveryWorker worker;
@@ -57,6 +85,7 @@ void main() {
     audits = InMemoryAuditLogRepository();
     cards = InMemoryCardRepository();
     sender = _RecordingSender();
+    settings = _MemorySettings();
     clock = _FixedClock(DateTime.utc(2026, 9, 17, 12, 0));
     retry = LocalMessageRetryService(
       auditLogs: audits,
@@ -73,6 +102,7 @@ void main() {
       retryService: retry,
       clock: clock,
       ids: _SeqIds(),
+      settings: settings,
     );
   });
 

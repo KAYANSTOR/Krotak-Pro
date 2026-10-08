@@ -14,6 +14,7 @@ import 'package:net_app/domain/entities/money.dart';
 import 'package:net_app/domain/entities/pos_account.dart';
 import 'package:net_app/domain/entities/setting.dart';
 import 'package:net_app/domain/entities/transaction.dart';
+import 'package:net_app/domain/services/default_outbound_templates_seeder.dart';
 import 'package:net_app/domain/services/local_card_inventory_service.dart';
 import 'package:net_app/domain/services/local_catalog_services.dart';
 import 'package:net_app/domain/services/local_customer_balance_service.dart';
@@ -45,7 +46,7 @@ void main() {
   late _FakeMessageSender sender;
   late LocalTransferProcessor processor;
 
-  setUp(() {
+  setUp(() async {
     database = AppDatabase(NativeDatabase.memory());
     customers = LocalCustomerRepository(database);
     categories = LocalCardCategoryRepository(database);
@@ -64,6 +65,11 @@ void main() {
     inventoryService = LocalCardInventoryService(categories: categories, cards: cards, unitOfWork: unitOfWork);
     saleService = LocalSaleService(customers: customers, categories: categories, cards: cards, sales: sales, transactions: transactions, balances: balanceService, inventory: inventoryService, auditLogs: auditLogs, unitOfWork: unitOfWork, clock: clock, ids: ids);
     settings = LocalSettingsRepository(database);
+    final seeded = await DefaultOutboundTemplatesSeeder(
+      settings: settings,
+      clock: clock,
+    ).seedIfNeeded();
+    expect(seeded, isA<Success<void>>());
     sender = _FakeMessageSender();
     processor = LocalTransferProcessor(
       messages: messages,
