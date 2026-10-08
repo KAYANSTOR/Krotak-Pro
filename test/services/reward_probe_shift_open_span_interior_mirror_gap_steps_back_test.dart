@@ -43,7 +43,7 @@ void main() {
     // visible cross-e is inside span 1..9. Three steps place mirrors on cross-a and cross-h.
     // Gaps shift toward the higher end: c,d -> d,c and f,g -> g,f.
     final shifted = RewardProbeShiftOpenSpanInteriorMirrorGapStepsBack
-        .shiftOpenSpanInteriorMirrorGapSteps(
+        .shiftOpenSpanInteriorMirrorGapStepsBack(
       withRest,
       cardId: 'cross-e',
       startPosition: 1,
@@ -80,7 +80,7 @@ void main() {
     expect(customer?.expiresAt, expires);
     expect(
       RewardProbeShiftOpenSpanInteriorMirrorGapStepsBack
-          .shiftOpenSpanInteriorMirrorGapSteps(
+          .shiftOpenSpanInteriorMirrorGapStepsBack(
         shifted,
         cardId: 'cross-e',
         startPosition: 9,
@@ -92,7 +92,7 @@ void main() {
     );
     expect(
       RewardProbeShiftOpenSpanInteriorMirrorGapStepsBack
-          .shiftOpenSpanInteriorMirrorGapSteps(
+          .shiftOpenSpanInteriorMirrorGapStepsBack(
         withRest,
         cardId: 'cross-e',
         startPosition: 1,
@@ -104,7 +104,7 @@ void main() {
     );
     expect(
       RewardProbeShiftOpenSpanInteriorMirrorGapStepsBack
-          .shiftOpenSpanInteriorMirrorGapSteps(
+          .shiftOpenSpanInteriorMirrorGapStepsBack(
         withRest,
         cardId: 'cross-b',
         startPosition: 1,
