@@ -6,9 +6,9 @@ concurrency:
 
 on:
   push:
-    branches: [main, development/full-completion]
+    branches: [main, development/next]
   pull_request:
-    branches: [main, development/full-completion]
+    branches: [main, development/next]
   workflow_dispatch:
 
 jobs:
