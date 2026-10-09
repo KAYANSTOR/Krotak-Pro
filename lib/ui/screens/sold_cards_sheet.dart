@@ -12,6 +12,7 @@ import '../../domain/entities/pos_account.dart';
 import '../../domain/entities/wallet.dart';
 import '../../domain/services/sold_cards_service.dart';
 import '../app_scope.dart';
+import '../perf/screen_open_trace.dart';
 import '../theme/net_semantic_colors.dart';
 import '../theme/net_tokens.dart';
 import '../widgets/async_views.dart';
@@ -22,6 +23,7 @@ Future<void> showSoldCardsSheet({
   required List<domain.CardCategory> categories,
   VoidCallback? onChanged,
 }) {
+  ScreenOpenTrace.instance.beginSheet(ScreenOpenIds.soldCardsSheet);
   return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
@@ -59,7 +61,10 @@ class _SoldCardsSheetState extends State<_SoldCardsSheet> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _load());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ScreenOpenTrace.instance.markLatestFirstFrame(ScreenOpenIds.soldCardsSheet);
+      _load();
+    });
   }
 
   @override
@@ -120,6 +125,7 @@ class _SoldCardsSheetState extends State<_SoldCardsSheet> {
         _loading = false;
         _error = r.error.message;
       });
+      ScreenOpenTrace.instance.markLatestDataReady(ScreenOpenIds.soldCardsSheet);
       return;
     }
     var rows = (r as Success<List<SoldCardRow>>).value;
@@ -136,6 +142,7 @@ class _SoldCardsSheetState extends State<_SoldCardsSheet> {
       _rows = rows;
       _selected.removeWhere((id) => !_rows.any((e) => e.card.id == id));
     });
+    ScreenOpenTrace.instance.markLatestDataReady(ScreenOpenIds.soldCardsSheet);
   }
 
   String _fmtMoney(Money m) {

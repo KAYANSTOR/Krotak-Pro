@@ -15,6 +15,10 @@ abstract final class ScreenOpenIds {
   static const posReport = 'pos_report';
   static const posAccountsLedger = 'pos_accounts_ledger';
   static const systemCheck = 'system_check';
+  static const cardStockSheet = 'sheet_card_stock';
+  static const soldCardsSheet = 'sheet_sold_cards';
+  static const broadcastSheet = 'sheet_broadcast';
+  static const categoriesSheet = 'sheet_categories';
 }
 
 class ScreenOpenSample {
@@ -95,11 +99,20 @@ class ScreenOpenTrace {
     return handle;
   }
 
+  /// أول إطار لآخر فتح لنفس المعرّف. يُكتب مرة واحدة.
+  void markLatestFirstFrame(String screenId, [DateTime? at]) {
+    final handle = _open[screenId];
+    handle?.markFirstFrame(at);
+  }
+
   /// تكملة بيانات آخر فتح لنفس الشاشة ما زال بلا `dataReady`.
   void markLatestDataReady(String screenId, [DateTime? at]) {
     final handle = _open[screenId];
     handle?.markDataReady(at);
   }
+
+  /// يبدأ عينة ورقة. أول إطار واكتمال البيانات يُعلَّمان من الورقة نفسها.
+  ScreenOpenHandle beginSheet(String screenId) => start(screenId, kind: 'sheet');
 
   void _touch(ScreenOpenSample _) {}
 

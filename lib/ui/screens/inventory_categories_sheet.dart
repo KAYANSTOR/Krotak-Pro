@@ -6,6 +6,7 @@ import '../../domain/entities/card.dart' as domain;
 import '../../domain/entities/money.dart';
 import '../../domain/services/local_category_commission_store.dart';
 import '../app_scope.dart';
+import '../perf/screen_open_trace.dart';
 import '../theme/kayan_palette.dart';
 import '../theme/net_semantic_colors.dart';
 import '../theme/net_tokens.dart';
@@ -19,6 +20,7 @@ Future<void> showCategoriesSheet({
   required List<domain.Card> cards,
   required Future<void> Function() onChanged,
 }) {
+  ScreenOpenTrace.instance.beginSheet(ScreenOpenIds.categoriesSheet);
   return NetSheet.show<void>(
     context,
     builder: (ctx) => _CategoriesSheet(
@@ -58,7 +60,10 @@ class _CategoriesSheetState extends State<_CategoriesSheet> {
     super.initState();
     _categories = List<domain.CardCategory>.from(widget.categories);
     _cards = List<domain.Card>.from(widget.cards);
-    WidgetsBinding.instance.addPostFrameCallback((_) => _loadCommissions());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ScreenOpenTrace.instance.markLatestFirstFrame(ScreenOpenIds.categoriesSheet);
+      _loadCommissions();
+    });
   }
 
   Future<void> _reloadLocalCatalog() async {
@@ -88,6 +93,7 @@ class _CategoriesSheetState extends State<_CategoriesSheet> {
         ..clear()
         ..addAll(next);
     });
+    ScreenOpenTrace.instance.markLatestDataReady(ScreenOpenIds.categoriesSheet);
   }
 
   static String _commissionLabel(int bps) {
