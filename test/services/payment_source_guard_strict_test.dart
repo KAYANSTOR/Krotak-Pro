@@ -452,7 +452,7 @@ void main() {
     setUp(() {
       wallets = _Wallets([
         _wallet('jaib', senderId: 'JAIB', mode: WalletSourceMode.notification, packageName: 'com.ahd.jaib'),
-        _wallet('floosak', senderId: 'FLOOSAK'),
+        _wallet('floosak', senderId: 'Floosak'),
       ]);
       templates = _Templates([
         _tpl('t-jaib-a', walletId: 'jaib'),

@@ -266,7 +266,7 @@ final class DefaultWalletTemplatesSeeder {
       variant: 'ar-received',
       name: 'جوالي — استلمت مبلغ',
       priority: 10,
-      pattern: 'استلمت مبلغ {amount} YER من {phone} رصيدك هو.{ref}',
+      pattern: 'استلمت مبلغ {amount} YER من {phone} رصيدك هو {ref}',
       sampleBody: 'استلمت مبلغ 200 YER من 733332303 رصيدك هو 245',
     ),
     // ── أم فلوس — MFloos ─────────────────────────────────────────────────

@@ -241,7 +241,8 @@ void main() {
       expect(DefaultWalletSpecs.matchesOfficialSenderId('  ONE Cash  '), isTrue);
       expect(DefaultWalletSpecs.matchesOfficialSenderId('JAIB'), isFalse);
       expect(DefaultWalletSpecs.matchesOfficialSenderId('Jaib-Promo'), isFalse);
-      expect(DefaultWalletSpecs.matchesOfficialSenderId('MFloos '), isFalse);
+      // إزالة المسافات الطرفية جزء من القاعدة المعتمدة (انظر وثيقة تعريف المحافظ §1).
+      expect(DefaultWalletSpecs.matchesOfficialSenderId('MFloos '), isTrue);
       expect(DefaultWalletSpecs.matchesOfficialSenderId(''), isFalse);
       expect(DefaultWalletSpecs.awaitingOfficialSenderId, isEmpty);
     });
