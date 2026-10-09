@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../../domain/entities/setting.dart';
 import '../../domain/services/report_pdf_service.dart';
 import '../services/report_pdf_export.dart';
 import 'package:flutter/services.dart';
@@ -10,7 +9,9 @@ import '../../domain/entities/customer.dart';
 import '../../domain/entities/money.dart';
 import '../../domain/entities/pos_account.dart';
 import '../../domain/entities/transaction.dart';
+import '../../domain/entities/setting.dart';
 import '../../domain/services/local_identity_link_service.dart';
+import '../../domain/services/salafni_customer_ceiling.dart';
 import '../../domain/services/local_promotion_progress_service.dart';
 import '../../domain/services/services.dart';
 import '../../platform/contact_picker_bridge.dart';
@@ -41,6 +42,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
   List<Transaction> _ledger = const [];
   List<PromotionProgress> _promos = const [];
   PosAccount? _posLink;
+  int? _salafniCeilingMinor;
 
   @override
   void initState() {
@@ -84,6 +86,14 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
       final posR = await c.posRegistry.findByCustomerId(widget.customerId);
       if (posR is Success<PosAccount?>) posLink = posR.value;
     } catch (_) {}
+    int? ceilingMinor;
+    final ceilingR = await c.settings.find(SalafniCustomerCeiling.key);
+    if (ceilingR is Success<AppSetting?>) {
+      ceilingMinor = SalafniCustomerCeiling.forCustomer(
+        ceilingR.value?.value,
+        widget.customerId,
+      );
+    }
 
     if (!mounted) return;
     final txs = txR is Success<List<Transaction>> ? txR.value : const <Transaction>[];
@@ -100,6 +110,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
       _promos =
           promoR is Success<List<PromotionProgress>> ? promoR.value : const [];
       _posLink = posLink;
+      _salafniCeilingMinor = ceilingMinor;
     });
   }
 
@@ -650,6 +661,9 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                                 ],
                               ],
                             ),
+
+                            const SizedBox(height: 12),
+                            _salafniCeilingCard(scheme),
                             const SizedBox(height: 16),
                             CustomerPromotionProgressSection(
                               items: _promos,
@@ -830,6 +844,112 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
         ],
       ),
     );
+  }
+
+
+  Widget _salafniCeilingCard(ColorScheme scheme) {
+    final minor = _salafniCeilingMinor;
+    final label = minor == null
+        ? 'بلا سقف فردي'
+        : minor == 0
+            ? 'ممنوع'
+            : '${(minor / 100).toStringAsFixed(2)} ر.ي';
+    return Card(
+      child: ListTile(
+        title: const Text(
+          'سقف سلفني',
+          style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w800),
+        ),
+        subtitle: Text(
+          label,
+          style: const TextStyle(fontFamily: 'Tajawal'),
+        ),
+        trailing: const Icon(Icons.edit_outlined),
+        onTap: _editSalafniCeiling,
+      ),
+    );
+  }
+
+  Future<void> _editSalafniCeiling() async {
+    final ctrl = TextEditingController(
+      text: _salafniCeilingMinor == null
+          ? ''
+          : (_salafniCeilingMinor! / 100).toStringAsFixed(2),
+    );
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          title: const Text(
+            'سقف سلفني لهذا العميل',
+            style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w800),
+          ),
+          content: TextField(
+            controller: ctrl,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: const InputDecoration(
+              labelText: 'السقف بالريال، اتركه فارغًا لإلغاء السقف',
+              helperText: 'صفر يمنع سلفني. القيمة حد أقصى للفئة.',
+            ),
+            style: const TextStyle(fontFamily: 'Tajawal'),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('إلغاء', style: TextStyle(fontFamily: 'Tajawal')),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('حفظ', style: TextStyle(fontFamily: 'Tajawal')),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (saved != true || !mounted) return;
+    final raw = ctrl.text.trim().replaceAll(',', '');
+    int? minor;
+    if (raw.isNotEmpty) {
+      final major = double.tryParse(raw);
+      if (major == null || major < 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('مبلغ السقف غير صالح', style: TextStyle(fontFamily: 'Tajawal'))),
+        );
+        return;
+      }
+      minor = (major * 100).round();
+    }
+    final c = AppScope.of(context);
+    final current = await c.settings.find(SalafniCustomerCeiling.key);
+    if (current is Failure<AppSetting?>) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(current.error.message, style: const TextStyle(fontFamily: 'Tajawal'))),
+      );
+      return;
+    }
+    final map = SalafniCustomerCeiling.decode(
+      (current as Success<AppSetting?>).value?.value,
+    );
+    if (minor == null) {
+      map.remove(widget.customerId);
+    } else {
+      map[widget.customerId] = minor;
+    }
+    final write = await c.settings.save(AppSetting(
+      key: SalafniCustomerCeiling.key,
+      value: SalafniCustomerCeiling.encode(map),
+      updatedAt: c.clock.now(),
+    ));
+    if (!mounted) return;
+    if (write is Failure) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text((write as Failure).error.message, style: const TextStyle(fontFamily: 'Tajawal'))),
+      );
+      return;
+    }
+    await _load();
   }
 
   Widget _summaryGrid(ColorScheme scheme, NetSemanticColors net) {
