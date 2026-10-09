@@ -452,7 +452,7 @@ void main() {
     setUp(() {
       wallets = _Wallets([
         _wallet('jaib', senderId: 'JAIB', mode: WalletSourceMode.notification, packageName: 'com.ahd.jaib'),
-        _wallet('floosak', senderId: 'FLOOSAK'),
+        _wallet('floosak', senderId: 'Floosak'),
       ]);
       templates = _Templates([
         _tpl('t-jaib-a', walletId: 'jaib'),
@@ -555,7 +555,7 @@ void main() {
       expect(json['walletStatus'], isNull);
       expect(() => jsonEncode(json), returnsNormally);
 
-      final ok = (await diag(_sms('FLOOSAK'))).toJson();
+      final ok = (await diag(_sms('Floosak'))).toJson();
       expect(ok['walletStatus'], 'active');
       expect(ok['walletSourceMode'], 'sms');
     });
