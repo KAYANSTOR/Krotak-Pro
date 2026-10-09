@@ -8,6 +8,7 @@ import '../entities/setting.dart';
 import '../entities/wallet.dart';
 import '../repositories/repositories.dart';
 import '../repositories/unit_of_work.dart';
+import 'default_wallet_specs.dart';
 import 'services.dart';
 
 final class LocalCardCatalogService implements CardCatalogService {
@@ -260,12 +261,8 @@ final class LocalWalletCatalogService implements WalletCatalogService {
   final SettingsRepository settings;
   final Clock clock;
   final IdGenerator ids;
-  static const _defaults = [
-    (name: 'جيب', senderId: 'JAIB', sourceMode: WalletSourceMode.notification, packageName: 'com.ahd.jaib'),
-    (name: 'جوالي', senderId: 'JAWALI', sourceMode: WalletSourceMode.sms, packageName: 'com.wecash.jawali'),
-    (name: 'ون كاش', senderId: 'ONE CASH', sourceMode: WalletSourceMode.sms, packageName: 'com.one.onecustomer'),
-    (name: 'فلوسك', senderId: 'FLOOSAK', sourceMode: WalletSourceMode.sms, packageName: 'co.ysys.floosak'),
-  ];
+  /// محافظ الإيداع المعتمدة — مصدرها الوحيد [DefaultWalletSpecs].
+  static const List<WalletSpec> _defaults = DefaultWalletSpecs.all;
   @override
   Future<Result<List<Wallet>>> listEnriched() async {
     final list = await wallets.listAll();
@@ -284,10 +281,10 @@ final class LocalWalletCatalogService implements WalletCatalogService {
     return Success(enriched);
   }
   @override
-  Future<Result<Wallet>> saveWallet({required String name, String? senderId, WalletSourceMode sourceMode = WalletSourceMode.sms, String? packageName}) async {
+  Future<Result<Wallet>> saveWallet({required String name, String? senderId, WalletSourceMode sourceMode = WalletSourceMode.sms, String? packageName, WalletStatus status = WalletStatus.active}) async {
     final trimmed = name.trim();
     if (trimmed.isEmpty) return const Failure(AppFailure(code: 'invalid_wallet_name', message: 'اسم المحفظة مطلوب'));
-    final wallet = Wallet(id: ids.next('wallet'), name: trimmed, status: WalletStatus.active, createdAt: clock.now(), senderId: senderId?.trim().isEmpty == true ? null : senderId?.trim(), sourceMode: sourceMode, packageName: packageName?.trim().isEmpty == true ? null : packageName?.trim());
+    final wallet = Wallet(id: ids.next('wallet'), name: trimmed, status: status, createdAt: clock.now(), senderId: senderId?.trim().isEmpty == true ? null : senderId?.trim(), sourceMode: sourceMode, packageName: packageName?.trim().isEmpty == true ? null : packageName?.trim());
     final saved = await wallets.save(wallet);
     if (saved is Failure<void>) return Failure(saved.error);
     await _writeExtras(wallet.id, wallet.senderId, wallet.sourceMode, wallet.packageName);
@@ -329,26 +326,45 @@ final class LocalWalletCatalogService implements WalletCatalogService {
     for (final spec in _defaults) {
       // يُعدّ الافتراضي موجوداً إن طابق الاسمُ أو المرسلُ أو الحزمةُ محفظةً قائمة؛
       // فإعادة تسمية «جيب» لا يجوز أن تُنتج محفظة «جيب» مكررة ونشطة عند الإقلاع التالي.
-      final specSender = spec.senderId.trim().toLowerCase();
-      final specPackage = spec.packageName.trim();
+      final specSender = (spec.senderId ?? '').trim().toLowerCase();
+      final specPackage = (spec.packageName ?? '').trim();
       final match = current.where((w) {
         if (w.name.trim().toLowerCase() == spec.name.toLowerCase()) return true;
-        if ((w.senderId?.trim().toLowerCase() ?? '') == specSender) return true;
+        if (specSender.isNotEmpty &&
+            (w.senderId?.trim().toLowerCase() ?? '') == specSender) {
+          return true;
+        }
         return specPackage.isNotEmpty && (w.packageName?.trim() ?? '') == specPackage;
       }).firstOrNull;
       if (match != null) {
         // Never overwrite operator-edited sender/mode/package on subsequent boots.
+        final official = (spec.senderId ?? '').trim();
+        final storedSender = (match.senderId ?? '').trim();
+        final legacyAlias = official.isNotEmpty &&
+            storedSender.isNotEmpty &&
+            storedSender != official &&
+            storedSender.toUpperCase() == official.toUpperCase();
+        if (legacyAlias) {
+          // ترحيل قيمة Sender ID قديمة (حالة أحرف/مسافات) إلى القيمة الرسمية
+          // المعتمدة دون تغيير هوية المحفظة ولا تعديل المشغّل الحقيقي.
+          await wallets.save(match.copyWith(senderId: official));
+          await _writeExtras(match.id, official, spec.sourceMode, spec.packageName);
+          continue;
+        }
         final id = match.id;
         if (!extras.containsKey(id)) {
           await _writeExtras(id, spec.senderId, spec.sourceMode, spec.packageName);
         }
         continue;
       }
+      // محفظة بلا Sender ID رسمي تُزرع موقوفة: لا تُعتمد إيداعاتها ماليًا حتى
+      // يُدخل المشغّل الـID الرسمي ويُفعّلها يدويًا.
       final r = await saveWallet(
         name: spec.name,
         senderId: spec.senderId,
         sourceMode: spec.sourceMode,
         packageName: spec.packageName,
+        status: spec.autoActivate ? WalletStatus.active : WalletStatus.suspended,
       );
       if (r is Failure) return Failure((r as Failure).error);
     }

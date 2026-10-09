@@ -48,15 +48,14 @@ void main() {
       );
     });
 
-    test('same SMS is idempotent across time changes', () async {
+    test('manual entry is never auto-credited as a deposit', () async {
       final first = await handler.handleManual(sender: 'bank', body: 'تم تحويل 500 ريال الى 770123456 برقم العملية BANK-REF-42', receivedAt: DateTime.utc(2026, 9, 12, 1, 0));
       final second = await handler.handleManual(sender: 'bank', body: 'تم تحويل 500 ريال الى 770123456 برقم العملية BANK-REF-42', receivedAt: DateTime.utc(2026, 9, 12, 2, 0));
-      expect(first, isA<Success<Transaction?>>());
-      expect(second, isA<Success<Transaction?>>());
-      expect(processor.calls, 1);
-      expect(messages.store, hasLength(1));
-      expect(messages.seenExternalReferences, everyElement('pay:v1:ref:bank:BANK-REF-42'));
-      expect(messages.seenExternalReferences, hasLength(2));
+      expect(first, isA<Failure<Transaction?>>());
+      expect(second, isA<Failure<Transaction?>>());
+      expect((first as Failure<Transaction?>).error.code, 'manual_requires_review');
+      expect(processor.calls, 0);
+      expect(messages.store.where((m) => m.status == MessageProcessingStatus.received), isEmpty);
     });
   });
 

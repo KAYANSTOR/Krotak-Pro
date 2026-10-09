@@ -88,6 +88,8 @@ abstract interface class WalletCatalogService {
     String? senderId,
     WalletSourceMode sourceMode = WalletSourceMode.sms,
     String? packageName,
+    /// حالة البداية: المحفظة بلا Sender ID رسمي تُزرع موقوفة لا نشطة.
+    WalletStatus status = WalletStatus.active,
   });
 
   Future<Result<Wallet>> updateWallet({

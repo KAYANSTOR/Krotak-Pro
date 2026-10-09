@@ -80,6 +80,11 @@ final class PaymentSourceDiagnosis {
       };
 }
 
+/// كود رفض الإدخال اليدوي: النص المنسوخ يدويًا ليس اعتمادًا ماليًا تلقائيًا.
+const manualRequiresReviewCode = 'manual_requires_review';
+const manualRequiresReviewMessage =
+    'الإدخال اليدوي لا يُعتمد ماليًا تلقائيًا — يتطلب مراجعة صريحة';
+
 /// Authorizes inbound payment events against explicitly configured payment sources.
 /// Commercial processing is never allowed merely because an SMS body matches a
 /// template. The source must belong to an active wallet configured for the same
@@ -107,21 +112,22 @@ final class PaymentSourceGuard {
     final allTemplates = (configured as Success<List<TransferTemplate>>).value;
 
     if (event.channel == PaymentChannel.manual) {
+      // الإدخال اليدوي ليس اعتمادًا ماليًا تلقائيًا: نص منسوخ يدويًا لا يُعتمد
+      // كإيداع، ويُحال إلى صندوق المراجعة بقرار صريح من المشغّل.
       return Success(PaymentSourceDiagnosis(
         channel: event.channel,
         rawSource: event.sourceKey,
         normalizedSource: _normalize(event.sourceKey),
         packageName: event.packageName?.trim(),
-        authorized: true,
-        activeTemplateIds: allTemplates
-            .where((t) => t.isActive)
-            .map((t) => t.id)
-            .toList(growable: false),
+        authorized: false,
+        activeTemplateIds: const <String>[],
         sourceEnabled: true,
         matchedTemplateId: matchedTemplateId,
         matchedTemplateName: matchedTemplateId == null
             ? null
             : allTemplates.where((t) => t.id == matchedTemplateId).firstOrNull?.name,
+        failureCode: manualRequiresReviewCode,
+        failureMessage: manualRequiresReviewMessage,
       ));
     }
 
@@ -147,7 +153,7 @@ final class PaymentSourceGuard {
         wallet = active.where((w) {
           final sender = w.senderId?.trim();
           if (sender == null || sender.isEmpty) return false;
-          return _senderMatches(_normalize(event.sourceKey), _normalize(sender));
+          return _senderMatches(event.sourceKey.trim(), sender.trim());
         }).firstOrNull;
       } else if (event.channel == PaymentChannel.notification) {
         final packageName = event.packageName?.trim();
@@ -201,7 +207,12 @@ final class PaymentSourceGuard {
     PaymentEvent event, {
     String? matchedTemplateId,
   }) async {
-    if (event.channel == PaymentChannel.manual) return const Success(null);
+    if (event.channel == PaymentChannel.manual) {
+      return const Failure(AppFailure(
+        code: manualRequiresReviewCode,
+        message: manualRequiresReviewMessage,
+      ));
+    }
 
     final configuredTemplates = await templates.listAll();
     if (configuredTemplates is Failure<List<TransferTemplate>>) return Failure(configuredTemplates.error);
@@ -234,14 +245,13 @@ final class PaymentSourceGuard {
 
     Wallet? wallet;
     if (event.channel == PaymentChannel.sms) {
-      final incomingSender = _normalize(event.sourceKey);
-      // Match any active wallet whose senderId relates to the SMS origin.
-      // Do not require sourceMode==sms only — operators may receive the same
-      // wallet alerts over SMS short-codes even when UI mode is notification.
+      // Match any active wallet whose official Sender ID equals the SMS origin
+      // exactly. Do not require sourceMode==sms only — operators may receive the
+      // same wallet alerts over SMS short-codes even when UI mode is notification.
       wallet = activeWallets.where((w) {
         final sender = w.senderId;
         if (sender == null || sender.trim().isEmpty) return false;
-        return _senderMatches(incomingSender, _normalize(sender));
+        return _senderMatches(event.sourceKey.trim(), sender.trim());
       }).firstOrNull;
     } else if (event.channel == PaymentChannel.notification) {
       final package = event.packageName?.trim();
@@ -291,27 +301,14 @@ final class PaymentSourceGuard {
     return const Success(null);
   }
 
+  /// مطابقة مصدر الرسالة لقيمة `Sender ID` الرسمية — **تامة فقط**.
+  ///
+  /// لا مطابقة جزئية ولا احتواء ولا مقارنة أرقام لاحقة: قيمة المرسل يجب أن
+  /// تساوي قيمة المحفظة حرفًا بحرف، بنفس حالة الأحرف والمسافات. أي اختلاف —
+  /// حتى لو كان اسمًا يشبه الاسم الرسمي — يُرفض لمنع انتحال مصدر دفع.
   bool _senderMatches(String incoming, String configured) {
     if (incoming.isEmpty || configured.isEmpty) return false;
-    if (incoming == configured) return true;
-    // احتواء جزئي مسموح (JAIB داخل JAIB-PROMO) لكن بشرط ألا يقلّ الجزء المحتوى
-    // عن 3 أحرف؛ وإلا طابق مرسلٌ من حرف أو حرفين (مثل «A» أو «AI») أي محفظة
-    // معرّفها يحتوي ذلك الحرف، وهي ثغرة انتحال مصدر دفع.
-    const minPartialLength = 3;
-    if (configured.length >= minPartialLength && incoming.contains(configured)) {
-      return true;
-    }
-    if (incoming.length >= minPartialLength && configured.contains(incoming)) {
-      return true;
-    }
-    final incDigits = incoming.replaceAll(RegExp(r'[^0-9]'), '');
-    final cfgDigits = configured.replaceAll(RegExp(r'[^0-9]'), '');
-    if (incDigits.length >= 4 && cfgDigits.length >= 4) {
-      if (incDigits.endsWith(cfgDigits) || cfgDigits.endsWith(incDigits)) {
-        return true;
-      }
-    }
-    return false;
+    return incoming == configured;
   }
 
   String _normalize(String raw) =>

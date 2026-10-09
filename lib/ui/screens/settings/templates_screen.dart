@@ -107,8 +107,10 @@ class _TemplatesScreenState extends State<TemplatesScreen> {
             final n = w.name.trim();
             if (n == 'جيب') walletSender = 'JAIB';
             if (n == 'جوالي') walletSender = 'JAWALI';
-            if (n == 'ون كاش') walletSender = 'ONE CASH';
+            if (n == 'أم فلوس') walletSender = 'MFLOOS';
             if (n == 'فلوسك') walletSender = 'FLOOSAK';
+            if (n == 'الكريمي') walletSender = 'KURAIMILMB';
+            if (n == 'ون كاش') walletSender = 'ONE CASH';
           }
           break;
         }
