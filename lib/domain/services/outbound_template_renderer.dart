@@ -260,23 +260,30 @@ final class OutboundTemplateRenderer {
         resolvedNetworkName = stored.value?.value.trim() ?? '';
       }
     }
+    if (resolvedNetworkName.isEmpty) {
+      resolvedNetworkName = SettingDefaults.networkName;
+    }
+    // 'الفئة' الفارغة تُعرض «غير محدد» لا نصًّا فارغًا.
+    final resolvedCardValue =
+        cardValue.trim().isEmpty ? 'غير محدد' : cardValue.trim();
+
+    // المتغيرات العربية (aliases) تُمرَّر بنفس قيمة نظيرها الإنجليزي: تعريفها في
+    // عقد القوالب وحده لا يكفي، لأن المحرك يستبدل ما وُجدت له قيمة فقط.
     final values = <String, String>{
       'serial': serial,
       'serial_number': serial,
+      'الرقم': serial,
       'code': secret,
       'secret': secret,
+      'الرمز': secret,
       'CARD_CODE': serial,
       'CARD_SERIAL': serial,
-      'CARD_VALUE': cardValue.trim().isEmpty ? 'غير محدد' : cardValue.trim(),
-      'NETWORK_NAME': resolvedNetworkName.isEmpty
-          ? SettingDefaults.networkName
-          : resolvedNetworkName,
-      'network': resolvedNetworkName.isEmpty
-          ? SettingDefaults.networkName
-          : resolvedNetworkName,
-      'network_name': resolvedNetworkName.isEmpty
-          ? SettingDefaults.networkName
-          : resolvedNetworkName,
+      'CARD_VALUE': resolvedCardValue,
+      'الفئة': resolvedCardValue,
+      'NETWORK_NAME': resolvedNetworkName,
+      'network': resolvedNetworkName,
+      'network_name': resolvedNetworkName,
+      'اسم_المحفظة': resolvedNetworkName,
       'CURRENCY': currency,
     };
     return renderRegistered(
