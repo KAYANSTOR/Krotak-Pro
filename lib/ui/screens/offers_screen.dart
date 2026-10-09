@@ -7,6 +7,7 @@ import '../../domain/entities/promotion.dart';
 import '../../domain/entities/setting.dart';
 import '../../domain/services/promotion_reward_template.dart';
 import '../app_scope.dart';
+import '../perf/screen_open_trace.dart';
 import '../theme/kayan_palette.dart';
 import '../theme/net_semantic_colors.dart';
 import '../theme/net_tokens.dart';
@@ -65,6 +66,7 @@ class _OffersScreenState extends State<OffersScreen>
       }
     }
     if (listed is Failure<List<Promotion>>) {
+      ScreenOpenTrace.instance.markLatestDataReady('offers');
       setState(() {
         _loading = false;
         _error = listed.error.message;
@@ -74,6 +76,7 @@ class _OffersScreenState extends State<OffersScreen>
     final templates = await c.settings.find(SettingKeys.promotionRewardSmsTemplates);
     final raw = templates is Success<AppSetting?> ? templates.value?.value : null;
     if (!mounted) return;
+    ScreenOpenTrace.instance.markLatestDataReady('offers');
     setState(() {
       _loading = false;
       _items = (listed as Success<List<Promotion>>).value;

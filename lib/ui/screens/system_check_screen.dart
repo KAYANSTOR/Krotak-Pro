@@ -80,7 +80,7 @@ class _SystemCheckScreenState extends State<SystemCheckScreen> {
           ),
           const SizedBox(height: 4),
           Text(
-            'قياس محلي لآخر التنقلات في هذه الجلسة. ليس ميزانية معتمدة ولا دليل جهاز.',
+            'قياس محلي لآخر التنقلات في هذه الجلسة. اكتمال البيانات للتبويبات الرئيسية فقط. ليس ميزانية معتمدة ولا دليل جهاز.',
             style: TextStyle(
               fontFamily: 'Tajawal',
               fontSize: 12,
