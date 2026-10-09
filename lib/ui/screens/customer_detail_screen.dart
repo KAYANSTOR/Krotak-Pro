@@ -11,6 +11,8 @@ import '../../domain/entities/pos_account.dart';
 import '../../domain/entities/transaction.dart';
 import '../../domain/entities/setting.dart';
 import '../../domain/services/local_identity_link_service.dart';
+import '../../domain/services/customer_alternate_code.dart';
+import '../../domain/services/customer_deposit_block.dart';
 import '../../domain/services/salafni_customer_ceiling.dart';
 import '../../domain/services/local_promotion_progress_service.dart';
 import '../../domain/services/services.dart';
@@ -43,6 +45,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
   List<PromotionProgress> _promos = const [];
   PosAccount? _posLink;
   int? _salafniCeilingMinor;
+  bool _depositsBlocked = false;
 
   @override
   void initState() {
@@ -111,6 +114,9 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
           promoR is Success<List<PromotionProgress>> ? promoR.value : const [];
       _posLink = posLink;
       _salafniCeilingMinor = ceilingMinor;
+      final blockR = await c.settings.find(CustomerDepositBlock.key);
+      _depositsBlocked = blockR is Success<AppSetting?> &&
+          CustomerDepositBlock.isBlocked(blockR.value?.value, widget.customerId);
     });
   }
 
@@ -664,6 +670,8 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
 
                             const SizedBox(height: 12),
                             _salafniCeilingCard(scheme),
+                            const SizedBox(height: 12),
+                            _depositPolicyCard(scheme),
                             const SizedBox(height: 16),
                             CustomerPromotionProgressSection(
                               items: _promos,
@@ -947,6 +955,139 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text((write as Failure).error.message, style: const TextStyle(fontFamily: 'Tajawal'))),
       );
+      return;
+    }
+    await _load();
+  }
+
+
+  Widget _depositPolicyCard(ColorScheme scheme) {
+    final codes = _ids.where((id) => id.type == CustomerIdentifierType.externalReference).toList();
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHighest.withValues(alpha: 0.45),
+        borderRadius: NetRadii.mdAll,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('حظر استقبال الإيداعات', style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w800)),
+            subtitle: const Text('الحساب يبقى للمراجعة والبيع وسلفني. الإيداع الآلي فقط يُرفض.', style: TextStyle(fontFamily: 'Tajawal')),
+            value: _depositsBlocked,
+            onChanged: (value) => _setDepositsBlocked(value),
+          ),
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              const Expanded(child: Text('أكواد بديلة', style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w800))),
+              TextButton(onPressed: _addAlternateCode, child: const Text('إضافة', style: TextStyle(fontFamily: 'Tajawal'))),
+            ],
+          ),
+          if (codes.isEmpty)
+            Text('لا توجد أكواد. الطول 4–15 حرفًا أو رقمًا.', style: TextStyle(fontFamily: 'Tajawal', color: scheme.onSurfaceVariant))
+          else
+            for (final code in codes)
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text(code.value, style: const TextStyle(fontFamily: 'Tajawal')),
+                trailing: IconButton(icon: const Icon(Icons.delete_outline), onPressed: () => _removeAlternateCode(code.id)),
+              ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _setDepositsBlocked(bool blocked) async {
+    final c = AppScope.of(context);
+    final current = await c.settings.find(CustomerDepositBlock.key);
+    if (current is Failure<AppSetting?>) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(current.error.message, style: const TextStyle(fontFamily: 'Tajawal'))));
+      return;
+    }
+    final ids = CustomerDepositBlock.decode((current as Success<AppSetting?>).value?.value);
+    if (blocked) {
+      ids.add(widget.customerId);
+    } else {
+      ids.remove(widget.customerId);
+    }
+    final write = await c.settings.save(AppSetting(
+      key: CustomerDepositBlock.key,
+      value: CustomerDepositBlock.encode(ids),
+      updatedAt: c.clock.now(),
+    ));
+    if (!mounted) return;
+    if (write is Failure) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text((write as Failure).error.message, style: const TextStyle(fontFamily: 'Tajawal'))));
+      return;
+    }
+    await _load();
+  }
+
+  Future<void> _addAlternateCode() async {
+    final ctrl = TextEditingController();
+    final raw = await showDialog<String>(
+      context: context,
+      builder: (ctx) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          title: const Text('كود بديل', style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w800)),
+          content: TextField(
+            controller: ctrl,
+            textDirection: TextDirection.ltr,
+            decoration: const InputDecoration(helperText: '4–15 حرفًا أو رقمًا بلا مسافات', helperStyle: TextStyle(fontFamily: 'Tajawal')),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء', style: TextStyle(fontFamily: 'Tajawal'))),
+            FilledButton(onPressed: () => Navigator.pop(ctx, ctrl.text), child: const Text('حفظ', style: TextStyle(fontFamily: 'Tajawal'))),
+          ],
+        ),
+      ),
+    );
+    if (raw == null || !mounted) return;
+    final code = CustomerAlternateCode.normalize(raw);
+    if (code == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('الكود يجب أن يكون 4–15 حرفًا أو رقمًا', style: TextStyle(fontFamily: 'Tajawal'))));
+      return;
+    }
+    final c = AppScope.of(context);
+    final existing = await c.customers.findByIdentifier(code);
+    if (existing is Failure<Customer?>) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(existing.error.message, style: const TextStyle(fontFamily: 'Tajawal'))));
+      return;
+    }
+    final owner = (existing as Success<Customer?>).value;
+    if (owner != null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('الكود مستخدم لحساب آخر أو لهذا الحساب', style: TextStyle(fontFamily: 'Tajawal'))));
+      return;
+    }
+    final write = await c.customers.saveIdentifier(CustomerIdentifier(
+      id: c.ids.next('alt'),
+      customerId: widget.customerId,
+      type: CustomerIdentifierType.externalReference,
+      value: code,
+      isPrimary: false,
+    ));
+    if (!mounted) return;
+    if (write is Failure) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text((write as Failure).error.message, style: const TextStyle(fontFamily: 'Tajawal'))));
+      return;
+    }
+    await _load();
+  }
+
+  Future<void> _removeAlternateCode(String id) async {
+    final c = AppScope.of(context);
+    final write = await c.customers.deleteIdentifier(id);
+    if (!mounted) return;
+    if (write is Failure) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text((write as Failure).error.message, style: const TextStyle(fontFamily: 'Tajawal'))));
       return;
     }
     await _load();

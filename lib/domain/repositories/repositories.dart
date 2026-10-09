@@ -43,6 +43,9 @@ abstract interface class CustomerRepository {
 
   Future<Result<void>> save(Customer customer);
   Future<Result<void>> saveIdentifier(CustomerIdentifier identifier);
+
+  /// حذف معرّف واحد. لا يمس العميل ولا دفتره.
+  Future<Result<void>> deleteIdentifier(String id);
 }
 
 abstract interface class WalletRepository {

@@ -192,6 +192,7 @@ final class _FakeCustomers implements CustomerRepository {
   @override Future<Result<Customer?>> findByIdentifier(String value) async { final id = byIdentifier[value]; return Success(id == null ? null : store[id]); }
   @override Future<Result<void>> save(Customer customer) async { store[customer.id] = customer; return const Success(null); }
   @override Future<Result<void>> saveIdentifier(CustomerIdentifier identifier) async { byIdentifier[identifier.value] = identifier.customerId; return const Success(null); }
+  @override Future<Result<void>> deleteIdentifier(String id) async => const Success(null);
   @override Future<Result<List<Customer>>> search(String query) async => Success(store.values.toList());
   @override Future<Result<List<Customer>>> searchPage(String query, {int limit = 80, int offset = 0}) async { final needle = query.trim().toLowerCase(); final matches = store.values.where((c) => needle.isEmpty || c.displayName.toLowerCase().contains(needle)).toList()..sort((a, b) => a.displayName.compareTo(b.displayName)); return Success(matches.skip(offset < 0 ? 0 : offset).take(limit < 1 ? 80 : limit).toList()); }
   @override Future<Result<List<CustomerPhoneSuggestion>>> suggestPhonesByPrefix(String prefix, {int limit = 8}) async => const Success([]);

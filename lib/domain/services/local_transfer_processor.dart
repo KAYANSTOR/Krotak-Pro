@@ -25,6 +25,7 @@ import 'local_category_commission_store.dart';
 import 'pos_wholesale_pricing.dart';
 import 'pos_order_message_renderer.dart';
 import 'outbound_template_renderer.dart';
+import 'customer_deposit_block.dart';
 import 'deposit_debt_priority.dart';
 
 /// Completes the real incoming-transfer business flow using the existing
@@ -391,6 +392,25 @@ final class LocalTransferProcessor implements TransferProcessor {
                 '{\"phone\":\"${transfer.customerIdentifier}\",\"error\":\"${contactResult.error.code}\"}',
           ),
         );
+      }
+    }
+
+    if (!isPosOrder && resolution.customer != null && settings != null) {
+      final blocked = await _depositsBlocked(resolution.customer!.id);
+      if (blocked) {
+        const failure = AppFailure(
+          code: 'deposits_blocked',
+          message: 'Customer deposits are blocked',
+        );
+        await _persistTerminalFailure(
+          messageId: message.id,
+          status: MessageProcessingStatus.rejected,
+          action: 'deposits_blocked',
+          error: failure,
+          transfer: transfer,
+          deliveryPhone: resolution.deliveryPhone,
+        );
+        return const Failure<Transaction>(failure);
       }
     }
 
@@ -1463,6 +1483,14 @@ final class LocalTransferProcessor implements TransferProcessor {
       result.value?.value,
       defaultValue: SettingDefaults.processCategoryAmountsOnly,
     );
+  }
+
+  Future<bool> _depositsBlocked(String customerId) async {
+    final repo = settings;
+    if (repo == null) return false;
+    final current = await repo.find(CustomerDepositBlock.key);
+    if (current is! Success<AppSetting?>) return false;
+    return CustomerDepositBlock.isBlocked(current.value?.value, customerId);
   }
 
   Future<void> _persistTerminalFailure({
