@@ -244,12 +244,19 @@ final class OutboundTemplateRenderer {
   }
 
   /// نص تسليم الكرت — يمرّ من القاعدة المركزية بلا بديل.
+  ///
+  /// [channel] يختار قالب نوع العملية (نقدي/آجل/هدية/سلفني). إن لم يُزرع
+  /// القالب بعد، يُستخدم [fallbackKey] ثم قالب التسليم العام حتى لا ينقطع
+  /// الإرسال عن تخصيص المشغّل القديم.
   Future<Result<String>> renderVoucherDelivery({
     required String serialNumber,
     required String secretCode,
     String cardValue = 'غير محدد',
     String? networkName,
     String currency = 'ر.ي',
+    CardDeliveryChannel channel = CardDeliveryChannel.legacy,
+    String? fallbackKey,
+    Map<String, String> extraValues = const {},
   }) async {
     final serial = serialNumber.trim();
     final secret = secretCode.trim();
@@ -285,10 +292,37 @@ final class OutboundTemplateRenderer {
       'network_name': resolvedNetworkName,
       'اسم_المحفظة': resolvedNetworkName,
       'CURRENCY': currency,
+      ...extraValues,
     };
+    final preferred = channel.templateKey;
+    if (preferred != null) {
+      final specific = await renderRegistered(key: preferred, values: values);
+      if (specific is Success<String>) return specific;
+      if (specific is Failure<String> &&
+          specific.error.code != 'outbound_template_missing') {
+        return specific;
+      }
+    }
     return renderRegistered(
-      key: SettingKeys.voucherDeliverySmsTemplate,
+      key: fallbackKey ?? SettingKeys.voucherDeliverySmsTemplate,
       values: values,
     );
   }
+}
+
+/// نوع عملية صرف الكرت الذي يحدد قالب الرسالة الصادرة.
+enum CardDeliveryChannel {
+  legacy,
+  cash,
+  credit,
+  gift,
+  salafni;
+
+  String? get templateKey => switch (this) {
+        CardDeliveryChannel.legacy => null,
+        CardDeliveryChannel.cash => SettingKeys.cardDeliveryCashTemplate,
+        CardDeliveryChannel.credit => SettingKeys.cardDeliveryCreditTemplate,
+        CardDeliveryChannel.gift => SettingKeys.cardDeliveryGiftTemplate,
+        CardDeliveryChannel.salafni => SettingKeys.salafniCardDeliveryTemplate,
+      };
 }

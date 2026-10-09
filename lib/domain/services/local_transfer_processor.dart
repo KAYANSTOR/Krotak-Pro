@@ -700,6 +700,15 @@ final class LocalTransferProcessor implements TransferProcessor {
         transfer: transfer,
         deliveryPhone: destination,
       );
+      if (failure.code == 'out_of_stock' && !isPosOrder) {
+        await _notifyDepositNoStock(
+          customer: customer,
+          destination: destination,
+          amount: effectiveAmount,
+          messageId: message.id,
+          sender: sender,
+        );
+      }
       return Failure<Transaction>(failure);
     }
     final card = (reserved as Success<Card>).value;
@@ -807,6 +816,9 @@ final class LocalTransferProcessor implements TransferProcessor {
       serialNumber: card.serialNumber,
       secretCode: card.secretCode,
       cardValue: (category.faceValue.minorUnits / 100).toString(),
+      channel: isPosOrder
+          ? CardDeliveryChannel.legacy
+          : CardDeliveryChannel.cash,
     );
     if (rendered is Failure<String>) {
       await auditLogs.append(
@@ -1595,6 +1607,15 @@ final class LocalTransferProcessor implements TransferProcessor {
           transfer: transfer,
           deliveryPhone: destination,
         );
+        if (failure.code == 'out_of_stock' && !isPosOrder) {
+          await _notifyDepositNoStock(
+            customer: customer,
+            destination: destination,
+            amount: transfer.amount,
+            messageId: message.id,
+            sender: sender,
+          );
+        }
         return Failure<Transaction>(failure);
       }
       final item = (card: (reserved as Success<Card>).value, reservationId: reservationId);
@@ -1763,4 +1784,60 @@ final class _PosOrderItem {
   final Card card;
   final String reservationId;
   final String saleOperationId;
+
+  /// يُرسل قالب «إيداع بلا كرت» دون أن يفشل مسار الرفض إن تعذّر الإرسال.
+  Future<void> _notifyDepositNoStock({
+    required Customer customer,
+    required String destination,
+    required Money amount,
+    required String messageId,
+    required MessageSender sender,
+  }) async {
+    final phone = destination.trim();
+    if (phone.isEmpty) return;
+    final first = customer.displayName.trim().split(RegExp(r'\s+')).first;
+    final rendered = await OutboundTemplateRenderer(settings: settings)
+        .renderRegistered(
+      key: SettingKeys.depositNoStockTemplate,
+      values: {
+        'اسم_الزبون_الاول': first.isEmpty ? customer.displayName : first,
+        'customer_name': customer.displayName,
+        'المبلغ': (amount.minorUnits / 100).toString(),
+        'amount': (amount.minorUnits / 100).toString(),
+        'AMOUNT': (amount.minorUnits / 100).toString(),
+        'المستخدم': customer.displayName,
+        'user': customer.displayName,
+      },
+    );
+    if (rendered is Failure<String>) {
+      await auditLogs.append(
+        AuditLog(
+          id: ids.next('audit'),
+          entityType: 'message',
+          entityId: messageId,
+          action: 'deposit_no_stock_template_failed',
+          occurredAt: clock.now(),
+          payloadJson: '{"error":"${rendered.error.code}"}',
+        ),
+      );
+      return;
+    }
+    final send = await sender.send(
+      destination: phone,
+      body: (rendered as Success<String>).value,
+    );
+    await auditLogs.append(
+      AuditLog(
+        id: ids.next('audit'),
+        entityType: 'message',
+        entityId: messageId,
+        action: send is Success<void>
+            ? 'deposit_no_stock_notified'
+            : 'deposit_no_stock_send_failed',
+        occurredAt: clock.now(),
+        payloadJson: '{"destination":"$phone"}',
+      ),
+    );
+  }
+
 }

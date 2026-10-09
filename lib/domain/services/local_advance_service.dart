@@ -227,9 +227,14 @@ final class LocalAdvanceService implements AdvanceService {
       ));
       return Success(issued);
     }
-    final rendered = await _render(
-      acceptedTemplateKey,
-      {
+    final rendered = await OutboundTemplateRenderer(settings: settings)
+        .renderVoucherDelivery(
+      serialNumber: selectedCard.serialNumber,
+      secretCode: selectedCard.secretCode,
+      cardValue: _money(selectedCategory.faceValue),
+      channel: CardDeliveryChannel.salafni,
+      fallbackKey: acceptedTemplateKey,
+      extraValues: {
         'amount': _money(selectedCategory.faceValue),
         'serial': selectedCard.serialNumber,
         'code': selectedCard.secretCode,
