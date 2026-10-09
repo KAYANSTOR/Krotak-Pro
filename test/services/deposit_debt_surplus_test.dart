@@ -335,6 +335,33 @@ void main() {
 
 
   test(
+      'a surplus that matches no active category leaves the advance unsettled',
+      () async {
+    final customer = await seedCustomer();
+    // الإيداع يطابق فئة الكرت، والباقي بعد الدين (150) لا يطابق أي فئة نشطة.
+    await seedCategory(minorUnits: 20000, categoryId: 'cat-200');
+    await seedAdvance(
+      id: 'adv-mixed',
+      customerId: customer.id,
+      amountMinor: 5000,
+    );
+    await seedMessage('m-mixed');
+
+    final result = await processor.process(transfer('m-mixed', 20000));
+
+    expect(result, isA<Success<Transaction>>());
+    final available = await cards.findAvailableByCategory('cat-200');
+    expect((available as Success<List<Card>>).value, isEmpty,
+        reason: 'الإيداع اشترى كرتًا لأن قاعدة الباقي لم تسمح بالسداد');
+    final advancesResult =
+        await advanceService.listCustomerAdvances(customer.id);
+    final open = (advancesResult as Success<List<Advance>>).value;
+    expect(open.single.outstanding.minorUnits, 5000,
+        reason: 'الدين ما زال قائمًا: قاعدة الباقي في _applyPayment تمنع السداد '
+            'حين لا يطابق الباقي فئة نشطة واحدة (قرار مالك مطلوب)');
+  });
+
+  test(
       'a deposit with no matching stock notifies the customer with the no-stock template',
       () async {
     await seedCustomer();

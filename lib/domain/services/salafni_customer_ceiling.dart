@@ -8,10 +8,12 @@ abstract final class SalafniCustomerCeiling {
   static const key = 'salafni_customer_ceiling_v1';
 
   static Map<String, int> decode(String? raw) {
-    if (raw == null || raw.trim().isEmpty) return const {};
+    // خريطة قابلة للتعديل: ملف العميل يعدّل النسخة المفكوكة قبل حفظها،
+    // وإرجاع خريطة ثابتة يجعل أول تعيين لسقف عميل يفشل.
+    if (raw == null || raw.trim().isEmpty) return <String, int>{};
     try {
       final decoded = jsonDecode(raw);
-      if (decoded is! Map) return const {};
+      if (decoded is! Map) return <String, int>{};
       final out = <String, int>{};
       for (final entry in decoded.entries) {
         final id = entry.key.toString().trim();
@@ -26,7 +28,7 @@ abstract final class SalafniCustomerCeiling {
       }
       return out;
     } catch (_) {
-      return const {};
+      return <String, int>{};
     }
   }
 

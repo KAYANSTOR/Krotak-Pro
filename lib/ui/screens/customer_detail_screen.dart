@@ -988,14 +988,14 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
 
   Widget _depositPolicyCard(ColorScheme scheme) {
     final codes = _ids.where((id) => id.type == CustomerIdentifierType.externalReference).toList();
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: scheme.surfaceContainerHighest.withValues(alpha: 0.45),
-        borderRadius: NetRadii.mdAll,
-      ),
-      child: Column(
+    // Material بدل Container ملوّن: ListTile يرسم خلفيته وحبره على Material،
+    // ووضعه داخل صندوق ملوّن يُطلق تحذير Flutter بأن الحبر قد لا يظهر.
+    return Material(
+      color: scheme.surfaceContainerHighest.withValues(alpha: 0.45),
+      borderRadius: NetRadii.mdAll,
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SwitchListTile(
@@ -1021,7 +1021,8 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                 title: Text(code.value, style: const TextStyle(fontFamily: 'Tajawal')),
                 trailing: IconButton(icon: const Icon(Icons.delete_outline), onPressed: () => _removeAlternateCode(code.id)),
               ),
-        ],
+          ],
+        ),
       ),
     );
   }
