@@ -12,6 +12,17 @@
 - تبقى النتائج التاريخية في ملفات `phase-*` وشهادة QA مرجعًا لتاريخ تنفيذها، ولا تُرفع حالتها إلى «متحقق على جهاز» أو «منشور» اعتمادًا على CI وحده.
 
 
+## لقطة تحقق محدثة — 2026-10-09 (توحيد الفرعين وإصلاح CI)
+
+- الفرعان `development/next` و`development/full-completion` تباعدا بعد `d1a0a95` (4 التزامات مقابل 14)،
+  ووُحِّدا بدمج `108461d`، وصار الالتزام نفسه على الفرعين.
+- الالتزامات الـ14 الخاصة بـ`development/full-completion` (البنود A–F والمراحل 87–95) لم تمر على CI إطلاقًا،
+  لأن الالتزام `a6323e7` نقل مراقبة CI إلى `development/next` فقط.
+- أول تشغيل CI على الرأس الموحَّد [37975833719](https://github.com/KAYANSTOR/Krotak-Pro/actions/runs/37975833719)
+  **فشل** بـ13 خطأ تحليل في `lib/domain/services/local_transfer_processor.dart` و`lib/ui/screens/customer_detail_screen.dart`
+  و`lib/ui/screens/offers_reward_template_sheet.dart` — أي أن الكود لم يكن قابلًا للبناء أصلًا.
+- الإصلاحات والاختبارات الجديدة وقرارات المالك المتبقية: `docs/ci-verification-and-branch-unification-2026-10-09.md`.
+
 ## المرحلة 95 — اكتمال بيانات الأوراق التشغيلية — منفّذة في الكود
 
 | البند | الحالة |

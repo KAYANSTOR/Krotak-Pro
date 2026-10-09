@@ -23,6 +23,12 @@
 
 ## 1. حالة التحقق الآلي (CI)
 
+> **تحديث 2026-10-09 (بعد هذا التقرير):** الالتزامات الـ14 الخاصة بـ`development/full-completion`
+> (البنود A–F والمراحل 87–95) لم تمر على CI إطلاقًا، وأول تحقق آلي على الرأس الموحَّد فشل بـ13 خطأ تحليل
+> — أي أن أجزاءً من الجرد أدناه (خصوصًا «بلا مسار» للقوالب 19–23) تغيّرت لاحقًا في الكود بلا تحقق آلي.
+> التفصيل والإصلاح في `docs/ci-verification-and-branch-unification-2026-10-09.md`.
+
+
 | التشغيل | الالتزام | النتيجة |
 |---|---|---|
 | [37863582178](https://github.com/KAYANSTOR/Krotak-Pro/actions/runs/37863582178) | `174fb5b` (قبل الإصلاح) | **فشل**: `651 tests passed, 1 failed` — اختبار `voucher delivery resolves Arabic aliases from existing card data` |

@@ -1654,9 +1654,10 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
         customerId: _holdCustomerId,
       );
     }
-    await c.auditPort.write(
-      AuditEvent(
-        category: 'promotion',
+    await c.auditLogs.append(
+      AuditLog(
+        id: c.ids.next('reward-probe-hold'),
+        entityType: 'promotion_reward_template',
         entityId: card.cardId,
         action: 'reward_probe_card_open_span_rotated_steps_backward',
         occurredAt: now,

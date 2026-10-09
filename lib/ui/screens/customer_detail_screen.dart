@@ -101,6 +101,13 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
       );
     }
 
+    var depositsBlocked = false;
+    final blockR = await c.settings.find(CustomerDepositBlock.key);
+    if (blockR is Success<AppSetting?>) {
+      depositsBlocked =
+          CustomerDepositBlock.isBlocked(blockR.value?.value, widget.customerId);
+    }
+
     if (!mounted) return;
     final txs = txR is Success<List<Transaction>> ? txR.value : const <Transaction>[];
     final sorted = List<Transaction>.from(txs)
@@ -118,9 +125,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
           promoR is Success<List<PromotionProgress>> ? promoR.value : const [];
       _posLink = posLink;
       _salafniCeilingMinor = ceilingMinor;
-      final blockR = await c.settings.find(CustomerDepositBlock.key);
-      _depositsBlocked = blockR is Success<AppSetting?> &&
-          CustomerDepositBlock.isBlocked(blockR.value?.value, widget.customerId);
+      _depositsBlocked = depositsBlocked;
     });
   }
 

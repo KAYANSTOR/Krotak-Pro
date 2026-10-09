@@ -1309,6 +1309,122 @@ final class LocalTransferProcessor implements TransferProcessor {
     return Success<Transaction>(tx);
   }
 
+  /// يحفظ باقي الإيداع بعد سداد سلفني رصيدًا للعميل بلا كرت.
+  ///
+  /// القاعدة المعتمدة في `docs/phase-deposit-debt-priority-2026-10-09.md`:
+  /// المبلغ المستخدم في السداد لا يحجز كرتًا ولا يبيعه ولا يرسله، والباقي لا
+  /// يشتري كرتًا قبل قرار المالك. المرجع ثابت لكل رسالة، وخدمة الرصيد ترجع
+  /// القيد نفسه للمرجع نفسه، فلا يتكرر القيد عند إعادة معالجة الرسالة.
+  Future<Result<Transaction>> _creditSalafniSurplus({
+    required IncomingMessage message,
+    required ParsedTransfer transfer,
+    required String customerId,
+    required Money surplus,
+    required int appliedMinorUnits,
+  }) async {
+    final depositReference = transfer.reference.trim();
+    final ref =
+        'salafni-surplus:${depositReference.isEmpty ? message.id : depositReference}';
+    final credit = await balances.credit(
+      customerId: customerId,
+      amount: surplus,
+      reference: ref,
+    );
+    if (credit is Failure<Transaction>) {
+      await _persistTerminalFailure(
+        messageId: message.id,
+        status: MessageProcessingStatus.failed,
+        action: 'salafni_surplus_credit_failed',
+        error: credit.error,
+        transfer: transfer,
+      );
+      return Failure<Transaction>(credit.error);
+    }
+    final tx = (credit as Success<Transaction>).value;
+    await messages.updateStatus(message.id, MessageProcessingStatus.processed);
+    await auditLogs.append(
+      AuditLog(
+        id: ids.next('audit'),
+        entityType: 'message',
+        entityId: message.id,
+        action: 'salafni_surplus_held_as_balance',
+        occurredAt: clock.now(),
+        payloadJson:
+            '{"transactionId":"${tx.id}","customerId":"$customerId",'
+            '"appliedMinorUnits":$appliedMinorUnits,'
+            '"surplusMinorUnits":${surplus.minorUnits},'
+            '"currency":"${surplus.currencyCode}"}',
+      ),
+    );
+    return Success<Transaction>(tx);
+  }
+
+  /// يُرسل قالب «إيداع بلا كرت» دون أن يفشل مسار الرفض إن تعذّر الإرسال.
+  ///
+  /// لا يُمرَّر `{المستخدم}` لأن المستخدم في التطبيق هو المشغّل، ولا يوجد حتى
+  /// الآن مصدر معتمد لاسمه؛ تمرير اسم العميل في هذا المتغير يُرسل بيانات
+  /// مضللة، لذا يبقى المتغير معلنًا بلا قيمة إلى أن يحدد المالك مصدره.
+  Future<void> _notifyDepositNoStock({
+    required Customer customer,
+    required String destination,
+    required Money amount,
+    required String messageId,
+    required MessageSender sender,
+  }) async {
+    final phone = destination.trim();
+    if (phone.isEmpty) return;
+    final first = customer.displayName.trim().split(RegExp(r'\s+')).first;
+    final amountText = _majorAmountText(amount);
+    final rendered = await OutboundTemplateRenderer(settings: settings)
+        .renderRegistered(
+      key: SettingKeys.depositNoStockTemplate,
+      values: {
+        'اسم_الزبون_الاول': first.isEmpty ? customer.displayName : first,
+        'customer_name': customer.displayName,
+        'المبلغ': amountText,
+        'amount': amountText,
+        'AMOUNT': amountText,
+      },
+    );
+    if (rendered is Failure<String>) {
+      await auditLogs.append(
+        AuditLog(
+          id: ids.next('audit'),
+          entityType: 'message',
+          entityId: messageId,
+          action: 'deposit_no_stock_template_failed',
+          occurredAt: clock.now(),
+          payloadJson: '{"error":"${rendered.error.code}"}',
+        ),
+      );
+      return;
+    }
+    final send = await sender.send(
+      destination: phone,
+      body: (rendered as Success<String>).value,
+    );
+    await auditLogs.append(
+      AuditLog(
+        id: ids.next('audit'),
+        entityType: 'message',
+        entityId: messageId,
+        action: send is Success<void>
+            ? 'deposit_no_stock_notified'
+            : 'deposit_no_stock_send_failed',
+        occurredAt: clock.now(),
+        payloadJson: '{"destination":"$phone"}',
+      ),
+    );
+  }
+
+  /// نص المبلغ بالوحدة الكبرى للرسائل: بلا كسور عشرية عند القيمة الصحيحة.
+  static String _majorAmountText(Money money) {
+    final major = money.minorUnits / 100;
+    return major == major.roundToDouble()
+        ? major.toStringAsFixed(0)
+        : major.toStringAsFixed(2);
+  }
+
   Future<Result<List<CardCategory>>> _matchActiveCategory(Money amount) async {
     final categoriesRepo = categories!;
     final now = clock.now();
@@ -1826,60 +1942,4 @@ final class _PosOrderItem {
   final Card card;
   final String reservationId;
   final String saleOperationId;
-
-  /// يُرسل قالب «إيداع بلا كرت» دون أن يفشل مسار الرفض إن تعذّر الإرسال.
-  Future<void> _notifyDepositNoStock({
-    required Customer customer,
-    required String destination,
-    required Money amount,
-    required String messageId,
-    required MessageSender sender,
-  }) async {
-    final phone = destination.trim();
-    if (phone.isEmpty) return;
-    final first = customer.displayName.trim().split(RegExp(r'\s+')).first;
-    final rendered = await OutboundTemplateRenderer(settings: settings)
-        .renderRegistered(
-      key: SettingKeys.depositNoStockTemplate,
-      values: {
-        'اسم_الزبون_الاول': first.isEmpty ? customer.displayName : first,
-        'customer_name': customer.displayName,
-        'المبلغ': (amount.minorUnits / 100).toString(),
-        'amount': (amount.minorUnits / 100).toString(),
-        'AMOUNT': (amount.minorUnits / 100).toString(),
-        'المستخدم': customer.displayName,
-        'user': customer.displayName,
-      },
-    );
-    if (rendered is Failure<String>) {
-      await auditLogs.append(
-        AuditLog(
-          id: ids.next('audit'),
-          entityType: 'message',
-          entityId: messageId,
-          action: 'deposit_no_stock_template_failed',
-          occurredAt: clock.now(),
-          payloadJson: '{"error":"${rendered.error.code}"}',
-        ),
-      );
-      return;
-    }
-    final send = await sender.send(
-      destination: phone,
-      body: (rendered as Success<String>).value,
-    );
-    await auditLogs.append(
-      AuditLog(
-        id: ids.next('audit'),
-        entityType: 'message',
-        entityId: messageId,
-        action: send is Success<void>
-            ? 'deposit_no_stock_notified'
-            : 'deposit_no_stock_send_failed',
-        occurredAt: clock.now(),
-        payloadJson: '{"destination":"$phone"}',
-      ),
-    );
-  }
-
 }
