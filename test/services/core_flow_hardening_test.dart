@@ -55,7 +55,10 @@ void main() {
       expect(second, isA<Failure<Transaction?>>());
       expect((first as Failure<Transaction?>).error.code, 'manual_requires_review');
       expect(processor.calls, 0);
-      expect(messages.store.where((m) => m.status == MessageProcessingStatus.received), isEmpty);
+      expect(
+        messages.store.values.where((m) => m.status == MessageProcessingStatus.processed),
+        isEmpty,
+      );
     });
   });
 
