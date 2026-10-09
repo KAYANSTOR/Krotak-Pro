@@ -52,6 +52,20 @@ void main() {
     expect((r as Success<String>).value, contains('111'));
   });
 
+  test('strict render supports Arabic placeholder names', () {
+    final r = OutboundTemplateRenderer.renderStrict(
+      template: 'كرتك من {اسم_المحفظة}\n{الفئة}\n{الرقم}\n{الرمز}',
+      values: {
+        'اسم_المحفظة': 'شبكة كيان',
+        'الفئة': '100 ر.ي',
+        'الرقم': '111',
+        'الرمز': '222',
+      },
+    );
+    expect(r, isA<Success<String>>());
+    expect((r as Success<String>).value, 'كرتك من شبكة كيان\n100 ر.ي\n111\n222');
+  });
+
   test('strict render fails on unresolved placeholder', () {
     final r = OutboundTemplateRenderer.renderStrict(
       template: 'كرت {serial_number} والرمز {code}',
@@ -81,6 +95,26 @@ void main() {
     expect(result, isA<Success<String>>());
     expect((result as Success<String>).value, contains('شبكة الاختبار'));
     expect((result as Success<String>).value, isNot(contains('NET')));
+  });
+
+  test('voucher delivery resolves Arabic aliases from existing card data', () async {
+    final result = await OutboundTemplateRenderer(
+      settings: _Settings(<String, String>{
+        SettingKeys.voucherDeliverySmsTemplate:
+            'من {اسم_المحفظة} فئة {الفئة} رقم {الرقم} رمز {الرمز}',
+        SettingKeys.networkName: 'شبكة الاختبار',
+      }),
+    ).renderVoucherDelivery(
+      serialNumber: '111',
+      secretCode: '222',
+      cardValue: '100 ر.ي',
+    );
+
+    expect(result, isA<Success<String>>());
+    expect(
+      (result as Success<String>).value,
+      'من شبكة الاختبار فئة 100 ر.ي رقم 111 رمز 222',
+    );
   });
 
   group('no template in settings → no send', () {

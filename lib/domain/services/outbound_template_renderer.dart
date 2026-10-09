@@ -28,8 +28,7 @@ final class OutboundTemplateRenderer {
   final SettingsRepository? settings;
 
   /// مطابقة `{name}` — يُرفض أي توكن متبقٍّ بعد الاستبدال.
-  static final RegExp placeholderPattern =
-      RegExp(r'\{([A-Za-z][A-Za-z0-9_]*)\}');
+  static final RegExp placeholderPattern = RegExp(r'\{([^{}\s]+)\}');
 
   /// مطابقة `%name` — صيغة قديمة مدعومة، وتبقى غير المحلولة مرفوضة أيضًا.
   static final RegExp percentPlaceholderPattern =
