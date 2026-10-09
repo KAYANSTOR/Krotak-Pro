@@ -40,12 +40,14 @@ class _SystemCheckScreenState extends State<SystemCheckScreen> {
     if (!mounted) return;
     if (r is Failure<SystemHealthSnapshot>) {
       setState(() {
+        ScreenOpenTrace.instance.markLatestDataReady(ScreenOpenIds.systemCheck);
         _loading = false;
         _error = r.error.message;
       });
       return;
     }
     setState(() {
+      ScreenOpenTrace.instance.markLatestDataReady(ScreenOpenIds.systemCheck);
       _loading = false;
       _snapshot = (r as Success<SystemHealthSnapshot>).value;
     });
@@ -80,7 +82,7 @@ class _SystemCheckScreenState extends State<SystemCheckScreen> {
           ),
           const SizedBox(height: 4),
           Text(
-            'قياس محلي لآخر التنقلات في هذه الجلسة. اكتمال البيانات للتبويبات الرئيسية فقط. ليس ميزانية معتمدة ولا دليل جهاز.',
+            'قياس محلي لآخر التنقلات في هذه الجلسة. اكتمال البيانات للتبويبات الرئيسية والشاشات التشغيلية المدفوعة. ليس ميزانية معتمدة ولا دليل جهاز.',
             style: TextStyle(
               fontFamily: 'Tajawal',
               fontSize: 12,

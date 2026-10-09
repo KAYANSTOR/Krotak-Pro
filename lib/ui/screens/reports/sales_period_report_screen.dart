@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../perf/screen_open_trace.dart';
 
 import '../../../domain/entities/setting.dart';
 import '../../../domain/services/report_pdf_service.dart';
@@ -105,6 +106,7 @@ class _SalesPeriodReportScreenState extends State<SalesPeriodReportScreen> {
     if (!mounted) return;
     if (salesResult is Failure) {
       setState(() {
+        ScreenOpenTrace.instance.markLatestDataReady(ScreenOpenIds.salesPeriodReport);
         _loading = false;
         _error = (salesResult as Failure).error.message;
       });
@@ -125,6 +127,7 @@ class _SalesPeriodReportScreenState extends State<SalesPeriodReportScreen> {
     }
     if (!mounted) return;
     setState(() {
+      ScreenOpenTrace.instance.markLatestDataReady(ScreenOpenIds.salesPeriodReport);
       _loading = false;
       _rows = [
         for (final s in sales)

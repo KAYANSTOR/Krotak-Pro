@@ -34,12 +34,12 @@ abstract final class AppRoutes {
   }
 
   static Future<void> openHelp(BuildContext context) => push(context, const HelpCenterScreen());
-  static Future<void> openSystemCheck(BuildContext context) => push(context, const SystemCheckScreen());
-  static Future<void> openPendingMessages(BuildContext context) => push(context, const PendingMessagesScreen());
-  static Future<void> openFailedMessages(BuildContext context) => push(context, const FailedMessagesScreen());
+  static Future<void> openSystemCheck(BuildContext context) => push(context, const SystemCheckScreen(), screenId: ScreenOpenIds.systemCheck);
+  static Future<void> openPendingMessages(BuildContext context) => push(context, const PendingMessagesScreen(), screenId: ScreenOpenIds.pendingMessages);
+  static Future<void> openFailedMessages(BuildContext context) => push(context, const FailedMessagesScreen(), screenId: ScreenOpenIds.failedMessages);
   static Future<void> openAttentionMessages(BuildContext context) => openPendingMessages(context);
-  static Future<void> openRejectedMessages(BuildContext context) => push(context, const RejectedMessagesScreen());
-  static Future<void> openCustomerDetail(BuildContext context, String customerId) => push(context, CustomerDetailScreen(customerId: customerId));
+  static Future<void> openRejectedMessages(BuildContext context) => push(context, const RejectedMessagesScreen(), screenId: ScreenOpenIds.rejectedMessages);
+  static Future<void> openCustomerDetail(BuildContext context, String customerId) => push(context, CustomerDetailScreen(customerId: customerId), screenId: ScreenOpenIds.customerDetail);
   static Future<void> openDirectSale(BuildContext context) => push(context, const DirectSaleScreen());
   static Future<void> openDirectSalePrefilled(
     BuildContext context, {
@@ -55,22 +55,22 @@ abstract final class AppRoutes {
           initialName: name,
         ),
       );
-  static Future<void> openTransactionsLog(BuildContext context) => push(context, const TransactionsLogScreen());
+  static Future<void> openTransactionsLog(BuildContext context) => push(context, const TransactionsLogScreen(), screenId: ScreenOpenIds.transactionsLog);
   static Future<void> openWallets(BuildContext context) =>
-      push(context, const WalletsScreen());
+      push(context, const WalletsScreen(), screenId: ScreenOpenIds.wallets);
 
   /// شاشة نقاط البيع المستقلة (منفصلة عن إدارة المحافظ).
   static Future<void> openPos(BuildContext context) =>
-      push(context, const PosScreen());
+      push(context, const PosScreen(), screenId: ScreenOpenIds.pos);
   static Future<void> openSalesPeriodReport(
     BuildContext context, {
     SalesReportRange range = SalesReportRange.today,
   }) =>
-      push(context, SalesPeriodReportScreen(initialRange: range));
+      push(context, SalesPeriodReportScreen(initialRange: range), screenId: ScreenOpenIds.salesPeriodReport);
   static Future<void> openPosReport(BuildContext context) =>
-      push(context, const PosReportScreen());
+      push(context, const PosReportScreen(), screenId: ScreenOpenIds.posReport);
 
   /// حسابات نقاط البيع — كشف التسوية والدفتر (مطابق للفيديو).
   static Future<void> openPosAccountsLedger(BuildContext context) =>
-      push(context, const PosAccountsLedgerScreen());
+      push(context, const PosAccountsLedgerScreen(), screenId: ScreenOpenIds.posAccountsLedger);
 }

@@ -2,6 +2,21 @@
 ///
 /// لا يُحفظ في قاعدة البيانات، ولا يُستخدم كدليل جهاز أو كميزانية معتمدة.
 /// كل عينة تسجّل لحظة الطلب، ثم أول إطار إن وُجد، ثم اكتمال البيانات إن أبلغته الشاشة.
+
+abstract final class ScreenOpenIds {
+  static const pendingMessages = 'pending_messages';
+  static const failedMessages = 'failed_messages';
+  static const rejectedMessages = 'rejected_messages';
+  static const customerDetail = 'customer_detail';
+  static const transactionsLog = 'transactions_log';
+  static const wallets = 'wallets';
+  static const pos = 'pos';
+  static const salesPeriodReport = 'sales_period_report';
+  static const posReport = 'pos_report';
+  static const posAccountsLedger = 'pos_accounts_ledger';
+  static const systemCheck = 'system_check';
+}
+
 class ScreenOpenSample {
   ScreenOpenSample({
     required this.screenId,

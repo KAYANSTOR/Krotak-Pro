@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../perf/screen_open_trace.dart';
 
 import '../../domain/services/report_pdf_service.dart';
 import '../services/report_pdf_export.dart';
@@ -63,6 +64,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
     if (!mounted) return;
     if (found is Failure<Customer?>) {
       setState(() {
+        ScreenOpenTrace.instance.markLatestDataReady(ScreenOpenIds.customerDetail);
         _loading = false;
         _error = found.error.message;
       });
@@ -71,6 +73,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
     final customer = (found as Success<Customer?>).value;
     if (customer == null) {
       setState(() {
+        ScreenOpenTrace.instance.markLatestDataReady(ScreenOpenIds.customerDetail);
         _loading = false;
         _error = 'الحساب غير موجود';
       });
@@ -104,6 +107,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
       ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
     setState(() {
+      ScreenOpenTrace.instance.markLatestDataReady(ScreenOpenIds.customerDetail);
       _loading = false;
       _customer = customer;
       _ids = idsR is Success<List<CustomerIdentifier>> ? idsR.value : const [];

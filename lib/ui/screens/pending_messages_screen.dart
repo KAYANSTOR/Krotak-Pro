@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../perf/screen_open_trace.dart';
 
 import '../../core/result.dart';
 import '../../domain/entities/message.dart';
@@ -95,6 +96,7 @@ class _PendingMessagesScreenState extends State<PendingMessagesScreen>
       }
       if (!mounted) return;
       setState(() {
+        ScreenOpenTrace.instance.markLatestDataReady(ScreenOpenIds.pendingMessages);
         _loading = false;
         _all = list;
         _rows = rows;
@@ -108,6 +110,7 @@ class _PendingMessagesScreenState extends State<PendingMessagesScreen>
     } catch (error) {
       if (!mounted) return;
       setState(() {
+        ScreenOpenTrace.instance.markLatestDataReady(ScreenOpenIds.pendingMessages);
         _loading = false;
         _error = 'تعذر تحميل الرسائل المعلّقة: $error';
       });

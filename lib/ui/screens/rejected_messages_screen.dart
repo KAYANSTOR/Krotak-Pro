@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../perf/screen_open_trace.dart';
 
 import '../../core/result.dart';
 import '../../domain/entities/message.dart';
@@ -149,6 +150,7 @@ class _RejectedMessagesScreenState extends State<RejectedMessagesScreen> {
       }
       if (!mounted) return;
       setState(() {
+        ScreenOpenTrace.instance.markLatestDataReady(ScreenOpenIds.rejectedMessages);
         _loading = false;
         _items = items;
         _newCount = newCount;
@@ -157,6 +159,7 @@ class _RejectedMessagesScreenState extends State<RejectedMessagesScreen> {
     } catch (error) {
       if (!mounted) return;
       setState(() {
+        ScreenOpenTrace.instance.markLatestDataReady(ScreenOpenIds.rejectedMessages);
         _loading = false;
         _error = 'تعذر تحميل الرسائل المرفوضة: $error';
       });
