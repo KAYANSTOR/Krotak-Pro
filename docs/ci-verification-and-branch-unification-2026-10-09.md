@@ -30,6 +30,8 @@ CI على `development/full-completion` بعد ذلك. لذلك نُفِّذت �
 | [37978307696](https://github.com/KAYANSTOR/Krotak-Pro/actions/runs/37978307696) | `549df35` (إصلاح الاختبارين) | **نجاح كامل**: `flutter analyze` ✅ · `Test (full suite)` ✅ · `Android unit tests` ✅ · `build-apk` ✅ |
 | [37982214748](https://github.com/KAYANSTOR/Krotak-Pro/actions/runs/37982214748) | `77630e8` (اختبارات سلفني) | فشل عند التحليل: `tearDown` زائد في ملف الاختبار الجديد (59 ثانية) |
 | [37982647856](https://github.com/KAYANSTOR/Krotak-Pro/actions/runs/37982647856) | `d3d3830` (تدقيق سياسات العميل) | التحليل ✅ — `699 tests passed, 2 failed`: كشف اختبار الواجهة الجديد خطأين حقيقيين (خريطة السقف الثابتة وتحذير ListTile) |
+| [37983047341](https://github.com/KAYANSTOR/Krotak-Pro/actions/runs/37983047341) | `9a575a1` (إصلاح السقف والورقة) | `701 tests passed, 1 failed`: اختبار قاعدة الباقي كان يتوقع سلوكًا غير ما يفعله المسار |
+| [37983921766](https://github.com/KAYANSTOR/Krotak-Pro/actions/runs/37983921766) | `96d1b412` (السداد أولًا بقرار المالك) | **نجاح كامل**: `flutter analyze` ✅ · `Test (full suite)` ✅ · `Android unit tests` ✅ · `build-apk` ✅ |
 
 ### فشل الاختبارين في التشغيل الثاني وإصلاحهما
 
