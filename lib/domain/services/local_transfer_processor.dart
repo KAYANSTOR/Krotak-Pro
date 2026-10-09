@@ -25,6 +25,7 @@ import 'local_category_commission_store.dart';
 import 'pos_wholesale_pricing.dart';
 import 'pos_order_message_renderer.dart';
 import 'outbound_template_renderer.dart';
+import 'deposit_debt_priority.dart';
 
 /// Completes the real incoming-transfer business flow using the existing
 /// catalog, inventory, sale and native SMS boundaries.
@@ -560,7 +561,20 @@ final class LocalTransferProcessor implements TransferProcessor {
       }
       final settled = (settlement as Success<AdvancePaymentResult>).value;
       effectiveAmount = settled.remaining;
-      if (effectiveAmount.minorUnits == 0) {
+      final afterDebt = DepositDebtPriority.decide(
+        appliedMinorUnits: settled.applied.minorUnits,
+        remainingMinorUnits: effectiveAmount.minorUnits,
+      );
+      if (afterDebt == DepositAfterDebt.creditSurplusNoCard) {
+        return _creditSalafniSurplus(
+          message: message,
+          transfer: transfer,
+          customerId: customer.id,
+          surplus: effectiveAmount,
+          appliedMinorUnits: settled.applied.minorUnits,
+        );
+      }
+      if (afterDebt == DepositAfterDebt.settlementOnly) {
         final settlementTransaction = settled.settlementTransaction;
         if (settlementTransaction == null) {
           const failure = AppFailure(
