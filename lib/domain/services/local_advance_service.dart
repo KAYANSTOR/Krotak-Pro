@@ -389,31 +389,11 @@ final class LocalAdvanceService implements AdvanceService {
             a.amount.currencyCode == amount.currencyCode &&
             a.outstanding.minorUnits > 0)
         .toList(growable: false);
-    final outstandingTotal = open.fold<int>(
-        0, (sum, advance) => sum + advance.outstanding.minorUnits);
-    final firstAttemptRemaining = amount.minorUnits - priorApplied;
-    if (priorApplied == 0 &&
-        outstandingTotal > 0 &&
-        firstAttemptRemaining > outstandingTotal) {
-      final residual = firstAttemptRemaining - outstandingTotal;
-      final categoriesResult = await categories.listAll();
-      if (categoriesResult is Failure<List<CardCategory>>)
-        return Failure(categoriesResult.error);
-      final matches = (categoriesResult as Success<List<CardCategory>>)
-          .value
-          .where((c) =>
-              c.isActive &&
-              c.faceValue.currencyCode == amount.currencyCode &&
-              c.faceValue.minorUnits == residual)
-          .toList(growable: false);
-      if (matches.length != 1)
-        return Success(AdvancePaymentResult(
-            applied: Money(minorUnits: 0, currencyCode: amount.currencyCode),
-            remaining: amount,
-            settlementTransaction: null));
-    }
-
-    var remaining = firstAttemptRemaining;
+    // قرار المالك 2026-10-09 (§1): السداد أولًا دائمًا. لا تُشترط مطابقة
+    // الباقي لفئة كرت، ولا يُشترى كرت من الفائض: الباقي يبقى رصيدًا
+    // ويتولى مسار الإيداع حفظه. القاعدة القديمة كانت ترفض السداد كاملًا
+    // حين لا يطابق الباقي فئة نشطة، فيبقى الدين قائمًا بلا سبب.
+    var remaining = amount.minorUnits - priorApplied;
     var applied = priorApplied;
     final notices = <Future<void> Function()>[];
     for (final advance in open) {

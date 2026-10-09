@@ -335,7 +335,7 @@ void main() {
 
 
   test(
-      'a surplus that matches no active category blocks the sale and keeps the debt',
+      'a surplus that matches no active category still settles the debt first',
       () async {
     final customer = await seedCustomer();
     // الإيداع يطابق فئة الكرت، والباقي بعد الدين (150) لا يطابق أي فئة نشطة.
@@ -349,24 +349,26 @@ void main() {
 
     final result = await processor.process(transfer('m-mixed', 20000));
 
-    // قاعدة الباقي في `_applyPayment` ترفض السداد لأن الباقي لا يطابق فئة
-    // نشطة واحدة، فينتقل الإيداع إلى مسار الكرت، ولا يكتمل البيع لأن رصيد
-    // العميل بعد الإيداع (150) لا يغطي الفئة (200) بسبب الدين القائم (50).
-    // هذا سلوك حالي موثّق لا إقرار: يلزم قرار مالك على قاعدة الباقي.
-    expect(result, isA<Failure<Transaction>>());
-    expect((result as Failure<Transaction>).error.code, 'insufficient_balance');
-    final available = await cards.findAvailableByCategory('cat-200');
-    expect((available as Success<List<Card>>).value, hasLength(1),
-        reason: 'لم يُبع كرت');
-    expect(await balanceOf(customer.id), 15000,
-        reason: 'الإيداع أُضيف رصيدًا ولم يُعكس عند فشل البيع');
+    // قرار المالك 2026-10-09 (§1): السداد أولًا دائمًا، والفائض رصيد، ولا كرت.
+    expect(result, isA<Success<Transaction>>());
     final advancesResult =
         await advanceService.listCustomerAdvances(customer.id);
-    expect(
-      (advancesResult as Success<List<Advance>>).value.single.outstanding.minorUnits,
-      5000,
-      reason: 'الدين ما زال قائمًا لأن قاعدة الباقي منعت السداد',
-    );
+    final open = (advancesResult as Success<List<Advance>>)
+        .value
+        .where((advance) => advance.outstanding.minorUnits > 0);
+    expect(open, isEmpty, reason: 'الدين يُسدَّد أولًا ولو لم يطابق الباقي فئة');
+    final surplus =
+        await transactions.findByReference('salafni-surplus:REF-m-mixed');
+    expect((surplus as Success<Transaction?>).value?.amount.minorUnits, 15000,
+        reason: 'الفائض يُحفظ رصيدًا بمرجع ثابت');
+    expect(await balanceOf(customer.id), 15000);
+    final available = await cards.findAvailableByCategory('cat-200');
+    expect((available as Success<List<Card>>).value, hasLength(1),
+        reason: 'لا يُشترى كرت من الفائض');
+    expect(sender.bodies.any((body) => body.contains('SN-cat-200')), isFalse);
+    final saved = await messages.findById('m-mixed');
+    expect((saved as Success<IncomingMessage?>).value?.status,
+        MessageProcessingStatus.processed);
   });
 
   test(
