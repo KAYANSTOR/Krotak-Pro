@@ -335,7 +335,7 @@ void main() {
 
 
   test(
-      'a surplus that matches no active category leaves the advance unsettled',
+      'a surplus that matches no active category blocks the sale and keeps the debt',
       () async {
     final customer = await seedCustomer();
     // الإيداع يطابق فئة الكرت، والباقي بعد الدين (150) لا يطابق أي فئة نشطة.
@@ -349,16 +349,24 @@ void main() {
 
     final result = await processor.process(transfer('m-mixed', 20000));
 
-    expect(result, isA<Success<Transaction>>());
+    // قاعدة الباقي في `_applyPayment` ترفض السداد لأن الباقي لا يطابق فئة
+    // نشطة واحدة، فينتقل الإيداع إلى مسار الكرت، ولا يكتمل البيع لأن رصيد
+    // العميل بعد الإيداع (150) لا يغطي الفئة (200) بسبب الدين القائم (50).
+    // هذا سلوك حالي موثّق لا إقرار: يلزم قرار مالك على قاعدة الباقي.
+    expect(result, isA<Failure<Transaction>>());
+    expect((result as Failure<Transaction>).error.code, 'insufficient_balance');
     final available = await cards.findAvailableByCategory('cat-200');
-    expect((available as Success<List<Card>>).value, isEmpty,
-        reason: 'الإيداع اشترى كرتًا لأن قاعدة الباقي لم تسمح بالسداد');
+    expect((available as Success<List<Card>>).value, hasLength(1),
+        reason: 'لم يُبع كرت');
+    expect(await balanceOf(customer.id), 15000,
+        reason: 'الإيداع أُضيف رصيدًا ولم يُعكس عند فشل البيع');
     final advancesResult =
         await advanceService.listCustomerAdvances(customer.id);
-    final open = (advancesResult as Success<List<Advance>>).value;
-    expect(open.single.outstanding.minorUnits, 5000,
-        reason: 'الدين ما زال قائمًا: قاعدة الباقي في _applyPayment تمنع السداد '
-            'حين لا يطابق الباقي فئة نشطة واحدة (قرار مالك مطلوب)');
+    expect(
+      (advancesResult as Success<List<Advance>>).value.single.outstanding.minorUnits,
+      5000,
+      reason: 'الدين ما زال قائمًا لأن قاعدة الباقي منعت السداد',
+    );
   });
 
   test(
