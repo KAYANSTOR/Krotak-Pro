@@ -220,11 +220,13 @@ abstract interface class AdvanceService {
     required String customerId,
     required String currencyCode,
     required String operationId,
+    int? amountMinorUnits,
   });
   Future<Result<AdvanceIssue>> requestByIdentifier({
     required String identifier,
     required String currencyCode,
     required String operationId,
+    int? amountMinorUnits,
   });
   Future<Result<AdvancePaymentResult>> applyPayment({
     required String customerId,
