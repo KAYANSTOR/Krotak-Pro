@@ -6,6 +6,7 @@ import '../services/report_pdf_export.dart';
 import 'package:flutter/services.dart';
 
 import '../../core/result.dart';
+import '../../domain/entities/audit.dart';
 import '../../domain/entities/customer.dart';
 import '../../domain/entities/money.dart';
 import '../../domain/entities/pos_account.dart';
@@ -949,6 +950,9 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
     final map = SalafniCustomerCeiling.decode(
       (current as Success<AppSetting?>).value?.value,
     );
+    final previousMinor = map.containsKey(widget.customerId)
+        ? map[widget.customerId]
+        : null;
     if (minor == null) {
       map.remove(widget.customerId);
     } else {
@@ -966,6 +970,18 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
       );
       return;
     }
+    // كل تغيير سياسة يُسجَّل بالقيمة السابقة والجديدة (الخطة §10.5).
+    await c.auditLogs.append(AuditLog(
+      id: c.ids.next('audit'),
+      entityType: 'customer',
+      entityId: widget.customerId,
+      action: minor == null
+          ? 'salafni_ceiling_cleared'
+          : 'salafni_ceiling_updated',
+      occurredAt: c.clock.now(),
+      payloadJson:
+          '{\"previousMinor\":${previousMinor ?? 'null'},\"nextMinor\":${minor ?? 'null'}}',
+    ));
     await _load();
   }
 
@@ -1019,6 +1035,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
       return;
     }
     final ids = CustomerDepositBlock.decode((current as Success<AppSetting?>).value?.value);
+    final wasBlocked = ids.contains(widget.customerId);
     if (blocked) {
       ids.add(widget.customerId);
     } else {
@@ -1034,6 +1051,15 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text((write as Failure).error.message, style: const TextStyle(fontFamily: 'Tajawal'))));
       return;
     }
+    // كل تغيير سياسة يُسجَّل بالقيمة السابقة والجديدة (الخطة §10.5).
+    await c.auditLogs.append(AuditLog(
+      id: c.ids.next('audit'),
+      entityType: 'customer',
+      entityId: widget.customerId,
+      action: 'deposit_block_updated',
+      occurredAt: c.clock.now(),
+      payloadJson: '{\"previous\":$wasBlocked,\"next\":$blocked}',
+    ));
     await _load();
   }
 
@@ -1088,17 +1114,40 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text((write as Failure).error.message, style: const TextStyle(fontFamily: 'Tajawal'))));
       return;
     }
+    await c.auditLogs.append(AuditLog(
+      id: c.ids.next('audit'),
+      entityType: 'customer',
+      entityId: widget.customerId,
+      action: 'alternate_code_added',
+      occurredAt: c.clock.now(),
+      payloadJson: '{\"code\":\"$code\"}',
+    ));
     await _load();
   }
 
   Future<void> _removeAlternateCode(String id) async {
     final c = AppScope.of(context);
+    String? code;
+    for (final item in _ids) {
+      if (item.id == id) {
+        code = item.value;
+        break;
+      }
+    }
     final write = await c.customers.deleteIdentifier(id);
     if (!mounted) return;
     if (write is Failure) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text((write as Failure).error.message, style: const TextStyle(fontFamily: 'Tajawal'))));
       return;
     }
+    await c.auditLogs.append(AuditLog(
+      id: c.ids.next('audit'),
+      entityType: 'customer',
+      entityId: widget.customerId,
+      action: 'alternate_code_removed',
+      occurredAt: c.clock.now(),
+      payloadJson: '{\"code\":\"${code ?? ''}\"}',
+    ));
     await _load();
   }
 

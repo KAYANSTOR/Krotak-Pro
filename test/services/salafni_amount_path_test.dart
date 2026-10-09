@@ -181,6 +181,8 @@ void main() {
     );
   });
 
+  tearDown(() async => database.close());
+
   Future<Customer> seedCustomer(String phone) async {
     final created = await customerService.create(
       displayName: 'عميل سلفني',
@@ -364,6 +366,3 @@ final class _FakeSmsBridge extends SmsBridge {
   @override
   Future<void> ackPendingSms(List<String> ids) async {}
 }
-
-
-  tearDown(() async => database.close());
