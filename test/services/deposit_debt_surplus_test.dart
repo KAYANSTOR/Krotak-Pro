@@ -21,7 +21,6 @@ import 'package:net_app/domain/entities/card.dart';
 import 'package:net_app/domain/entities/customer.dart';
 import 'package:net_app/domain/entities/message.dart';
 import 'package:net_app/domain/entities/money.dart';
-import 'package:net_app/domain/entities/setting.dart';
 import 'package:net_app/domain/entities/transaction.dart';
 import 'package:net_app/domain/services/default_outbound_templates_seeder.dart';
 import 'package:net_app/domain/services/local_advance_service.dart';

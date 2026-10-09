@@ -254,7 +254,20 @@ void main() {
     final balance = await balanceService.getBalance(customerId: customer.id, currencyCode: 'YER');
     expect((processed as Failure<Transaction>).error.code, 'out_of_stock');
     expect((balance as Success<Money>).value.minorUnits, 0);
-    expect(sender.calls, 0);
+    // الإيداع بلا كرت مطابق: لا حجز ولا بيع ولا قيد مالي، وتصل العميل رسالة
+    // «استلام إيداع بلا كرت متوفر» من قالبها المسجّل.
+    expect(sender.calls, 1);
+    expect(sender.lastBody, contains('Ali'));
+    expect(sender.lastBody, contains('تم استلام'));
+    final cardRows = await cards.findByCategory('cat-200');
+    expect((cardRows as Success<List<Card>>).value, isEmpty);
+    final audits = await auditLogs.findByEntity('message', 'm3');
+    expect(
+      (audits as Success<List<AuditLog>>)
+          .value
+          .any((item) => item.action == 'deposit_no_stock_notified'),
+      isTrue,
+    );
   });
 
   test('retry with same operation id does not create a second sale, ledger, reservation, or SMS', () async {
