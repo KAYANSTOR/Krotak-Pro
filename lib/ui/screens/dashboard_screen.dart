@@ -12,6 +12,7 @@ import '../../domain/entities/setting.dart';
 import '../../domain/entities/system_capability.dart';
 import '../../domain/entities/transaction.dart';
 import '../app_scope.dart';
+import '../perf/screen_open_trace.dart';
 import '../labels/net_labels.dart';
 import '../routing/app_routes.dart';
 import '../theme/kayan_palette.dart';
@@ -224,6 +225,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       if (!mounted) return;
       setState(() {
         _loading = false;
+        ScreenOpenTrace.instance.markLatestDataReady('dashboard');
         _networkName = networkName;
         _dateLabel = dateLabel;
         _attentionMessagesCount = attentionCount;
@@ -265,6 +267,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       if (!mounted) return;
       setState(() {
         _loading = false;
+        ScreenOpenTrace.instance.markLatestDataReady('dashboard');
         _dateLabel = dateLabel;
         _error = e.toString();
       });

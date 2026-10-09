@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'app_reloader.dart';
+import 'perf/screen_open_trace.dart';
 import 'routing/app_routes.dart';
 import 'screens/broadcast_sheet.dart';
 import 'screens/customers_screen.dart';
@@ -98,9 +99,14 @@ class _HomeShellState extends State<HomeShell> {
   void _goToId(String id) {
     final i = _ids.indexOf(id);
     if (i < 0 || i == _index) return;
+    final handle = ScreenOpenTrace.instance.start(id, kind: 'tab');
     setState(() {
       _index = i;
       _pageForIndex(i);
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      handle.markFirstFrame();
     });
   }
 

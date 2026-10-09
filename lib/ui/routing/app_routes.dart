@@ -14,11 +14,18 @@ import '../screens/settings_screen.dart';
 import '../screens/system_check_screen.dart';
 import '../screens/transactions_log_screen.dart';
 import '../screens/wallets_screen.dart';
+import '../perf/screen_open_probe.dart';
+import '../perf/screen_open_trace.dart';
 
 abstract final class AppRoutes {
-  static Future<T?> push<T>(BuildContext context, Widget page) {
+  static Future<T?> push<T>(BuildContext context, Widget page, {String? screenId}) {
+    final handle = ScreenOpenTrace.instance.start(
+      screenId ?? page.runtimeType.toString(),
+    );
     return Navigator.of(context).push<T>(
-      MaterialPageRoute(builder: (_) => page),
+      MaterialPageRoute(
+        builder: (_) => ScreenOpenProbe(handle: handle, child: page),
+      ),
     );
   }
 
