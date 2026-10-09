@@ -10,6 +10,7 @@ import '../../../domain/services/outbound_template_activation.dart';
 import '../../../domain/services/outbound_template_catalog.dart';
 import '../../../domain/services/outbound_template_renderer.dart';
 import '../../app_scope.dart';
+import '../../perf/screen_open_trace.dart';
 import '../../theme/kayan_palette.dart';
 import '../../widgets/async_views.dart';
 
@@ -217,6 +218,7 @@ class _OutboundMessageTemplatesScreenState
       active[entry.key] = entry.value;
     }
 
+    ScreenOpenTrace.instance.markLatestDataReady(ScreenOpenIds.outboundTemplates);
     if (!mounted) return;
     setState(() {
       _values..clear()..addAll(next);

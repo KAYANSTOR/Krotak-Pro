@@ -64,3 +64,23 @@ void main() {
     expect(trace.samples.single.dataReady, const Duration(milliseconds: 30));
   });
 }
+
+  test('شاشات الإعدادات ذات القائمة تُعلَّم مرة واحدة بمعرّف ثابت', () {
+    final opened = DateTime(2026, 10, 9, 14);
+    final trace = ScreenOpenTrace(clock: () => opened);
+    for (final id in [
+      ScreenOpenIds.walletNotificationSettings,
+      ScreenOpenIds.lowStockSettings,
+      ScreenOpenIds.outboundTemplates,
+    ]) {
+      trace.start(id);
+      trace.markLatestDataReady(id, opened.add(const Duration(milliseconds: 20)));
+      trace.markLatestDataReady(id, opened.add(const Duration(milliseconds: 70)));
+    }
+    expect(trace.samples.map((s) => s.screenId), [
+      'wallet_notification_settings',
+      'low_stock_settings',
+      'outbound_templates',
+    ]);
+    expect(trace.samples.every((s) => s.dataReady == const Duration(milliseconds: 20)), isTrue);
+  });

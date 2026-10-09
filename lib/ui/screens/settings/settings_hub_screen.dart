@@ -9,6 +9,7 @@ import '../../../platform/system_diagnostics_bridge.dart';
 import '../../../core/result.dart';
 import '../../../domain/entities/setting.dart';
 import '../../app_scope.dart';
+import '../../routing/app_routes.dart';
 import '../../theme/kayan_palette.dart';
 import '../../theme/net_theme_schedule.dart';
 import '../../theme/net_tokens.dart';
@@ -285,7 +286,7 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
   }
 
   Future<void> _openLowStock() async {
-    await Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LowStockSettingsScreen()));
+    await AppRoutes.openLowStockSettings(context);
     if (mounted) await _load();
   }
 
@@ -335,7 +336,7 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
                               if (_sectionVisible(_messagesKeywords)) const SettingsSectionHeader(title: 'الرسائل والقوالب'),
                               if (_sectionVisible(_messagesKeywords))
                                 SettingsGroupCard(children: [
-                                  SettingsGroupNavRow(icon: Icons.message_outlined, title: 'قوالب الرسائل', subtitle: 'رسائل العملاء والعروض والنظام ونقاط البيع وسلفني — في شاشة واحدة بتبويبات', searchText: 'قوالب رسائل العملاء العروض النظام سلفني نقاط البيع', onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const OutboundMessageTemplatesScreen()))),
+                                  SettingsGroupNavRow(icon: Icons.message_outlined, title: 'قوالب الرسائل', subtitle: 'رسائل العملاء والعروض والنظام ونقاط البيع وسلفني — في شاشة واحدة بتبويبات', searchText: 'قوالب رسائل العملاء العروض النظام سلفني نقاط البيع', onTap: () => AppRoutes.openOutboundTemplates(context)),
                                   SettingsGroupNavRow(icon: Icons.science_outlined, title: 'محاكاة القوالب', subtitle: 'اختبار مطابقة الرسائل الواردة قبل التشغيل', onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const TemplateSimulationScreen()))),
                                   SettingsGroupSwitchRow(icon: Icons.card_giftcard_outlined, title: 'خدمة سلفني', subtitle: _salafni ? 'الميزة مفعلة — يتم استقبال ومعالجة طلبات سلفني آلياً للعملاء المؤهلين' : 'الميزة متوقفة — طلبات سلفني لا تُعالج', value: _salafni, onChanged: (v) async { setState(() => _salafni = v); await _saveBool(SettingKeys.salafniEnabled, v); }),
                                 ]),
@@ -344,7 +345,7 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
                                 SettingsGroupCard(children: [
                                   SettingsGroupNavRow(icon: Icons.account_balance_wallet_outlined, title: 'إدارة المحافظ', subtitle: 'إضافة وتفعيل المحافظ وطريقة قراءة الدفع', searchText: 'المحافظ جيب جوالي ون كاش فلوسك', onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const WalletsScreen()))),
                                   SettingsGroupNavRow(icon: Icons.storefront_outlined, title: 'نقاط البيع', subtitle: 'حسابات النقاط وسقف الدين وقوالب رسائلها', searchText: 'نقاط البيع الحسابات القوالب الرصيد', onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PosScreen()))),
-                                  SettingsGroupNavRow(icon: Icons.notifications_none_outlined, title: 'إشعارات المحافظ', subtitle: 'مصادر إشعارات التطبيقات ومنح إذن الوصول', searchText: 'إشعارات المحافظ مصادر الوصول', onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const WalletNotificationSettingsScreen()))),
+                                  SettingsGroupNavRow(icon: Icons.notifications_none_outlined, title: 'إشعارات المحافظ', subtitle: 'مصادر إشعارات التطبيقات ومنح إذن الوصول', searchText: 'إشعارات المحافظ مصادر الوصول', onTap: () => AppRoutes.openWalletNotificationSettings(context)),
                                   SettingsGroupSwitchRow(icon: Icons.account_balance_outlined, title: 'طلبات رصيد نقاط البيع', subtitle: _posBalanceRequests ? 'مفعّل — يتم الرد تلقائياً على طلب رصيد نقطة البيع برسالة تحتوي الرصيد والدين' : 'متوقف — طلبات رصيد نقاط البيع تُترك للمراجعة اليدوية', value: _posBalanceRequests, onChanged: (v) async { setState(() => _posBalanceRequests = v); await _saveBool(SettingKeys.posBalanceRequestsEnabled, v); }),
                                   SettingsGroupNavRow(icon: Icons.pin_outlined, title: 'الحد اليومي لطلبات رصيد نقاط البيع', subtitle: 'الحد الحالي: '+_posBalanceLimit.toString()+' طلب يومياً لكل نقطة بيع', searchText: 'حد يومي طلبات رصيد نقاط البيع', onTap: _openPosBalanceLimit),
                                   SettingsGroupSwitchRow(icon: Icons.summarize_outlined, title: 'ملخص العمليات اليومي', subtitle: _dailySummary ? 'مفعّل — يُجدول فحص منتصف الليل ثم يُرسل ملخص الأمس مرة واحدة لكل نقطة بيع' : 'متوقف — لن تُرسل ملخصات يومية لنقاط البيع', value: _dailySummary, onChanged: (v) async { setState(() => _dailySummary = v); await _saveBool(SettingKeys.dailyOpsSummaryAutoSend, v); final bridge = SystemDiagnosticsBridge(); if (v) { await bridge.scheduleDailySummary(); } else { await bridge.cancelDailySummary(); } }),

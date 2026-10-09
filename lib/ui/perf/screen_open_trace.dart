@@ -19,6 +19,9 @@ abstract final class ScreenOpenIds {
   static const soldCardsSheet = 'sheet_sold_cards';
   static const broadcastSheet = 'sheet_broadcast';
   static const categoriesSheet = 'sheet_categories';
+  static const walletNotificationSettings = 'wallet_notification_settings';
+  static const lowStockSettings = 'low_stock_settings';
+  static const outboundTemplates = 'outbound_templates';
 }
 
 class ScreenOpenSample {

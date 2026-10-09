@@ -11,6 +11,9 @@ import '../screens/reports/pos_report_screen.dart';
 import '../screens/reports/sales_period_report_screen.dart';
 import '../screens/pos_screen.dart';
 import '../screens/settings_screen.dart';
+import '../screens/settings/low_stock_settings_screen.dart';
+import '../screens/settings/outbound_message_templates_screen.dart';
+import '../screens/settings/wallet_notification_settings_screen.dart';
 import '../screens/system_check_screen.dart';
 import '../screens/transactions_log_screen.dart';
 import '../screens/wallets_screen.dart';
@@ -73,4 +76,13 @@ abstract final class AppRoutes {
   /// حسابات نقاط البيع — كشف التسوية والدفتر (مطابق للفيديو).
   static Future<void> openPosAccountsLedger(BuildContext context) =>
       push(context, const PosAccountsLedgerScreen(), screenId: ScreenOpenIds.posAccountsLedger);
+
+  static Future<void> openWalletNotificationSettings(BuildContext context) =>
+      push(context, const WalletNotificationSettingsScreen(), screenId: ScreenOpenIds.walletNotificationSettings);
+
+  static Future<void> openLowStockSettings(BuildContext context) =>
+      push(context, const LowStockSettingsScreen(), screenId: ScreenOpenIds.lowStockSettings);
+
+  static Future<void> openOutboundTemplates(BuildContext context) =>
+      push(context, const OutboundMessageTemplatesScreen(), screenId: ScreenOpenIds.outboundTemplates);
 }
