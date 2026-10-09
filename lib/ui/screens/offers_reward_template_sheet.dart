@@ -18,6 +18,7 @@ import '../../domain/services/reward_probe_rotate_open_span_steps.dart';
 import '../../domain/services/reward_probe_reverse_open_span.dart';
 import '../../domain/services/reward_probe_swap_open_span.dart';
 import '../../domain/services/reward_probe_shift_open_span.dart';
+import '../../domain/services/reward_probe_shift_open_span_backward.dart';
 import '../../platform/sms_bridge.dart';
 import '../app_scope.dart';
 import '../theme/net_tokens.dart';
@@ -1350,6 +1351,117 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
     });
   }
 
+
+  /// يزيح مقطعًا بين موضعين مدخلين ككتلة نحو بداية الطابور. الكرت الظاهر يحدد الطابور ويقع داخل المقطع.
+  Future<void> _shiftOpenSpanBackwardSelectedHold() async {
+    final card = _liveCard;
+    final startPosition = int.tryParse(_spanFrom.text.trim());
+    final endPosition = int.tryParse(_placePosition.text.trim());
+    final steps = int.tryParse(_spanSteps.text.trim());
+    if (card == null ||
+        _queuedCardIds.length < 2 ||
+        startPosition == null ||
+        endPosition == null ||
+        startPosition < 1 ||
+        endPosition < 1 ||
+        steps == null ||
+        steps < 1) {
+      return;
+    }
+    final visibleIndex = _queuedCardIds.indexOf(card.cardId);
+    final start = startPosition < endPosition ? startPosition : endPosition;
+    final end = startPosition < endPosition ? endPosition : startPosition;
+    if (visibleIndex < 0 || end > _queuedCardIds.length) {
+      setState(() {
+        _status = 'الموضع خارج طول الطابور';
+        _statusIsError = true;
+      });
+      return;
+    }
+    if (start == end) {
+      setState(() {
+        _status = 'طرفا المقطع هما نفس الموضع';
+        _statusIsError = false;
+      });
+      return;
+    }
+    if (visibleIndex < start - 1 || visibleIndex > end - 1) {
+      setState(() {
+        _status = 'الكرت الظاهر خارج المقطع المختار';
+        _statusIsError = true;
+      });
+      return;
+    }
+    if (start - steps < 1) {
+      setState(() {
+        _status = 'الإزاحة تتجاوز بداية الطابور';
+        _statusIsError = true;
+      });
+      return;
+    }
+    final c = AppScope.of(context);
+    setState(() => _busy = true);
+    final current = await c.settings.find(SettingKeys.promotionRewardProbeHolds);
+    final raw = current is Success<AppSetting?> ? current.value?.value : null;
+    final now = c.clock.now();
+    final encoded = RewardProbeShiftOpenSpanBackward.shiftOpenSpanBackward(
+      raw,
+      cardId: card.cardId,
+      startPosition: start,
+      endPosition: end,
+      steps: steps,
+      customerId: _holdCustomerId,
+    );
+    await c.settings.save(
+      AppSetting(
+        key: SettingKeys.promotionRewardProbeHolds,
+        value: encoded,
+        updatedAt: now,
+      ),
+    );
+    var stored = PromotionRewardTemplate.lookupCrossCategoryHold(
+      encoded,
+      customerId: _holdCustomerId,
+    );
+    if (stored == null || !stored.holdsCard(card.cardId)) {
+      stored = PromotionRewardTemplate.lookupHold(
+        encoded,
+        card.categoryId,
+        customerId: _holdCustomerId,
+      );
+    }
+    await c.auditLogs.append(
+      AuditLog(
+        id: c.ids.next('reward-probe-hold'),
+        entityType: 'promotion_reward_template',
+        entityId: card.cardId,
+        action: 'reward_probe_card_open_span_shifted_backward',
+        occurredAt: now,
+        payloadJson: '{"customerId":"${_holdCustomerId ?? ''}","start":$start,"end":$end,"steps":$steps,"queue":${stored?.cards.length ?? 0}}',
+      ),
+    );
+    if (!mounted) return;
+    final ids = [for (final item in stored?.cards ?? const <RewardProbeHeldCard>[]) item.cardId];
+    final block = _queuedCardIds.sublist(start - 1, end);
+    final slide = _queuedCardIds.sublist(start - 1 - steps, start - 1);
+    final expected = [
+      ..._queuedCardIds.sublist(0, start - 1 - steps),
+      ...block,
+      ...slide,
+      ..._queuedCardIds.sublist(end),
+    ];
+    setState(() {
+      _busy = false;
+      _holdReservationId = stored?.cardFor(card.cardId)?.reservationId ?? _holdReservationId;
+      _holdQueueCount = stored?.cards.length ?? _holdQueueCount;
+      _queuedCardIds = ids;
+      _status = _sameOrder(ids, expected)
+          ? 'أُزيح المقطع من الموضع $start إلى $end نحو البداية بمقدار $steps، وبقي ${_holdQueueCount} في الطابور'
+          : 'تعذر إزاحة المقطع نحو البداية';
+      _statusIsError = !_sameOrder(ids, expected);
+    });
+  }
+
   /// يدوّر مقطعًا بين موضعين مدخلين بعدد خطوات. الكرت الظاهر يحدد الطابور ويقع داخل المقطع.
   Future<void> _rotateOpenSpanStepsSelectedHold() async {
     final card = _liveCard;
@@ -2337,6 +2449,17 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
                           icon: const Icon(Icons.keyboard_double_arrow_down),
                           label: const Text(
                             'إزاحة مقطع بين موضعين بعدد الخطوات',
+                            style: TextStyle(fontFamily: NetTypography.family),
+                          ),
+                        ),
+                      ),
+                      Align(
+                        alignment: AlignmentDirectional.centerStart,
+                        child: TextButton.icon(
+                          onPressed: _busy || _probing ? null : _shiftOpenSpanBackwardSelectedHold,
+                          icon: const Icon(Icons.keyboard_double_arrow_up),
+                          label: const Text(
+                            'إزاحة مقطع بين موضعين نحو البداية',
                             style: TextStyle(fontFamily: NetTypography.family),
                           ),
                         ),
