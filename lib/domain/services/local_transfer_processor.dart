@@ -222,6 +222,23 @@ final class LocalTransferProcessor implements TransferProcessor {
         await messages.updateStatus(message.id, MessageProcessingStatus.processed);
         return Success<Transaction>(existing);
       }
+
+      // إعادة معالجة إيداع قُيِّد رصيدًا بلا كرت (بلا فئة مطابقة أو حساب جيب
+      // مؤقت): تُرجع القيد نفسه بنفس المرجع بدل رفض الرسالة
+      // بـ`message_already_processed`، فلا يتكرر القيد ولا تفشل إعادة المعالجة
+      // (قرارات المالك §1.6: العملية idempotent).
+      final creditReference = transfer.reference.trim().isNotEmpty
+          ? 'no-category-credit:${transfer.reference.trim()}'
+          : 'no-category-credit:${message.id}';
+      final existingCredit = await txRepo.findByReference(creditReference);
+      if (existingCredit is Failure<Transaction?>) {
+        return Failure<Transaction>(existingCredit.error);
+      }
+      final creditedBalance = (existingCredit as Success<Transaction?>).value;
+      if (creditedBalance != null) {
+        await messages.updateStatus(message.id, MessageProcessingStatus.processed);
+        return Success<Transaction>(creditedBalance);
+      }
     }
 
     if (message.status == MessageProcessingStatus.processed) {
