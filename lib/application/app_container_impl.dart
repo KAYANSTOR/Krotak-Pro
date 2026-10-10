@@ -83,6 +83,7 @@ final class AppContainer {
     required this.transactions,
     required this.sales,
     required this.auditLogs,
+    required this.cardImportLogs,
     required this.licenses,
     required this.settings,
     required this.unitOfWork,
@@ -142,6 +143,9 @@ final class AppContainer {
   final LocalTransactionRepository transactions;
   final LocalSaleRepository sales;
   final LocalAuditLogRepository auditLogs;
+
+  /// WP-S4/WP-5 — سجل عمليات استيراد الكروت من ملفات.
+  final LocalCardImportLogRepository cardImportLogs;
   final LocalLicenseRepository licenses;
   final LocalSettingsRepository settings;
   final DriftUnitOfWork unitOfWork;
@@ -234,6 +238,7 @@ final class AppContainer {
     final transactions = LocalTransactionRepository(database);
     final sales = LocalSaleRepository(database);
     final auditLogs = LocalAuditLogRepository(database);
+    final cardImportLogs = LocalCardImportLogRepository(database);
     final licenses = LocalLicenseRepository(database);
     final settings = LocalSettingsRepository(database);
     final advanceRepository =
@@ -613,6 +618,7 @@ final class AppContainer {
         transactions: transactions,
         sales: sales,
         auditLogs: auditLogs,
+        cardImportLogs: cardImportLogs,
         licenses: licenses,
         settings: settings,
         unitOfWork: uow,

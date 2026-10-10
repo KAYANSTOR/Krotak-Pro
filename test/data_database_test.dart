@@ -14,13 +14,21 @@ void main() {
     await database.close();
   });
 
-  test('creates current schema version 5 and starts empty', () async {
-    expect(database.schemaVersion, 5);
+  test('creates current schema version 6 and starts empty', () async {
+    expect(database.schemaVersion, 6);
     expect(await database.select(database.customers).get(), isEmpty);
     expect(await database.select(database.cards).get(), isEmpty);
     expect(await database.select(database.incomingMessages).get(), isEmpty);
     expect(await database.select(database.broadcastJobs).get(), isEmpty);
     expect(await database.select(database.broadcastRecipients).get(), isEmpty);
+    // WP-S4 — جدول سجل عمليات استيراد الكروت موجود في المخطط الجديد.
+    final logs = await database
+        .customSelect(
+          "SELECT name FROM sqlite_master WHERE type = 'table' "
+          "AND name = 'card_import_logs'",
+        )
+        .get();
+    expect(logs, hasLength(1), reason: 'جدول سجل الاستيراد غير موجود');
   });
 
   test('stores an incoming message before processing', () async {

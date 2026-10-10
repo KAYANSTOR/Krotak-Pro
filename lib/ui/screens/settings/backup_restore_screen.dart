@@ -37,6 +37,19 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen> {
   File? _lastBackup;
   String? _visiblePath;
 
+  /// متحكّما كلمة المرور يعيشان مع الشاشة لا مع الحوار:
+  /// الحوار يُبنى مرة أخرى أثناء حركة الإغلاق، فتحريرهما فور إغلاق الحوار
+  /// كان يُنتج خطأ «استخدام متحكّم بعد تحريره» في الاختبارات والتشغيل.
+  final TextEditingController _pwdCtrl = TextEditingController();
+  final TextEditingController _confCtrl = TextEditingController();
+
+  @override
+  void dispose() {
+    _pwdCtrl.dispose();
+    _confCtrl.dispose();
+    super.dispose();
+  }
+
   @override
   void initState() {
     super.initState();
@@ -232,8 +245,10 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen> {
     required String confirmLabel,
     required bool requireConfirm,
   }) async {
-    final pwdCtrl = TextEditingController();
-    final confCtrl = TextEditingController();
+    final pwdCtrl = _pwdCtrl;
+    final confCtrl = _confCtrl;
+    pwdCtrl.clear();
+    confCtrl.clear();
     final formKey = GlobalKey<FormState>();
     final value = await showDialog<String>(
       context: context,
@@ -304,8 +319,7 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen> {
         );
       },
     );
-    pwdCtrl.dispose();
-    confCtrl.dispose();
+    // لا تُحرّر المتحكّمات هنا: الحوار ما زال يُبنى أثناء الإغلاق.
     return value;
   }
 

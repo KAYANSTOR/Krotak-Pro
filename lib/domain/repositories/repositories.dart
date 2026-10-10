@@ -2,6 +2,7 @@ import '../../core/result.dart';
 import '../entities/advance.dart';
 import '../entities/audit.dart';
 import '../entities/card.dart';
+import '../entities/card_import_log.dart';
 import '../entities/customer.dart';
 import '../entities/license.dart';
 import '../entities/message.dart';
@@ -194,6 +195,25 @@ abstract interface class SettingsRepository {
 /// بدلًا من الحذف، والقيمة الفارغة يُرفض الإرسال بها تمامًا كالمفتاح الغائب.
 abstract interface class SettingsPurge {
   Future<Result<void>> delete(String key);
+}
+
+/// WP-S4 / WP-5 — مستودع سجل عمليات استيراد الكروت من ملفات.
+///
+/// يُستعمل في شاشة «إدارة ملفات الاستيراد»، ولا يمس أي كرت
+/// أو حركة مالية (الحذف يكون للسجل فقط).
+abstract interface class CardImportLogRepository {
+  /// إدراج أو تحديث سجل بالمعرّف نفسه.
+  Future<Result<void>> save(CardImportLog log);
+
+  Future<Result<CardImportLog?>> findById(String id);
+
+  /// من الأحدث إلى الأقدم.
+  Future<Result<List<CardImportLog>>> listRecent({int limit = 200});
+
+  /// حذف السجل فقط — لا يحذف أي كرت من المخزون.
+  Future<Result<void>> deleteLog(String id);
+
+  Future<Result<int>> count();
 }
 
 abstract interface class AuditLogRepository {

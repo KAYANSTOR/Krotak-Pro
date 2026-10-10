@@ -211,8 +211,9 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase(super.e);
 
   /// 5 — جداول البث المسمّاة صارت مصدر الحقيقة الوحيد (بدل JSON الإعدادات).
+  /// 6 — جدول سجل عمليات استيراد الكروت (card_import_logs) لإدارة ملفات الاستيراد (WP-S4/WP-5 — القرار D8). الترقية إضافية فقط ولا تمس أي بيانات.
   @override
-  int get schemaVersion => 5;
+  int get schemaVersion => 6;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -222,6 +223,7 @@ class AppDatabase extends _$AppDatabase {
           await _createIdempotencyIndexes();
           await _createPerformanceIndexes();
           await _createBroadcastTables();
+          await _createCardImportLogsTable();
           await _ensureBroadcastColumns();
           await _applySqlitePragmas();
         },
@@ -247,11 +249,16 @@ class AppDatabase extends _$AppDatabase {
           }
           await _createPerformanceIndexes();
           await _createBroadcastTables();
+          await _createCardImportLogsTable();
           await _ensureBroadcastColumns();
           if (from < 5) {
             // ترحيل JSON الإعدادات إلى الجداول المسمّاة — إضافي فقط، ولا يكتب
             // فوق مهمة موجودة، ولا يحذف النص القديم (مسار رجوع آمن).
             await _migrateLegacyBroadcastJobs();
+          }
+          if (from < 6) {
+            // 6 — جدول سجل عمليات استيراد الكروت (card_import_logs): إضافي بالكامل، بلا مساس أي بيانات قائمة.
+            await _createCardImportLogsTable();
           }
           await _applySqlitePragmas();
         },
@@ -260,6 +267,7 @@ class AppDatabase extends _$AppDatabase {
           await _createIdempotencyIndexes();
           await _createPerformanceIndexes();
           await _createBroadcastTables();
+          await _createCardImportLogsTable();
           await _ensureBroadcastColumns();
           // مؤقّت أمان idempotent: يغطّي أي ملف قاعدة لم يمرّ بمسار الترقية.
           await _migrateLegacyBroadcastJobs();
@@ -425,6 +433,38 @@ class AppDatabase extends _$AppDatabase {
     await customStatement(
       'CREATE INDEX IF NOT EXISTS idx_broadcast_jobs_fingerprint '
       'ON broadcast_jobs (fingerprint) WHERE fingerprint IS NOT NULL',
+    );
+  }
+
+  /// WP-S4 (D8) — جدول سجل عمليات استيراد الكروت.
+  ///
+  /// يُنشأ بـSQL مباشر ويُقرأ عبر مستودع مخصوص
+  /// (`LocalCardImportLogRepository`), وذلك لأن ملف الـDrift المولّد
+  /// (`app_database.g.dart`) لا يُعاد توليده بلا Flutter SDK محليًا.
+  /// الترميز: الطوابع الزمنية INTEGER بثواني Unix (UTC)
+  /// مطابقةً لترميز Drift الافتراضي.
+  Future<void> _createCardImportLogsTable() async {
+    await customStatement(
+      'CREATE TABLE IF NOT EXISTS card_import_logs ('
+      'id TEXT NOT NULL PRIMARY KEY,'
+      'file_name TEXT NOT NULL,'
+      'file_kind TEXT NOT NULL,'
+      'status TEXT NOT NULL,'
+      'total_rows INTEGER NOT NULL DEFAULT 0,'
+      'accepted_count INTEGER NOT NULL DEFAULT 0,'
+      'duplicate_count INTEGER NOT NULL DEFAULT 0,'
+      'rejected_count INTEGER NOT NULL DEFAULT 0,'
+      'category_id TEXT,'
+      'category_name TEXT,'
+      'failure_reason TEXT,'
+      'rejected_details TEXT,'
+      'started_at INTEGER NOT NULL,'
+      'finished_at INTEGER'
+      ')',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_card_import_logs_started '
+      'ON card_import_logs (started_at)',
     );
   }
 

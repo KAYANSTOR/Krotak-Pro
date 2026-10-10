@@ -134,6 +134,8 @@ void main() {
   Future<AppDatabase> openUpgrading({
     required int userVersion,
     List<String> legacyIndexSql = const [],
+    // جداول لم تكن موجودة في النسخة القديمة فتُحذف قبل الترقية.
+    List<String> droppedTables = const ['card_import_logs'],
   }) {
     var rewound = false;
     return Future.value(
@@ -148,6 +150,11 @@ void main() {
               "AND name = 'cards'",
             );
             if (tables.isEmpty) return;
+
+            // 0. جداول أضافتها ترقية أحدث من النسخة المُرجع إليها.
+            for (final table in droppedTables) {
+              raw.execute('DROP TABLE IF EXISTS $table');
+            }
 
             // 1. الفهارس أولًا: SQLite يرفض حذف عمود ما زال فهرس يشير إليه.
             final indexes = raw.select(
@@ -238,7 +245,24 @@ void main() {
     expect(transactions.single.customerId, 'legacy-customer');
 
     // 4. نسخة المخطط أصبحت الحالية.
-    expect(await userVersion(upgraded), 5);
+    expect(await userVersion(upgraded), 6);
+    // WP-S4: جدول سجل عمليات استيراد الكروت وفهرسه أُنشئا بالترقية بلا مساس البيانات.
+    expect(await columnsOf(upgraded, 'card_import_logs'), containsAll(<String>[
+      'id',
+      'file_name',
+      'file_kind',
+      'status',
+      'total_rows',
+      'accepted_count',
+      'duplicate_count',
+      'rejected_count',
+      'category_id',
+      'failure_reason',
+      'rejected_details',
+      'started_at',
+      'finished_at',
+    ]));
+    expect(await indexNames(upgraded), contains('idx_card_import_logs_started'));
     // جداول البث المسمّاة موجودة بعد الترقية.
     expect(await columnsOf(upgraded, 'broadcast_jobs'), contains('fingerprint'));
     expect(
@@ -325,7 +349,7 @@ void main() {
       throwsA(isA<Exception>()),
     );
 
-    expect(await userVersion(upgraded), 5);
+    expect(await userVersion(upgraded), 6);
   });
 
   test('legacy broadcast JSON migrates into the typed tables exactly once',
@@ -376,7 +400,7 @@ void main() {
     // ترقية حقيقية من نسخة 4 (بلا عمود position) مع نص البث القديم في الإعدادات.
     final upgraded = await openUpgrading(userVersion: 4);
     addTearDown(upgraded.close);
-    expect(await userVersion(upgraded), 5);
+    expect(await userVersion(upgraded), 6);
 
     final jobs = await upgraded.select(upgraded.broadcastJobs).get();
     expect(jobs, hasLength(1));
