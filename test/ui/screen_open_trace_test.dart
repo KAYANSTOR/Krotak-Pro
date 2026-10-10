@@ -80,7 +80,7 @@ void main() {
       'wallet_notification_settings',
       'low_stock_settings',
       'outbound_templates',
-    ]);
+    });
     expect(trace.samples.every((s) => s.dataReady == const Duration(milliseconds: 20)), isTrue);
   });
 }
