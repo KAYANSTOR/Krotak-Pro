@@ -22,6 +22,7 @@ import '../data/repositories/local_broadcast_repository.dart';
 import '../domain/services/local_advance_service.dart';
 import '../domain/services/local_broadcast_service.dart';
 import '../domain/services/local_backup_service.dart';
+import '../domain/services/card_import_service.dart';
 import '../domain/services/ledger_csv_export_service.dart';
 import '../domain/services/local_maintenance_service.dart';
 import '../domain/services/local_message_recovery_service.dart';
@@ -84,6 +85,7 @@ final class AppContainer {
     required this.sales,
     required this.auditLogs,
     required this.cardImportLogs,
+    required this.cardImportService,
     required this.licenses,
     required this.settings,
     required this.unitOfWork,
@@ -146,6 +148,9 @@ final class AppContainer {
 
   /// WP-S4/WP-5 — سجل عمليات استيراد الكروت من ملفات.
   final LocalCardImportLogRepository cardImportLogs;
+
+  /// WP-5 — مسار واحد لاستيراد الكروت من ملفات (قراءة → معاينة → حفظ ذرّي → سجل).
+  final CardImportService cardImportService;
   final LocalLicenseRepository licenses;
   final LocalSettingsRepository settings;
   final DriftUnitOfWork unitOfWork;
@@ -239,6 +244,13 @@ final class AppContainer {
     final sales = LocalSaleRepository(database);
     final auditLogs = LocalAuditLogRepository(database);
     final cardImportLogs = LocalCardImportLogRepository(database);
+    final cardImportService = CardImportService(
+      cards: cards,
+      catalog: catalogService,
+      logs: cardImportLogs,
+      clock: clock,
+      ids: ids,
+    );
     final licenses = LocalLicenseRepository(database);
     final settings = LocalSettingsRepository(database);
     final advanceRepository =
@@ -619,6 +631,7 @@ final class AppContainer {
         sales: sales,
         auditLogs: auditLogs,
         cardImportLogs: cardImportLogs,
+        cardImportService: cardImportService,
         licenses: licenses,
         settings: settings,
         unitOfWork: uow,

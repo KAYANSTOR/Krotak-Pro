@@ -372,7 +372,6 @@ class _AddCardsSheetState extends State<_AddCardsSheet> {
   CardImportPreview? _preview;
   String _analyzedSource = '';
   CardImportFormat? _analyzedFormat;
-  String? _fileName;
 
   /// يحلل النص الحالي: يفصل السطور الصالحة عن المرفوضة وعن المكرر في المخزون.
   ///
@@ -401,7 +400,6 @@ class _AddCardsSheetState extends State<_AddCardsSheet> {
       drafts: parsed.drafts,
       parseErrors: parsed.errors,
       stockDuplicateSerials: stockDuplicates,
-      fileName: _fileName,
     );
     setState(() {
       _analyzing = false;
@@ -426,100 +424,25 @@ class _AddCardsSheetState extends State<_AddCardsSheet> {
     super.dispose();
   }
 
-  Future<void> _pickFile() async {
-    try {
-      final result = await FilePicker.platform.pickFiles(
-        type: FileType.custom,
-        // pdf مدعوم عبر CardImportFileReader، والامتدادات المجهولة تُقرأ كنص UTF-8.
-        allowedExtensions: CardImportFileReader.allowedExtensions,
-        withData: true,
-        allowMultiple: false,
-      );
-      if (result == null || result.files.isEmpty) return;
-      final file = result.files.single;
-      Uint8List? bytes = file.bytes;
-      if ((bytes == null || bytes.isEmpty) &&
-          file.path != null &&
-          file.path!.isNotEmpty) {
-        bytes = await File(file.path!).readAsBytes();
-      }
-      if (bytes == null || bytes.isEmpty) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'تعذر قراءة الملف أو الملف فارغ',
-              style: TextStyle(fontFamily: 'Tajawal'),
-            ),
-          ),
-        );
-        return;
-      }
 
-      // قراءة UTF-8 صحيحة (مع تجاوز BOM) بدل `String.fromCharCodes` الذي كان
-      // يُفسد الأرقام العربية والرموز، واستخراج نص PDF المدعوم.
-      final read = CardImportFileReader.read(fileName: file.name, bytes: bytes);
-      if (!read.isOk) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              read.errorMessage ??
-                  'يُسمح فقط بملفات PDF أو Excel (.xlsx) أو CSV',
-              style: const TextStyle(fontFamily: 'Tajawal'),
-            ),
-          ),
-        );
-        return;
-      }
-      final content = read.text;
-      if (content.trim().isEmpty) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'لم يُعثر على بيانات كروت في الملف (' + file.name + ')',
-              style: const TextStyle(fontFamily: 'Tajawal'),
-            ),
-          ),
-        );
-        return;
-      }
-      setState(() {
-        _batchCtrl.text = content;
-        _fileName = file.name;
-        _tab = 1;
-        _preview = null;
-      });
-      final preview = await _analyze(force: true);
-      if (!mounted || preview == null) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'تم تحميل الملف: ' +
-                preview.acceptedCount.toString() +
-                ' كرت صالح' +
-                (preview.stockDuplicateCount > 0
-                    ? ' · ' + preview.stockDuplicateCount.toString() + ' مكرر في المخزون'
-                    : '') +
-                (preview.parseErrors.isNotEmpty
-                    ? ' · ' + preview.parseErrors.length.toString() + ' سطر مرفوض'
-                    : ''),
-            style: const TextStyle(fontFamily: 'Tajawal'),
-          ),
-        ),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'فشل اختيار الملف: ' + e.toString(),
-            style: const TextStyle(fontFamily: 'Tajawal'),
-          ),
-        ),
-      );
+  /// يفتح ورقة «استيراد كروت من ملف» (PDF/Excel/CSV)
+  /// — كل صف يفتح المنتقي بامتداده فقط، ثم يُسجّلت العملية.
+  Future<void> _openImportSheet() async {
+    final categoryId = _categoryId;
+    var categoryName = '';
+    for (final category in widget.categories) {
+      if (category.id == categoryId) categoryName = category.name;
     }
+    if (categoryName.isEmpty && widget.categories.isNotEmpty) {
+      categoryName = widget.categories.first.name;
+    }
+    await showCardImportFileSheet(
+      context,
+      categoryId: categoryId,
+      categoryName: categoryName,
+      categories: widget.categories,
+      onDone: widget.onDone,
+    );
   }
 
   Future<void> _saveSingle() async {
@@ -699,10 +622,10 @@ class _AddCardsSheetState extends State<_AddCardsSheet> {
                       const SizedBox(width: 8),
                       Expanded(
                         child: OutlinedButton.icon(
-                          onPressed: _busy ? null : _pickFile,
-                          icon: const Icon(Icons.folder_open_outlined, size: 18),
+                          onPressed: _busy ? null : _openImportSheet,
+                          icon: const Icon(Icons.upload_file_rounded, size: 18),
                           label: const Text(
-                            'اختيار ملف',
+                            'استيراد من ملف',
                             style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w700),
                           ),
                         ),

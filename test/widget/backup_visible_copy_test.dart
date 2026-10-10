@@ -86,15 +86,18 @@ void main() {
 
     await tester.tap(find.text('إنشاء النسخة'));
     await tester.pump();
-    // حركة إغلاق الحوار تجري بالزمن الوهمي، والإنشاء لا يبدأ إلا بعد
-    // اكتمالها — فنتقدّم بالزمن أولًا ثم نمنح العمل الحقيقي حلقة زمن.
+    // حركة إغلاق الحوار تجري بالزمن الوهمي، والإنشاء لا يبدأ إلا بعدها.
     await tester.pump(const Duration(milliseconds: 400));
-    // إنشاء النسخة يكتب ملفًا حقيقيًا (PBKDF2 + AES-GCM + كتابة على القرص):
-    // نمنح الحلقة الحقيقية وقتًا ليكتمل العمل قبل فحص الواجهة.
-    await tester.runAsync(() async {
-      await Future<void>.delayed(const Duration(milliseconds: 1800));
-    });
-    await tester.pump();
+    // الإنشاء يقرأ ويكتب ملفات حقيقية (PBKDF2 + AES-GCM + قرص): كل
+    // قراءة/كتابة تحتاج حلقة زمن حقيقية، فنتبادل بينها وبين تقديم
+    // الزمن الوهمي حتى تكتمل سلسلة العمل كاملة.
+    for (var attempt = 0; attempt < 40; attempt++) {
+      await tester.runAsync(() async {
+        await Future<void>.delayed(const Duration(milliseconds: 40));
+      });
+      await tester.pump();
+      if (storageCalls.isNotEmpty) break;
+    }
     await tester.pump(const Duration(milliseconds: 300));
 
     expect(storageCalls, isNotEmpty, reason: 'لم تُنسخ النسخة إلى المجلد الظاهر');

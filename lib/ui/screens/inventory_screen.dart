@@ -1,14 +1,11 @@
 import 'dart:async';
-import 'dart:io';
 
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'sold_cards_sheet.dart';
 import 'package:flutter/services.dart';
 
 import '../../core/result.dart';
 import '../../domain/entities/card.dart' as domain;
-import '../../domain/services/card_import_file_reader.dart';
 import '../../domain/services/card_import_parser.dart';
 import '../../domain/services/card_import_preview.dart';
 import '../../domain/services/services.dart';
@@ -24,6 +21,8 @@ import '../widgets/net/net_sparkline.dart';
 import '../widgets/net/net_surface_card.dart';
 import '../widgets/net/net_tab_header.dart';
 import 'inventory_categories_sheet.dart';
+import 'inventory_import_logs_screen.dart';
+import 'inventory_import_sheets.dart';
 import '../errors/user_facing_error_localizer.dart';
 
 part 'inventory_sheets.dart';
@@ -161,14 +160,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
 
   Future<void> _openAddCards() async {
     if (_categories.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'أضف فئة أولاً قبل استيراد الكروت',
-            style: TextStyle(fontFamily: NetTypography.family),
-          ),
-        ),
-      );
+      _noticeMissingCategory();
       return;
     }
     await NetSheet.show<void>(
@@ -177,6 +169,50 @@ class _InventoryScreenState extends State<InventoryScreen> {
         categories: _categories,
         initialCategoryId: _categoryFilter ?? _categories.first.id,
         onDone: _load,
+      ),
+    );
+  }
+
+  /// WP-5 — ورقة «استيراد كروت من ملف» (PDF/Excel/CSV).
+  Future<void> _openImportFile() async {
+    if (_categories.isEmpty) {
+      _noticeMissingCategory();
+      return;
+    }
+    final categoryId = _categoryFilter ?? _categories.first.id;
+    var categoryName = '';
+    for (final category in _categories) {
+      if (category.id == categoryId) categoryName = category.name;
+    }
+    if (categoryName.isEmpty) categoryName = _categories.first.name;
+    await showCardImportFileSheet(
+      context,
+      categoryId: categoryId,
+      categoryName: categoryName,
+      categories: _categories,
+      onDone: _load,
+    );
+  }
+
+  /// WP-5 (P1) — شاشة «إدارة ملفات الاستيراد».
+  Future<void> _openImportLogs() async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => InventoryImportLogsScreen(
+          onImportRequested: _openImportFile,
+        ),
+      ),
+    );
+    await _load();
+  }
+
+  void _noticeMissingCategory() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'أضف فئة أولاً قبل استيراد الكروت',
+          style: TextStyle(fontFamily: NetTypography.family),
+        ),
       ),
     );
   }
@@ -398,6 +434,11 @@ class _InventoryScreenState extends State<InventoryScreen> {
                 onPressed: _openAddCards,
               ),
               NetHeaderAction(
+                icon: Icons.folder_copy_rounded,
+                tooltip: 'إدارة ملفات الاستيراد',
+                onPressed: _openImportLogs,
+              ),
+              NetHeaderAction(
                 icon: Icons.more_horiz_rounded,
                 tooltip: 'خيارات',
                 onPressed: _openOverflowMenu,
@@ -427,7 +468,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                 const SizedBox(width: 12),
                 Expanded(
                   child: FilledButton.icon(
-                    onPressed: _openAddCards,
+                    onPressed: _openImportFile,
                     icon: const Icon(Icons.cloud_upload_rounded, size: 20),
                     label: const Text(
                       'استيراد من ملف',
