@@ -39,6 +39,12 @@ void main() {
   }
 
   Future<void> pumpHub(WidgetTester tester, AppContainer container) async {
+    // شاشة الصيانة أطول من السطح الافتراضي للاختبار: نوسّعه حتى تكون الأزرار
+    // مبنية وقابلة للنقر فعلاً (ListView يبني ما يظهر فقط).
+    tester.view.physicalSize = const Size(1200, 2800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
     await tester.pumpWidget(
       AppScope(
         container: container,

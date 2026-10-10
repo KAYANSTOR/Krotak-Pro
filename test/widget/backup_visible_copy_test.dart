@@ -50,6 +50,10 @@ void main() {
       await database.close();
     });
 
+    tester.view.physicalSize = const Size(1200, 2600);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
     await tester.pumpWidget(
       AppScope(
         container: container,
@@ -76,8 +80,13 @@ void main() {
 
     await tester.tap(find.text('إنشاء النسخة'));
     await tester.pump();
-    await tester.pump(const Duration(seconds: 2));
-    await tester.pump(const Duration(seconds: 2));
+    // إنشاء النسخة يكتب ملفًا حقيقيًا (PBKDF2 + AES-GCM + كتابة على القرص):
+    // نمنح الحلقة الحقيقية وقتًا ليكتمل العمل قبل فحص الواجهة.
+    await tester.runAsync(() async {
+      await Future<void>.delayed(const Duration(milliseconds: 1200));
+    });
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
 
     expect(storageCalls, isNotEmpty, reason: 'لم تُنسخ النسخة إلى المجلد الظاهر');
     final call = storageCalls.first;

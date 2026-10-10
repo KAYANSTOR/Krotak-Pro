@@ -4,16 +4,19 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../../core/result.dart';
 import '../../../domain/entities/customer.dart';
 import '../../../domain/entities/transaction.dart';
 import '../../app_scope.dart';
+import '../../errors/user_facing_error_localizer.dart';
+import '../../services/receipt_image_service.dart';
+import 'transaction_receipt_card.dart';
 import '../../labels/net_labels.dart';
 import '../../theme/kayan_palette.dart';
 import '../../theme/net_semantic_colors.dart';
 import '../../theme/net_tokens.dart';
-import '../async_views.dart';
 import 'net_sheet.dart';
 
 /// تفاصيل العملية — مطابقة تخطيط إطار «بيانات الحركة» في التطبيق المرجعي
@@ -47,6 +50,11 @@ class _NetTransactionDetailSheetState extends State<NetTransactionDetailSheet> {
   String? _customerName;
   String? _customerPhone;
   bool _loadingCustomer = false;
+
+  /// WP-8 — مفتاح حدود الرسم لبطاقة الإشعار (PNG).
+  final GlobalKey _receiptKey = GlobalKey();
+
+  static const ReceiptImageService _imageService = ReceiptImageService();
 
   Transaction get _tx => widget.transaction;
 
@@ -122,59 +130,53 @@ class _NetTransactionDetailSheetState extends State<NetTransactionDetailSheet> {
     return parts.join('\n');
   }
 
-  /// نص الإيصال المستخدم في النسخ والحفظ (عرض فقط، لا يعدّل أي بيانات).
-  String get _receiptText => buildTransactionReceiptText(
-        amountText: _amountText,
-        currencyLabel: _currencyLabel,
-        reference: _reference,
-        typeLabel: transactionTypeLabel(_tx.type),
-        statusLabel: transactionStatusLabel(_tx.status),
-        dateLabel: _dateLabel,
-        beneficiaryLabel: _beneficiaryLabel,
-      );
-
-  Future<void> _copyReceipt() async {
-    final messenger = ScaffoldMessenger.of(context);
-    await Clipboard.setData(ClipboardData(text: _receiptText));
-    messenger.showSnackBar(
-      const SnackBar(
-        content: Text(
-          'تم نسخ بيانات العملية — يمكنك لصقها للمشاركة',
-          style: TextStyle(fontFamily: NetTypography.family),
-        ),
-        duration: Duration(seconds: 2),
+  void _notice(String text) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(text, style: const TextStyle(fontFamily: NetTypography.family)),
+        duration: const Duration(seconds: 3),
       ),
     );
   }
 
-  Future<void> _saveReceipt() async {
-    final messenger = ScaffoldMessenger.of(context);
-    try {
-      final dir = await getApplicationDocumentsDirectory();
-      final fileName =
-          'net-tx-${_reference.replaceAll(RegExp(r'[^\w\-]'), '_')}.txt';
-      final file = File(p.join(dir.path, fileName));
-      await file.writeAsString(_receiptText, flush: true);
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(
-            'تم حفظ نسخة نصية: $fileName',
-            style: const TextStyle(fontFamily: NetTypography.family),
-          ),
-          duration: const Duration(seconds: 3),
-        ),
-      );
-    } on Object {
-      messenger.showSnackBar(
-        const SnackBar(
-          content: Text(
-            'تعذّر حفظ النسخة على هذا الجهاز',
-            style: TextStyle(fontFamily: NetTypography.family),
-          ),
-          duration: Duration(seconds: 2),
-        ),
-      );
+  /// WP-8 — مشاركة **صورة** الإشعار (لا نص) عبر ورقة النظام.
+  Future<void> _shareReceipt() async {
+    final bytes = await _imageService.capture(_receiptKey);
+    if (bytes == null) {
+      _notice('تعذر إنشاء صورة الإشعار. حاول مرة أخرى.');
+      return;
     }
+    try {
+      final dir = await getTemporaryDirectory();
+      final file = File(p.join(dir.path, ReceiptImageService.fileNameFor(_reference)));
+      await file.writeAsBytes(bytes, flush: true);
+      await Share.shareXFiles(
+        [XFile(file.path, mimeType: 'image/png')],
+        subject: 'إشعار عملية',
+      );
+    } catch (error) {
+      _notice(localizedError(error));
+    }
+  }
+
+  /// WP-8/D5 — حفظ صورة الإشعار في `Pictures/Krotak Pro/` (بلا حفظ TXT).
+  Future<void> _saveReceipt() async {
+    final bytes = await _imageService.capture(_receiptKey);
+    if (bytes == null) {
+      _notice('تعذر إنشاء صورة الإشعار. حاول مرة أخرى.');
+      return;
+    }
+    final c = AppScope.of(context);
+    final saved = await c.visibleStorage.saveImageToPictures(
+      bytes: bytes,
+      fileName: ReceiptImageService.fileNameFor(_reference),
+    );
+    if (saved is Failure<String>) {
+      _notice(localizedError(saved.error));
+      return;
+    }
+    _notice('تم حفظ صورة الإشعار في الصور: ${(saved as Success<String>).value}');
   }
 
   @override
@@ -188,90 +190,29 @@ class _NetTransactionDetailSheetState extends State<NetTransactionDetailSheet> {
       subtitle: 'تفاصيل عملية مسجّلة في دفتر الحسابات',
       icon: Icons.receipt_long_rounded,
       children: [
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(
-            horizontal: NetSpacing.lg,
-            vertical: NetSpacing.lg,
-          ),
-          decoration: BoxDecoration(
-            color: palette.surfaceVariant,
-            borderRadius: NetRadii.mdAll,
-          ),
-          child: Column(
-            children: [
-              Text(
-                _isInflow ? 'مبلغ دائن (إضافة)' : 'مبلغ مدين (خصم)',
-                style: TextStyle(
-                  fontFamily: NetTypography.family,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: palette.textSecondary,
-                ),
-              ),
-              const SizedBox(height: NetSpacing.xs),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(
-                    _amountText,
-                    style: TextStyle(
-                      fontFamily: NetTypography.family,
-                      fontSize: 26,
-                      fontWeight: FontWeight.w800,
-                      height: 1.1,
-                      color: amountColor,
-                    ),
-                  ),
-                  const SizedBox(width: NetSpacing.xs),
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 3),
-                    child: Text(
-                      _currencyLabel,
-                      style: TextStyle(
-                        fontFamily: NetTypography.family,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: amountColor,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: NetSpacing.md),
-        _DetailRow(
-          label: 'رقم مرجع العملية',
-          value: _reference,
-          trailing: IconButton(
-            tooltip: 'نسخ المرجع',
-            onPressed: () async {
+        RepaintBoundary(
+          key: _receiptKey,
+          child: TransactionReceiptCard(
+            amountText: _amountText,
+            currencyLabel: _currencyLabel,
+            reference: _reference,
+            typeLabel: transactionTypeLabel(_tx.type),
+            statusLabel: transactionStatusLabel(_tx.status),
+            dateLabel: _dateLabel,
+            beneficiaryLabel: _beneficiaryLabel,
+            isInflow: _isInflow,
+            statusColor: transactionStatusColor(_tx.status, net),
+            onCopyReference: () async {
               await Clipboard.setData(ClipboardData(text: _reference));
             },
-            icon: Icon(
-              Icons.copy_rounded,
-              size: NetSizes.iconSm,
-              color: palette.textSecondary,
-            ),
           ),
         ),
-        _DetailRow(label: 'العملية', value: transactionTypeLabel(_tx.type)),
-        _DetailRow(
-          label: 'الحالة',
-          value: transactionStatusLabel(_tx.status),
-          valueColor: transactionStatusColor(_tx.status, net),
-        ),
-        _DetailRow(label: 'تاريخ العملية', value: _dateLabel),
-        _DetailRow(label: 'المستفيد', value: _beneficiaryLabel),
         const SizedBox(height: NetSpacing.lg),
         Row(
           children: [
             Expanded(
               child: OutlinedButton.icon(
-                onPressed: _copyReceipt,
+                onPressed: _shareReceipt,
                 icon: const Icon(Icons.ios_share_rounded, size: NetSizes.iconSm),
                 label: const Text(
                   'مشاركة',
@@ -292,66 +233,6 @@ class _NetTransactionDetailSheetState extends State<NetTransactionDetailSheet> {
             ),
           ],
         ),
-      ],
-    );
-  }
-}
-
-/// صف تفاصيل: التسمية في جهة البداية (اليمين) والقيمة في الجهة المقابلة.
-class _DetailRow extends StatelessWidget {
-  const _DetailRow({
-    required this.label,
-    required this.value,
-    this.trailing,
-    this.valueColor,
-  });
-
-  final String label;
-  final String value;
-  final Widget? trailing;
-  final Color? valueColor;
-
-  @override
-  Widget build(BuildContext context) {
-    final palette = KayanPalette.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: NetSpacing.sm),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SizedBox(
-                width: 118,
-                child: Text(
-                  label,
-                  style: TextStyle(
-                    fontFamily: NetTypography.family,
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w600,
-                    color: palette.textSecondary,
-                  ),
-                ),
-              ),
-              const SizedBox(width: NetSpacing.sm),
-              Expanded(
-                child: Text(
-                  value,
-                  style: TextStyle(
-                    fontFamily: NetTypography.family,
-                    fontSize: 13.5,
-                    fontWeight: FontWeight.w800,
-                    height: 1.45,
-                    color: valueColor ?? palette.textPrimary,
-                  ),
-                ),
-              ),
-              if (trailing != null) trailing!,
-            ],
-          ),
-        ),
-        Divider(height: 1, color: palette.border),
       ],
     );
   }
