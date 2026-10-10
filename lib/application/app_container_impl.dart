@@ -22,6 +22,7 @@ import '../data/repositories/local_broadcast_repository.dart';
 import '../domain/services/local_advance_service.dart';
 import '../domain/services/local_broadcast_service.dart';
 import '../domain/services/local_backup_service.dart';
+import '../domain/services/ledger_csv_export_service.dart';
 import '../domain/services/local_maintenance_service.dart';
 import '../domain/services/local_message_recovery_service.dart';
 import '../domain/services/message_delivery_worker.dart';
@@ -57,10 +58,12 @@ import '../domain/services/local_transfer_processor.dart';
 import '../domain/services/payment_source_guard.dart';
 import '../domain/services/unified_payment_event_engine.dart';
 import '../domain/services/services.dart';
+import '../domain/services/visible_storage_service.dart';
 import '../platform/delivery_keep_alive_bridge.dart';
 import '../platform/native_message_sender.dart';
 import '../platform/notification_bridge.dart';
 import '../platform/stock_alert_bridge.dart';
+import '../platform/visible_storage_bridge.dart';
 import '../platform/sms_bridge.dart';
 import '../platform/contact_picker_bridge.dart';
 import 'delivery_keep_alive_controller.dart';
@@ -104,6 +107,8 @@ final class AppContainer {
     required this.licenseService,
     required this.backupService,
     required this.maintenanceService,
+    required this.ledgerCsvExport,
+    required this.visibleStorage,
     required this.lowStockAlerts,
     required this.stockAlertNotifier,
     required this.dailyPosSummary,
@@ -164,6 +169,12 @@ final class AppContainer {
   final LocalLicenseService licenseService;
   final LocalBackupService backupService;
   final LocalMaintenanceService maintenanceService;
+
+  /// WP-3 — تصدير دفتر الحركات إلى CSV فعلي (بلا سقف 500 صف).
+  final LedgerCsvExportService ledgerCsvExport;
+
+  /// WP-S1 — حفظ الملفات في مجلدات عامة ظاهرة لمدير الملفات.
+  final VisibleStorageService visibleStorage;
   final LocalLowStockAlertService lowStockAlerts;
   final NativeStockAlertNotifier stockAlertNotifier;
   final LocalPosDailySummaryService dailyPosSummary;
@@ -415,6 +426,11 @@ final class AppContainer {
       clock: clock,
       database: database,
     );
+    final visibleStorage = VisibleStorageBridge();
+    final ledgerCsvExport = LedgerCsvExportService(
+      transactions: transactions,
+      clock: clock,
+    );
     // إشعار المخزون الحي على الجهاز: يظهر عند انخفاض أي فئة تحت العتبة ويبقى
     // حتى إعادة تعبئتها (الإلغاء من نفس الخدمة عند ارتفاع المخزون).
     final stockAlertNotifier = NativeStockAlertNotifier();
@@ -621,6 +637,8 @@ final class AppContainer {
         licenseService: licenseService,
         backupService: backupService,
         maintenanceService: maintenanceService,
+        ledgerCsvExport: ledgerCsvExport,
+        visibleStorage: visibleStorage,
         lowStockAlerts: lowStockAlerts,
         stockAlertNotifier: stockAlertNotifier,
         dailyPosSummary: dailyPosSummary,

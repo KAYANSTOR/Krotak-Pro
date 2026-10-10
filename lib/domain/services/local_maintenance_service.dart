@@ -102,7 +102,10 @@ final class LocalMaintenanceService {
     final db = database;
     if (db == null) {
       return const Failure(
-        AppFailure(code: 'size_unavailable', message: 'Database not available'),
+        AppFailure(
+          code: 'size_unavailable',
+          message: 'قاعدة البيانات غير متاحة. أعد فتح التطبيق.',
+        ),
       );
     }
     try {
@@ -120,7 +123,10 @@ final class LocalMaintenanceService {
       );
     } catch (e) {
       return Failure(
-        AppFailure(code: 'size_failed', message: e.toString()),
+        const AppFailure(
+          code: 'size_failed',
+          message: 'تعذر قراءة حجم قاعدة البيانات.',
+        ),
       );
     }
   }
@@ -142,26 +148,67 @@ final class LocalMaintenanceService {
     return int.tryParse('$value') ?? 0;
   }
 
-  /// Rebuilds SQLite indexes / statistics (VACUUM + ANALYZE + PRAGMA optimize).
+  /// التنظيف العميق الفعلي: `wal_checkpoint(TRUNCATE)` + `REINDEX` + `VACUUM`
+  /// + `ANALYZE` + `PRAGMA optimize`، ويُقيس الحجم قبل وبعد.
+  ///
+  /// الوصف في الواجهة يجب أن يطابق هذه القائمة حرفيًا (لا «تصفير سجلات»).
   Future<Result<DeepCleanReport>> runDeepClean() async {
     final db = database;
     if (db == null) {
       return const Failure(
-        AppFailure(code: 'deep_clean_unavailable', message: 'Database not available'),
+        AppFailure(
+          code: 'deep_clean_unavailable',
+          message: 'قاعدة البيانات غير متاحة. أعد فتح التطبيق.',
+        ),
       );
     }
+    final before = await _logicalBytes(db);
     final sw = Stopwatch()..start();
     try {
-      await db.customStatement('PRAGMA wal_checkpoint(TRUNCATE)');
-      await db.customStatement('VACUUM');
-      await db.customStatement('ANALYZE');
-      await db.customStatement('PRAGMA optimize');
+      for (final statement in deepCleanStatements) {
+        await db.customStatement(statement);
+      }
+      final after = await _logicalBytes(db);
       sw.stop();
-      return Success(DeepCleanReport(durationMs: sw.elapsedMilliseconds));
-    } catch (e) {
-      return Failure(
-        AppFailure(code: 'deep_clean_failed', message: e.toString()),
+      return Success(
+        DeepCleanReport(
+          durationMs: sw.elapsedMilliseconds,
+          sizeBeforeBytes: before,
+          sizeAfterBytes: after,
+        ),
       );
+    } catch (_) {
+      sw.stop();
+      return const Failure(
+        AppFailure(
+          code: 'deep_clean_failed',
+          message: 'تعذر تنفيذ التنظيف العميق. حاول مرة أخرى.',
+        ),
+      );
+    }
+  }
+
+  /// جمل التنظيف العميق بالترتيب — مصدر واحد يقرأه الاختبار والواجهة.
+  static const List<String> deepCleanStatements = <String>[
+    'PRAGMA wal_checkpoint(TRUNCATE)',
+    'REINDEX',
+    'VACUUM',
+    'ANALYZE',
+    'PRAGMA optimize',
+  ];
+
+  /// وصف عربي مطابق لما يُنفَّذ فعلاً (لا «تصفير السجلات»).
+  static const String deepCleanSummaryAr =
+      'إعادة بناء الفهارس (REINDEX) وضغط الملف (VACUUM) وتحديث الإحصاءات (ANALYZE) '
+      'وتحسين الاستعلامات. لا تُحذف أي حركة مالية أو كرت أو عميل.';
+
+  Future<int?> _logicalBytes(AppDatabase db) async {
+    try {
+      final pageSize = await _pragmaInt(db, 'page_size');
+      final pageCount = await _pragmaInt(db, 'page_count');
+      return pageSize * pageCount;
+    } catch (_) {
+      return null;
     }
   }
 }
@@ -181,8 +228,27 @@ final class MaintenanceReport {
 }
 
 final class DeepCleanReport {
-  const DeepCleanReport({required this.durationMs});
+  const DeepCleanReport({
+    required this.durationMs,
+    this.sizeBeforeBytes,
+    this.sizeAfterBytes,
+  });
+
   final int durationMs;
+
+  /// الحجم المنطقي قبل التنظيف (null إن تعذّر قياسه).
+  final int? sizeBeforeBytes;
+
+  /// الحجم المنطقي بعد التنظيف (null إن تعذّر قياسه).
+  final int? sizeAfterBytes;
+
+  bool get hasSizeComparison =>
+      sizeBeforeBytes != null && sizeAfterBytes != null;
+
+  /// الفرق بالبايت — موجب يعني تحرير مساحة.
+  int? get reclaimedBytes => hasSizeComparison
+      ? sizeBeforeBytes! - sizeAfterBytes!
+      : null;
 }
 
 final class DatabaseSizeReport {

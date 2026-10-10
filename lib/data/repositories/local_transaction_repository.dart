@@ -1,6 +1,7 @@
 part of local_repositories;
 
-final class LocalTransactionRepository implements TransactionRepository, CustomerHistoryMover {
+final class LocalTransactionRepository
+    implements TransactionRepository, CustomerHistoryMover, TransactionPager {
   const LocalTransactionRepository(this.database);
 
   final AppDatabase database;
@@ -17,6 +18,28 @@ final class LocalTransactionRepository implements TransactionRepository, Custome
       return Success(moved);
     } catch (error) {
       return Failure(_failure('transaction_reassign_failed', error));
+    }
+  }
+
+  @override
+  Future<Result<List<domain.Transaction>>> listPage({
+    required int limit,
+    required int offset,
+  }) async {
+    if (limit <= 0) return const Success(<domain.Transaction>[]);
+    try {
+      final rows = await (database.select(database.transactions)
+            ..orderBy([
+              (table) => OrderingTerm(
+                    expression: table.createdAt,
+                    mode: OrderingMode.desc,
+                  )
+            ])
+            ..limit(limit, offset: offset < 0 ? 0 : offset))
+          .get();
+      return Success(rows.map(_toTransaction).toList(growable: false));
+    } catch (error) {
+      return Failure(_failure('transaction_page_failed', error));
     }
   }
 

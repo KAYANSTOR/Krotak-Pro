@@ -93,4 +93,43 @@ void extraSizeTests() {
     expect(report.pageCount, greaterThan(0));
     expect(report.logicalBytes, report.pageSize * report.pageCount);
   });
+
+  test('التنظيف العميق ينفّذ REINDEX فعلاً ويقيس الحجم قبل/بعد [WP-3]', () async {
+    final database = AppDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+    final svc = LocalMaintenanceService(
+      messages: InMemoryMessageRepository(),
+      clock: _Clock(DateTime.utc(2026, 10, 1)),
+      database: database,
+    );
+
+    // مصدر واحد لجمل التنظيف: REINDEX جزء فعلي لا وصف تسويقي.
+    expect(LocalMaintenanceService.deepCleanStatements, contains('REINDEX'));
+    expect(LocalMaintenanceService.deepCleanStatements, contains('VACUUM'));
+    expect(LocalMaintenanceService.deepCleanStatements, contains('ANALYZE'));
+    expect(LocalMaintenanceService.deepCleanStatements.first, contains('wal_checkpoint'));
+    expect(LocalMaintenanceService.deepCleanStatements.last, contains('optimize'));
+
+    final result = await svc.runDeepClean();
+    expect(result, isA<Success<DeepCleanReport>>());
+    final report = (result as Success<DeepCleanReport>).value;
+    expect(report.hasSizeComparison, isTrue);
+    expect(report.sizeBeforeBytes, greaterThan(0));
+    expect(report.sizeAfterBytes, greaterThan(0));
+    expect(report.reclaimedBytes, isNotNull);
+  });
+
+  test('فشل التنظيف العميق برسالة عربية بلا نص إنجليزي [WP-3]', () async {
+    final svc = LocalMaintenanceService(
+      messages: InMemoryMessageRepository(),
+      clock: _Clock(DateTime.utc(2026, 10, 1)),
+    );
+    final deep = await svc.runDeepClean();
+    final size = await svc.inspectDatabase();
+    for (final result in <Result<Object>>[deep, size]) {
+      expect(result, isA<Failure<Object>>());
+      final message = (result as Failure<Object>).error.message;
+      expect(RegExp('[A-Za-z]').hasMatch(message), isFalse, reason: message);
+    }
+  });
 }

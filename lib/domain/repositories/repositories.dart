@@ -126,6 +126,17 @@ abstract interface class CustomerHistoryMover {
   });
 }
 
+/// قراءة دفتر الحركات على صفحات — للتصدير الكامل بلا سقف 500 ولا تحميل
+/// كامل في الذاكرة. منفصلة عن [TransactionRepository] حتى لا يُجبر كل تنفيذ
+/// تجريبي على تطبيقها (نفس نمط [CustomerHistoryMover]).
+abstract interface class TransactionPager {
+  /// صفوف مرتّبة من الأحدث للأقدم: [offset] صف يُتخطى، ثم [limit] صف.
+  Future<Result<List<Transaction>>> listPage({
+    required int limit,
+    required int offset,
+  });
+}
+
 abstract interface class SaleRepository {
   Future<Result<void>> save(Sale sale);
   Future<Result<Sale?>> findById(String id);

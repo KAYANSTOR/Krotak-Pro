@@ -23,9 +23,7 @@ import '../pos_screen.dart';
 import '../system_check_screen.dart';
 import '../wallets_screen.dart';
 import 'backup_restore_screen.dart';
-import 'clean_logs_screen.dart';
-import 'deep_clean_screen.dart';
-import 'export_ledger_screen.dart';
+import 'maintenance_hub_screen.dart';
 import 'low_stock_settings_screen.dart';
 import 'network_name_settings_screen.dart';
 import 'outbound_message_templates_screen.dart';
@@ -69,7 +67,7 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
       'الرسائل القوالب صيغ محاكاة القوالب قوالب رسائل العملاء العروض النظام سلفني SMS الصادرة';
   static const _walletsKeywords =
       'المحافظ نقاط البيع إشعارات المحافظ طلبات رصيد نقاط البيع حد يومي ملخص العمليات اليومي التسوية التلقائية مصادر الإشعارات الحسابات سقف الدين قوالب المحفظة';
-  static const _maintenanceKeywords = 'تنظيف السجلات تصدير السجل الأرشفة نسخ احتياطي استعادة بيانات تنظيف عميق فهارس';
+  static const _maintenanceKeywords = 'الصيانة تنظيف السجلات تصدير السجل الأرشفة نسخ احتياطي استعادة بيانات تنظيف عميق فهارس';
   static const _accountKeywords =
       'الحساب حساب الشبكة التسجيل تسجيل الدخول الرقم كلمة المرور الاشتراك التجريبي إشعارات الإدارة الخروج العمولات المبيعات الفوترة';
   static const _aboutKeywords =
@@ -364,9 +362,7 @@ class _SettingsHubScreenState extends State<SettingsHubScreen> {
                                     searchText: 'نسخ احتياطي استعادة بيانات',
                                     onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const BackupRestoreScreen())),
                                   ),
-                                  SettingsGroupNavRow(icon: Icons.cleaning_services_outlined, title: 'تنظيف السجلات', subtitle: 'يدوي فقط — لا يوجد تنظيف دوري تلقائي في الخلفية', onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const CleanLogsScreen()))),
-                                  SettingsGroupNavRow(icon: Icons.auto_fix_high_outlined, title: 'تنظيف عميق للنظام', subtitle: 'إعادة بناء فهارس قاعدة البيانات لتحرير المساحة وتسريع الأداء', onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const DeepCleanScreen()))),
-                                  SettingsGroupNavRow(icon: Icons.upload_file_outlined, title: 'تصدير السجل', subtitle: 'تصدير دفتر الحسابات', onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ExportLedgerScreen()))),
+                                  SettingsGroupNavRow(icon: Icons.build_circle_outlined, title: 'الصيانة والتنظيف والتصدير', subtitle: 'تنظيف السجلات والتنظيف العميق وتصدير دفتر الحركات في مكان واحد', searchText: 'صيانة تنظيف السجلات تنظيف عميق تصدير السجل الأرشفة', onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const MaintenanceHubScreen()))),
                                 ]),
                               if (_sectionVisible(_aboutKeywords)) const SettingsSectionHeader(title: 'عن التطبيق'),
                               if (_sectionVisible(_aboutKeywords))
