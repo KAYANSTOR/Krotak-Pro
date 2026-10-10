@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../perf/screen_open_trace.dart';
 
 import '../../core/result.dart';
 import '../../domain/entities/transaction.dart';
@@ -58,6 +59,7 @@ class _TransactionsLogScreenState extends State<TransactionsLogScreen> {
     final r = await c.transactions.listRecent(limit: 500);
     if (!mounted) return;
     setState(() {
+      ScreenOpenTrace.instance.markLatestDataReady(ScreenOpenIds.transactionsLog);
       _loading = false;
       if (r is Success<List<Transaction>>) {
         _all = r.value;

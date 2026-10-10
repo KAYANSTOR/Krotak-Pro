@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../perf/screen_open_trace.dart';
 
 import '../../core/result.dart';
 import '../../domain/entities/wallet.dart';
@@ -61,6 +62,7 @@ class _WalletsScreenState extends State<WalletsScreen> {
     final wallets = await c.walletCatalog.listEnriched();
     if (!mounted) return;
     setState(() {
+      ScreenOpenTrace.instance.markLatestDataReady(ScreenOpenIds.wallets);
       _loading = false;
       if (wallets is Failure) {
         _error = (wallets as Failure).error.message;

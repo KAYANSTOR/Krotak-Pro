@@ -434,7 +434,7 @@ void main() {
       expect(await messageCount(), 1);
     });
 
-    test('manual ingress deduplicates the very same SMS body', () async {
+    test('manual ingress is routed to review instead of auto-crediting', () async {
       final handler = buildHandler(bridge: _FakeSmsBridge(pending: const []));
 
       final first = await handler.handleManual(
@@ -448,11 +448,12 @@ void main() {
         receivedAt: clock.now(),
       );
 
-      expect(first, isA<Success<Transaction?>>());
-      expect(second, isA<Success<Transaction?>>());
+      expect(first, isA<Failure<Transaction?>>());
+      expect(second, isA<Failure<Transaction?>>());
+      expect((first as Failure<Transaction?>).error.code, 'manual_requires_review');
+      expect(await soldCards(), 0);
+      expect(sender.sent, isEmpty);
       expect(await messageCount(), 1);
-      expect(await soldCards(), 1);
-      expect(sender.sent, hasLength(1));
     });
   });
 }

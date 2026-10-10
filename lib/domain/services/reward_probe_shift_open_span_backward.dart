@@ -2,7 +2,7 @@ import 'promotion_reward_template.dart';
 
 /// إزاحة مقطع طابور المعاينة ككتلة نحو بداية الطابور بعدد خطوات.
 /// المقطع لا يُشترط أن يبدأ من الكرت الظاهر؛ الكرت الظاهر يحدد الطابور ويجب أن يقع داخل المقطع.
-/// ترتيب الكروت داخل المقطع لا يتغير. الكروت التي تسبق المقطع بعدد الخطوات تنزلق إلى مكانه.
+/// ترتيب الكروت داخل المقطع لا يتغير. الكروت التي تسبق المقطع بعدد الخطوات تنزلق إلى ما بعده.
 /// الحجوزات وموعد الانتهاء يبقيان.
 class RewardProbeShiftOpenSpanBackward {
   const RewardProbeShiftOpenSpanBackward._();
@@ -25,7 +25,7 @@ class RewardProbeShiftOpenSpanBackward {
       customerId: customer,
     );
     if (cross != null && cross.holdsCard(wanted)) {
-      return _shiftHoldBackward(raw, cross, wanted, startPosition, endPosition, steps);
+      return _shiftHold(raw, cross, wanted, startPosition, endPosition, steps);
     }
     final map = PromotionRewardTemplate.decodeHoldMap(raw);
     for (final entry in map.entries) {
@@ -36,12 +36,12 @@ class RewardProbeShiftOpenSpanBackward {
       if (hold == null || !hold.holdsCard(wanted)) continue;
       if (customer.isNotEmpty && hold.customerId.trim() != customer) continue;
       if (customer.isEmpty && hold.customerId.trim().isNotEmpty) continue;
-      return _shiftHoldBackward(raw, hold, wanted, startPosition, endPosition, steps);
+      return _shiftHold(raw, hold, wanted, startPosition, endPosition, steps);
     }
     return raw ?? '{}';
   }
 
-  static String _shiftHoldBackward(
+  static String _shiftHold(
     String? raw,
     RewardProbeHold hold,
     String cardId,

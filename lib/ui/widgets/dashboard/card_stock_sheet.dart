@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../core/result.dart';
 import '../../../domain/entities/card.dart' as domain;
 import '../../app_scope.dart';
+import '../../perf/screen_open_trace.dart';
 import '../../theme/kayan_palette.dart';
 import '../../theme/net_semantic_colors.dart';
 import '../../theme/net_tokens.dart';
@@ -16,13 +17,15 @@ class CardStockSheet extends StatefulWidget {
   static Future<void> show(
     BuildContext context, {
     required VoidCallback onGoToCards,
-  }) =>
-      showModalBottomSheet<void>(
-        context: context,
-        isScrollControlled: true,
-        backgroundColor: Colors.transparent,
-        builder: (ctx) => CardStockSheet(onGoToCards: onGoToCards),
-      );
+  }) {
+    ScreenOpenTrace.instance.beginSheet(ScreenOpenIds.cardStockSheet);
+    return showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => CardStockSheet(onGoToCards: onGoToCards),
+    );
+  }
 
   @override
   State<CardStockSheet> createState() => _CardStockSheetState();
@@ -64,7 +67,10 @@ class _CardStockSheetState extends State<CardStockSheet> {
   void initState() {
     super.initState();
     _CardStockSheetScope.attach(this);
-    WidgetsBinding.instance.addPostFrameCallback((_) => _load());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ScreenOpenTrace.instance.markLatestFirstFrame(ScreenOpenIds.cardStockSheet);
+      _load();
+    });
   }
 
   @override
@@ -89,6 +95,7 @@ class _CardStockSheetState extends State<CardStockSheet> {
         _loading = false;
         _error = (cats as Failure).error.message;
       });
+      ScreenOpenTrace.instance.markLatestDataReady(ScreenOpenIds.cardStockSheet);
       return;
     }
     final categories = (cats as Success<List<domain.CardCategory>>).value;
@@ -121,6 +128,7 @@ class _CardStockSheetState extends State<CardStockSheet> {
       _reservedCards = reservedList;
       _catsById = byId;
     });
+    ScreenOpenTrace.instance.markLatestDataReady(ScreenOpenIds.cardStockSheet);
   }
 
   int get _availableTotal =>

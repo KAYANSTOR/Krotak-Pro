@@ -20,7 +20,7 @@ final class DefaultOutboundTemplatesSeeder {
   final Clock clock;
 
   /// Bump when new catalog keys are added so existing installs backfill.
-  static const seededKey = 'default_outbound_templates_seeded_v6';
+  static const seededKey = 'default_outbound_templates_seeded_v7';
 
   static const _legacyPosCustomerTemplateWithoutCategory =
       'شبكة {NETWORK_NAME}\n{cards}';

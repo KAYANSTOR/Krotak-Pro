@@ -325,18 +325,21 @@ void main() {
       Future<List<Wallet>> all() async =>
           ((await catalog.listEnriched()) as Success<List<Wallet>>).value;
 
-      test('seeds exactly the four standard wallets with the right transport', () async {
+      test('seeds exactly the six approved wallets with the right transport', () async {
         expect(await catalog.ensureDefaultWallets(), isA<Success<void>>());
         final byName = {for (final w in await all()) w.name: w};
-        expect(byName.keys.toSet(), {'جيب', 'جوالي', 'ون كاش', 'فلوسك'});
+        expect(byName.keys.toSet(),
+            {'جيب', 'جوالي', 'أم فلوس', 'فلوسك', 'الكريمي', 'ون كاش'});
 
         expect(byName['جيب']!.sourceMode, WalletSourceMode.notification);
         expect(byName['جيب']!.packageName, 'com.ahd.jaib');
-        expect(byName['جيب']!.senderId, 'JAIB');
+        expect(byName['جيب']!.senderId, 'Jaib');
         expect(byName['جوالي']!.sourceMode, WalletSourceMode.sms);
-        expect(byName['جوالي']!.senderId, 'JAWALI');
-        expect(byName['ون كاش']!.senderId, 'ONE CASH');
-        expect(byName['فلوسك']!.senderId, 'FLOOSAK');
+        expect(byName['جوالي']!.senderId, 'Jawali');
+        expect(byName['أم فلوس']!.senderId, 'MFloos');
+        expect(byName['فلوسك']!.senderId, 'Floosak');
+        expect(byName['الكريمي']!.senderId, 'KuraimiLMB');
+        expect(byName['ون كاش']!.senderId, 'ONE Cash');
         expect(byName.values.every((w) => w.status == WalletStatus.active), isTrue);
         expect(settings.map[SettingKeys.defaultWalletsSeeded]!.value, 'true');
       });
@@ -345,7 +348,7 @@ void main() {
         for (var i = 0; i < 4; i++) {
           await catalog.ensureDefaultWallets();
         }
-        expect((await all()).length, 4);
+        expect((await all()).length, 6);
       });
 
       test('matches an existing wallet by name even when the stored name is padded', () async {
@@ -359,7 +362,7 @@ void main() {
         await catalog.ensureDefaultWallets();
         final names = (await all()).map((w) => w.name.trim()).toList();
         expect(names.where((n) => n == 'جيب').length, 1);
-        expect(names.length, 4);
+        expect(names.length, 6);
       });
 
       test('never overwrites operator-edited sender, mode or package', () async {
@@ -389,7 +392,7 @@ void main() {
         await catalog.updateWallet(id: floosak.id, name: 'فلوسك', status: WalletStatus.archived);
         await catalog.ensureDefaultWallets();
         final after = {for (final w in await all()) w.id: w};
-        expect(after.length, 4);
+        expect(after.length, 6);
         expect(after[jaib.id]!.status, WalletStatus.suspended);
         expect(after[floosak.id]!.status, WalletStatus.archived);
       });
@@ -400,8 +403,8 @@ void main() {
         await catalog.updateWallet(id: jaib.id, name: 'محفظتي الخاصة', status: WalletStatus.active);
         await catalog.ensureDefaultWallets();
         final list = await all();
-        expect(list.length, 4);
-        expect(list.where((w) => w.senderId == 'JAIB').length, 1);
+        expect(list.length, 6);
+        expect(list.where((w) => w.senderId == 'Jaib').length, 1);
         expect(list.any((w) => w.name == 'جيب'), isFalse);
       });
 
@@ -414,7 +417,7 @@ void main() {
         );
         await catalog.ensureDefaultWallets();
         final legacy = (await all()).firstWhere((w) => w.id == 'legacy');
-        expect(legacy.senderId, 'JAWALI');
+        expect(legacy.senderId, 'Jawali');
         expect(legacy.packageName, 'com.wecash.jawali');
       });
     });
@@ -439,18 +442,18 @@ void main() {
       await first.ensureDefaultWallets();
       final second = buildCatalog();
       final list = ((await second.listEnriched()) as Success<List<Wallet>>).value;
-      expect(list.length, 4);
+      expect(list.length, 6);
       final jaib = list.firstWhere((w) => w.name == 'جيب');
       expect(jaib.sourceMode, WalletSourceMode.notification);
       expect(jaib.packageName, 'com.ahd.jaib');
     });
 
-    test('seeding twice on the real database stays at four wallets', () async {
+    test('seeding twice on the real database stays at six wallets', () async {
       final catalog = buildCatalog();
       await catalog.ensureDefaultWallets();
       await catalog.ensureDefaultWallets();
       final list = ((await catalog.listEnriched()) as Success<List<Wallet>>).value;
-      expect(list.length, 4);
+      expect(list.length, 6);
     });
 
     test('status changes persist and are audited in the database', () async {

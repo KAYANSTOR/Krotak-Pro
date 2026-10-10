@@ -64,6 +64,13 @@ abstract final class SettingKeys {
   static const lowStockAlertTemplate = 'low_stock_alert_template';
   static const lowStockActiveJson = 'low_stock_active_json';
 
+  // ── قوالب إرسال الكروت حسب نوع العملية (تُزرع وتُعدَّل من الإعدادات) ──
+  static const cardDeliveryCashTemplate = 'card_delivery_cash_template';
+  static const cardDeliveryCreditTemplate = 'card_delivery_credit_template';
+  static const cardDeliveryGiftTemplate = 'card_delivery_gift_template';
+  static const salafniCardDeliveryTemplate = 'salafni_card_delivery_template';
+  static const depositNoStockTemplate = 'deposit_no_stock_template';
+
   /// سجل metadata القوالب المخصّصة (معرّف/اسم/تبويب/هدف).
   ///
   /// لا يُخزَّن نص القالب هنا أبدًا — النص له مصدر واحد هو
@@ -152,6 +159,16 @@ abstract final class SettingDefaults {
       'تم إرسال كرت {amount} ر.ي إلى {phone}';
   static const lowStockAlertTemplate =
       'عذراً، كروت فئة {category} غير متوفرة حالياً (المتبقي: {count}). يرجى التواصل مع الإدارة.';
+  static const cardDeliveryCashTemplate =
+      'كرتك من شبكة {اسم_المحفظة}\n{الفئة}\n{الرقم}\n{الرمز}';
+  static const cardDeliveryCreditTemplate =
+      'كرت آجل عليكم في حسابكم\nمن شبكة {اسم_المحفظة}\n{الفئة}\n{الرقم}\n{الرمز}';
+  static const cardDeliveryGiftTemplate =
+      'كرتك الهدية\nمن شبكة {اسم_المحفظة}\n{الفئة}\n{الرقم}\n{الرمز}';
+  static const salafniCardDeliveryTemplate =
+      'كرتك من خدمة سلفني\nشبكة {اسم_المحفظة}\n{الفئة}\n{الرقم}\n{الرمز}';
+  static const depositNoStockTemplate =
+      'عزيزي {اسم_الزبون_الاول}\nتم استلام {المبلغ}﷼\nسوف يتم مشاركة الكرت آلياً فور توفره';
   static const preferredSimSlot = '0';
   static const preferredSendSimSlot = '0';
   static const simAutoFailover = true;

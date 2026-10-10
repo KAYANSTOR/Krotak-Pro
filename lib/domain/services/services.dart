@@ -88,6 +88,8 @@ abstract interface class WalletCatalogService {
     String? senderId,
     WalletSourceMode sourceMode = WalletSourceMode.sms,
     String? packageName,
+    /// حالة البداية: المحفظة بلا Sender ID رسمي تُزرع موقوفة لا نشطة.
+    WalletStatus status = WalletStatus.active,
   });
 
   Future<Result<Wallet>> updateWallet({
@@ -218,11 +220,13 @@ abstract interface class AdvanceService {
     required String customerId,
     required String currencyCode,
     required String operationId,
+    int? amountMinorUnits,
   });
   Future<Result<AdvanceIssue>> requestByIdentifier({
     required String identifier,
     required String currencyCode,
     required String operationId,
+    int? amountMinorUnits,
   });
   Future<Result<AdvancePaymentResult>> applyPayment({
     required String customerId,

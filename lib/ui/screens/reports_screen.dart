@@ -7,6 +7,7 @@ import '../services/report_pdf_export.dart';
 import '../../core/result.dart';
 import '../../domain/services/ops_report_service.dart';
 import '../app_scope.dart';
+import '../perf/screen_open_trace.dart';
 import '../routing/app_routes.dart';
 import '../theme/kayan_palette.dart';
 import '../theme/net_semantic_colors.dart';
@@ -58,6 +59,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
     );
     final result = await ops.snapshot();
     if (!mounted) return;
+    ScreenOpenTrace.instance.markLatestDataReady('reports');
     setState(() {
       _loading = false;
       if (result is Failure<OpsSnapshot>) {

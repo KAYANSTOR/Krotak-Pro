@@ -315,19 +315,113 @@ abstract final class OutboundTemplateCatalog {
       initialBody: SettingDefaults.lowStockAlertTemplate,
       usage: 'يُرسل للعميل الذي طلب فئة غير متوفرة في المخزون.',
     ),
+    // ── قوالب إرسال الكروت حسب نوع العملية (مرحلة A من خطة التطوير) ──
+    OutboundTemplateDefinition(
+      key: SettingKeys.cardDeliveryCashTemplate,
+      title: 'كرت نقدي',
+      category: OutboundTemplateCategory.customers,
+      variables: _cardDeliveryVariables,
+      requiredVariables: _cardDeliveryRequired,
+      initialBody: SettingDefaults.cardDeliveryCashTemplate,
+      usage: 'يُرسل للعميل عند صرف كرت نقدي.',
+    ),
+    OutboundTemplateDefinition(
+      key: SettingKeys.cardDeliveryCreditTemplate,
+      title: 'كرت آجل',
+      category: OutboundTemplateCategory.customers,
+      variables: _cardDeliveryVariables,
+      requiredVariables: _cardDeliveryRequired,
+      initialBody: SettingDefaults.cardDeliveryCreditTemplate,
+      usage: 'يُرسل للعميل عند صرف كرت آجل على حسابه.',
+    ),
+    OutboundTemplateDefinition(
+      key: SettingKeys.cardDeliveryGiftTemplate,
+      title: 'كرت هدية',
+      category: OutboundTemplateCategory.customers,
+      variables: _cardDeliveryVariables,
+      requiredVariables: _cardDeliveryRequired,
+      initialBody: SettingDefaults.cardDeliveryGiftTemplate,
+      usage: 'يُرسل للمستفيد عند صرف كرت هدية.',
+    ),
+    OutboundTemplateDefinition(
+      key: SettingKeys.salafniCardDeliveryTemplate,
+      title: 'كرت سلفني',
+      category: OutboundTemplateCategory.salafni,
+      variables: _cardDeliveryVariables,
+      requiredVariables: _cardDeliveryRequired,
+      initialBody: SettingDefaults.salafniCardDeliveryTemplate,
+      usage: 'يُرسل للعميل عند صرف كرت سلفني.',
+    ),
+    OutboundTemplateDefinition(
+      key: SettingKeys.depositNoStockTemplate,
+      title: 'استلام إيداع بلا كرت متوفر',
+      category: OutboundTemplateCategory.system,
+      variables: _depositNoStockVariables,
+      requiredVariables: _depositNoStockRequired,
+      initialBody: SettingDefaults.depositNoStockTemplate,
+      usage: 'يُرسل للعميل عند استلام إيداع دون توفر الفئة/الكرت المطابق.',
+    ),
   ];
+
+  /// متغيّرات قوالب إرسال الكروت — الأسماء العربية هي المعتمدة في النص،
+  /// والأسماء الإنجليزية/aliases للتوافق مع المسارات القديمة.
+  static const Set<String> _cardDeliveryRequired = {
+    'اسم_المحفظة',
+    'الفئة',
+    'الرقم',
+    'الرمز',
+  };
+
+  static const Set<String> _cardDeliveryVariables = {
+    'اسم_المحفظة',
+    'network_name',
+    'NETWORK_NAME',
+    'network',
+    'الفئة',
+    'CARD_VALUE',
+    'category',
+    'category_name',
+    'الرقم',
+    'serial',
+    'serial_number',
+    'CARD_SERIAL',
+    'الرمز',
+    'code',
+    'secret',
+    'CARD_CODE',
+    'CURRENCY',
+  };
+
+  static const Set<String> _depositNoStockRequired = {
+    'اسم_الزبون_الاول',
+    'المبلغ',
+  };
+
+  static const Set<String> _depositNoStockVariables = {
+    'اسم_الزبون_الاول',
+    'customer_name',
+    'المبلغ',
+    'amount',
+    'AMOUNT',
+    'المستخدم',
+    'user',
+  };
 
   static const Set<String> _voucherVariables = {
     'serial',
     'serial_number',
+    'الرقم',
     'code',
     'secret',
+    'الرمز',
     'CARD_CODE',
     'CARD_SERIAL',
     'CARD_VALUE',
+    'الفئة',
     'NETWORK_NAME',
     'network',
     'network_name',
+    'اسم_المحفظة',
     'CURRENCY',
   };
 
@@ -357,17 +451,21 @@ abstract final class OutboundTemplateCatalog {
   static const Map<String, String> previewSamples = <String, String>{
     'serial': '1234567',
     'serial_number': '1234567',
+    'الرقم': '1234567',
     'code': '987654',
     'secret': '987654',
+    'الرمز': '987654',
     'CODE': '987654',
     'SECRET': '987654',
     'CARD_CODE': '1234567',
     'CARD_SERIAL': '1234567',
     'CARD_VALUE': '10',
+    'الفئة': '10',
     'CURRENCY': 'ر.ي',
     'NETWORK_NAME': 'kayan',
     'network': 'kayan',
     'network_name': 'kayan',
+    'اسم_المحفظة': 'kayan',
     'amount': '1000',
     'AMOUNT': '1000',
     'balance': '5000',
@@ -395,6 +493,10 @@ abstract final class OutboundTemplateCatalog {
     'QUANTITY': '1',
     'QUANTITY_TEXT': 'الكرت',
     'quantity_text': 'الكرت',
+    'المبلغ': '1000',
+    'اسم_الزبون_الاول': 'عميل تجريبي',
+    'المستخدم': 'المشغّل',
+    'user': 'المشغّل',
     'CUSTOMER_PHONE': '779776919',
     'customer_phone': '779776919',
     'phone': '779776919',

@@ -221,6 +221,12 @@ final class ManualSaleRunner {
           serialNumber: card.serialNumber,
           secretCode: card.secretCode,
           cardValue: (category.faceValue.minorUnits / 100).toString(),
+          channel: switch (method) {
+            ManualSaleMethod.cash => CardDeliveryChannel.cash,
+            ManualSaleMethod.credit => CardDeliveryChannel.credit,
+            ManualSaleMethod.gift => CardDeliveryChannel.gift,
+            ManualSaleMethod.pos => CardDeliveryChannel.legacy,
+          },
         );
         if (rendered is Failure<String>) {
           await host.auditLogs.append(

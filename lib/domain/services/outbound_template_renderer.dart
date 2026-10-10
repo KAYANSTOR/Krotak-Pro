@@ -28,8 +28,7 @@ final class OutboundTemplateRenderer {
   final SettingsRepository? settings;
 
   /// مطابقة `{name}` — يُرفض أي توكن متبقٍّ بعد الاستبدال.
-  static final RegExp placeholderPattern =
-      RegExp(r'\{([A-Za-z][A-Za-z0-9_]*)\}');
+  static final RegExp placeholderPattern = RegExp(r'\{([^{}\s]+)\}');
 
   /// مطابقة `%name` — صيغة قديمة مدعومة، وتبقى غير المحلولة مرفوضة أيضًا.
   static final RegExp percentPlaceholderPattern =
@@ -245,12 +244,19 @@ final class OutboundTemplateRenderer {
   }
 
   /// نص تسليم الكرت — يمرّ من القاعدة المركزية بلا بديل.
+  ///
+  /// [channel] يختار قالب نوع العملية (نقدي/آجل/هدية/سلفني). إن لم يُزرع
+  /// القالب بعد، يُستخدم [fallbackKey] ثم قالب التسليم العام حتى لا ينقطع
+  /// الإرسال عن تخصيص المشغّل القديم.
   Future<Result<String>> renderVoucherDelivery({
     required String serialNumber,
     required String secretCode,
     String cardValue = 'غير محدد',
     String? networkName,
     String currency = 'ر.ي',
+    CardDeliveryChannel channel = CardDeliveryChannel.legacy,
+    String? fallbackKey,
+    Map<String, String> extraValues = const {},
   }) async {
     final serial = serialNumber.trim();
     final secret = secretCode.trim();
@@ -261,28 +267,62 @@ final class OutboundTemplateRenderer {
         resolvedNetworkName = stored.value?.value.trim() ?? '';
       }
     }
+    if (resolvedNetworkName.isEmpty) {
+      resolvedNetworkName = SettingDefaults.networkName;
+    }
+    // 'الفئة' الفارغة تُعرض «غير محدد» لا نصًّا فارغًا.
+    final resolvedCardValue =
+        cardValue.trim().isEmpty ? 'غير محدد' : cardValue.trim();
+
+    // المتغيرات العربية (aliases) تُمرَّر بنفس قيمة نظيرها الإنجليزي: تعريفها في
+    // عقد القوالب وحده لا يكفي، لأن المحرك يستبدل ما وُجدت له قيمة فقط.
     final values = <String, String>{
       'serial': serial,
       'serial_number': serial,
+      'الرقم': serial,
       'code': secret,
       'secret': secret,
+      'الرمز': secret,
       'CARD_CODE': serial,
       'CARD_SERIAL': serial,
-      'CARD_VALUE': cardValue.trim().isEmpty ? 'غير محدد' : cardValue.trim(),
-      'NETWORK_NAME': resolvedNetworkName.isEmpty
-          ? SettingDefaults.networkName
-          : resolvedNetworkName,
-      'network': resolvedNetworkName.isEmpty
-          ? SettingDefaults.networkName
-          : resolvedNetworkName,
-      'network_name': resolvedNetworkName.isEmpty
-          ? SettingDefaults.networkName
-          : resolvedNetworkName,
+      'CARD_VALUE': resolvedCardValue,
+      'الفئة': resolvedCardValue,
+      'NETWORK_NAME': resolvedNetworkName,
+      'network': resolvedNetworkName,
+      'network_name': resolvedNetworkName,
+      'اسم_المحفظة': resolvedNetworkName,
       'CURRENCY': currency,
+      ...extraValues,
     };
+    final preferred = channel.templateKey;
+    if (preferred != null) {
+      final specific = await renderRegistered(key: preferred, values: values);
+      if (specific is Success<String>) return specific;
+      if (specific is Failure<String> &&
+          specific.error.code != 'outbound_template_missing') {
+        return specific;
+      }
+    }
     return renderRegistered(
-      key: SettingKeys.voucherDeliverySmsTemplate,
+      key: fallbackKey ?? SettingKeys.voucherDeliverySmsTemplate,
       values: values,
     );
   }
+}
+
+/// نوع عملية صرف الكرت الذي يحدد قالب الرسالة الصادرة.
+enum CardDeliveryChannel {
+  legacy,
+  cash,
+  credit,
+  gift,
+  salafni;
+
+  String? get templateKey => switch (this) {
+        CardDeliveryChannel.legacy => null,
+        CardDeliveryChannel.cash => SettingKeys.cardDeliveryCashTemplate,
+        CardDeliveryChannel.credit => SettingKeys.cardDeliveryCreditTemplate,
+        CardDeliveryChannel.gift => SettingKeys.cardDeliveryGiftTemplate,
+        CardDeliveryChannel.salafni => SettingKeys.salafniCardDeliveryTemplate,
+      };
 }

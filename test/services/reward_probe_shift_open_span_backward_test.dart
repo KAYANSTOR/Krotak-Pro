@@ -37,7 +37,7 @@ void main() {
     );
 
     // queue: cross-b, cross-a, cross-c, cross-d
-    // visible cross-c is inside span 2..3, not an endpoint requirement.
+    // visible cross-c is inside span 2..3.
     final shifted = RewardProbeShiftOpenSpanBackward.shiftOpenSpanBackward(
       withRest,
       cardId: 'cross-c',
@@ -63,21 +63,6 @@ void main() {
       'res-cross-d',
     ]);
     expect(customer?.expiresAt, expires);
-    final shiftedAgain = RewardProbeShiftOpenSpanBackward.shiftOpenSpanBackward(
-      shifted,
-      cardId: 'cross-b',
-      startPosition: 3,
-      endPosition: 4,
-      steps: 1,
-      customerId: 'cust-1',
-    );
-    expect(
-      PromotionRewardTemplate.lookupCrossCategoryHold(
-        shiftedAgain,
-        customerId: 'cust-1',
-      )?.cards.map((card) => card.cardId),
-      ['cross-a', 'cross-b', 'cross-d', 'cross-c'],
-    );
     expect(
       RewardProbeShiftOpenSpanBackward.shiftOpenSpanBackward(
         shifted,
@@ -92,9 +77,9 @@ void main() {
     expect(
       RewardProbeShiftOpenSpanBackward.shiftOpenSpanBackward(
         withRest,
-        cardId: 'cross-b',
-        startPosition: 3,
-        endPosition: 4,
+        cardId: 'cross-d',
+        startPosition: 1,
+        endPosition: 2,
         steps: 1,
         customerId: 'cust-1',
       ),

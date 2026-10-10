@@ -1,27 +1,38 @@
-# Default templates inventory (product video)
+# جرد القوالب المزروعة
 
-## Built-in on first launch (no manual setup)
+> **ملاحظة تصحيح (2026-10-09):** هذا الملف كان يصف حالة مرحلة 8 ويحتوي وصفًا غير مطابق للواقع الحالي
+> (خصوصًا صيغ جوالي: نمط واحد `استلمت مبلغ … رصيدك هو {ref}` لا «تحويل مشترك/رقم فقط/English»).
+> الجرد المرجعي الحالي هو جدول القوالب الـ23 في `docs/phase-0-contracts-audit-2026-10-09.md` §2،
+> وبوابة عقده في `test/services/outbound_template_contract_gate_test.dart`.
 
-### 1) Four wallets
-جيب / جوالي / ون كاش / فلوسك — `ensureDefaultWallets()`
+## 1) المحافظ المزروعة عند أول تشغيل
 
-### 2) Inbound parse templates (Phase-4 style)
-`DefaultWalletTemplatesSeeder` (`default_wallet_templates_seeded_v2`):
+المصدر: `lib/domain/services/default_wallet_specs.dart` (الأسماء الرسمية) و
+`lib/domain/services/default_wallet_templates_seeder.dart` (`default_wallet_templates_seeded_v4`).
 
-| Wallet | Patterns |
-|--------|----------|
-| JAIB | تحويل مشترك اسم+رقم، رقم فقط، English received |
-| JAWALI | تحويل مشترك، رقم فقط، English |
-| ONE CASH | تحويل مشترك، استلمت حوالة، عام |
-| FLOOSAK | تحويل مشترك، **استلمت حوالة** (فيديو)، عام |
+| المحفظة | `Sender ID` الرسمي | عدد قوالب الاستقبال المزروعة |
+|---|---|---|
+| Jaib | `Jaib` | 4 (مشترك، رقم بديل، حساب، إنجليزي) |
+| Jawali | `Jawali` | 1 |
+| MFloos | `MFloos` | 1 |
+| Floosak | `Floosak` | 3 |
+| KuraimiLMB | `KuraimiLMB` | 1 |
+| ONE Cash | `ONE Cash` | 4 |
 
-Editable via معالج القالب / إدارة القوالب per wallet. Default can be changed; new wallets need manual templates.
+قوالب الاستقبال تُعدَّل من معالج القالب/إدارة القوالب لكل محفظة، والزرع لا يكتب فوق تعديل المشغّل.
+مطابقة `Sender ID` في `PaymentSourceGuard` مطابقة تامة (حالة الأحرف والمسافات) بحسب
+`docs/wallet-deposit-definitions-2026-10-09.md`.
 
-### 3) Outbound feature templates
-`DefaultOutboundTemplatesSeeder`:
+## 2) القوالب الصادرة
 
-- **سلفني**: قبول / رفض / سداد — screen `SalafniTemplatesScreen` (full edit + reset to default)
-- **عروض**: `promotion_reward_sms_template` — `PromotionRewardTemplateScreen`
+المصدر المركزي: `lib/domain/services/outbound_template_catalog.dart` (23 قالبًا)، والزرع في
+`DefaultOutboundTemplatesSeeder` (`default_outbound_templates_seeded_v7`).
 
-### 4) Wallets UI
-Full `WalletsPosScreen` (cards, switch, ⋮ menu, edit sheet, POS tab) aligned with wallet video frames.
+- قوالب سلفني: قبول / رفض / سداد، وكرت سلفني.
+- قوالب إرسال الكروت: نقدي / آجل / هدية، مع الرجوع إلى `voucher_delivery_sms_template` إن غاب قالب النوع.
+- قوالب الإيداع: `deposit_no_stock_template`، وقوالب POS وتقاريرها، وتنبيه نفاد المخزون.
+- القالب الذي يعدّله المشغّل من الإعدادات هو المصدر الفعّال في الإرسال، والزرع قيمة بداية فقط.
+
+## 3) واجهة المحافظ
+
+شاشة `WalletsPosScreen` (بطاقات، مفتاح تفعيل، قائمة ⋮، ورقة تعديل، تبويب نقاط البيع).

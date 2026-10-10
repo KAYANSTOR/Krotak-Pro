@@ -1,16 +1,21 @@
 import 'package:flutter/material.dart';
+import '../perf/screen_open_trace.dart';
 
-import '../../domain/entities/setting.dart';
 import '../../domain/services/report_pdf_service.dart';
 import '../services/report_pdf_export.dart';
 import 'package:flutter/services.dart';
 
 import '../../core/result.dart';
+import '../../domain/entities/audit.dart';
 import '../../domain/entities/customer.dart';
 import '../../domain/entities/money.dart';
 import '../../domain/entities/pos_account.dart';
 import '../../domain/entities/transaction.dart';
+import '../../domain/entities/setting.dart';
 import '../../domain/services/local_identity_link_service.dart';
+import '../../domain/services/customer_alternate_code.dart';
+import '../../domain/services/customer_deposit_block.dart';
+import '../../domain/services/salafni_customer_ceiling.dart';
 import '../../domain/services/local_promotion_progress_service.dart';
 import '../../domain/services/services.dart';
 import '../../platform/contact_picker_bridge.dart';
@@ -41,6 +46,8 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
   List<Transaction> _ledger = const [];
   List<PromotionProgress> _promos = const [];
   PosAccount? _posLink;
+  int? _salafniCeilingMinor;
+  bool _depositsBlocked = false;
 
   @override
   void initState() {
@@ -58,6 +65,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
     if (!mounted) return;
     if (found is Failure<Customer?>) {
       setState(() {
+        ScreenOpenTrace.instance.markLatestDataReady(ScreenOpenIds.customerDetail);
         _loading = false;
         _error = found.error.message;
       });
@@ -66,6 +74,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
     final customer = (found as Success<Customer?>).value;
     if (customer == null) {
       setState(() {
+        ScreenOpenTrace.instance.markLatestDataReady(ScreenOpenIds.customerDetail);
         _loading = false;
         _error = 'الحساب غير موجود';
       });
@@ -84,6 +93,21 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
       final posR = await c.posRegistry.findByCustomerId(widget.customerId);
       if (posR is Success<PosAccount?>) posLink = posR.value;
     } catch (_) {}
+    int? ceilingMinor;
+    final ceilingR = await c.settings.find(SalafniCustomerCeiling.key);
+    if (ceilingR is Success<AppSetting?>) {
+      ceilingMinor = SalafniCustomerCeiling.forCustomer(
+        ceilingR.value?.value,
+        widget.customerId,
+      );
+    }
+
+    var depositsBlocked = false;
+    final blockR = await c.settings.find(CustomerDepositBlock.key);
+    if (blockR is Success<AppSetting?>) {
+      depositsBlocked =
+          CustomerDepositBlock.isBlocked(blockR.value?.value, widget.customerId);
+    }
 
     if (!mounted) return;
     final txs = txR is Success<List<Transaction>> ? txR.value : const <Transaction>[];
@@ -91,6 +115,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
       ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
     setState(() {
+      ScreenOpenTrace.instance.markLatestDataReady(ScreenOpenIds.customerDetail);
       _loading = false;
       _customer = customer;
       _ids = idsR is Success<List<CustomerIdentifier>> ? idsR.value : const [];
@@ -100,6 +125,8 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
       _promos =
           promoR is Success<List<PromotionProgress>> ? promoR.value : const [];
       _posLink = posLink;
+      _salafniCeilingMinor = ceilingMinor;
+      _depositsBlocked = depositsBlocked;
     });
   }
 
@@ -650,6 +677,11 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                                 ],
                               ],
                             ),
+
+                            const SizedBox(height: 12),
+                            _salafniCeilingCard(scheme),
+                            const SizedBox(height: 12),
+                            _depositPolicyCard(scheme),
                             const SizedBox(height: 16),
                             CustomerPromotionProgressSection(
                               items: _promos,
@@ -830,6 +862,294 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
         ],
       ),
     );
+  }
+
+
+  Widget _salafniCeilingCard(ColorScheme scheme) {
+    final minor = _salafniCeilingMinor;
+    final label = minor == null
+        ? 'بلا سقف فردي'
+        : minor == 0
+            ? 'ممنوع'
+            : '${(minor / 100).toStringAsFixed(2)} ر.ي';
+    return Card(
+      child: ListTile(
+        title: const Text(
+          'سقف سلفني',
+          style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w800),
+        ),
+        subtitle: Text(
+          label,
+          style: const TextStyle(fontFamily: 'Tajawal'),
+        ),
+        trailing: const Icon(Icons.edit_outlined),
+        onTap: _editSalafniCeiling,
+      ),
+    );
+  }
+
+  Future<void> _editSalafniCeiling() async {
+    final ctrl = TextEditingController(
+      text: _salafniCeilingMinor == null
+          ? ''
+          : (_salafniCeilingMinor! / 100).toStringAsFixed(2),
+    );
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          title: const Text(
+            'سقف سلفني لهذا العميل',
+            style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w800),
+          ),
+          content: TextField(
+            controller: ctrl,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: const InputDecoration(
+              labelText: 'السقف بالريال، اتركه فارغًا لإلغاء السقف',
+              helperText: 'صفر يمنع سلفني. القيمة حد أقصى للفئة.',
+            ),
+            style: const TextStyle(fontFamily: 'Tajawal'),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('إلغاء', style: TextStyle(fontFamily: 'Tajawal')),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('حفظ', style: TextStyle(fontFamily: 'Tajawal')),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (saved != true || !mounted) return;
+    final raw = ctrl.text.trim().replaceAll(',', '');
+    int? minor;
+    if (raw.isNotEmpty) {
+      final major = double.tryParse(raw);
+      if (major == null || major < 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('مبلغ السقف غير صالح', style: TextStyle(fontFamily: 'Tajawal'))),
+        );
+        return;
+      }
+      minor = (major * 100).round();
+    }
+    final c = AppScope.of(context);
+    final current = await c.settings.find(SalafniCustomerCeiling.key);
+    if (current is Failure<AppSetting?>) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(current.error.message, style: const TextStyle(fontFamily: 'Tajawal'))),
+      );
+      return;
+    }
+    final map = SalafniCustomerCeiling.decode(
+      (current as Success<AppSetting?>).value?.value,
+    );
+    final previousMinor = map.containsKey(widget.customerId)
+        ? map[widget.customerId]
+        : null;
+    if (minor == null) {
+      map.remove(widget.customerId);
+    } else {
+      map[widget.customerId] = minor;
+    }
+    final write = await c.settings.save(AppSetting(
+      key: SalafniCustomerCeiling.key,
+      value: SalafniCustomerCeiling.encode(map),
+      updatedAt: c.clock.now(),
+    ));
+    if (!mounted) return;
+    if (write is Failure) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text((write as Failure).error.message, style: const TextStyle(fontFamily: 'Tajawal'))),
+      );
+      return;
+    }
+    // كل تغيير سياسة يُسجَّل بالقيمة السابقة والجديدة (الخطة §10.5).
+    await c.auditLogs.append(AuditLog(
+      id: c.ids.next('audit'),
+      entityType: 'customer',
+      entityId: widget.customerId,
+      action: minor == null
+          ? 'salafni_ceiling_cleared'
+          : 'salafni_ceiling_updated',
+      occurredAt: c.clock.now(),
+      payloadJson:
+          '{\"previousMinor\":${previousMinor ?? 'null'},\"nextMinor\":${minor ?? 'null'}}',
+    ));
+    await _load();
+  }
+
+
+  Widget _depositPolicyCard(ColorScheme scheme) {
+    final codes = _ids.where((id) => id.type == CustomerIdentifierType.externalReference).toList();
+    // Material بدل Container ملوّن: ListTile يرسم خلفيته وحبره على Material،
+    // ووضعه داخل صندوق ملوّن يُطلق تحذير Flutter بأن الحبر قد لا يظهر.
+    return Material(
+      color: scheme.surfaceContainerHighest.withValues(alpha: 0.45),
+      borderRadius: NetRadii.mdAll,
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('حظر استقبال الإيداعات', style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w800)),
+            subtitle: const Text('الحساب يبقى للمراجعة والبيع وسلفني. الإيداع الآلي فقط يُرفض.', style: TextStyle(fontFamily: 'Tajawal')),
+            value: _depositsBlocked,
+            onChanged: (value) => _setDepositsBlocked(value),
+          ),
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              const Expanded(child: Text('أكواد بديلة', style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w800))),
+              TextButton(onPressed: _addAlternateCode, child: const Text('إضافة', style: TextStyle(fontFamily: 'Tajawal'))),
+            ],
+          ),
+          if (codes.isEmpty)
+            Text('لا توجد أكواد. الطول 4–15 حرفًا أو رقمًا.', style: TextStyle(fontFamily: 'Tajawal', color: scheme.onSurfaceVariant))
+          else
+            for (final code in codes)
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text(code.value, style: const TextStyle(fontFamily: 'Tajawal')),
+                trailing: IconButton(icon: const Icon(Icons.delete_outline), onPressed: () => _removeAlternateCode(code.id)),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _setDepositsBlocked(bool blocked) async {
+    final c = AppScope.of(context);
+    final current = await c.settings.find(CustomerDepositBlock.key);
+    if (current is Failure<AppSetting?>) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(current.error.message, style: const TextStyle(fontFamily: 'Tajawal'))));
+      return;
+    }
+    final ids = CustomerDepositBlock.decode((current as Success<AppSetting?>).value?.value);
+    final wasBlocked = ids.contains(widget.customerId);
+    if (blocked) {
+      ids.add(widget.customerId);
+    } else {
+      ids.remove(widget.customerId);
+    }
+    final write = await c.settings.save(AppSetting(
+      key: CustomerDepositBlock.key,
+      value: CustomerDepositBlock.encode(ids),
+      updatedAt: c.clock.now(),
+    ));
+    if (!mounted) return;
+    if (write is Failure) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text((write as Failure).error.message, style: const TextStyle(fontFamily: 'Tajawal'))));
+      return;
+    }
+    // كل تغيير سياسة يُسجَّل بالقيمة السابقة والجديدة (الخطة §10.5).
+    await c.auditLogs.append(AuditLog(
+      id: c.ids.next('audit'),
+      entityType: 'customer',
+      entityId: widget.customerId,
+      action: 'deposit_block_updated',
+      occurredAt: c.clock.now(),
+      payloadJson: '{\"previous\":$wasBlocked,\"next\":$blocked}',
+    ));
+    await _load();
+  }
+
+  Future<void> _addAlternateCode() async {
+    final ctrl = TextEditingController();
+    final raw = await showDialog<String>(
+      context: context,
+      builder: (ctx) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          title: const Text('كود بديل', style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w800)),
+          content: TextField(
+            controller: ctrl,
+            textDirection: TextDirection.ltr,
+            decoration: const InputDecoration(helperText: '4–15 حرفًا أو رقمًا بلا مسافات', helperStyle: TextStyle(fontFamily: 'Tajawal')),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء', style: TextStyle(fontFamily: 'Tajawal'))),
+            FilledButton(onPressed: () => Navigator.pop(ctx, ctrl.text), child: const Text('حفظ', style: TextStyle(fontFamily: 'Tajawal'))),
+          ],
+        ),
+      ),
+    );
+    if (raw == null || !mounted) return;
+    final code = CustomerAlternateCode.normalize(raw);
+    if (code == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('الكود يجب أن يكون 4–15 حرفًا أو رقمًا', style: TextStyle(fontFamily: 'Tajawal'))));
+      return;
+    }
+    final c = AppScope.of(context);
+    final existing = await c.customers.findByIdentifier(code);
+    if (existing is Failure<Customer?>) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(existing.error.message, style: const TextStyle(fontFamily: 'Tajawal'))));
+      return;
+    }
+    final owner = (existing as Success<Customer?>).value;
+    if (owner != null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('الكود مستخدم لحساب آخر أو لهذا الحساب', style: TextStyle(fontFamily: 'Tajawal'))));
+      return;
+    }
+    final write = await c.customers.saveIdentifier(CustomerIdentifier(
+      id: c.ids.next('alt'),
+      customerId: widget.customerId,
+      type: CustomerIdentifierType.externalReference,
+      value: code,
+      isPrimary: false,
+    ));
+    if (!mounted) return;
+    if (write is Failure) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text((write as Failure).error.message, style: const TextStyle(fontFamily: 'Tajawal'))));
+      return;
+    }
+    await c.auditLogs.append(AuditLog(
+      id: c.ids.next('audit'),
+      entityType: 'customer',
+      entityId: widget.customerId,
+      action: 'alternate_code_added',
+      occurredAt: c.clock.now(),
+      payloadJson: '{\"code\":\"$code\"}',
+    ));
+    await _load();
+  }
+
+  Future<void> _removeAlternateCode(String id) async {
+    final c = AppScope.of(context);
+    String? code;
+    for (final item in _ids) {
+      if (item.id == id) {
+        code = item.value;
+        break;
+      }
+    }
+    final write = await c.customers.deleteIdentifier(id);
+    if (!mounted) return;
+    if (write is Failure) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text((write as Failure).error.message, style: const TextStyle(fontFamily: 'Tajawal'))));
+      return;
+    }
+    await c.auditLogs.append(AuditLog(
+      id: c.ids.next('audit'),
+      entityType: 'customer',
+      entityId: widget.customerId,
+      action: 'alternate_code_removed',
+      occurredAt: c.clock.now(),
+      payloadJson: '{\"code\":\"${code ?? ''}\"}',
+    ));
+    await _load();
   }
 
   Widget _summaryGrid(ColorScheme scheme, NetSemanticColors net) {

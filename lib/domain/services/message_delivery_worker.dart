@@ -136,6 +136,7 @@ final class MessageDeliveryWorker {
           .renderVoucherDelivery(
         serialNumber: card.serialNumber,
         secretCode: card.secretCode,
+        channel: CardDeliveryChannel.cash,
       );
       if (rendered is Failure<String>) {
         failed++;

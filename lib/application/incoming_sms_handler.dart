@@ -8,6 +8,7 @@ import '../domain/entities/setting.dart';
 import '../domain/entities/transaction.dart';
 import '../domain/repositories/repositories.dart';
 import '../domain/services/payment_source_guard.dart';
+import '../domain/services/salafni_command.dart';
 import '../domain/services/services.dart';
 import '../domain/services/unified_payment_event_engine.dart';
 import '../domain/services/template_performance_service.dart';
@@ -84,13 +85,15 @@ final class IncomingSmsHandler {
     DateTime? receivedAt,
   }) async {
     final at = receivedAt ?? DateTime.now().toUtc();
-    if (_isSalafniCommand(body) &&
+    final manualCommand = SalafniCommand.tryParse(body);
+    if (manualCommand != null &&
         advanceService != null &&
         await _salafniEnabled()) {
       final result = await advanceService!.requestByIdentifier(
         identifier: sender,
         currencyCode: await _currencyCode(),
         operationId: _salafniOperationId(sender, body, at),
+        amountMinorUnits: manualCommand.amountMinorUnits,
       );
       if (result is Success<AdvanceIssue>) return const Success(null);
       return Failure<Transaction?>((result as Failure).error);
@@ -107,7 +110,8 @@ final class IncomingSmsHandler {
 
   Future<void> _onEvent(IncomingSmsEvent event) async {
     try {
-      if (_isSalafniCommand(event.body) &&
+      final command = SalafniCommand.tryParse(event.body);
+      if (command != null &&
           advanceService != null &&
           await _salafniEnabled()) {
         await advanceService!.requestByIdentifier(
@@ -118,6 +122,7 @@ final class IncomingSmsHandler {
             event.body,
             event.receivedAt,
           ),
+          amountMinorUnits: command.amountMinorUnits,
         );
         return;
       }
@@ -137,17 +142,6 @@ final class IncomingSmsHandler {
         } catch (_) {}
       }
     }
-  }
-
-  bool _isSalafniCommand(String body) {
-    final normalized = body
-        .trim()
-        .toLowerCase()
-        .replaceAll(RegExp(r'[\u200f\u200e\s]+'), '');
-    return normalized == 'سلفني' ||
-        normalized == 'س' ||
-        normalized == 's' ||
-        normalized == 'salafni';
   }
 
   String _salafniOperationId(

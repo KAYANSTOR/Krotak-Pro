@@ -344,7 +344,9 @@ final class LocalMessageParser implements MessageParser, SourceScopedMessagePars
         continue;
       }
       if (unified.startsWith('{phone}', i)) {
-        buf.write(r'(?<phone>\+?[\d]{7,15})');
+        // يسمح بحرف لاتيني واحد في بداية معرف الوكيل (مثل M773086403 في جوالي):
+        // يُستخدم الرقم للمطابقة ويُحفظ المعرّف الأصلي في rawIdentifier للسجل.
+        buf.write(r'(?<phone>\+?[A-Za-z]?[\d]{7,15})');
         i += '{phone}'.length;
         continue;
       }

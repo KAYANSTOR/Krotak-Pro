@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../perf/screen_open_trace.dart';
 
 import '../../core/result.dart';
 import '../../domain/entities/customer.dart';
@@ -72,6 +73,7 @@ class _PosScreenState extends State<PosScreen> {
     if (posList is Failure<List<PointOfSale>>) {
       if (!mounted) return;
       setState(() {
+        ScreenOpenTrace.instance.markLatestDataReady(ScreenOpenIds.pos);
         _loading = false;
         _error = posList.error.message;
       });
@@ -99,6 +101,7 @@ class _PosScreenState extends State<PosScreen> {
     final counts = await _readCounts();
     if (!mounted) return;
     setState(() {
+      ScreenOpenTrace.instance.markLatestDataReady(ScreenOpenIds.pos);
       _loading = false;
       _pos = points;
       _accounts = accounts;

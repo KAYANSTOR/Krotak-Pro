@@ -3,6 +3,7 @@ import '../../../core/result.dart';
 import '../../../domain/entities/wallet.dart';
 import '../../../domain/entities/payment_event.dart';
 import '../../app_scope.dart';
+import '../../perf/screen_open_trace.dart';
 import '../../theme/kayan_palette.dart';
 import '../../theme/net_semantic_colors.dart';
 import '../../theme/net_tokens.dart';
@@ -27,6 +28,7 @@ class _WalletNotificationSettingsScreenState extends State<WalletNotificationSet
     final c = AppScope.of(context);
     final access = await c.notificationBridge.isAccessGranted();
     final result = await c.notificationSources.list();
+    ScreenOpenTrace.instance.markLatestDataReady(ScreenOpenIds.walletNotificationSettings);
     if (!mounted) return;
     setState(() { _accessGranted = access; _loading = false; _sources = result is Success<List<PaymentSource>> ? result.value : const []; });
   }

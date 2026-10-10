@@ -12,6 +12,7 @@ import '../phone_normalizer.dart';
 import '../repositories/repositories.dart';
 import '../repositories/unit_of_work.dart';
 import 'outbound_template_renderer.dart';
+import 'salafni_customer_ceiling.dart';
 import 'services.dart';
 import 'local_pos_account_registry.dart';
 
@@ -61,7 +62,8 @@ final class LocalAdvanceService implements AdvanceService {
   Future<Result<AdvanceIssue>> request(
       {required String customerId,
       required String currencyCode,
-      required String operationId}) async {
+      required String operationId,
+      int? amountMinorUnits}) async {
     final enabledResult = await _isEnabled();
     if (enabledResult is Failure<bool>) return Failure(enabledResult.error);
     if (!(enabledResult as Success<bool>).value)
@@ -139,8 +141,20 @@ final class LocalAdvanceService implements AdvanceService {
       return _reject('no_active_category', 'لا توجد فئة كروت نشطة',
           customerId: customerId);
 
+    final candidates = amountMinorUnits == null
+        ? active
+        : active
+            .where((c) => c.faceValue.minorUnits == amountMinorUnits)
+            .toList(growable: false);
+    if (amountMinorUnits != null && candidates.isEmpty) {
+      return _reject(
+        'salafni_category_mismatch',
+        'لا توجد فئة مطابقة للمبلغ المطلوب',
+        customerId: customerId,
+      );
+    }
     CardCategory? selectedCategory;
-    for (final category in active) {
+    for (final category in candidates) {
       final available = await cards.findAvailableByCategory(category.id);
       if (available is Failure<List<Card>>) return Failure(available.error);
       if ((available as Success<List<Card>>).value.isNotEmpty) {
@@ -148,10 +162,28 @@ final class LocalAdvanceService implements AdvanceService {
         break;
       }
     }
-    if (selectedCategory == null)
+    if (selectedCategory == null) {
       return _reject(
-          'salafni_out_of_stock', 'لا يوجد كرت متاح في الفئات النشطة',
-          customerId: customerId);
+        amountMinorUnits == null
+            ? 'salafni_out_of_stock'
+            : 'salafni_category_out_of_stock',
+        amountMinorUnits == null
+            ? 'لا يوجد كرت متاح في الفئات النشطة'
+            : 'الفئة المطابقة بلا مخزون',
+        customerId: customerId,
+      );
+    }
+    final ceiling = await _ceilingMinor(customerId);
+    if (ceiling is Failure<int?>) return Failure(ceiling.error);
+    final ceilingMinor = (ceiling as Success<int?>).value;
+    if (ceilingMinor != null &&
+        selectedCategory.faceValue.minorUnits > ceilingMinor) {
+      return _reject(
+        'salafni_ceiling_exceeded',
+        'المبلغ يتجاوز سقف سلفني لهذا العميل',
+        customerId: customerId,
+      );
+    }
 
     final now = clock.now();
     final reservationId = ids.next('salafni-reservation');
@@ -281,7 +313,8 @@ final class LocalAdvanceService implements AdvanceService {
   Future<Result<AdvanceIssue>> requestByIdentifier(
       {required String identifier,
       required String currencyCode,
-      required String operationId}) async {
+      required String operationId,
+      int? amountMinorUnits}) async {
     final value = PhoneNormalizer.canonicalize(identifier) ?? identifier.trim();
     final customerResult = await customers.findByIdentifier(value);
     if (customerResult is Failure<Customer?>)
@@ -293,7 +326,8 @@ final class LocalAdvanceService implements AdvanceService {
     return request(
         customerId: customer.id,
         currencyCode: currencyCode,
-        operationId: operationId);
+        operationId: operationId,
+        amountMinorUnits: amountMinorUnits);
   }
 
   @override
@@ -355,31 +389,11 @@ final class LocalAdvanceService implements AdvanceService {
             a.amount.currencyCode == amount.currencyCode &&
             a.outstanding.minorUnits > 0)
         .toList(growable: false);
-    final outstandingTotal = open.fold<int>(
-        0, (sum, advance) => sum + advance.outstanding.minorUnits);
-    final firstAttemptRemaining = amount.minorUnits - priorApplied;
-    if (priorApplied == 0 &&
-        outstandingTotal > 0 &&
-        firstAttemptRemaining > outstandingTotal) {
-      final residual = firstAttemptRemaining - outstandingTotal;
-      final categoriesResult = await categories.listAll();
-      if (categoriesResult is Failure<List<CardCategory>>)
-        return Failure(categoriesResult.error);
-      final matches = (categoriesResult as Success<List<CardCategory>>)
-          .value
-          .where((c) =>
-              c.isActive &&
-              c.faceValue.currencyCode == amount.currencyCode &&
-              c.faceValue.minorUnits == residual)
-          .toList(growable: false);
-      if (matches.length != 1)
-        return Success(AdvancePaymentResult(
-            applied: Money(minorUnits: 0, currencyCode: amount.currencyCode),
-            remaining: amount,
-            settlementTransaction: null));
-    }
-
-    var remaining = firstAttemptRemaining;
+    // قرار المالك 2026-10-09 (§1): السداد أولًا دائمًا. لا تُشترط مطابقة
+    // الباقي لفئة كرت، ولا يُشترى كرت من الفائض: الباقي يبقى رصيدًا
+    // ويتولى مسار الإيداع حفظه. القاعدة القديمة كانت ترفض السداد كاملًا
+    // حين لا يطابق الباقي فئة نشطة، فيبقى الدين قائمًا بلا سبب.
+    var remaining = amount.minorUnits - priorApplied;
     var applied = priorApplied;
     final notices = <Future<void> Function()>[];
     for (final advance in open) {
@@ -444,6 +458,14 @@ final class LocalAdvanceService implements AdvanceService {
   @override
   Future<Result<List<Advance>>> listCustomerAdvances(String customerId) =>
       advances.listByCustomer(customerId);
+
+
+  Future<Result<int?>> _ceilingMinor(String customerId) async {
+    final result = await settings.find(SalafniCustomerCeiling.key);
+    if (result is Failure<AppSetting?>) return Failure(result.error);
+    final raw = (result as Success<AppSetting?>).value?.value;
+    return Success(SalafniCustomerCeiling.forCustomer(raw, customerId));
+  }
 
   Future<Result<bool>> _isEnabled() async {
     final result = await settings.find(activationKey);

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../perf/screen_open_trace.dart';
 
 import '../../core/result.dart';
 import '../../domain/entities/message.dart';
@@ -44,6 +45,7 @@ class _FailedMessagesScreenState extends State<FailedMessagesScreen> {
     if (!mounted) return;
     if (result is Failure<List<IncomingMessage>>) {
       setState(() {
+        ScreenOpenTrace.instance.markLatestDataReady(ScreenOpenIds.failedMessages);
         _loading = false;
         _error = result.error.message;
       });
@@ -58,6 +60,7 @@ class _FailedMessagesScreenState extends State<FailedMessagesScreen> {
     }
     if (!mounted) return;
     setState(() {
+      ScreenOpenTrace.instance.markLatestDataReady(ScreenOpenIds.failedMessages);
       _loading = false;
       _rows = rows;
     });

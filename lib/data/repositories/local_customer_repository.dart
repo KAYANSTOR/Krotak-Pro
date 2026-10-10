@@ -20,11 +20,13 @@ final class LocalCustomerRepository implements CustomerRepository {
   @override
   Future<Result<domain.Customer?>> findByIdentifier(String value) async {
     try {
-      final keys = PhoneNormalizer.lookupKeys(value);
+      final keys = PhoneNormalizer.lookupKeys(value).toSet();
+      final upper = value.trim().toUpperCase();
+      if (upper.isNotEmpty) keys.add(upper);
       if (keys.isEmpty) return const Success(null);
 
       final identifierQuery = database.select(database.customerIdentifiers)
-        ..where((table) => table.value.isIn(keys));
+        ..where((table) => table.value.isIn(keys.toList()));
       final identifier = await identifierQuery.getSingleOrNull();
       if (identifier == null) return const Success(null);
 
@@ -340,6 +342,18 @@ final class LocalCustomerRepository implements CustomerRepository {
       return const Success(null);
     } catch (error) {
       return Failure(_failure('customer_identifier_save_failed', error));
+    }
+  }
+
+  @override
+  Future<Result<void>> deleteIdentifier(String id) async {
+    try {
+      await (database.delete(database.customerIdentifiers)
+            ..where((table) => table.id.equals(id)))
+          .go();
+      return const Success(null);
+    } catch (error) {
+      return Failure(_failure('customer_identifier_delete_failed', error));
     }
   }
 

@@ -634,6 +634,14 @@ final class _FakeCustomers implements CustomerRepository {
     byId[identifier.value] = byId[identifier.customerId]!;
     return const Success(null);
   }
+
+  @override
+  Future<Result<void>> deleteIdentifier(String id) async {
+    for (final list in identifiers.values) {
+      list.removeWhere((item) => item.id == id);
+    }
+    return const Success(null);
+  }
 }
 
 final class _FakeBalances implements CustomerBalanceService {

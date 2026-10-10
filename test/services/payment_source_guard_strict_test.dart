@@ -168,14 +168,14 @@ void main() {
       expect(await guard.authorize(_sms('JAIB')), isA<Success<void>>());
     });
 
-    test('matching ignores case and any whitespace', () async {
-      expect(await guard.authorize(_sms('jaib')), isA<Success<void>>());
-      expect(await guard.authorize(_sms('  J A I B  ')), isA<Success<void>>());
-      expect(await guard.authorize(_sms('ONE  cash')), isA<Success<void>>());
+    test('matching is exact: case and internal whitespace differences are rejected', () async {
+      expectRejected(await guard.authorize(_sms('jaib')), RejectionCodes.unknownSender);
+      expectRejected(await guard.authorize(_sms('  J A I B  ')), RejectionCodes.unknownSender);
+      expectRejected(await guard.authorize(_sms('ONE  cash')), RejectionCodes.unknownSender);
     });
 
-    test('a decorated sender that contains the configured id is authorized', () async {
-      expect(await guard.authorize(_sms('JAIB-PROMO')), isA<Success<void>>());
+    test('a decorated sender that merely contains the configured id is rejected', () async {
+      expectRejected(await guard.authorize(_sms('JAIB-PROMO')), RejectionCodes.unknownSender);
     });
 
     test('an unknown sender is rejected as unknownSender', () async {
@@ -204,13 +204,13 @@ void main() {
       expectRejected(await g.authorize(_sms('BANK-AB-X')), RejectionCodes.unknownSender);
     });
 
-    test('numeric senders match by digit suffix (country code, spaces) but not by other digits', () async {
+    test('numeric senders are matched exactly, never by digit suffix', () async {
       final g = PaymentSourceGuard(
         wallets: _Wallets([_wallet('num', senderId: '777-123')]),
         templates: _Templates([_tpl('t', walletId: 'num')]),
       );
-      // لا احتواء نصي هنا (الشرطة)، فالنجاح يأتي من قاعدة لاحقة الأرقام وحدها.
-      expect(await g.authorize(_sms('+967 777 123')), isA<Success<void>>());
+      expect(await g.authorize(_sms('777-123')), isA<Success<void>>());
+      expectRejected(await g.authorize(_sms('+967 777 123')), RejectionCodes.unknownSender);
       expectRejected(await g.authorize(_sms('+967 888 123')), RejectionCodes.unknownSender);
       expectRejected(await g.authorize(_sms('12')), RejectionCodes.unknownSender);
     });
@@ -313,12 +313,12 @@ void main() {
       expectRejected(await guard.authorize(_sms('JAIB')), 'template_list_failed');
     });
 
-    test('the manual channel bypasses sources entirely, even with no wallets at all', () async {
+    test('the manual channel is never auto-authorized as a payment source', () async {
       final g = PaymentSourceGuard(wallets: _Wallets(const []), templates: _Templates(const []));
       final r = await g.authorize(
         PaymentEvent(channel: PaymentChannel.manual, sourceKey: 'cashier', body: 'x', receivedAt: _at),
       );
-      expect(r, isA<Success<void>>());
+      expectRejected(r, manualRequiresReviewCode);
     });
   });
 
@@ -452,7 +452,7 @@ void main() {
     setUp(() {
       wallets = _Wallets([
         _wallet('jaib', senderId: 'JAIB', mode: WalletSourceMode.notification, packageName: 'com.ahd.jaib'),
-        _wallet('floosak', senderId: 'FLOOSAK'),
+        _wallet('floosak', senderId: 'Floosak'),
       ]);
       templates = _Templates([
         _tpl('t-jaib-a', walletId: 'jaib'),
@@ -520,11 +520,12 @@ void main() {
       expect(d.activeTemplateIds.toSet(), {'t-jaib-a', 't-jaib-b'});
     });
 
-    test('the manual channel is always authorized and enabled', () async {
+    test('the manual channel is reported as review-required, not authorized', () async {
       final d = await diag(
         PaymentEvent(channel: PaymentChannel.manual, sourceKey: 'cashier', body: 'x', receivedAt: _at),
       );
-      expect(d.authorized, isTrue);
+      expect(d.authorized, isFalse);
+      expect(d.failureCode, manualRequiresReviewCode);
       expect(d.sourceEnabled, isTrue);
       expect(d.walletId, isNull);
     });
@@ -554,7 +555,7 @@ void main() {
       expect(json['walletStatus'], isNull);
       expect(() => jsonEncode(json), returnsNormally);
 
-      final ok = (await diag(_sms('FLOOSAK'))).toJson();
+      final ok = (await diag(_sms('Floosak'))).toJson();
       expect(ok['walletStatus'], 'active');
       expect(ok['walletSourceMode'], 'sms');
     });

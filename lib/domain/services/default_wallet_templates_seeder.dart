@@ -5,12 +5,17 @@ import '../entities/message.dart';
 import '../entities/setting.dart';
 import '../entities/wallet.dart';
 import '../repositories/repositories.dart';
+import 'default_wallet_specs.dart';
 
-/// Seeds built-in parse templates for the four default Yemen wallets.
+/// Seeds built-in parse templates for the six approved deposit wallets.
 ///
-/// Patterns follow the product video samples so JAIB / JAWALI /
-/// ONE CASH / FLOOSAK work without manual wizard setup. New wallets still
-/// require operator-defined templates.
+/// Patterns follow the owner-approved deposit samples so Jaib / Jawali /
+/// MFloos / Floosak / KuraimiLMB / ONE Cash work without manual wizard setup.
+/// New wallets still require operator-defined templates.
+///
+/// قيم `senderCode` هنا هي قيم `Sender ID` الرسمية المعتمدة من المالك، وتُستخدم
+/// فقط لربط القالب بمحفظته وللتصنيف في الواجهة — أما اعتماد مصدر الرسالة
+/// ماليًا فيمرّ عبر [PaymentSourceGuard] بمطابقة تامة لقيمة المحفظة.
 final class DefaultWalletTemplatesSeeder {
   const DefaultWalletTemplatesSeeder({
     required this.wallets,
@@ -26,7 +31,7 @@ final class DefaultWalletTemplatesSeeder {
   final Clock clock;
   final IdGenerator ids;
 
-  static const seededKey = 'default_wallet_templates_seeded_v3';
+  static const seededKey = 'default_wallet_templates_seeded_v4';
 
   // Legacy JAIB default before the provider changed the separator from `-` to
   // a space between the sender name and phone number.
@@ -34,7 +39,7 @@ final class DefaultWalletTemplatesSeeder {
       'اضيف {amount} ر.ي تحويل مشترك رص:{ref} ر.ي من {account}-{phone}';
 
   /// Idempotent: skips the **insert** pass when [seededKey] is set, otherwise
-  /// inserts missing templates keyed by stable id `tpl-default-{senderId}-{variant}`.
+  /// inserts missing templates keyed by stable id `tpl-default-{senderCode}-{variant}`.
   ///
   /// A cheap **repair** pass always runs afterwards: any built-in template that
   /// carries a `senderCode` of a known wallet but no (or a stale) `walletId` is
@@ -50,15 +55,22 @@ final class DefaultWalletTemplatesSeeder {
     if (walletList is Failure<List<Wallet>>) {
       return Failure(walletList.error);
     }
+    final walletValues = (walletList as Success<List<Wallet>>).value;
+
+    final byWalletKey = <String, Wallet>{};
     final bySender = <String, Wallet>{};
-    for (final w in (walletList as Success<List<Wallet>>).value) {
-      final sid = (w.senderId ?? '').trim().toUpperCase();
-      if (sid.isNotEmpty) bySender[sid] = w;
+    for (final w in walletValues) {
+      final sid = (w.senderId ?? '').trim();
+      if (sid.isNotEmpty) bySender[sid.toUpperCase()] = w;
       final name = w.name.trim();
-      if (name == 'جيب') bySender.putIfAbsent('JAIB', () => w);
-      if (name == 'جوالي') bySender.putIfAbsent('JAWALI', () => w);
-      if (name == 'ون كاش') bySender.putIfAbsent('ONE CASH', () => w);
-      if (name == 'فلوسك') bySender.putIfAbsent('FLOOSAK', () => w);
+      for (final spec in DefaultWalletSpecs.all) {
+        if (name != spec.name) continue;
+        byWalletKey.putIfAbsent(spec.key, () => w);
+        final official = (spec.senderId ?? '').trim();
+        if (official.isNotEmpty) {
+          bySender.putIfAbsent(official.toUpperCase(), () => w);
+        }
+      }
     }
 
     final existing = await templates.listAll();
@@ -68,13 +80,13 @@ final class DefaultWalletTemplatesSeeder {
     final all = (existing as Success<List<TransferTemplate>>).value;
     final byId = {for (final t in all) t.id: t};
     final knownWalletIds = {
-      for (final w in (walletList as Success<List<Wallet>>).value) w.id,
+      for (final w in walletValues) w.id,
     };
 
     var changed = 0;
     if (!alreadySeeded) {
       for (final spec in _specs) {
-        final wallet = bySender[spec.senderCode.toUpperCase()];
+        final wallet = byWalletKey[spec.walletKey];
         final id =
             'tpl-default-${spec.senderCode.toLowerCase().replaceAll(' ', '-')}-${spec.variant}';
         if (byId.containsKey(id)) continue;
@@ -104,10 +116,9 @@ final class DefaultWalletTemplatesSeeder {
       final jaibSharedId = 'tpl-default-jaib-ar-shared';
       if (t.id == jaibSharedId && t.pattern == _legacyJaibSharedPattern) {
         t = t.copyWith(
-          pattern: _specs
-              .firstWhere((spec) => spec.senderCode == 'JAIB' && spec.variant == 'ar-shared')
-              .pattern,
-          sampleBody: 'اضيف 100 ر.ي تحويل مشترك رص:10615 ر.ي من جارالله الكبودي 773086403',
+          pattern: _specFor('Jaib', 'ar-shared').pattern,
+          sampleBody:
+              'اضيف 100 ر.ي تحويل مشترك رص:10615 ر.ي من جارالله الكبودي 773086403',
         );
         templateChanged = true;
       }
@@ -118,12 +129,20 @@ final class DefaultWalletTemplatesSeeder {
         templateChanged = true;
       }
 
+      // v4: توحيد قيم senderCode للقوالب الافتراضية إلى قيم Sender ID الرسمية
+      // بنفس حالة الأحرف والمسافات، دون المساس بأي قالب أنشأه المشغّل.
+      if (t.id.startsWith('tpl-default-')) {
+        final official = _officialSenderCodeForTemplateId(t.id);
+        if (official != null && t.senderCode != official) {
+          t = t.copyWith(senderCode: official);
+          templateChanged = true;
+        }
+      }
+
       // v3: استبدال قوالب جوالي القديمة بقالب الاستلام المعتمد (واحد فقط).
       if (t.senderCode?.trim().toUpperCase() == 'JAWALI') {
-        final jawaly = _specs.firstWhere(
-          (spec) => spec.senderCode == 'JAWALI' && spec.variant == 'ar-received',
-        );
-        // القالب الأساسي (shared أو ar-received) يُحدَّث للنمط الجديد.
+        final jawaly = _specFor('Jawali', 'ar-received');
+        // القالب الأساسي (shared أو ar-received) يُحدَّث للنمط الجديد.
         if (t.id == 'tpl-default-jawali-ar-shared' ||
             t.id == 'tpl-default-jawali-ar-received') {
           if (t.pattern != jawaly.pattern ||
@@ -185,99 +204,180 @@ final class DefaultWalletTemplatesSeeder {
     return Success(changed);
   }
 
+  static _TplSpec _specFor(String walletKey, String variant) => _specs.firstWhere(
+        (spec) => spec.walletKey == walletKey && spec.variant == variant,
+      );
+
+  static String? _officialSenderCodeForTemplateId(String id) {
+    for (final spec in _specs) {
+      final prefix =
+          'tpl-default-${spec.senderCode.toLowerCase().replaceAll(' ', '-')}-';
+      if (id.startsWith(prefix)) return spec.senderCode;
+    }
+    return null;
+  }
+
   static const _specs = <_TplSpec>[
+    // ── جيب — Jaib ────────────────────────────────────────────────────────
     _TplSpec(
-      senderCode: 'JAIB',
+      walletKey: 'Jaib',
+      senderCode: 'Jaib',
       variant: 'ar-shared',
       name: 'جيب — تحويل مشترك',
       priority: 10,
       pattern:
           'اضيف {amount} ر.ي تحويل مشترك رص:{ref} ر.ي من {account} {phone}',
       sampleBody:
-          'اضيف 100 ر.ي تحويل مشترك رص:10615 ر.ي من جارالله الكبودي 773086403',
+          'اضيف 500ر.ي تحويل مشترك رص:515920ر.ي من علي القواتي 715813555',
     ),
     _TplSpec(
-      senderCode: 'JAIB',
+      walletKey: 'Jaib',
+      senderCode: 'Jaib',
       variant: 'ar-phone-only',
-      name: 'جيب — تحويل (رقم فقط)',
+      name: 'جيب — تحويل (رقم بديل)',
       priority: 20,
       pattern: 'اضيف {amount} ر.ي تحويل مشترك رص:{ref} ر.ي من {phone}',
-      sampleBody: 'اضيف 10 ر.ي تحويل مشترك رص:1022 ر.ي من 687471',
+      sampleBody: 'اضيف 500ر.ي تحويل مشترك رص:255265ر.ي من 8483883',
     ),
     _TplSpec(
-      senderCode: 'JAIB',
+      walletKey: 'Jaib',
+      senderCode: 'Jaib',
+      variant: 'ar-blocked',
+      name: 'Jaib — إشعار محجوب',
+      priority: 30,
+      pattern: 'اضيف {amount} ر.ي تحويل مشترك رص:{ref} ر.ي من {account}-{phone}',
+      sampleBody:
+          'اضيف 300ر.ي تحويل مشترك رص:4650ر.ي من د**** ح****** ح** م******-6557728',
+    ),
+    _TplSpec(
+      walletKey: 'Jaib',
+      senderCode: 'Jaib',
+      variant: 'ar-account-only',
+      name: 'جيب — تحويل (اسم/Offline)',
+      priority: 40,
+      pattern: 'اضيف {amount} ر.ي تحويل مشترك رص:{ref} ر.ي من {account}',
+      sampleBody:
+          'اضيف 200 ر.ي تحويل مشترك رص:414445 ر.ي من روضه نعمان اسم البعداني -77',
+    ),
+    _TplSpec(
+      walletKey: 'Jaib',
+      senderCode: 'Jaib',
       variant: 'en-received',
       name: 'Jaib — received (EN)',
-      priority: 30,
+      priority: 50,
       pattern: 'You have received {amount} YER from {phone} your balance {ref}',
       sampleBody: 'You have received 10 YER from 779776919 your balance 20',
     ),
+    // ── جوالي — Jawali ───────────────────────────────────────────────────
     // قالب جوالي الوحيد المعتمد — يطابق رسائل الاستلام الفعلية.
     _TplSpec(
-      senderCode: 'JAWALI',
+      walletKey: 'Jawali',
+      senderCode: 'Jawali',
       variant: 'ar-received',
       name: 'جوالي — استلمت مبلغ',
       priority: 10,
-      pattern: 'استلمت مبلغ {amount} YER من {phone} رصيدك هو.{ref}',
-      sampleBody: 'استلمت مبلغ 500 YER من 737725368 رصيدك هو.99150',
+      pattern: 'استلمت مبلغ {amount} YER من {phone} رصيدك هو {ref}',
+      sampleBody: 'استلمت مبلغ 200 YER من 733332303 رصيدك هو 245',
     ),
+    // ── أم فلوس — MFloos ─────────────────────────────────────────────────
     _TplSpec(
-      senderCode: 'ONE CASH',
-      variant: 'ar-shared',
-      name: 'ون كاش — تحويل مشترك',
+      walletKey: 'MFloos',
+      senderCode: 'MFloos',
+      variant: 'ar-deposit',
+      name: 'أم فلوس — إيداع',
       priority: 10,
-      pattern:
-          'اضيف {amount} ر.ي تحويل مشترك رص:{ref} ر.ي من {account}-{phone}',
+      pattern: 'تم إيداع مبلغ {amount} YER من: {account} المرجع: {ref}',
       sampleBody:
-          'اضيف 1000 ر.ي تحويل مشترك رص:1000 ر.ي من عميل-771234567',
+          'تم إيداع مبلغ 300.00 YER من: منيره جبر المرجع:939493993',
     ),
+    // ── فلوسك — Floosak ──────────────────────────────────────────────────
     _TplSpec(
-      senderCode: 'ONE CASH',
+      walletKey: 'Floosak',
+      senderCode: 'Floosak',
       variant: 'ar-hawala',
-      name: 'ون كاش — استلمت حوالة',
-      priority: 15,
+      name: 'فلوسك — استلمت حوالة',
+      priority: 10,
       pattern: 'استلمت حوالة من {account} بمبلغ {amount} ر.ي رصيدك {ref} ر.ي',
-      sampleBody: 'استلمت حوالة من عميل بمبلغ 500.00 ر.ي رصيدك 1500.00 ر.ي',
+      sampleBody:
+          'استلمت حوالة من بسام الشيباني بمبلغ 250.00 ر.ي رصيدك 250.00 ر.ي',
     ),
     _TplSpec(
-      senderCode: 'ONE CASH',
-      variant: 'sms-generic',
-      name: 'ون كاش — تحويل عام',
-      priority: 20,
-      pattern: 'تم استلام {amount} من {phone}',
-      sampleBody: 'تم استلام 1000 من 771234567',
-    ),
-    _TplSpec(
-      senderCode: 'FLOOSAK',
+      walletKey: 'Floosak',
+      senderCode: 'Floosak',
       variant: 'ar-shared',
       name: 'فلوسك — تحويل مشترك',
-      priority: 10,
+      priority: 20,
       pattern:
           'اضيف {amount} ر.ي تحويل مشترك رص:{ref} ر.ي من {account}-{phone}',
       sampleBody:
           'اضيف 2000 ر.ي تحويل مشترك رص:2000 ر.ي من عميل-770000001',
     ),
     _TplSpec(
-      senderCode: 'FLOOSAK',
-      variant: 'ar-hawala',
-      name: 'فلوسك — استلمت حوالة',
-      priority: 15,
-      pattern: 'استلمت حوالة من {account} بمبلغ {amount} ر.ي رصيدك {ref} ر.ي',
-      sampleBody: 'استلمت حوالة من محمد احمد بمبلغ 200.00 ر.ي رصيدك 600.00 ر.ي',
-    ),
-    _TplSpec(
-      senderCode: 'FLOOSAK',
+      walletKey: 'Floosak',
+      senderCode: 'Floosak',
       variant: 'sms-generic',
       name: 'فلوسك — تحويل عام',
-      priority: 20,
+      priority: 30,
       pattern: 'تم استلام {amount} من {phone}',
       sampleBody: 'تم استلام 2000 من 770000001',
+    ),
+    // ── الكريمي — KuraimiLMB ─────────────────────────────────────────────
+    _TplSpec(
+      walletKey: 'KuraimiLMB',
+      senderCode: 'KuraimiLMB',
+      variant: 'ar-deposit',
+      name: 'الكريمي — إيداع لحسابك',
+      priority: 10,
+      pattern: 'أودع/ {account} لحسابك مبلغ {amount} رصيدك {ref} YER',
+      sampleBody:
+          'أودع/احمد جابر حسن المنتصر لحسابك مبلغ 600 رصيدك 10030 YER',
+    ),
+    // ── ون كاش — ONE Cash ────────────────────────────────────────────────
+    _TplSpec(
+      walletKey: 'ONE Cash',
+      senderCode: 'ONE Cash',
+      variant: 'ar-received',
+      name: 'ون كاش — استلمت',
+      priority: 10,
+      pattern: 'استملت {amount} من {account} رصيدك هوه {ref} ر.ي',
+      sampleBody:
+          'استملت 200.00 من وسام مرشد علي حمود رصيدك هوه 252.33 ر.ي',
+    ),
+    _TplSpec(
+      walletKey: 'ONE Cash',
+      senderCode: 'ONE Cash',
+      variant: 'ar-shared',
+      name: 'ون كاش — تحويل مشترك',
+      priority: 20,
+      pattern:
+          'اضيف {amount} ر.ي تحويل مشترك رص:{ref} ر.ي من {account}-{phone}',
+      sampleBody:
+          'اضيف 1000 ر.ي تحويل مشترك رص:1000 ر.ي من عميل-771234567',
+    ),
+    _TplSpec(
+      walletKey: 'ONE Cash',
+      senderCode: 'ONE Cash',
+      variant: 'ar-hawala',
+      name: 'ون كاش — استلمت حوالة',
+      priority: 30,
+      pattern: 'استلمت حوالة من {account} بمبلغ {amount} ر.ي رصيدك {ref} ر.ي',
+      sampleBody: 'استلمت حوالة من عميل بمبلغ 500.00 ر.ي رصيدك 1500.00 ر.ي',
+    ),
+    _TplSpec(
+      walletKey: 'ONE Cash',
+      senderCode: 'ONE Cash',
+      variant: 'sms-generic',
+      name: 'ون كاش — تحويل عام',
+      priority: 40,
+      pattern: 'تم استلام {amount} من {phone}',
+      sampleBody: 'تم استلام 1000 من 771234567',
     ),
   ];
 }
 
 final class _TplSpec {
   const _TplSpec({
+    required this.walletKey,
     required this.senderCode,
     required this.variant,
     required this.name,
@@ -286,7 +386,12 @@ final class _TplSpec {
     required this.sampleBody,
   });
 
+  /// مفتاح المحفظة الداخلي في [DefaultWalletSpecs].
+  final String walletKey;
+
+  /// قيمة `Sender ID` الرسمية المرتبطة بالقالب.
   final String senderCode;
+
   final String variant;
   final String name;
   final int priority;

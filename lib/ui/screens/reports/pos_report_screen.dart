@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../perf/screen_open_trace.dart';
 
 import '../../../domain/services/report_pdf_service.dart';
 import '../../services/report_pdf_export.dart';
@@ -62,6 +63,7 @@ class _PosReportScreenState extends State<PosReportScreen> {
     if (!mounted) return;
     if (listed is Failure || accounts is Failure) {
       setState(() {
+        ScreenOpenTrace.instance.markLatestDataReady(ScreenOpenIds.posReport);
         _loading = false;
         _error = 'تعذر تحميل نقاط البيع';
       });
@@ -99,6 +101,7 @@ class _PosReportScreenState extends State<PosReportScreen> {
     if (!mounted) return;
     final autoVal = auto is Success<AppSetting?> ? auto.value?.value : null;
     setState(() {
+      ScreenOpenTrace.instance.markLatestDataReady(ScreenOpenIds.posReport);
       _loading = false;
       _items = rows;
       _autoSettle = SettingBool.read(

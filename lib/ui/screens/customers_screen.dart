@@ -11,6 +11,7 @@ import '../../core/result.dart';
 import '../../domain/entities/customer.dart';
 import '../../domain/entities/money.dart';
 import '../app_scope.dart';
+import '../perf/screen_open_trace.dart';
 import '../routing/app_routes.dart';
 import '../theme/kayan_palette.dart';
 import '../theme/net_semantic_colors.dart';
@@ -135,6 +136,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
     final result = await c.customers.search(query);
     if (!mounted) return;
     if (result is Failure<List<Customer>>) {
+      ScreenOpenTrace.instance.markLatestDataReady('accounts');
       setState(() {
         _loading = false;
         _error = result.error.message;
@@ -162,6 +164,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
     }
 
     if (!mounted) return;
+    ScreenOpenTrace.instance.markLatestDataReady('accounts');
     setState(() {
       _loading = false;
       _allRows = rows;

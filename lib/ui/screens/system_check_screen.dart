@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/result.dart';
 import '../../domain/entities/system_capability.dart';
 import '../app_scope.dart';
+import '../perf/screen_open_trace.dart';
 import '../theme/kayan_palette.dart';
 import '../theme/net_semantic_colors.dart';
 import '../theme/net_tokens.dart';
@@ -39,12 +40,14 @@ class _SystemCheckScreenState extends State<SystemCheckScreen> {
     if (!mounted) return;
     if (r is Failure<SystemHealthSnapshot>) {
       setState(() {
+        ScreenOpenTrace.instance.markLatestDataReady(ScreenOpenIds.systemCheck);
         _loading = false;
         _error = r.error.message;
       });
       return;
     }
     setState(() {
+      ScreenOpenTrace.instance.markLatestDataReady(ScreenOpenIds.systemCheck);
       _loading = false;
       _snapshot = (r as Success<SystemHealthSnapshot>).value;
     });
@@ -61,6 +64,57 @@ class _SystemCheckScreenState extends State<SystemCheckScreen> {
       setState(() => _snapshot = r.value);
     }
   }
+
+
+  Widget _openTraceCard(KayanPalette palette) {
+    final samples = ScreenOpenTrace.instance.samples.reversed.take(6).toList();
+    return NetSurfaceCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'زمن فتح الشاشات',
+            style: TextStyle(
+              fontFamily: 'Tajawal',
+              fontWeight: FontWeight.w800,
+              color: palette.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'قياس محلي لآخر التنقلات في هذه الجلسة. اكتمال البيانات للتبويبات والشاشات المدفوعة وأوراق المخزون والبث. ليس ميزانية معتمدة ولا دليل جهاز.',
+            style: TextStyle(
+              fontFamily: 'Tajawal',
+              fontSize: 12,
+              height: 1.35,
+              color: palette.textSecondary,
+            ),
+          ),
+          const SizedBox(height: 8),
+          if (samples.isEmpty)
+            Text(
+              'لا توجد تنقلات مقيسة بعد.',
+              style: TextStyle(fontFamily: 'Tajawal', color: palette.textSecondary),
+            )
+          else
+            for (final sample in samples)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Text(
+                  '${sample.screenId} · ${sample.kind} · إطار ${_ms(sample.firstFrame)} · بيانات ${_ms(sample.dataReady)}',
+                  style: TextStyle(
+                    fontFamily: 'Tajawal',
+                    fontSize: 12,
+                    color: palette.textPrimary,
+                  ),
+                ),
+              ),
+        ],
+      ),
+    );
+  }
+
+  String _ms(Duration? value) => value == null ? '—' : '${value.inMilliseconds} ms';
 
   Color _levelColor(SystemHealthLevel level) {
     final net = context.netColors;
@@ -175,6 +229,8 @@ class _SystemCheckScreenState extends State<SystemCheckScreen> {
               ],
             ),
           ),
+          const SizedBox(height: NetSpacing.lg),
+          _openTraceCard(palette),
           const SizedBox(height: NetSpacing.lg),
           _section(
             palette: palette,

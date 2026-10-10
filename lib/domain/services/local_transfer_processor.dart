@@ -25,6 +25,8 @@ import 'local_category_commission_store.dart';
 import 'pos_wholesale_pricing.dart';
 import 'pos_order_message_renderer.dart';
 import 'outbound_template_renderer.dart';
+import 'customer_deposit_block.dart';
+import 'deposit_debt_priority.dart';
 
 /// Completes the real incoming-transfer business flow using the existing
 /// catalog, inventory, sale and native SMS boundaries.
@@ -393,6 +395,25 @@ final class LocalTransferProcessor implements TransferProcessor {
       }
     }
 
+    if (!isPosOrder && resolution.customer != null && settings != null) {
+      final blocked = await _depositsBlocked(resolution.customer!.id);
+      if (blocked) {
+        const failure = AppFailure(
+          code: 'deposits_blocked',
+          message: 'Customer deposits are blocked',
+        );
+        await _persistTerminalFailure(
+          messageId: message.id,
+          status: MessageProcessingStatus.rejected,
+          action: 'deposits_blocked',
+          error: failure,
+          transfer: transfer,
+          deliveryPhone: resolution.deliveryPhone,
+        );
+        return const Failure<Transaction>(failure);
+      }
+    }
+
     final bindPhone =
         (resolution.deliveryPhone ?? transfer.customerIdentifier).trim();
     if (!isPosOrder &&
@@ -560,7 +581,20 @@ final class LocalTransferProcessor implements TransferProcessor {
       }
       final settled = (settlement as Success<AdvancePaymentResult>).value;
       effectiveAmount = settled.remaining;
-      if (effectiveAmount.minorUnits == 0) {
+      final afterDebt = DepositDebtPriority.decide(
+        appliedMinorUnits: settled.applied.minorUnits,
+        remainingMinorUnits: effectiveAmount.minorUnits,
+      );
+      if (afterDebt == DepositAfterDebt.creditSurplusNoCard) {
+        return _creditSalafniSurplus(
+          message: message,
+          transfer: transfer,
+          customerId: customer.id,
+          surplus: effectiveAmount,
+          appliedMinorUnits: settled.applied.minorUnits,
+        );
+      }
+      if (afterDebt == DepositAfterDebt.settlementOnly) {
         final settlementTransaction = settled.settlementTransaction;
         if (settlementTransaction == null) {
           const failure = AppFailure(
@@ -700,6 +734,15 @@ final class LocalTransferProcessor implements TransferProcessor {
         transfer: transfer,
         deliveryPhone: destination,
       );
+      if (failure.code == 'out_of_stock' && !isPosOrder) {
+        await _notifyDepositNoStock(
+          customer: customer,
+          destination: destination,
+          amount: effectiveAmount,
+          messageId: message.id,
+          sender: sender,
+        );
+      }
       return Failure<Transaction>(failure);
     }
     final card = (reserved as Success<Card>).value;
@@ -807,6 +850,9 @@ final class LocalTransferProcessor implements TransferProcessor {
       serialNumber: card.serialNumber,
       secretCode: card.secretCode,
       cardValue: (category.faceValue.minorUnits / 100).toString(),
+      channel: isPosOrder
+          ? CardDeliveryChannel.legacy
+          : CardDeliveryChannel.cash,
     );
     if (rendered is Failure<String>) {
       await auditLogs.append(
@@ -1263,6 +1309,122 @@ final class LocalTransferProcessor implements TransferProcessor {
     return Success<Transaction>(tx);
   }
 
+  /// يحفظ باقي الإيداع بعد سداد سلفني رصيدًا للعميل بلا كرت.
+  ///
+  /// القاعدة المعتمدة في `docs/phase-deposit-debt-priority-2026-10-09.md`:
+  /// المبلغ المستخدم في السداد لا يحجز كرتًا ولا يبيعه ولا يرسله، والباقي لا
+  /// يشتري كرتًا قبل قرار المالك. المرجع ثابت لكل رسالة، وخدمة الرصيد ترجع
+  /// القيد نفسه للمرجع نفسه، فلا يتكرر القيد عند إعادة معالجة الرسالة.
+  Future<Result<Transaction>> _creditSalafniSurplus({
+    required IncomingMessage message,
+    required ParsedTransfer transfer,
+    required String customerId,
+    required Money surplus,
+    required int appliedMinorUnits,
+  }) async {
+    final depositReference = transfer.reference.trim();
+    final ref =
+        'salafni-surplus:${depositReference.isEmpty ? message.id : depositReference}';
+    final credit = await balances.credit(
+      customerId: customerId,
+      amount: surplus,
+      reference: ref,
+    );
+    if (credit is Failure<Transaction>) {
+      await _persistTerminalFailure(
+        messageId: message.id,
+        status: MessageProcessingStatus.failed,
+        action: 'salafni_surplus_credit_failed',
+        error: credit.error,
+        transfer: transfer,
+      );
+      return Failure<Transaction>(credit.error);
+    }
+    final tx = (credit as Success<Transaction>).value;
+    await messages.updateStatus(message.id, MessageProcessingStatus.processed);
+    await auditLogs.append(
+      AuditLog(
+        id: ids.next('audit'),
+        entityType: 'message',
+        entityId: message.id,
+        action: 'salafni_surplus_held_as_balance',
+        occurredAt: clock.now(),
+        payloadJson:
+            '{"transactionId":"${tx.id}","customerId":"$customerId",'
+            '"appliedMinorUnits":$appliedMinorUnits,'
+            '"surplusMinorUnits":${surplus.minorUnits},'
+            '"currency":"${surplus.currencyCode}"}',
+      ),
+    );
+    return Success<Transaction>(tx);
+  }
+
+  /// يُرسل قالب «إيداع بلا كرت» دون أن يفشل مسار الرفض إن تعذّر الإرسال.
+  ///
+  /// لا يُمرَّر `{المستخدم}` لأن المستخدم في التطبيق هو المشغّل، ولا يوجد حتى
+  /// الآن مصدر معتمد لاسمه؛ تمرير اسم العميل في هذا المتغير يُرسل بيانات
+  /// مضللة، لذا يبقى المتغير معلنًا بلا قيمة إلى أن يحدد المالك مصدره.
+  Future<void> _notifyDepositNoStock({
+    required Customer customer,
+    required String destination,
+    required Money amount,
+    required String messageId,
+    required MessageSender sender,
+  }) async {
+    final phone = destination.trim();
+    if (phone.isEmpty) return;
+    final first = customer.displayName.trim().split(RegExp(r'\s+')).first;
+    final amountText = _majorAmountText(amount);
+    final rendered = await OutboundTemplateRenderer(settings: settings)
+        .renderRegistered(
+      key: SettingKeys.depositNoStockTemplate,
+      values: {
+        'اسم_الزبون_الاول': first.isEmpty ? customer.displayName : first,
+        'customer_name': customer.displayName,
+        'المبلغ': amountText,
+        'amount': amountText,
+        'AMOUNT': amountText,
+      },
+    );
+    if (rendered is Failure<String>) {
+      await auditLogs.append(
+        AuditLog(
+          id: ids.next('audit'),
+          entityType: 'message',
+          entityId: messageId,
+          action: 'deposit_no_stock_template_failed',
+          occurredAt: clock.now(),
+          payloadJson: '{"error":"${rendered.error.code}"}',
+        ),
+      );
+      return;
+    }
+    final send = await sender.send(
+      destination: phone,
+      body: (rendered as Success<String>).value,
+    );
+    await auditLogs.append(
+      AuditLog(
+        id: ids.next('audit'),
+        entityType: 'message',
+        entityId: messageId,
+        action: send is Success<void>
+            ? 'deposit_no_stock_notified'
+            : 'deposit_no_stock_send_failed',
+        occurredAt: clock.now(),
+        payloadJson: '{"destination":"$phone"}',
+      ),
+    );
+  }
+
+  /// نص المبلغ بالوحدة الكبرى للرسائل: بلا كسور عشرية عند القيمة الصحيحة.
+  static String _majorAmountText(Money money) {
+    final major = money.minorUnits / 100;
+    return major == major.roundToDouble()
+        ? major.toStringAsFixed(0)
+        : major.toStringAsFixed(2);
+  }
+
   Future<Result<List<CardCategory>>> _matchActiveCategory(Money amount) async {
     final categoriesRepo = categories!;
     final now = clock.now();
@@ -1439,6 +1601,14 @@ final class LocalTransferProcessor implements TransferProcessor {
     );
   }
 
+  Future<bool> _depositsBlocked(String customerId) async {
+    final repo = settings;
+    if (repo == null) return false;
+    final current = await repo.find(CustomerDepositBlock.key);
+    if (current is! Success<AppSetting?>) return false;
+    return CustomerDepositBlock.isBlocked(current.value?.value, customerId);
+  }
+
   Future<void> _persistTerminalFailure({
     required String messageId,
     required MessageProcessingStatus status,
@@ -1595,6 +1765,15 @@ final class LocalTransferProcessor implements TransferProcessor {
           transfer: transfer,
           deliveryPhone: destination,
         );
+        if (failure.code == 'out_of_stock' && !isPosOrder) {
+          await _notifyDepositNoStock(
+            customer: customer,
+            destination: destination,
+            amount: transfer.amount,
+            messageId: message.id,
+            sender: sender,
+          );
+        }
         return Failure<Transaction>(failure);
       }
       final item = (card: (reserved as Success<Card>).value, reservationId: reservationId);

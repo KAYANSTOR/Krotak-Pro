@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../core/result.dart';
 import '../../../domain/entities/setting.dart';
 import '../../app_scope.dart';
+import '../../perf/screen_open_trace.dart';
 import '../../theme/kayan_palette.dart';
 import '../../theme/net_semantic_colors.dart';
 
@@ -40,6 +41,7 @@ class _LowStockSettingsScreenState extends State<LowStockSettingsScreen> {
     final raw = r is Success<AppSetting?> ? r.value?.value : null;
     final value = SettingInt.read(raw, defaultValue: SettingDefaults.lowStockThreshold);
     final allowed = await c.stockAlertNotifier.hasPermission();
+    ScreenOpenTrace.instance.markLatestDataReady(ScreenOpenIds.lowStockSettings);
     if (!mounted) return;
     setState(() {
       _ctrl.text = '$value';

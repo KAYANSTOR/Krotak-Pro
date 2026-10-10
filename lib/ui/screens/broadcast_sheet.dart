@@ -6,6 +6,7 @@ import '../../domain/entities/customer.dart';
 import '../../domain/entities/pos_account.dart';
 import '../../domain/entities/wallet.dart';
 import '../app_scope.dart';
+import '../perf/screen_open_trace.dart';
 import '../theme/kayan_palette.dart';
 import '../theme/net_semantic_colors.dart';
 import '../theme/net_tokens.dart';
@@ -21,6 +22,7 @@ class BroadcastSheet extends StatefulWidget {
   const BroadcastSheet({super.key});
 
   static Future<void> show(BuildContext context) async {
+    ScreenOpenTrace.instance.beginSheet(ScreenOpenIds.broadcastSheet);
     await NetSheet.show<void>(
       context,
       builder: (ctx) => const BroadcastSheet(),
@@ -53,7 +55,10 @@ class _BroadcastSheetState extends State<BroadcastSheet> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _loadTargets());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ScreenOpenTrace.instance.markLatestFirstFrame(ScreenOpenIds.broadcastSheet);
+      _loadTargets();
+    });
   }
 
   @override
@@ -78,6 +83,7 @@ class _BroadcastSheetState extends State<BroadcastSheet> {
         _error = customers.error.message;
       }
     });
+    ScreenOpenTrace.instance.markLatestDataReady(ScreenOpenIds.broadcastSheet);
     await _refreshPreview();
   }
 

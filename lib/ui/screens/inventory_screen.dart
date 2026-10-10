@@ -12,6 +12,7 @@ import '../../domain/services/card_import_parser.dart';
 import '../../domain/services/card_import_preview.dart';
 import '../../domain/services/services.dart';
 import '../app_scope.dart';
+import '../perf/screen_open_trace.dart';
 import '../labels/net_labels.dart';
 import '../theme/kayan_palette.dart';
 import '../theme/net_semantic_colors.dart';
@@ -70,6 +71,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
     final cards = await c.cards.listAll();
     if (!mounted) return;
     if (cats is Failure || cards is Failure) {
+      ScreenOpenTrace.instance.markLatestDataReady('cards');
       setState(() {
         _loading = false;
         _error = cats is Failure
@@ -78,6 +80,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
       });
       return;
     }
+    ScreenOpenTrace.instance.markLatestDataReady('cards');
     setState(() {
       _loading = false;
       _categories = (cats as Success<List<domain.CardCategory>>).value;

@@ -260,6 +260,12 @@ final class InMemoryCustomerRepository implements CustomerRepository {
     _identifiers[identifier.id] = identifier;
     return const Success(null);
   }
+
+  @override
+  Future<Result<void>> deleteIdentifier(String id) async {
+    _identifiers.remove(id);
+    return const Success(null);
+  }
 }
 
 final class InMemoryCardRepository implements CardRepository {

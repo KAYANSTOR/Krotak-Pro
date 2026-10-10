@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../perf/screen_open_trace.dart';
 
 import '../../../domain/entities/setting.dart';
 import '../../../domain/ledger.dart';
@@ -119,6 +120,7 @@ class _PosAccountsLedgerScreenState extends State<PosAccountsLedgerScreen> {
     if (!mounted) return;
     if (listed is Failure || accounts is Failure) {
       setState(() {
+        ScreenOpenTrace.instance.markLatestDataReady(ScreenOpenIds.posAccountsLedger);
         _loading = false;
         _error = 'تعذر تحميل نقاط البيع';
       });
@@ -166,6 +168,7 @@ class _PosAccountsLedgerScreenState extends State<PosAccountsLedgerScreen> {
         .compareTo(a.debtMinor + a.prepaidMinor));
     if (!mounted) return;
     setState(() {
+      ScreenOpenTrace.instance.markLatestDataReady(ScreenOpenIds.posAccountsLedger);
       _loading = false;
       _rows = rows;
     });
