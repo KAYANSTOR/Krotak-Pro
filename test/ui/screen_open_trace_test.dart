@@ -63,6 +63,7 @@ void main() {
     expect(trace.samples.single.firstFrame, const Duration(milliseconds: 12));
     expect(trace.samples.single.dataReady, const Duration(milliseconds: 30));
   });
+}
 
   test('شاشات الإعدادات ذات القائمة تُعلَّم مرة واحدة بمعرّف ثابت', () {
     final opened = DateTime(2026, 10, 9, 14);
@@ -80,7 +81,6 @@ void main() {
       'wallet_notification_settings',
       'low_stock_settings',
       'outbound_templates',
-    });
+    ]);
     expect(trace.samples.every((s) => s.dataReady == const Duration(milliseconds: 20)), isTrue);
   });
-}
