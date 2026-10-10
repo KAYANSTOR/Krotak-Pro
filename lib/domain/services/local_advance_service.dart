@@ -41,7 +41,10 @@ final class LocalAdvanceService implements AdvanceService {
       'تم تفعيل سلفني بقيمة {amount} ريال. الكرت: {serial} | الرمز: {code}';
   static const defaultRejected = 'تعذر تنفيذ سلفني: {reason}';
   static const defaultSettled =
-      'تم تسديد سلفني بقيمة {amount} ريال. المتبقي من السلفة: {remaining} ريال.';
+      'تم استلام إيداع بمبلغ {amount} {CURRENCY}\n'
+      'تم خصم {paid} {CURRENCY} لسداد السلفة\n'
+      'تم إضافة {surplus} {CURRENCY} إلى رصيد حسابك\n'
+      'رصيدك الحالي: {balance} {CURRENCY}';
 
   final AdvanceRepository advances;
   final CustomerRepository customers;
@@ -339,16 +342,13 @@ final class LocalAdvanceService implements AdvanceService {
       return const Failure(AppFailure(
           code: 'invalid_amount', message: 'مبلغ السداد يجب أن يكون موجبًا'));
     // كل كتابات السداد (الحركات + التدقيق) داخل معاملة واحدة: لا يُخصَّص جزء من
-    // الدفعة ثم يتعثر الباقي. رسائل الإشعار تُرسل بعد نجاح الالتزام فقط.
+    // الدفعة ثم يتعثر الباقي. إشعار العميل يُرسل من مسار الإيداع بعد تثبيت
+    // الفائض، حتى يكون {balance} هو الرصيد الجديد الفعلي.
     final applied = await unitOfWork.run(
       () => _applyPayment(
           customerId: customerId, amount: amount, reference: reference),
     );
     if (applied is Failure<AdvancePaymentResult>) return applied;
-    for (final notice
-        in (applied as Success<AdvancePaymentResult>).value.notices) {
-      await notice();
-    }
     return applied;
   }
 
@@ -395,7 +395,7 @@ final class LocalAdvanceService implements AdvanceService {
     // حين لا يطابق الباقي فئة نشطة، فيبقى الدين قائمًا بلا سبب.
     var remaining = amount.minorUnits - priorApplied;
     var applied = priorApplied;
-    final notices = <Future<void> Function()>[];
+    var didApply = false;
     for (final advance in open) {
       if (remaining <= 0) break;
       final pay = remaining > advance.outstanding.minorUnits
@@ -414,6 +414,7 @@ final class LocalAdvanceService implements AdvanceService {
       final saved = await transactions.append(payment);
       if (saved is Failure<void>) return Failure(saved.error);
       lastSettlement = payment;
+      didApply = true;
       applied += pay;
       remaining -= pay;
       final nowRemaining = advance.outstanding.minorUnits - pay;
@@ -425,33 +426,13 @@ final class LocalAdvanceService implements AdvanceService {
           occurredAt: clock.now(),
           payloadJson:
               '{"paymentReference":"${_escape(reference)}","applied":$pay,"remaining":$nowRemaining}'));
-      final settledAmount =
-          Money(minorUnits: pay, currencyCode: amount.currencyCode);
-      final settledRemaining =
-          Money(minorUnits: nowRemaining, currencyCode: amount.currencyCode);
-      final settledAmountText = _money(settledAmount);
-      final settledRemainingText = _money(settledRemaining);
-      notices.add(() async {
-        final destination = await _deliveryPhone(customerId);
-        if (destination.isEmpty) return;
-        final rendered = await _render(settledTemplateKey, {
-          'amount': settledAmountText,
-          'remaining': settledRemainingText,
-          'CURRENCY': 'ر.ي',
-        });
-        if (rendered is Failure<String>) return;
-        await messageSender.send(
-          destination: destination,
-          body: (rendered as Success<String>).value,
-        );
-      });
     }
     return Success(AdvancePaymentResult(
       applied: Money(minorUnits: applied, currencyCode: amount.currencyCode),
       remaining:
           Money(minorUnits: remaining, currencyCode: amount.currencyCode),
       settlementTransaction: lastSettlement,
-      notices: notices,
+      didApply: didApply,
     ));
   }
 

@@ -38,11 +38,15 @@ final class AdvancePaymentResult {
     required this.applied,
     required this.remaining,
     this.settlementTransaction,
+    this.didApply = false,
     this.notices = const [],
   });
   final Money applied;
   final Money remaining;
   final Transaction? settlementTransaction;
+
+  /// True only when this invocation appended at least one new settlement row.
+  final bool didApply;
 
   /// إشعارات السداد المؤجلة: الحركات والتدقيق تُثبَّت ذريًا أولًا، ثم تُرسل هذه
   /// الإشعارات بعد نجاح الالتزام حتى لا ترسل رسالة عن سداد لم يُكتب.

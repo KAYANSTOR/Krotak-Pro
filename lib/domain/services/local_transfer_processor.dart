@@ -586,13 +586,22 @@ final class LocalTransferProcessor implements TransferProcessor {
         remainingMinorUnits: effectiveAmount.minorUnits,
       );
       if (afterDebt == DepositAfterDebt.creditSurplusNoCard) {
-        return _creditSalafniSurplus(
+        final credited = await _creditSalafniSurplus(
           message: message,
           transfer: transfer,
           customerId: customer.id,
           surplus: effectiveAmount,
           appliedMinorUnits: settled.applied.minorUnits,
         );
+        if (credited is Success<Transaction> && settled.didApply) {
+          await _notifySalafniSettlement(
+            customerId: customer.id,
+            amount: transfer.amount,
+            paid: settled.applied,
+            surplus: effectiveAmount,
+          );
+        }
+        return credited;
       }
       if (afterDebt == DepositAfterDebt.settlementOnly) {
         final settlementTransaction = settled.settlementTransaction;
@@ -610,6 +619,14 @@ final class LocalTransferProcessor implements TransferProcessor {
             deliveryPhone: destination,
           );
           return const Failure<Transaction>(failure);
+        }
+        if (settled.didApply) {
+          await _notifySalafniSettlement(
+            customerId: customer.id,
+            amount: transfer.amount,
+            paid: settled.applied,
+            surplus: Money(minorUnits: 0, currencyCode: transfer.amount.currencyCode),
+          );
         }
         await messages.updateStatus(message.id, MessageProcessingStatus.processed);
         return Success<Transaction>(settlementTransaction);
@@ -1357,6 +1374,41 @@ final class LocalTransferProcessor implements TransferProcessor {
       ),
     );
     return Success<Transaction>(tx);
+  }
+
+  /// يرسل رسالة السداد بعد اكتمال السداد وتثبيت الفائض، بحيث تكون قيمة
+  /// `{balance}` مقروءة من الدفتر بعد آخر قيد فعلي لا من نص الإيداع.
+  Future<void> _notifySalafniSettlement({
+    required String customerId,
+    required Money amount,
+    required Money paid,
+    required Money surplus,
+  }) async {
+    final sender = messageSender;
+    if (sender == null) return;
+    final destination = await _deliveryPhone(customerId);
+    if (destination.isEmpty) return;
+    final balance = await balances.getBalance(
+      customerId: customerId,
+      currencyCode: amount.currencyCode,
+    );
+    if (balance is Failure<Money>) return;
+    final rendered = await OutboundTemplateRenderer(settings: settings)
+        .renderRegistered(
+      key: SettingKeys.salafniSettledTemplate,
+      values: {
+        'amount': _majorAmountText(amount),
+        'paid': _majorAmountText(paid),
+        'surplus': _majorAmountText(surplus),
+        'balance': _majorAmountText((balance as Success<Money>).value),
+        'CURRENCY': 'ر.ي',
+      },
+    );
+    if (rendered is Failure<String>) return;
+    await sender.send(
+      destination: destination,
+      body: (rendered as Success<String>).value,
+    );
   }
 
   /// يُرسل قالب «إيداع بلا كرت» دون أن يفشل مسار الرفض إن تعذّر الإرسال.
