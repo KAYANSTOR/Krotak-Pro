@@ -59,7 +59,9 @@ final class LocalSettlementService {
       );
     }
 
-    final settled = await unitOfWork.run(() async {
+    // النوع الصريح مهم: بلا <Transaction> يصبح T = dynamic ويرجع Failure<dynamic>
+    // لا يمكن إرجاعه من دالة نوعها Result<Transaction>.
+    final settled = await unitOfWork.run<Transaction>(() async {
       final found = await customers.findById(customerId);
       if (found is Failure<Customer?>) return Failure(found.error);
       final customer = (found as Success<Customer?>).value;
