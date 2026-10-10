@@ -586,13 +586,24 @@ final class LocalTransferProcessor implements TransferProcessor {
         remainingMinorUnits: effectiveAmount.minorUnits,
       );
       if (afterDebt == DepositAfterDebt.creditSurplusNoCard) {
-        return _creditSalafniSurplus(
+        final result = await _creditSalafniSurplus(
           message: message,
           transfer: transfer,
           customerId: customer.id,
           surplus: effectiveAmount,
           appliedMinorUnits: settled.applied.minorUnits,
         );
+        if (result is Success<Transaction>) {
+          await _notifySalafniSettlement(
+            messageId: message.id,
+            phone: destination,
+            deposit: transfer.amount,
+            paid: settled.applied,
+            surplus: effectiveAmount,
+            customerId: customer.id,
+          );
+        }
+        return result;
       }
       if (afterDebt == DepositAfterDebt.settlementOnly) {
         final settlementTransaction = settled.settlementTransaction;
@@ -612,6 +623,14 @@ final class LocalTransferProcessor implements TransferProcessor {
           return const Failure<Transaction>(failure);
         }
         await messages.updateStatus(message.id, MessageProcessingStatus.processed);
+        await _notifySalafniSettlement(
+          messageId: message.id,
+          phone: destination,
+          deposit: transfer.amount,
+          paid: settled.applied,
+          surplus: Money(minorUnits: 0, currencyCode: transfer.amount.currencyCode),
+          customerId: customer.id,
+        );
         return Success<Transaction>(settlementTransaction);
       }
     }
@@ -1307,6 +1326,93 @@ final class LocalTransferProcessor implements TransferProcessor {
       ),
     );
     return Success<Transaction>(tx);
+  }
+
+
+  /// يُرسل رسالة سداد سلفني بعد نجاح المعاملة، بالمبالغ الحقيقية.
+  ///
+  /// لا يفشل المسار إن تعذّر الإرسال؛ التدقيق يسجّل النتيجة. الرسالة لا تُعاد
+  /// إذا سبق تسجيل إرسال ناجح لنفس الرسالة.
+  Future<void> _notifySalafniSettlement({
+    required String messageId,
+    required String phone,
+    required Money deposit,
+    required Money paid,
+    required Money surplus,
+    required String customerId,
+  }) async {
+    if (messageSender == null || settings == null || phone.trim().isEmpty) {
+      return;
+    }
+    // Idempotency: skip if already notified successfully.
+    final existing = await auditLogs.findByEntity('message', messageId);
+    if (existing is Success<List<AuditLog>>) {
+      final already = existing.value.any(
+        (log) => log.action == 'salafni_settlement_notified',
+      );
+      if (already) return;
+    }
+
+    final balanceResult = await balances.getBalance(
+      customerId: customerId,
+      currencyCode: deposit.currencyCode,
+    );
+    final balance = balanceResult is Success<Money>
+        ? balanceResult.value
+        : Money(minorUnits: 0, currencyCode: deposit.currencyCode);
+
+    final depositText = _majorAmountText(deposit);
+    final paidText = _majorAmountText(paid);
+    final surplusText = _majorAmountText(surplus);
+    final balanceText = _majorAmountText(balance);
+    final currency = deposit.currencyCode == 'YER' ? 'ر.ي' : deposit.currencyCode;
+
+    final rendered = await OutboundTemplateRenderer(settings: settings)
+        .renderRegistered(
+      key: SettingKeys.salafniSettledTemplate,
+      values: {
+        'amount': depositText,
+        'AMOUNT': depositText,
+        'paid': paidText,
+        'PAID': paidText,
+        'surplus': surplusText,
+        'SURPLUS': surplusText,
+        'remaining': surplusText, // compatibility
+        'balance': balanceText,
+        'BALANCE': balanceText,
+        'CURRENCY': currency,
+      },
+    );
+    if (rendered is Failure<String>) {
+      await auditLogs.append(
+        AuditLog(
+          id: ids.next('audit'),
+          entityType: 'message',
+          entityId: messageId,
+          action: 'salafni_settlement_template_failed',
+          occurredAt: clock.now(),
+          payloadJson: '{"error":"${rendered.error.code}"}',
+        ),
+      );
+      return;
+    }
+    final send = await messageSender!.send(
+      destination: phone.trim(),
+      body: (rendered as Success<String>).value,
+    );
+    await auditLogs.append(
+      AuditLog(
+        id: ids.next('audit'),
+        entityType: 'message',
+        entityId: messageId,
+        action: send is Success<void>
+            ? 'salafni_settlement_notified'
+            : 'salafni_settlement_send_failed',
+        occurredAt: clock.now(),
+        payloadJson:
+            '{"destination":"$phone","deposit":"$depositText","paid":"$paidText","surplus":"$surplusText","balance":"$balanceText"}',
+      ),
+    );
   }
 
   /// يحفظ باقي الإيداع بعد سداد سلفني رصيدًا للعميل بلا كرت.

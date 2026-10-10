@@ -41,7 +41,7 @@ final class LocalAdvanceService implements AdvanceService {
       'تم تفعيل سلفني بقيمة {amount} ريال. الكرت: {serial} | الرمز: {code}';
   static const defaultRejected = 'تعذر تنفيذ سلفني: {reason}';
   static const defaultSettled =
-      'تم تسديد سلفني بقيمة {amount} ريال. المتبقي من السلفة: {remaining} ريال.';
+      'تم استلام إيداع بمبلغ {amount} {CURRENCY}\nتم خصم {paid} {CURRENCY} لسداد السلفة\nتم إضافة {surplus} {CURRENCY} إلى رصيد حسابك\nرصيدك الحالي: {balance} {CURRENCY}';
 
   final AdvanceRepository advances;
   final CustomerRepository customers;
