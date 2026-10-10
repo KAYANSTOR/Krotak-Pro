@@ -9,6 +9,8 @@ import 'package:net_app/platform/visible_storage_bridge.dart';
 /// النجاح يُرجع المسار الفعلي، والفشل يُترجم إلى رسالة عربية مفهومة،
 /// وغياب المنصة (MissingPluginException) لا يُسقط التطبيق.
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   const channel = MethodChannel('com.kayan.net/storage');
   final bytes = Uint8List.fromList(List<int>.generate(64, (i) => i));
 

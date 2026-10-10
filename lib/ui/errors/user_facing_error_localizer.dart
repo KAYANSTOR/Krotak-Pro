@@ -31,11 +31,12 @@ abstract final class UserFacingErrorLocalizer {
     final normalized = code.trim();
     final known = _byCode[normalized];
     if (known != null) return known;
-    final rejectionAction = _rejectionActions[normalized];
-    if (rejectionAction != null || RejectionCodeLabels.ar.containsKey(normalized)) {
+    final rejectionMessage = _rejectionMessages[normalized];
+    if (rejectionMessage != null) return rejectionMessage;
+    if (RejectionCodeLabels.ar.containsKey(normalized)) {
       return UserFacingMessage(
         RejectionCodeLabels.labelAr(normalized),
-        action: rejectionAction ?? 'راجع الرسالة ثم أعد المحاولة.',
+        action: _rejectionActions[normalized] ?? 'راجع الرسالة ثم أعد المحاولة.',
       );
     }
     return generic;
@@ -256,19 +257,78 @@ abstract final class UserFacingErrorLocalizer {
 
   };
 
+  /// نصوص الرفض بالصيغة المخزّنة فعلًا في الرسائل (snake_case) — نص عربي كامل
+  /// لكل رمز، بلا الاعتماد على مفاتيح خريطة أخرى.
+  static const Map<String, UserFacingMessage> _rejectionMessages = {
+    'voucher_send_failed': UserFacingMessage(
+      'فشل إرسال الكرت بعد استنفاد المحاولات.',
+      action: 'أعد المحاولة أو أرسل الكرت يدوياً.',
+    ),
+    'voucher_unavailable': UserFacingMessage(
+      'لا يوجد مخزون كروت كافٍ في الفئة المطلوبة.',
+      action: 'استورد كروتاً لهذه الفئة.',
+    ),
+    'missing_fields': UserFacingMessage(
+      'بيانات أساسية مفقودة في الرسالة.',
+      action: 'راجع صيغة الرسالة مع العميل.',
+    ),
+    'category_mismatch': UserFacingMessage(
+      'المبلغ لا يطابق أي فئة كروت نشطة.',
+      action: 'أضف فئة مطابقة للمبلغ أو راجع الفئات.',
+    ),
+    'blacklisted': UserFacingMessage(
+      'رقم جوال العميل مدرج في القائمة السوداء.',
+      action: 'راجع حالة العميل قبل إعادة المحاولة.',
+    ),
+    'parse_failure': UserFacingMessage(
+      'تعذر تحليل الرسالة.',
+      action: 'راجع القالب النشط للمحفظة.',
+    ),
+    'no_active_template': UserFacingMessage(
+      'لا يوجد قالب نشط مطابق للمحفظة.',
+      action: 'أضف قالباً نشطاً لهذه المحفظة.',
+    ),
+    'unknown_sender': UserFacingMessage(
+      'مرسل غير معروف أو غير مهيأ.',
+      action: 'أضف المرسل كمحفظة أو نقطة بيع.',
+    ),
+    'duplicate_transaction': UserFacingMessage(
+      'عملية تحويل مكررة.',
+      action: 'راجع العملية الأصلية في سجل العمليات.',
+    ),
+    'invalid_format': UserFacingMessage(
+      'تنسيق الرسالة غير صالح.',
+      action: 'راجع صيغة الرسالة المعتمدة.',
+    ),
+    'license_blocked': UserFacingMessage(
+      'الترخيص يمنع المعالجة.',
+      action: 'راجع حالة الترخيص.',
+    ),
+    'credit_limit_exceeded': UserFacingMessage(
+      'تجاوز سقف الدين المسموح.',
+      action: 'راجع سقف الدين أو حصّل جزءاً من الرصيد.',
+    ),
+    'other': UserFacingMessage(
+      'سبب آخر.',
+      action: 'راجع الرسالة ثم أعد المحاولة.',
+    ),
+  };
+
+  /// إجراءات أكواد الرفض بصيغتها المعرّفة في `RejectionCodes` (camelCase).
   static const Map<String, String> _rejectionActions = {
-    'voucher_send_failed': 'أعد المحاولة أو أرسل الكرت يدوياً.',
-    'voucher_unavailable': 'استورد كروتاً لهذه الفئة.',
-    'missing_fields': 'راجع صيغة الرسالة مع العميل.',
-    'category_mismatch': 'أضف فئة مطابقة للمبلغ أو راجع الفئات.',
+    'voucherSendFailed': 'أعد المحاولة أو أرسل الكرت يدوياً.',
+    'voucherUnavailable': 'استورد كروتاً لهذه الفئة.',
+    'missingFields': 'راجع صيغة الرسالة مع العميل.',
+    'categoryMismatch': 'أضف فئة مطابقة للمبلغ أو راجع الفئات.',
     'blacklisted': 'راجع حالة العميل قبل إعادة المحاولة.',
-    'parse_failure': 'راجع القالب النشط للمحفظة.',
-    'no_active_template': 'أضف قالباً نشطاً لهذه المحفظة.',
-    'unknown_sender': 'أضف المرسل كمحفظة أو نقطة بيع.',
-    'duplicate_transaction': 'راجع العملية الأصلية في سجل العمليات.',
-    'invalid_format': 'راجع صيغة الرسالة المعتمدة.',
-    'license_blocked': 'راجع حالة الترخيص.',
-    'credit_limit_exceeded': 'راجع سقف الدين أو حصّل جزءاً من الرصيد.',
+    'parseFailure': 'راجع القالب النشط للمحفظة.',
+    'noActiveTemplate': 'أضف قالباً نشطاً لهذه المحفظة.',
+    'unknownSender': 'أضف المرسل كمحفظة أو نقطة بيع.',
+    'duplicateTransaction': 'راجع العملية الأصلية في سجل العمليات.',
+    'invalidFormat': 'راجع صيغة الرسالة المعتمدة.',
+    'licenseBlocked': 'راجع حالة الترخيص.',
+    'creditLimitExceeded': 'راجع سقف الدين أو حصّل جزءاً من الرصيد.',
+    'other': 'راجع الرسالة ثم أعد المحاولة.',
   };
 }
 
