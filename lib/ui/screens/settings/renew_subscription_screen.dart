@@ -8,6 +8,7 @@ import '../../theme/net_semantic_colors.dart';
 import '../../theme/net_tokens.dart';
 import '../../widgets/async_views.dart';
 import '../../widgets/net/net_surface_card.dart';
+import '../../errors/user_facing_error_localizer.dart';
 
 class RenewSubscriptionScreen extends StatefulWidget {
   const RenewSubscriptionScreen({super.key});
@@ -36,7 +37,7 @@ class _RenewSubscriptionScreenState extends State<RenewSubscriptionScreen> {
       if (r is Success<License>) {
         _current = '${r.value.status.name} · ينتهي ${r.value.expiresAt}';
       } else {
-        _current = (r as Failure).error.message;
+        _current = localizedError((r as Failure).error);
       }
     });
   }
@@ -56,7 +57,7 @@ class _RenewSubscriptionScreenState extends State<RenewSubscriptionScreen> {
       _busy = false;
       _status = r is Success<License>
           ? 'تم التجديد حتى ${r.value.expiresAt}'
-          : (r as Failure).error.message;
+          : localizedError((r as Failure).error);
     });
     await _load();
   }

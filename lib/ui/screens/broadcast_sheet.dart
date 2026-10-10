@@ -13,6 +13,7 @@ import '../theme/net_tokens.dart';
 import '../widgets/async_views.dart';
 import '../widgets/net/net_sheet.dart';
 import '../widgets/net/net_surface_card.dart';
+import '../errors/user_facing_error_localizer.dart';
 
 /// ورقة «إرسال رسالة للعملاء» — بث SMS جماعي بنطاق محدد.
 ///
@@ -80,7 +81,7 @@ class _BroadcastSheetState extends State<BroadcastSheet> {
           ? pos.value.where((e) => e.status == PointOfSaleStatus.active).length
           : 0;
       if (customers is Failure<List<Customer>>) {
-        _error = customers.error.message;
+        _error = localizedError(customers.error);
       }
     });
     ScreenOpenTrace.instance.markLatestDataReady(ScreenOpenIds.broadcastSheet);
@@ -111,7 +112,7 @@ class _BroadcastSheetState extends State<BroadcastSheet> {
         _error = null;
       } else {
         _preview = null;
-        _error = (result as Failure<BroadcastPreview>).error.message;
+        _error = localizedError((result as Failure<BroadcastPreview>).error);
       }
     });
   }
@@ -137,7 +138,7 @@ class _BroadcastSheetState extends State<BroadcastSheet> {
     if (confirmed is Failure<BroadcastJob>) {
       setState(() {
         _sending = false;
-        _error = confirmed.error.message;
+        _error = localizedError(confirmed.error);
       });
       return;
     }
@@ -153,7 +154,7 @@ class _BroadcastSheetState extends State<BroadcastSheet> {
     setState(() {
       _sending = false;
       if (ran is Failure<BroadcastJob>) {
-        _error = ran.error.message;
+        _error = localizedError(ran.error);
       } else {
         _job = (ran as Success<BroadcastJob>).value;
       }

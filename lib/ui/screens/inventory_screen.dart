@@ -24,6 +24,7 @@ import '../widgets/net/net_sparkline.dart';
 import '../widgets/net/net_surface_card.dart';
 import '../widgets/net/net_tab_header.dart';
 import 'inventory_categories_sheet.dart';
+import '../errors/user_facing_error_localizer.dart';
 
 part 'inventory_sheets.dart';
 
@@ -98,14 +99,14 @@ class _InventoryScreenState extends State<InventoryScreen> {
       setState(() {
         _loading = false;
         _error = cats is Failure
-            ? (cats as Failure<dynamic>).error.message
+            ? localizedError((cats as Failure<dynamic>).error)
             : cards is Failure
-                ? (cards as Failure<dynamic>).error.message
+                ? localizedError((cards as Failure<dynamic>).error)
                 : available is Failure
-                    ? (available as Failure<dynamic>).error.message
+                    ? localizedError((available as Failure<dynamic>).error)
                     : reserved is Failure
-                        ? (reserved as Failure<dynamic>).error.message
-                        : (sold as Failure<dynamic>).error.message;
+                        ? localizedError((reserved as Failure<dynamic>).error)
+                        : localizedError((sold as Failure<dynamic>).error);
       });
       return;
     }
@@ -257,7 +258,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
     if (next is Failure<List<domain.Card>>) {
       setState(() => _loadingMore = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('تعذّر تحميل المزيد: ${next.error.message}')),
+        SnackBar(content: Text('تعذّر تحميل المزيد: ${localizedError(next.error)}')),
       );
       return;
     }
@@ -290,7 +291,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            (r as Failure<dynamic>).error.message,
+            localizedError((r as Failure<dynamic>).error),
             style: const TextStyle(fontFamily: NetTypography.family),
           ),
         ),

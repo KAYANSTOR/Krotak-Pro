@@ -54,7 +54,7 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen> {
     setState(() {
       _loading = false;
       if (r is Failure) {
-        _error = (r as Failure).error.message;
+        _error = localizedError((r as Failure).error);
         _backups = const [];
       } else {
         _backups = (r as Success<List<File>>).value;
@@ -79,7 +79,7 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen> {
     if (!mounted) return;
     setState(() => _creating = false);
     if (r is Failure) {
-      setState(() => _status = (r as Failure).error.message);
+      setState(() => _status = localizedError((r as Failure).error));
       return;
     }
     final file = (r as Success<File>).value;
@@ -189,7 +189,7 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen> {
         final dbNote = report.databaseRestored ? ' مع استبدال قاعدة البيانات' : '';
         AppReloader.setNotice('تمت الاستعادة (${report.settingsCount} إعداد$dbNote)');
       } else if (r is Failure) {
-        AppReloader.setNotice('تعذّرت الاستعادة: ${(r as Failure).error.message}');
+        AppReloader.setNotice('تعذّرت الاستعادة: ${localizedError((r as Failure).error)}');
       }
       await AppReloader.reload();
       return;
@@ -198,7 +198,7 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen> {
     if (!mounted) return;
     setState(() => _restoring = false);
     if (r is Failure) {
-      setState(() => _status = (r as Failure).error.message);
+      setState(() => _status = localizedError((r as Failure).error));
       return;
     }
     final report = (r as Success).value;

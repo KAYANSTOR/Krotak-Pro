@@ -12,12 +12,12 @@
 | WP-S3 `UserFacingErrorLocalizer` | منجز | `95ffd1f`,`c7e4379` | `test/ui/user_facing_error_localizer_test.dart` | حارس مصدري: كل `code:` في `lib/**` له نص عربي بلا لاتيني |
 | WP-S2 `TemplateVariableRegistry` | قيد CI | `67de478` | `test/services/template_variable_registry_test.dart` | + `docs/exec/template-variables-inventory.md` (جرد من الكود) |
 | WP-S4 ترحيل DB إلى 6 | قيد | | | |
-| WP-3 بطاقة صيانة واحدة | قيد | | | يعتمد على WP-S1 |
-| WP-4 نسخ احتياطي ظاهر | قيد | | | يعتمد على WP-S1 |
+| WP-3 بطاقة صيانة واحدة | قيد CI | `254a5a8`,`40c9b1f` | `test/services/ledger_csv_export_service_test.dart` + `test/widget/maintenance_hub_screen_test.dart` | بطاقة واحدة + `MaintenanceHubScreen`؛ REINDEX فعلي + قياس الحجم؛ تصدير CSV حقيقي (BOM + كل الحركات) عبر WP-S1؛ حذف الشاشات الثلاث القديمة |
+| WP-4 نسخ احتياطي ظاهر | قيد CI | `51358e1` | `test/widget/backup_visible_copy_test.dart` | نسخ `.krt` إلى `Download/Krotak Pro/` مع إبقاء النسخة الداخلية + زر «مشاركة النسخة» |
 | WP-5 استيراد الكروت + إدارة الملفات | قيد | | | يعتمد على WP-S1/S4 |
 | WP-6 المتغيرات بلا تكرار | قيد | | | يعتمد على WP-S2 |
-| WP-7 المعلقة والمرفوضة بالعربية | قيد | | | يعتمد على WP-S3 |
-| WP-8 حفظ/مشاركة صورة الإشعار | قيد | | | يعتمد على WP-S1 |
+| WP-7 المعلقة والمرفوضة بالعربية | قيد CI | `51358e1`+ | `test/ui/ui_no_raw_errors_test.dart` | إزالة 112 موضعًا لـ`error.message` في 38 ملفًا عبر `localizedError`؛ ترجمة أسباب الرفض الرمزية مع إجراء؛ حارس مصدري |
+| WP-8 حفظ/مشاركة صورة الإشعار | قيد CI | `51358e1` | `test/widget/transaction_receipt_image_test.dart` | `TransactionReceiptCard` + `ReceiptImageService` (PNG)؛ إزالة حفظ TXT |
 | WP-9 توقف التطبيق في الخلفية | قيد | | | الدليل أولاً |
 | WP-10 اتساق المحافظ (P2) | قيد | | | |
 | الجرد النهائي + مصفوفة الأزرار (5.4) | قيد | | | بعد استقرار الواجهات |

@@ -5,6 +5,7 @@ import '../../../domain/entities/message.dart';
 import '../../../domain/services/template_performance_service.dart';
 import '../../app_scope.dart';
 import '../../widgets/net/net_app_bar_title.dart';
+import '../../errors/user_facing_error_localizer.dart';
 
 /// لوحة أداء القوالب الواردة — أي قالب يُطابق فعلياً وكم مرة.
 class TemplatePerformanceScreen extends StatefulWidget {
@@ -37,7 +38,7 @@ class _TemplatePerformanceScreenState extends State<TemplatePerformanceScreen> {
     if (listed is Failure<List<TransferTemplate>>) {
       setState(() {
         _loading = false;
-        _error = listed.error.message;
+        _error = localizedError(listed.error);
       });
       return;
     }

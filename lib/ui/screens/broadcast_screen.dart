@@ -11,6 +11,7 @@ import '../widgets/net/net_surface_card.dart';
 import '../../core/result.dart';
 import '../../domain/entities/broadcast.dart';
 import '../app_scope.dart';
+import '../errors/user_facing_error_localizer.dart';
 
 class BroadcastScreen extends StatefulWidget {
   const BroadcastScreen({super.key});
@@ -46,7 +47,7 @@ class _BroadcastScreenState extends State<BroadcastScreen> {
     setState(() {
       _loadingPreview = false;
       if (result is Failure<BroadcastPreview>) {
-        _error = result.error.message;
+        _error = localizedError(result.error);
         _preview = null;
       } else {
         _preview = (result as Success<BroadcastPreview>).value;
@@ -68,7 +69,7 @@ class _BroadcastScreenState extends State<BroadcastScreen> {
     if (confirmed is Failure<BroadcastJob>) {
       setState(() {
         _running = false;
-        _error = confirmed.error.message;
+        _error = localizedError(confirmed.error);
       });
       return;
     }
@@ -85,7 +86,7 @@ class _BroadcastScreenState extends State<BroadcastScreen> {
     setState(() {
       _running = false;
       if (ran is Failure<BroadcastJob>) {
-        _error = ran.error.message;
+        _error = localizedError(ran.error);
       } else {
         _job = (ran as Success<BroadcastJob>).value;
       }

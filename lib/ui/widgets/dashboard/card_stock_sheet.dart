@@ -9,6 +9,7 @@ import '../../theme/net_semantic_colors.dart';
 import '../../theme/net_tokens.dart';
 import '../async_views.dart';
 import '../reserved_card_ops.dart';
+import '../../errors/user_facing_error_localizer.dart';
 
 class CardStockSheet extends StatefulWidget {
   const CardStockSheet({super.key, required this.onGoToCards});
@@ -93,7 +94,7 @@ class _CardStockSheetState extends State<CardStockSheet> {
     if (cats is Failure) {
       setState(() {
         _loading = false;
-        _error = (cats as Failure).error.message;
+        _error = localizedError((cats as Failure).error);
       });
       ScreenOpenTrace.instance.markLatestDataReady(ScreenOpenIds.cardStockSheet);
       return;

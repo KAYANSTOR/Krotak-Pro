@@ -4,6 +4,7 @@ import '../../../core/result.dart';
 import '../../../domain/services/local_blocked_number_service.dart';
 import '../../app_scope.dart';
 import '../../theme/kayan_palette.dart';
+import '../../errors/user_facing_error_localizer.dart';
 
 /// قائمة أرقام مستقلة تُرفض رسائلها قبل التحليل والإيداع.
 class BlockedNumbersScreen extends StatefulWidget {
@@ -56,7 +57,7 @@ class _BlockedNumbersScreenState extends State<BlockedNumbersScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            result.error.message,
+            localizedError(result.error),
             style: const TextStyle(fontFamily: 'Tajawal'),
           ),
         ),

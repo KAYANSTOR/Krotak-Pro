@@ -8,6 +8,7 @@ import '../../theme/net_tokens.dart';
 import '../async_views.dart';
 import '../net/net_initial_avatar.dart';
 import '../net/net_surface_card.dart';
+import '../../errors/user_facing_error_localizer.dart';
 
 /// Period for Dashboard sales metric sheets (real SaleRepository data only).
 enum SalesPeriod { day, month }
@@ -92,7 +93,7 @@ class _SalesPeriodSheetState extends State<SalesPeriodSheet> {
     if (salesResult is Failure) {
       setState(() {
         _loading = false;
-        _error = (salesResult as Failure).error.message;
+        _error = localizedError((salesResult as Failure).error);
       });
       return;
     }

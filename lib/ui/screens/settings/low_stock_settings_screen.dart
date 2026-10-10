@@ -6,6 +6,7 @@ import '../../app_scope.dart';
 import '../../perf/screen_open_trace.dart';
 import '../../theme/kayan_palette.dart';
 import '../../theme/net_semantic_colors.dart';
+import '../../errors/user_facing_error_localizer.dart';
 
 /// تنبيهات انخفاض مخزون الكروت — عتبة التنبيه (افتراضي 10 كما في الفيديو).
 class LowStockSettingsScreen extends StatefulWidget {
@@ -89,7 +90,7 @@ class _LowStockSettingsScreenState extends State<LowStockSettingsScreen> {
     setState(() => _saving = false);
     if (result is Failure) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(result.error.message, style: const TextStyle(fontFamily: 'Tajawal'))),
+        SnackBar(content: Text(localizedError(result.error), style: const TextStyle(fontFamily: 'Tajawal'))),
       );
       return;
     }

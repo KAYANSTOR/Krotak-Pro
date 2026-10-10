@@ -12,6 +12,7 @@ import '../theme/net_semantic_colors.dart';
 import '../theme/net_tokens.dart';
 import '../widgets/async_views.dart';
 import '../widgets/net/net_sheet.dart';
+import '../errors/user_facing_error_localizer.dart';
 
 /// ورقة إدارة فئات الكروت — بطاقات + مخزون + تعديل/تفعيل.
 Future<void> showCategoriesSheet({
@@ -251,7 +252,7 @@ class _CategoriesSheetState extends State<_CategoriesSheet> {
     );
     if (!mounted) return;
     if (r is Failure) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text((r as Failure<dynamic>).error.message, style: const TextStyle(fontFamily: 'Tajawal'))));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(localizedError((r as Failure<dynamic>).error), style: const TextStyle(fontFamily: 'Tajawal'))));
       return;
     }
     await _reloadLocalCatalog();
@@ -358,7 +359,7 @@ class _CategoriesSheetState extends State<_CategoriesSheet> {
                     ),
                   );
                   if (r is Failure) {
-                    setLocal(() => localError = (r as Failure<dynamic>).error.message);
+                    setLocal(() => localError = localizedError((r as Failure<dynamic>).error));
                     return;
                   }
                   // الفئة الجديدة يستنتج لها المعرّف داخل الخدمة، لذا تُحفظ النسبة
@@ -369,7 +370,7 @@ class _CategoriesSheetState extends State<_CategoriesSheet> {
                     clock: c.clock,
                   ).save(categoryId: savedId, commissionPercentBps: bps);
                   if (commission is Failure) {
-                    setLocal(() => localError = (commission as Failure<dynamic>).error.message);
+                    setLocal(() => localError = localizedError((commission as Failure<dynamic>).error));
                     return;
                   }
                   if (ctx.mounted) Navigator.pop(ctx);

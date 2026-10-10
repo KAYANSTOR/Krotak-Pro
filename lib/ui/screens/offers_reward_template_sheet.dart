@@ -24,6 +24,7 @@ import '../../platform/sms_bridge.dart';
 import '../app_scope.dart';
 import '../theme/net_tokens.dart';
 import '../widgets/net/net_surface_card.dart';
+import '../errors/user_facing_error_localizer.dart';
 
 /// تحرير قالب رسالة المكافأة من شاشة العروض مع تتبّع الكتابة قبل الحفظ.
 ///
@@ -2043,7 +2044,7 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
     if (result is Failure) {
       setState(() {
         _busy = false;
-        _status = result.error.message;
+        _status = localizedError(result.error);
         _statusIsError = true;
       });
       return;
@@ -2055,7 +2056,7 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
     final destination = PromotionRewardTemplate.probeDestination(_phone.text);
     if (destination is Failure<String>) {
       setState(() {
-        _status = destination.error.message;
+        _status = localizedError(destination.error);
         _statusIsError = true;
       });
       return;
@@ -2063,7 +2064,7 @@ class _OffersRewardTemplateSheetState extends State<_OffersRewardTemplateSheet> 
     final body = PromotionRewardTemplate.probeBody(_resolution.template, values: _probeValues);
     if (body is Failure<String>) {
       setState(() {
-        _status = body.error.message;
+        _status = localizedError(body.error);
         _statusIsError = true;
       });
       return;

@@ -7,6 +7,7 @@ import '../app_scope.dart';
 import '../theme/kayan_palette.dart';
 import '../theme/net_tokens.dart';
 import '../widgets/async_views.dart';
+import '../errors/user_facing_error_localizer.dart';
 
 /// معالج إنشاء/تعديل عرض ترويجي — 4 خطوات مطابقة الفيديو.
 Future<bool?> showOffersWizardSheet({
@@ -141,7 +142,7 @@ class _OffersWizardSheetState extends State<_OffersWizardSheet> {
     } else {
       setState(() {
         _busy = false;
-        _status = (r as Failure).error.message;
+        _status = localizedError((r as Failure).error);
       });
     }
   }

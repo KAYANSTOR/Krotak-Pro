@@ -6,6 +6,7 @@ import '../app_scope.dart';
 import '../theme/kayan_palette.dart';
 import '../theme/net_tokens.dart';
 import '../widgets/net/net_surface_card.dart';
+import '../errors/user_facing_error_localizer.dart';
 
 class MessagesScreen extends StatefulWidget {
   const MessagesScreen({super.key});
@@ -48,7 +49,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
             ? 'رسالة مكررة أو بدون أثر'
             : 'تمت المعالجة — معاملة ${tx.id}';
       } else {
-        _status = (result as Failure).error.message;
+        _status = localizedError((result as Failure).error);
       }
     });
   }

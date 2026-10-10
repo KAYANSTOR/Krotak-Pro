@@ -9,6 +9,7 @@ import '../../app_scope.dart';
 import '../../theme/kayan_palette.dart';
 import '../../theme/net_tokens.dart';
 import '../../widgets/async_views.dart';
+import '../../errors/user_facing_error_localizer.dart';
 
 /// شاشة العمولات والمبيعات الشهرية — مربوطة بلوحة الإدارة.
 class CommissionBillingScreen extends StatefulWidget {
@@ -75,7 +76,7 @@ class _CommissionBillingScreenState extends State<CommissionBillingScreen> {
               'فشل رفع ${up.value.failedCount} سجل. ستتم إعادة المحاولة لاحقاً.\n$details';
         }
       } else if (up is Failure<SaleSyncResult>) {
-        _error = up.error.message;
+        _error = localizedError(up.error);
       }
     }
 
@@ -95,7 +96,7 @@ class _CommissionBillingScreenState extends State<CommissionBillingScreen> {
       if (result is Success<List<MonthCommissionSummary>>) {
         _months = result.value;
       } else if (result is Failure<List<MonthCommissionSummary>>) {
-        _error = result.error.message;
+        _error = localizedError(result.error);
       }
     });
   }

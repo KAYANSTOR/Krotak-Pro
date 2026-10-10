@@ -5,6 +5,7 @@ import '../../domain/entities/card.dart' as domain;
 import '../../domain/entities/customer.dart';
 import '../app_scope.dart';
 import '../theme/net_semantic_colors.dart';
+import '../errors/user_facing_error_localizer.dart';
 
 /// تدخل يدوي على كرت محجوز: تأكيد تسليم أو إلغاء حجز + Rollback.
 Future<void> showReservedCardOps({
@@ -74,7 +75,7 @@ Future<void> _confirmDelivery(
   if (!context.mounted) return;
   if (r is Failure) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(r.error.message, style: const TextStyle(fontFamily: 'Tajawal'))),
+      SnackBar(content: Text(localizedError(r.error), style: const TextStyle(fontFamily: 'Tajawal'))),
     );
     return;
   }
@@ -145,7 +146,7 @@ Future<void> _releaseReserved(
       if (!context.mounted) return;
       if (r is Failure) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(r.error.message, style: const TextStyle(fontFamily: 'Tajawal'))),
+          SnackBar(content: Text(localizedError(r.error), style: const TextStyle(fontFamily: 'Tajawal'))),
         );
         return;
       }
@@ -172,7 +173,7 @@ Future<void> _releaseReserved(
     if (!context.mounted) return;
     if (r is Failure) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(r.error.message, style: const TextStyle(fontFamily: 'Tajawal'))),
+        SnackBar(content: Text(localizedError(r.error), style: const TextStyle(fontFamily: 'Tajawal'))),
       );
       return;
     }

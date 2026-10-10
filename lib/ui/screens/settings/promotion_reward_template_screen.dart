@@ -7,6 +7,7 @@ import '../../app_scope.dart';
 import '../../theme/net_tokens.dart';
 import '../../widgets/async_views.dart';
 import '../../widgets/net/net_surface_card.dart';
+import '../../errors/user_facing_error_localizer.dart';
 
 class PromotionRewardTemplateScreen extends StatefulWidget {
   const PromotionRewardTemplateScreen({super.key});
@@ -51,7 +52,7 @@ class _PromotionRewardTemplateScreenState
     if (!mounted) return;
     if (result is Failure) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(result.error.message)),
+        SnackBar(content: Text(localizedError(result.error))),
       );
       return;
     }

@@ -16,6 +16,7 @@ import '../perf/screen_open_trace.dart';
 import '../theme/net_semantic_colors.dart';
 import '../theme/net_tokens.dart';
 import '../widgets/async_views.dart';
+import '../errors/user_facing_error_localizer.dart';
 
 /// شاشة/ورقة الكروت المباعة: فلاتر تاريخ/فئة/بحث + تصدير CSV + حذف (tombstone).
 Future<void> showSoldCardsSheet({
@@ -123,7 +124,7 @@ class _SoldCardsSheetState extends State<_SoldCardsSheet> {
     if (r is Failure<List<SoldCardRow>>) {
       setState(() {
         _loading = false;
-        _error = r.error.message;
+        _error = localizedError(r.error);
       });
       ScreenOpenTrace.instance.markLatestDataReady(ScreenOpenIds.soldCardsSheet);
       return;
@@ -266,7 +267,7 @@ class _SoldCardsSheetState extends State<_SoldCardsSheet> {
     if (!mounted) return;
     if (r is Failure) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text((r as Failure).error.message, style: const TextStyle(fontFamily: 'Tajawal'))),
+        SnackBar(content: Text(localizedError((r as Failure).error), style: const TextStyle(fontFamily: 'Tajawal'))),
       );
       return;
     }

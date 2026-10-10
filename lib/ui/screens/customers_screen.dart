@@ -24,6 +24,7 @@ import '../widgets/net/net_sheet.dart';
 import '../widgets/net/net_surface_card.dart';
 import '../widgets/net/net_tab_header.dart';
 import 'broadcast_sheet.dart';
+import '../errors/user_facing_error_localizer.dart';
 
 enum _AccountFilter { all, debtor, creditor, zero, provisional, unlinked }
 
@@ -139,7 +140,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
       ScreenOpenTrace.instance.markLatestDataReady('accounts');
       setState(() {
         _loading = false;
-        _error = result.error.message;
+        _error = localizedError(result.error);
         _allRows = const [];
       });
       return;

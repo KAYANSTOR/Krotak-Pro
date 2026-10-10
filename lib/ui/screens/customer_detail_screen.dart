@@ -27,6 +27,7 @@ import '../widgets/customer_promotion_progress.dart';
 import '../widgets/customer_statement_export.dart';
 import '../widgets/net/net_app_bar_title.dart';
 import 'offers_reward_template_sheet.dart';
+import '../errors/user_facing_error_localizer.dart';
 
 /// مركز العميل الكامل: هوية + رصيد + دفتر + تعديل رصيد + عروض.
 class CustomerDetailScreen extends StatefulWidget {
@@ -67,7 +68,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
       setState(() {
         ScreenOpenTrace.instance.markLatestDataReady(ScreenOpenIds.customerDetail);
         _loading = false;
-        _error = found.error.message;
+        _error = localizedError(found.error);
       });
       return;
     }
@@ -205,7 +206,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
                       phone: ctrl.text,
                     );
                     if (r is Failure<IdentityLinkPreview>) {
-                      setLocal(() => error = r.error.message);
+                      setLocal(() => error = localizedError(r.error));
                       return;
                     }
                     setLocal(() => preview = (r as Success<IdentityLinkPreview>).value);
@@ -233,7 +234,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
     if (!mounted) return;
     if (result is Failure<Customer>) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(result.error.message, style: const TextStyle(fontFamily: 'Tajawal'))),
+        SnackBar(content: Text(localizedError(result.error), style: const TextStyle(fontFamily: 'Tajawal'))),
       );
       return;
     }
@@ -303,7 +304,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            (result as Failure).error.message,
+            localizedError((result as Failure).error),
             style: const TextStyle(fontFamily: 'Tajawal'),
           ),
         ),
@@ -402,7 +403,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
     if (!mounted) return;
     if (r is Failure) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text((r as Failure).error.message, style: const TextStyle(fontFamily: 'Tajawal'))),
+        SnackBar(content: Text(localizedError((r as Failure).error), style: const TextStyle(fontFamily: 'Tajawal'))),
       );
       return;
     }
@@ -547,7 +548,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            (r as Failure).error.message,
+            localizedError((r as Failure).error),
             style: const TextStyle(fontFamily: 'Tajawal'),
           ),
         ),
@@ -943,7 +944,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
     if (current is Failure<AppSetting?>) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(current.error.message, style: const TextStyle(fontFamily: 'Tajawal'))),
+        SnackBar(content: Text(localizedError(current.error), style: const TextStyle(fontFamily: 'Tajawal'))),
       );
       return;
     }
@@ -966,7 +967,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
     if (!mounted) return;
     if (write is Failure) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text((write as Failure).error.message, style: const TextStyle(fontFamily: 'Tajawal'))),
+        SnackBar(content: Text(localizedError((write as Failure).error), style: const TextStyle(fontFamily: 'Tajawal'))),
       );
       return;
     }
@@ -1032,7 +1033,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
     final current = await c.settings.find(CustomerDepositBlock.key);
     if (current is Failure<AppSetting?>) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(current.error.message, style: const TextStyle(fontFamily: 'Tajawal'))));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(localizedError(current.error), style: const TextStyle(fontFamily: 'Tajawal'))));
       return;
     }
     final ids = CustomerDepositBlock.decode((current as Success<AppSetting?>).value?.value);
@@ -1049,7 +1050,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
     ));
     if (!mounted) return;
     if (write is Failure) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text((write as Failure).error.message, style: const TextStyle(fontFamily: 'Tajawal'))));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(localizedError((write as Failure).error), style: const TextStyle(fontFamily: 'Tajawal'))));
       return;
     }
     // كل تغيير سياسة يُسجَّل بالقيمة السابقة والجديدة (الخطة §10.5).
@@ -1094,7 +1095,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
     final existing = await c.customers.findByIdentifier(code);
     if (existing is Failure<Customer?>) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(existing.error.message, style: const TextStyle(fontFamily: 'Tajawal'))));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(localizedError(existing.error), style: const TextStyle(fontFamily: 'Tajawal'))));
       return;
     }
     final owner = (existing as Success<Customer?>).value;
@@ -1112,7 +1113,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
     ));
     if (!mounted) return;
     if (write is Failure) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text((write as Failure).error.message, style: const TextStyle(fontFamily: 'Tajawal'))));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(localizedError((write as Failure).error), style: const TextStyle(fontFamily: 'Tajawal'))));
       return;
     }
     await c.auditLogs.append(AuditLog(
@@ -1138,7 +1139,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
     final write = await c.customers.deleteIdentifier(id);
     if (!mounted) return;
     if (write is Failure) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text((write as Failure).error.message, style: const TextStyle(fontFamily: 'Tajawal'))));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(localizedError((write as Failure).error), style: const TextStyle(fontFamily: 'Tajawal'))));
       return;
     }
     await c.auditLogs.append(AuditLog(

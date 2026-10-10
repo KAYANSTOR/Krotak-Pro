@@ -10,6 +10,7 @@ import '../../theme/kayan_palette.dart';
 import '../../theme/net_semantic_colors.dart';
 import '../../theme/net_tokens.dart';
 import '../net/net_sheet.dart';
+import '../../errors/user_facing_error_localizer.dart';
 
 /// حقول إنشاء حساب عميل جديد — مطابقة لتصميم «إنشاء حساب عميل جديد».
 ///
@@ -177,7 +178,7 @@ class _CustomerCreateSheetState extends State<CustomerCreateSheet> {
     if (!mounted) return;
     if (created is Failure<Customer>) {
       final failure = created as Failure<Customer>;
-      var message = failure.error.message;
+      var message = localizedError(failure.error);
       // رفض غامض سابقاً: الرقم قد يملكه حساب موجود أصلاً (نقطة البيع مثلاً تنشئ
       // حساب عميل بنفس رقمها). نوضّح صاحب الرقم بدل ترك المستخدم بلا مخرج.
       if (failure.error.code == 'duplicate_identifier' && primaryValue.isNotEmpty) {
@@ -235,7 +236,7 @@ class _CustomerCreateSheetState extends State<CustomerCreateSheet> {
         setState(() {
           _busy = false;
           _status =
-              'الحساب أُنشئ لكن فشل حفظ أحد المعرفات: ${r.error.message}';
+              'الحساب أُنشئ لكن فشل حفظ أحد المعرفات: ${localizedError(r.error)}';
         });
         return;
       }

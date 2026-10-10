@@ -1,4 +1,5 @@
 part of 'inventory_screen.dart';
+import '../errors/user_facing_error_localizer.dart';
 
 /// تأكيد حذف كرت واحد أو عدة كروت من المخزون.
 ///
@@ -539,7 +540,7 @@ class _AddCardsSheetState extends State<_AddCardsSheet> {
     if (!mounted) return;
     setState(() => _busy = false);
     if (r is Failure) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text((r as Failure<dynamic>).error.message, style: const TextStyle(fontFamily: 'Tajawal'))));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(localizedError((r as Failure<dynamic>).error), style: const TextStyle(fontFamily: 'Tajawal'))));
       return;
     }
     final n = (r as Success<int>).value;
@@ -572,7 +573,7 @@ class _AddCardsSheetState extends State<_AddCardsSheet> {
     if (!mounted) return;
     setState(() => _busy = false);
     if (r is Failure) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text((r as Failure<dynamic>).error.message, style: const TextStyle(fontFamily: 'Tajawal'))));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(localizedError((r as Failure<dynamic>).error), style: const TextStyle(fontFamily: 'Tajawal'))));
       return;
     }
     final n = (r as Success<int>).value;

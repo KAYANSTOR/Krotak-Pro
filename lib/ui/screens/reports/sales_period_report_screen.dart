@@ -18,6 +18,7 @@ import '../../widgets/net/net_indicators.dart';
 import '../../widgets/net/net_initial_avatar.dart';
 import '../../widgets/net/net_sheet.dart';
 import '../../widgets/net/net_surface_card.dart';
+import '../../errors/user_facing_error_localizer.dart';
 
 enum SalesReportRange { today, month, custom }
 
@@ -108,7 +109,7 @@ class _SalesPeriodReportScreenState extends State<SalesPeriodReportScreen> {
       setState(() {
         ScreenOpenTrace.instance.markLatestDataReady(ScreenOpenIds.salesPeriodReport);
         _loading = false;
-        _error = (salesResult as Failure).error.message;
+        _error = localizedError((salesResult as Failure).error);
       });
       return;
     }

@@ -13,6 +13,7 @@ import '../theme/kayan_palette.dart';
 import '../theme/net_semantic_colors.dart';
 import '../widgets/async_views.dart';
 import '../widgets/net/net_app_bar_title.dart';
+import '../errors/user_facing_error_localizer.dart';
 
 /// الرسائل المرفوضة — مطابقة إطار الفيديو (`cards_t320s` / `rem_320`).
 ///
@@ -91,7 +92,7 @@ class _RejectedMessagesScreenState extends State<RejectedMessagesScreen> {
       );
       final result = await catalog.listRejected(viewedAfter: viewedAfter);
       if (result is Failure<List<RejectedMessageItem>>) {
-        throw StateError(result.error.message);
+        throw StateError(localizedError(result.error));
       }
       final all = (result as Success<List<RejectedMessageItem>>).value;
       // المؤرشفة يدوياً تُنقل لتبويب الأرشيف وتبقى حالتها `rejected` في القاعدة.
@@ -182,7 +183,7 @@ class _RejectedMessagesScreenState extends State<RejectedMessagesScreen> {
         await _load(markViewed: false);
       } else if (result is Failure) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('تعذّرت إعادة المعالجة: ${(result as Failure).error.message}')),
+          SnackBar(content: Text('تعذّرت إعادة المعالجة: ${localizedError((result as Failure).error)}')),
         );
       }
     } finally {
@@ -233,7 +234,7 @@ class _RejectedMessagesScreenState extends State<RejectedMessagesScreen> {
     if (!mounted) return;
     if (r is Failure) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('تعذّرت الأرشفة: ${(r as Failure).error.message}')),
+        SnackBar(content: Text('تعذّرت الأرشفة: ${localizedError((r as Failure).error)}')),
       );
       return;
     }
@@ -691,7 +692,7 @@ class _RejectedCard extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  item.reason,
+                  UserFacingErrorLocalizer.reasonText(item.reason),
                   style: TextStyle(
                     fontFamily: 'Tajawal',
                     fontWeight: FontWeight.w700,

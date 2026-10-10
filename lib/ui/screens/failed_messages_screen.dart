@@ -9,6 +9,7 @@ import '../app_scope.dart';
 import '../theme/net_semantic_colors.dart';
 import '../widgets/async_views.dart';
 import '../widgets/net/net_app_bar_title.dart';
+import '../errors/user_facing_error_localizer.dart';
 
 /// الرسائل الفاشلة + Bulk Reset/Retry + تفاصيل رمز الرفض — 1.0.9.
 class FailedMessagesScreen extends StatefulWidget {
@@ -47,7 +48,7 @@ class _FailedMessagesScreenState extends State<FailedMessagesScreen> {
       setState(() {
         ScreenOpenTrace.instance.markLatestDataReady(ScreenOpenIds.failedMessages);
         _loading = false;
-        _error = result.error.message;
+        _error = localizedError(result.error);
       });
       return;
     }
@@ -76,7 +77,7 @@ class _FailedMessagesScreenState extends State<FailedMessagesScreen> {
     if (result is Failure<void>) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(result.error.message, style: const TextStyle(fontFamily: 'Tajawal')),
+          content: Text(localizedError(result.error), style: const TextStyle(fontFamily: 'Tajawal')),
         ),
       );
     }

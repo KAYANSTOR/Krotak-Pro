@@ -16,6 +16,7 @@ import '../widgets/net/net_surface_card.dart';
 import '../widgets/net/net_tab_header.dart';
 import 'offers_reward_template_sheet.dart';
 import 'offers_wizard_sheet.dart';
+import '../errors/user_facing_error_localizer.dart';
 
 /// إدارة العروض والمكافآت — مطابق فيديو Z Net (نشطة / معطّلة + عرض جديد).
 ///
@@ -69,7 +70,7 @@ class _OffersScreenState extends State<OffersScreen>
       ScreenOpenTrace.instance.markLatestDataReady('offers');
       setState(() {
         _loading = false;
-        _error = listed.error.message;
+        _error = localizedError(listed.error);
       });
       return;
     }
@@ -140,7 +141,7 @@ class _OffersScreenState extends State<OffersScreen>
     if (!mounted) return;
     if (found is Failure<List<Customer>>) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(found.error.message)),
+        SnackBar(content: Text(localizedError(found.error))),
       );
       return;
     }
@@ -189,7 +190,7 @@ class _OffersScreenState extends State<OffersScreen>
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            r.error.message,
+            localizedError(r.error),
             style: const TextStyle(fontFamily: NetTypography.family),
           ),
         ),

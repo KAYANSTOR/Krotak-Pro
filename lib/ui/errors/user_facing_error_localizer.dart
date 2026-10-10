@@ -42,6 +42,25 @@ abstract final class UserFacingErrorLocalizer {
     return generic;
   }
 
+  /// هل النص رمز برمجي (لاتيني بلا مسافات) لا نصًا عربيًا جاهزًا؟
+  static bool looksLikeCode(String? raw) {
+    final value = raw?.trim() ?? '';
+    if (value.isEmpty) return false;
+    if (!RegExp(r'^[A-Za-z0-9_.\-]+$').hasMatch(value)) return false;
+    return RegExp('[A-Za-z]').hasMatch(value);
+  }
+
+  /// سبب رفض بالعربية: يُترجم الرمز إن كان رمزًا، ويُضيف الإجراء المقترح.
+  /// النص العربي الجاهز يبقى كما هو بلا تغيير.
+  static String reasonText(String? raw) {
+    final value = raw?.trim() ?? '';
+    if (value.isEmpty) return 'سبب غير محدد';
+    if (!looksLikeCode(value)) return value;
+    final message = localize(value);
+    if (message.action == null) return message.text;
+    return '${message.text} — ${message.action}';
+  }
+
   /// نص عربي فقط (بلا رمز) — تُستعمل في `SnackBar` والرسائل السريعة.
   static String message(Object? error) => localize(error).text;
 

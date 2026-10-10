@@ -13,6 +13,7 @@ import '../theme/kayan_palette.dart';
 import '../theme/net_semantic_colors.dart';
 import '../widgets/async_views.dart';
 import '../widgets/net/net_app_bar_title.dart';
+import '../errors/user_facing_error_localizer.dart';
 
 /// الرسائل المعلّقة (قيد التأكيد) — مطابقة منطق الفيديو + Domain.
 ///
@@ -87,7 +88,7 @@ class _PendingMessagesScreenState extends State<PendingMessagesScreen>
       await _loadAlertSetting();
       final result = await c.pendingReview.listPending();
       if (result is Failure<List<IncomingMessage>>) {
-        throw StateError(result.error.message);
+        throw StateError(localizedError(result.error));
       }
       final list = (result as Success<List<IncomingMessage>>).value;
       final rows = <_PendingRow>[];
@@ -170,7 +171,7 @@ class _PendingMessagesScreenState extends State<PendingMessagesScreen>
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            result.error.message,
+            localizedError(result.error),
             style: const TextStyle(fontFamily: 'Tajawal'),
           ),
         ),
@@ -230,7 +231,7 @@ class _PendingMessagesScreenState extends State<PendingMessagesScreen>
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            result.error.message,
+            localizedError(result.error),
             style: const TextStyle(fontFamily: 'Tajawal'),
           ),
         ),
@@ -250,7 +251,7 @@ class _PendingMessagesScreenState extends State<PendingMessagesScreen>
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            result.error.message,
+            localizedError(result.error),
             style: const TextStyle(fontFamily: 'Tajawal'),
           ),
         ),

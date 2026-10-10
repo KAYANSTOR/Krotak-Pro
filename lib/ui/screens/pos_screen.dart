@@ -17,6 +17,7 @@ import '../theme/net_semantic_colors.dart';
 import '../widgets/async_views.dart';
 import '../widgets/pos/pos_customer_link_dialog.dart';
 import 'settings/templates_screen.dart';
+import '../errors/user_facing_error_localizer.dart';
 
 /// شاشة نقاط البيع — **منفصلة عن إدارة المحافظ**.
 ///
@@ -75,7 +76,7 @@ class _PosScreenState extends State<PosScreen> {
       setState(() {
         ScreenOpenTrace.instance.markLatestDataReady(ScreenOpenIds.pos);
         _loading = false;
-        _error = posList.error.message;
+        _error = localizedError(posList.error);
       });
       return;
     }
@@ -184,7 +185,7 @@ class _PosScreenState extends State<PosScreen> {
       }
     });
     if (r is Failure) {
-      _snack((r as Failure).error.message);
+      _snack(localizedError((r as Failure).error));
       return;
     }
     _snack(next == PointOfSaleStatus.active
@@ -209,7 +210,7 @@ class _PosScreenState extends State<PosScreen> {
       _templateCounts = counts;
     });
     if (r is Failure<int>) {
-      _snack(r.error.message);
+      _snack(localizedError(r.error));
       return;
     }
     final changed = (r as Success<int>).value;
@@ -529,7 +530,7 @@ class _PosScreenState extends State<PosScreen> {
       );
       if (!mounted) return;
       if (created is Failure<PosProfile>) {
-        _snack(created.error.message);
+        _snack(localizedError(created.error));
         return;
       }
       final pos = (created as Success<PosProfile>).value.pointOfSale;
@@ -554,7 +555,7 @@ class _PosScreenState extends State<PosScreen> {
         status: existing.status,
       );
       if (!mounted) return;
-      if (r is Failure) _snack((r as Failure).error.message);
+      if (r is Failure) _snack(localizedError((r as Failure).error));
       await _load();
       return;
     }
@@ -571,7 +572,7 @@ class _PosScreenState extends State<PosScreen> {
     );
     if (!mounted) return;
     if (updated is Failure<PosProfile>) {
-      _snack(updated.error.message);
+      _snack(localizedError(updated.error));
       return;
     }
     await c.reloadTemplates();
@@ -673,7 +674,7 @@ class _PosScreenState extends State<PosScreen> {
                         status: PointOfSaleStatus.archived,
                       );
                   if (!mounted) return;
-                  if (r is Failure) _snack((r as Failure).error.message);
+                  if (r is Failure) _snack(localizedError((r as Failure).error));
                   await _load();
                 },
               ),
@@ -707,7 +708,7 @@ class _PosScreenState extends State<PosScreen> {
       messenger.showSnackBar(
         SnackBar(
           content: Text(
-            'تعذر إرسال الملخص: ${result.error.message}',
+            'تعذر إرسال الملخص: ${localizedError(result.error)}',
             style: const TextStyle(fontFamily: 'Tajawal'),
           ),
         ),

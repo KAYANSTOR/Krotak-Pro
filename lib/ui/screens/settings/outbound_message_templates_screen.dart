@@ -13,6 +13,7 @@ import '../../app_scope.dart';
 import '../../perf/screen_open_trace.dart';
 import '../../theme/kayan_palette.dart';
 import '../../widgets/async_views.dart';
+import '../../errors/user_facing_error_localizer.dart';
 
 /// قوالب رسائل العملاء / العروض / النظام / سلفني — مطابقة فيديو المنتج.
 class OutboundMessageTemplatesScreen extends StatefulWidget {
@@ -273,7 +274,7 @@ class _OutboundMessageTemplatesScreenState
       AppSetting(key: _customKey(id), value: body, updatedAt: c.clock.now()),
     );
     if (bodySaved is Failure) {
-      if (mounted) _snack(bodySaved.error.message);
+      if (mounted) _snack(localizedError(bodySaved.error));
       return null;
     }
     final saved = await c.settings.save(
@@ -284,7 +285,7 @@ class _OutboundMessageTemplatesScreenState
       ),
     );
     if (saved is Failure) {
-      if (mounted) _snack(saved.error.message);
+      if (mounted) _snack(localizedError(saved.error));
       return null;
     }
     return id;
@@ -342,7 +343,7 @@ class _OutboundMessageTemplatesScreenState
     if (t.target != target) {
       final targetSaved = await _setTarget(t, target);
       if (targetSaved is Failure<void>) {
-        if (mounted) _snack(targetSaved.error.message);
+        if (mounted) _snack(localizedError(targetSaved.error));
         return;
       }
     }
@@ -352,7 +353,7 @@ class _OutboundMessageTemplatesScreenState
     );
     if (!mounted) return;
     if (r is Failure<void>) {
-      _snack(r.error.message);
+      _snack(localizedError(r.error));
       return;
     }
     await _load();
@@ -364,7 +365,7 @@ class _OutboundMessageTemplatesScreenState
     final r = await _activation.revert(systemKey: t.keyName);
     if (!mounted) return;
     if (r is Failure<void>) {
-      _snack(r.error.message);
+      _snack(localizedError(r.error));
       return;
     }
     await _load();
@@ -410,14 +411,14 @@ class _OutboundMessageTemplatesScreenState
       if (old != null) {
         final reverted = await _activation.revert(systemKey: old.keyName);
         if (reverted is Failure<void>) {
-          if (mounted) _snack(reverted.error.message);
+          if (mounted) _snack(localizedError(reverted.error));
           return;
         }
       }
     }
     final targetSaved = await _setTarget(t, target);
     if (targetSaved is Failure<void>) {
-      if (mounted) _snack(targetSaved.error.message);
+      if (mounted) _snack(localizedError(targetSaved.error));
       return;
     }
     await _load();
@@ -436,7 +437,7 @@ class _OutboundMessageTemplatesScreenState
         // إلغاء التفعيل قبل حذف النص: لا يبقى مؤشر يشير إلى قالب محذوف.
         final reverted = await _activation.revert(systemKey: sys.keyName);
         if (reverted is Failure<void>) {
-          if (mounted) _snack(reverted.error.message);
+          if (mounted) _snack(localizedError(reverted.error));
           return;
         }
       }
@@ -463,13 +464,13 @@ class _OutboundMessageTemplatesScreenState
       ),
     );
     if (registrySaved is Failure<void>) {
-      if (mounted) _snack(registrySaved.error.message);
+      if (mounted) _snack(localizedError(registrySaved.error));
       return;
     }
     // حذف نص القالب نفسه: لا يبقى مفتاح يتيم قابل للقراءة بعد اختفاء تعريفه.
     final purge = await _purgeCustomBody(t.keyName);
     if (purge is Failure<void>) {
-      if (mounted) _snack(purge.error.message);
+      if (mounted) _snack(localizedError(purge.error));
       return;
     }
     if (mounted) _snack('تم حذف القالب');
@@ -483,7 +484,7 @@ class _OutboundMessageTemplatesScreenState
       AppSetting(key: key, value: value, updatedAt: c.clock.now()),
     );
     if (!mounted) return;
-    if (r is Failure<void>) { _snack(r.error.message); return; }
+    if (r is Failure<void>) { _snack(localizedError(r.error)); return; }
     setState(() => _values[key] = value);
     _snack('تم تحديث القالب بنجاح');
   }
@@ -506,7 +507,7 @@ class _OutboundMessageTemplatesScreenState
           : OutboundTemplateCatalog.previewValuesFor(definition),
     );
     if (rendered is Success<String>) return rendered.value;
-    return '⛔ لن تُرسل هذه الرسالة: ${(rendered as Failure<String>).error.message}';
+    return '⛔ لن تُرسل هذه الرسالة: ${localizedError((rendered as Failure<String>).error)}';
   }
 
   String _variableLabel(String variable) => const <String, String>{

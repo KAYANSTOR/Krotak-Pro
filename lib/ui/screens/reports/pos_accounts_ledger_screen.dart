@@ -24,6 +24,7 @@ import '../../widgets/net/net_initial_avatar.dart';
 import '../../widgets/net/net_sheet.dart';
 import '../../widgets/net/net_surface_card.dart';
 import '../../widgets/pos/pos_customer_link_dialog.dart';
+import '../../errors/user_facing_error_localizer.dart';
 
 /// حسابات نقاط البيع — مطابقة فيديو المنتج (t74s → t172s):
 ///
@@ -947,7 +948,7 @@ class _SettlementSheetState extends State<_SettlementSheet> {
     if (result is Failure<Transaction>) {
       setState(() {
         _busy = false;
-        _status = (result as Failure).error.message;
+        _status = localizedError((result as Failure).error);
       });
       return;
     }
@@ -1238,7 +1239,7 @@ class _PosFormSheetState extends State<_PosFormSheet> {
     if (existingById is Failure<Customer?>) {
       setState(() {
         _busy = false;
-        _status = (existingById as Failure).error.message;
+        _status = localizedError((existingById as Failure).error);
       });
       return;
     }
@@ -1327,7 +1328,7 @@ class _PosFormSheetState extends State<_PosFormSheet> {
       if (create is Failure<Customer>) {
         setState(() {
           _busy = false;
-          _status = (create as Failure).error.message;
+          _status = localizedError((create as Failure).error);
         });
         return;
       }

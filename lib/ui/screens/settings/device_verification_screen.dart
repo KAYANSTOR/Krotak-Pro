@@ -13,6 +13,7 @@ import '../../theme/net_tokens.dart';
 import '../../widgets/async_views.dart';
 import '../../widgets/net/net_surface_card.dart';
 import '../../widgets/settings/settings_section_header.dart';
+import '../../errors/user_facing_error_localizer.dart';
 
 class DeviceVerificationScreen extends StatefulWidget {
   const DeviceVerificationScreen({super.key});
@@ -47,7 +48,7 @@ class _DeviceVerificationScreenState extends State<DeviceVerificationScreen> {
     if (result is Failure<DeviceVerificationSnapshot>) {
       setState(() {
         _loading = false;
-        _error = result.error.message;
+        _error = localizedError(result.error);
       });
       return;
     }

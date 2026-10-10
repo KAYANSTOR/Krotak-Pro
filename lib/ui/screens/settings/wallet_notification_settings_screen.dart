@@ -9,6 +9,7 @@ import '../../theme/net_semantic_colors.dart';
 import '../../theme/net_tokens.dart';
 import '../../widgets/async_views.dart';
 import '../../widgets/net/net_surface_card.dart';
+import '../../errors/user_facing_error_localizer.dart';
 
 class WalletNotificationSettingsScreen extends StatefulWidget {
   const WalletNotificationSettingsScreen({super.key});
@@ -53,7 +54,7 @@ class _WalletNotificationSettingsScreenState extends State<WalletNotificationSet
     if (saved != true || !mounted) { name.dispose(); package.dispose(); return; }
     final result = await AppScope.of(context).notificationSources.upsert(displayName: name.text, packageName: package.text, enabled: true);
     name.dispose(); package.dispose();
-    if (result is Failure) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(result.error.message))); return; }
+    if (result is Failure) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(localizedError(result.error)))); return; }
     await _sync();
   }
 
@@ -76,7 +77,7 @@ class _WalletNotificationSettingsScreenState extends State<WalletNotificationSet
     final result = await AppScope.of(context).notificationSources.setEnabled(source.packageName!, enabled);
     if (result is Failure) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(result.error.message)));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(localizedError(result.error))));
       }
       return;
     }
@@ -102,7 +103,7 @@ class _WalletNotificationSettingsScreenState extends State<WalletNotificationSet
     if (wallets is Failure) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text((wallets as Failure).error.message, style: const TextStyle(fontFamily: 'Tajawal'))),
+          SnackBar(content: Text(localizedError((wallets as Failure).error), style: const TextStyle(fontFamily: 'Tajawal'))),
         );
       }
       return;

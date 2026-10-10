@@ -14,6 +14,7 @@ import '../../errors/user_facing_error_localizer.dart';
 import '../../services/receipt_image_service.dart';
 import 'transaction_receipt_card.dart';
 import '../../labels/net_labels.dart';
+import '../async_views.dart';
 import '../../theme/kayan_palette.dart';
 import '../../theme/net_semantic_colors.dart';
 import '../../theme/net_tokens.dart';

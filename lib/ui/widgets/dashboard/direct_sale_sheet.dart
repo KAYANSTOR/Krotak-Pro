@@ -13,6 +13,7 @@ import '../../app_scope.dart';
 import '../../../platform/contact_picker_bridge.dart';
 import '../../theme/net_semantic_colors.dart';
 import '../../theme/net_tokens.dart';
+import '../../errors/user_facing_error_localizer.dart';
 
 /// بيع يدوي: نقدي / آجل / هدية / نقطة بيع — 1.0.9.
 ///
@@ -225,7 +226,7 @@ class _DirectSaleSheetState extends State<DirectSaleSheet> {
       Navigator.of(context).pop(true);
       return;
     }
-    setState(() => _status = (r as Failure).error.message);
+    setState(() => _status = localizedError((r as Failure).error));
   }
 
   @override

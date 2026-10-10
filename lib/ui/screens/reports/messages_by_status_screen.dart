@@ -9,6 +9,7 @@ import '../../theme/net_semantic_colors.dart';
 import '../../theme/net_tokens.dart';
 import '../../widgets/async_views.dart';
 import '../../widgets/net/net_surface_card.dart';
+import '../../errors/user_facing_error_localizer.dart';
 
 class MessagesByStatusScreen extends StatefulWidget {
   const MessagesByStatusScreen({
@@ -48,7 +49,7 @@ class _MessagesByStatusScreenState extends State<MessagesByStatusScreen> {
         if (!mounted) return;
         setState(() {
           _loading = false;
-          _error = r.error.message;
+          _error = localizedError(r.error);
         });
         return;
       }

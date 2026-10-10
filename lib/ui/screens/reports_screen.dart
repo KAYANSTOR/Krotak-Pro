@@ -21,6 +21,7 @@ import 'rejected_messages_screen.dart';
 import 'reports/pos_accounts_ledger_screen.dart';
 import 'reports/sales_period_report_screen.dart';
 import 'transactions_log_screen.dart';
+import '../errors/user_facing_error_localizer.dart';
 
 /// التقارير والمراقبة — مطابقة فيديو المنتج (أقسام الرسائل / التقارير).
 ///
@@ -63,9 +64,9 @@ class _ReportsScreenState extends State<ReportsScreen> {
     setState(() {
       _loading = false;
       if (result is Failure<OpsSnapshot>) {
-        _error = result.error.message.isEmpty
+        _error = localizedError(result.error).isEmpty
             ? 'تعذر تحميل التقارير'
-            : result.error.message;
+            : localizedError(result.error);
         return;
       }
       _snap = (result as Success<OpsSnapshot>).value;

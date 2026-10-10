@@ -12,6 +12,7 @@ import '../../widgets/async_views.dart';
 import 'template_simulation_screen.dart';
 import 'template_wizard_screen.dart';
 import '../../../domain/services/local_transfer_template_activation_service.dart';
+import '../../errors/user_facing_error_localizer.dart';
 
 /// قائمة قوالب التحويل — مطابقة 100% لإطار فيديو Z Net (`tpl_sys50.jpg`).
 ///
@@ -146,7 +147,7 @@ class _TemplatesScreenState extends State<TemplatesScreen> {
         list.sort((a, b) => a.priority.compareTo(b.priority));
         _items = list;
       } else {
-        _error = (r as Failure).error.message;
+        _error = localizedError((r as Failure).error);
       }
       if (counts is Success<({int active, int total})>) {
         _activeCount = counts.value.active;
@@ -201,7 +202,7 @@ class _TemplatesScreenState extends State<TemplatesScreen> {
     if (!mounted) return;
     setState(() => _bulkBusy = false);
     if (r is Failure<int>) {
-      _snack(r.error.message);
+      _snack(localizedError(r.error));
       return;
     }
     final changed = (r as Success<int>).value;
@@ -252,7 +253,7 @@ class _TemplatesScreenState extends State<TemplatesScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            r.error.message,
+            localizedError(r.error),
             style: const TextStyle(fontFamily: 'Tajawal'),
           ),
         ),
@@ -301,7 +302,7 @@ class _TemplatesScreenState extends State<TemplatesScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            r.error.message,
+            localizedError(r.error),
             style: const TextStyle(fontFamily: 'Tajawal'),
           ),
         ),

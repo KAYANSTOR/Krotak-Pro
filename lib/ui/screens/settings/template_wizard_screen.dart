@@ -8,6 +8,7 @@ import '../../../domain/services/local_transfer_template_activation_service.dart
 import '../../app_scope.dart';
 import '../../theme/net_semantic_colors.dart';
 import '../../theme/kayan_palette.dart';
+import '../../errors/user_facing_error_localizer.dart';
 
 /// معالج إعداد/تعديل قالب التحويل — 4 مراحل مطابق لفيديو Z Net.
 class TemplateWizardScreen extends StatefulWidget {
@@ -325,7 +326,7 @@ class _TemplateWizardScreenState extends State<TemplateWizardScreen> {
     if (!mounted) return;
     setState(() => _saving = false);
     if (r is Failure) {
-      _toast(r.error.message);
+      _toast(localizedError(r.error));
       return;
     }
     Navigator.of(context).pop(true);
@@ -787,7 +788,7 @@ class _TemplateWizardScreenState extends State<TemplateWizardScreen> {
         resultText = 'نجح التوليد التلقائي بنجاح!';
         resultColor = context.netColors.available;
       } else {
-        resultText = '✗ لم يتطابق النمط مع الرسالة النموذجية\n${(r as Failure).error.message}';
+        resultText = '✗ لم يتطابق النمط مع الرسالة النموذجية\n${localizedError((r as Failure).error)}';
         resultColor = context.netColors.rejected;
       }
     }

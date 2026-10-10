@@ -11,6 +11,7 @@ import '../widgets/async_views.dart';
 import '../widgets/net/net_surface_card.dart';
 import '../widgets/net/net_transaction_detail_sheet.dart';
 import '../widgets/net/net_app_bar_title.dart';
+import '../errors/user_facing_error_localizer.dart';
 
 /// سجل العمليات — مطابقة إطارات الفيديو (`frame_t500s` / `inv_t480s`).
 ///
@@ -64,7 +65,7 @@ class _TransactionsLogScreenState extends State<TransactionsLogScreen> {
       if (r is Success<List<Transaction>>) {
         _all = r.value;
       } else {
-        _error = (r as Failure).error.message;
+        _error = localizedError((r as Failure).error);
       }
     });
   }

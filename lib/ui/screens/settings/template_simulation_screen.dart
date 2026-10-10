@@ -7,6 +7,7 @@ import '../../../domain/services/local_message_parser.dart';
 import '../../app_scope.dart';
 import '../../theme/net_semantic_colors.dart';
 import '../../theme/kayan_palette.dart';
+import '../../errors/user_facing_error_localizer.dart';
 
 /// محاكاة القوالب — اختبار استخراج البيانات من رسائل SMS (مطابق للفيديو).
 class TemplateSimulationScreen extends StatefulWidget {
@@ -92,7 +93,7 @@ class _TemplateSimulationScreenState extends State<TemplateSimulationScreen> {
             'المرجع: ${p.reference}';
       } else {
         _success = false;
-        _result = 'فشل التطابق\n${(r as Failure).error.message}';
+        _result = 'فشل التطابق\n${localizedError((r as Failure).error)}';
       }
     });
   }

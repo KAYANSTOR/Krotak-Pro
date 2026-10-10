@@ -8,6 +8,7 @@ import '../theme/net_tokens.dart';
 import '../widgets/async_views.dart';
 import '../widgets/net/net_app_bar_title.dart';
 import '../widgets/net/net_surface_card.dart';
+import '../errors/user_facing_error_localizer.dart';
 
 class ActivationScreen extends StatefulWidget {
   const ActivationScreen({super.key});
@@ -43,7 +44,7 @@ class _ActivationScreenState extends State<ActivationScreen> {
       _busy = false;
       _status = r is Success<License>
           ? 'مفعّل بشكل دائم: ${r.value.id}'
-          : (r as Failure).error.message;
+          : localizedError((r as Failure).error);
     });
   }
 

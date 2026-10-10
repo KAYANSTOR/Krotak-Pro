@@ -9,6 +9,7 @@ import '../theme/kayan_palette.dart';
 import '../theme/net_semantic_colors.dart';
 import '../widgets/async_views.dart';
 import 'settings/templates_screen.dart';
+import '../errors/user_facing_error_localizer.dart';
 
 /// إدارة المحافظ — **منفصلة عن نقاط البيع** (انظر `PosScreen`).
 ///
@@ -65,7 +66,7 @@ class _WalletsScreenState extends State<WalletsScreen> {
       ScreenOpenTrace.instance.markLatestDataReady(ScreenOpenIds.wallets);
       _loading = false;
       if (wallets is Failure) {
-        _error = (wallets as Failure).error.message;
+        _error = localizedError((wallets as Failure).error);
         return;
       }
       _wallets = (wallets as Success<List<Wallet>>).value;
@@ -117,7 +118,7 @@ class _WalletsScreenState extends State<WalletsScreen> {
             if (w.id == wallet.id) w.copyWith(status: wallet.status) else w,
         ];
       });
-      _snack((r as Failure).error.message);
+      _snack(localizedError((r as Failure).error));
       return;
     }
     _snack(next == WalletStatus.active
@@ -289,7 +290,7 @@ class _WalletsScreenState extends State<WalletsScreen> {
             packageName: mode == WalletSourceMode.notification && pkg.isNotEmpty ? pkg : null,
           );
       if (r is Failure && mounted) {
-        _snack((r as Failure).error.message);
+        _snack(localizedError((r as Failure).error));
         return;
       }
     } else {
@@ -302,7 +303,7 @@ class _WalletsScreenState extends State<WalletsScreen> {
             packageName: mode == WalletSourceMode.notification && pkg.isNotEmpty ? pkg : null,
           );
       if (r is Failure && mounted) {
-        _snack((r as Failure).error.message);
+        _snack(localizedError((r as Failure).error));
         return;
       }
     }
@@ -315,7 +316,7 @@ class _WalletsScreenState extends State<WalletsScreen> {
         enabled: true,
       );
       if (reg is Failure && mounted) {
-        _snack('حُفظت المحفظة لكن تعذّر تفعيل مصدر الإشعار: ${(reg as Failure).error.message}');
+        _snack('حُفظت المحفظة لكن تعذّر تفعيل مصدر الإشعار: ${localizedError((reg as Failure).error)}');
       } else if (mounted) {
         final granted = await c.notificationBridge.isAccessGranted();
         if (!granted) {
@@ -383,7 +384,7 @@ class _WalletsScreenState extends State<WalletsScreen> {
                         sourceMode: w.sourceMode,
                         packageName: w.packageName,
                       );
-                  if (r is Failure && mounted) _snack((r as Failure).error.message);
+                  if (r is Failure && mounted) _snack(localizedError((r as Failure).error));
                   await _load();
                 },
               ),
