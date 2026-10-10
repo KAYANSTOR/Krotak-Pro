@@ -339,7 +339,8 @@ final class LocalTransferProcessor implements TransferProcessor {
     if (!isPosOrder &&
         liveCustomer != null &&
         liveCustomer.status == CustomerStatus.provisional &&
-        customerService != null) {
+        customerService != null &&
+        !_isJaibTemporaryTemplate(transfer)) {
         final promoted = await customerService!.promoteToActive(liveCustomer.id);
         if (promoted is Success<Customer>) {
           final match = await contactDirectory?.findByPhone(transfer.customerIdentifier);
@@ -631,6 +632,18 @@ final class LocalTransferProcessor implements TransferProcessor {
         await messages.updateStatus(message.id, MessageProcessingStatus.processed);
         return Success<Transaction>(settlementTransaction);
       }
+    }
+
+    // Temporary Jaib accounts (blocked notice / alternate number) stay provisional
+    // and receive the deposit as balance only — no automatic card sale until linked.
+    if (!isPosOrder &&
+        customer.status == CustomerStatus.provisional &&
+        _isJaibTemporaryTemplate(transfer)) {
+      return _creditWithoutMatchingCategory(
+        message: message,
+        transfer: transfer,
+        customerId: customer.id,
+      );
     }
 
     final matchResult = await _matchActiveCategory(effectiveAmount);
@@ -1512,6 +1525,12 @@ final class LocalTransferProcessor implements TransferProcessor {
     return Success(matches);
   }
 
+
+  bool _isJaibTemporaryTemplate(ParsedTransfer transfer) {
+    final id = transfer.templateId ?? '';
+    return id.contains('jaib-ar-blocked') || id.contains('jaib-ar-phone-only');
+  }
+
   bool _canAutoProvision(ParsedTransfer transfer) {
     if (transfer.identifierType != TransferIdentifierType.phone) return false;
     final value = transfer.customerIdentifier.trim();
@@ -1534,11 +1553,14 @@ final class LocalTransferProcessor implements TransferProcessor {
     if (match != null && match.displayName.trim().isNotEmpty) {
       displayName = match.displayName.trim();
     }
+    final status = _isJaibTemporaryTemplate(transfer)
+        ? CustomerStatus.provisional
+        : CustomerStatus.active;
     final created = await service.create(
       displayName: displayName,
       identifierType: CustomerIdentifierType.phoneNumber,
       identifierValue: phone,
-      status: CustomerStatus.active,
+      status: status,
     );
     if (created is Success<Customer>) return created;
     if (created is Failure<Customer> &&
