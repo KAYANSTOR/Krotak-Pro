@@ -3,10 +3,12 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
+import 'package:share_plus/share_plus.dart';
 
 import '../../../core/result.dart';
 import '../../../domain/services/local_backup_service.dart';
 import '../../app_reloader.dart';
+import '../../errors/user_facing_error_localizer.dart';
 import '../../app_scope.dart';
 import '../../theme/kayan_palette.dart';
 import '../../theme/net_semantic_colors.dart';
@@ -30,6 +32,10 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen> {
   bool _creating = false;
   bool _restoring = false;
   String? _status;
+
+  /// WP-4 — آخر نسخة أُنشئت (للمشاركة) والمسار الظاهر في ملفات الهاتف.
+  File? _lastBackup;
+  String? _visiblePath;
 
   @override
   void initState() {
@@ -77,7 +83,30 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen> {
       return;
     }
     final file = (r as Success<File>).value;
-    setState(() => _status = 'تم إنشاء النسخة: ${p.basename(file.path)}');
+    // WP-4/D1: نسخة ظاهرة في `Download/Krotak Pro/` عبر MediaStore، مع إبقاء
+    // النسخة الداخلية كما هي (لا استبدال ولا حذف).
+    String? visiblePath;
+    try {
+      final bytes = await file.readAsBytes();
+      final saved = await c.visibleStorage.saveToDownloads(
+        bytes: bytes,
+        fileName: p.basename(file.path),
+        mimeType: 'application/octet-stream',
+      );
+      if (saved is Success<String>) visiblePath = saved.value;
+    } catch (_) {
+      visiblePath = null;
+    }
+    if (!mounted) return;
+    setState(() {
+      _lastBackup = file;
+      _visiblePath = visiblePath;
+      _status = visiblePath == null
+          ? 'تم إنشاء النسخة: ${p.basename(file.path)}\n'
+              'تعذر نسخها إلى مجلد التنزيلات — النسخة الداخلية سليمة ويمكن مشاركتها.'
+          : 'تم إنشاء النسخة: ${p.basename(file.path)}\n'
+              'المسار الظاهر: $visiblePath';
+    });
     await _load();
   }
 
@@ -176,6 +205,26 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen> {
     final dbNote = report.databaseRestored ? ' مع استبدال قاعدة البيانات' : '';
     setState(() => _status =
         'تمت الاستعادة (${report.settingsCount} إعداد$dbNote) — أعد تشغيل التطبيق');
+  }
+
+  /// WP-4 — مشاركة ملف النسخة عبر ورقة النظام (ملف فعلي لا نص).
+  Future<void> _shareBackup() async {
+    final file = _lastBackup;
+    if (file == null) return;
+    try {
+      if (!await file.exists()) {
+        if (mounted) {
+          setState(() => _status = 'ملف النسخة لم يعد موجوداً على الجهاز.');
+        }
+        return;
+      }
+      await Share.shareXFiles(
+        [XFile(file.path, mimeType: 'application/octet-stream')],
+        subject: 'نسخة احتياطية كروتك',
+      );
+    } catch (error) {
+      if (mounted) setState(() => _status = localizedError(error));
+    }
   }
 
   Future<String?> _askPassword({
@@ -360,6 +409,14 @@ class _BackupRestoreScreenState extends State<BackupRestoreScreen> {
                             fontSize: 13,
                             color: net.available,
                           ),
+                        ),
+                      ],
+                      if (_lastBackup != null) ...[
+                        const SizedBox(height: NetSpacing.sm),
+                        OutlinedButton.icon(
+                          onPressed: busy ? null : _shareBackup,
+                          icon: const Icon(Icons.share_rounded, size: 18),
+                          label: const Text('مشاركة النسخة'),
                         ),
                       ],
                       const SizedBox(height: NetSpacing.lg),

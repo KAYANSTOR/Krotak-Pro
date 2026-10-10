@@ -8,7 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:net_app/application/app_container.dart';
 import 'package:net_app/core/result.dart';
 import 'package:net_app/data/database/app_database.dart'
-    hide Customer, Card, Sale, TransferTemplate;
+    hide Customer, Card, Sale, TransferTemplate, AppSetting;
 import 'package:net_app/domain/entities/setting.dart';
 import 'package:net_app/domain/services/local_maintenance_service.dart';
 import 'package:net_app/ui/app_scope.dart';
