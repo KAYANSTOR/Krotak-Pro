@@ -48,7 +48,7 @@ final class CardImportService {
       CardImportPreview(
         drafts: parsed.drafts,
         parseErrors: parsed.errors,
-        stockDuplicateSerials: existing.value,
+        stockDuplicateSerials: (existing as Success<Set<String>>).value,
         fileName: fileName,
       ),
     );
@@ -82,7 +82,7 @@ final class CardImportService {
     if (analyzed is Failure<CardImportPreview>) return Failure(analyzed.error);
     return Success(
       CardImportReadOutcome(
-        preview: analyzed.value,
+        preview: (analyzed as Success<CardImportPreview>).value,
         fileKind: cardImportKindCode(fileName),
       ),
     );
@@ -147,7 +147,7 @@ final class CardImportService {
       return Failure(imported.error);
     }
 
-    final accepted = imported.value;
+    final accepted = (imported as Success<int>).value;
     final log = base.copyWith(
       status: (preview.stockDuplicateCount > 0 || preview.parseErrors.isNotEmpty)
           ? CardImportLogStatus.completedWithNotes

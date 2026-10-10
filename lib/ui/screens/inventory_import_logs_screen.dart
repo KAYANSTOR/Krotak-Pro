@@ -67,7 +67,7 @@ class _InventoryImportLogsScreenState extends State<InventoryImportLogsScreen> {
         _error = localizedError(result.error);
         _logs = const <CardImportLog>[];
       } else {
-        _logs = result.value;
+        _logs = (result as Success<List<CardImportLog>>).value;
       }
     });
   }
@@ -108,9 +108,10 @@ class _InventoryImportLogsScreenState extends State<InventoryImportLogsScreen> {
       await _load();
       return;
     }
+    final readOk = read as Success<CardImportReadOutcome>;
     final committed = await c.cardImportService.commit(
-      preview: read.value.preview,
-      fileKind: read.value.fileKind,
+      preview: readOk.value.preview,
+      fileKind: readOk.value.fileKind,
       categoryId: categoryId,
       categoryName: log.categoryName,
     );
@@ -119,7 +120,8 @@ class _InventoryImportLogsScreenState extends State<InventoryImportLogsScreen> {
     if (committed is Failure<CardImportOutcome>) {
       _notice(localizedError(committed.error));
     } else {
-      _notice('تم استيراد ${committed.value.acceptedCount} كرت.');
+      final ok = committed as Success<CardImportOutcome>;
+      _notice('تم استيراد ${ok.value.acceptedCount} كرت.');
     }
     await _load();
   }
@@ -140,7 +142,9 @@ class _InventoryImportLogsScreenState extends State<InventoryImportLogsScreen> {
       _notice(localizedError(saved.error));
       return;
     }
-    _notice('تم تصدير تقرير النتائج إلى ${saved.value}');
+    _notice(
+      'تم تصدير تقرير النتائج إلى ${(saved as Success<String>).value}',
+    );
   }
 
   Future<void> _deleteLog(CardImportLog log) async {

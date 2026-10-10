@@ -192,8 +192,9 @@ class _CardImportFileSheetState extends State<_CardImportFileSheet> {
         _error = localizedError(read.error);
         _preview = null;
       } else {
-        _preview = read.value.preview;
-        _fileKind = read.value.fileKind;
+        final ok = read as Success<CardImportReadOutcome>;
+        _preview = ok.value.preview;
+        _fileKind = ok.value.fileKind;
       }
     });
   }
@@ -218,7 +219,7 @@ class _CardImportFileSheetState extends State<_CardImportFileSheet> {
       setState(() => _error = localizedError(result.error));
       return;
     }
-    final outcome = result.value;
+    final outcome = (result as Success<CardImportOutcome>).value;
     final notes = <String>[
       if (outcome.duplicateCount > 0) 'تم تخطي ${outcome.duplicateCount} مكرر',
       if (outcome.rejectedCount > 0) '${outcome.rejectedCount} سطر مرفوض',

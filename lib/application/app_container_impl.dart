@@ -244,13 +244,6 @@ final class AppContainer {
     final sales = LocalSaleRepository(database);
     final auditLogs = LocalAuditLogRepository(database);
     final cardImportLogs = LocalCardImportLogRepository(database);
-    final cardImportService = CardImportService(
-      cards: cards,
-      catalog: catalogService,
-      logs: cardImportLogs,
-      clock: clock,
-      ids: ids,
-    );
     final licenses = LocalLicenseRepository(database);
     final settings = LocalSettingsRepository(database);
     final advanceRepository =
@@ -293,6 +286,13 @@ final class AppContainer {
         ids: ids);
     final inventoryService = LocalCardInventoryService(
         categories: categories, cards: cards, unitOfWork: uow);
+    final cardImportService = CardImportService(
+      cards: cards,
+      catalog: catalogService,
+      logs: cardImportLogs,
+      clock: clock,
+      ids: ids,
+    );
     final promotions =
         LocalPromotionCatalog(settings: settings, clock: clock, ids: ids);
     final promotionProgress = LocalPromotionProgressService(
