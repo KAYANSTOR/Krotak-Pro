@@ -73,6 +73,17 @@ abstract interface class CardRepository {
   Future<Result<Card?>> findById(String id);
   Future<Result<Card?>> findBySerialNumber(String serialNumber);
   Future<Result<List<Card>>> listAll();
+
+  /// صفحة من الكروت لتفادي تحميل المخزون كاملاً في شاشة الإدارة.
+  /// الترتيب بالسيريال. الفلاتر الاختيارية تُطبّق في الاستعلام.
+  Future<Result<List<Card>>> listPage({
+    int limit = 50,
+    int offset = 0,
+    String? categoryId,
+    CardStatus? status,
+    String? query,
+  });
+
   Future<Result<Set<String>>> existingSerialsAmong(Iterable<String> serials);
   Future<Result<Set<String>>> existingSecretsAmong(Iterable<String> secrets);
   Future<Result<List<Card>>> findByCategory(String categoryId);
