@@ -59,16 +59,18 @@ final class LocalCustomerIdentityResolver {
     }
 
     var lookupValue = trimmed;
+    var shortAlternate = false;
     if (identifierType == TransferIdentifierType.phone) {
       if (!PhoneNormalizer.isPhoneLike(trimmed)) {
-        return const Success(
-          CustomerIdentityResolution.unresolved(
-            reasonCode: 'invalid_phone_identifier',
-            reasonMessage: 'Phone identifier is not a sendable number',
-          ),
-        );
+        // معرّف بديل قصير (مثال: قوالب جيب المؤقتة، 4–15 خانة) ليس رقم هاتف
+        // قابلًا للإرسال، لكنه معرّف محفوظ في ملف العميل. يُبحث به مباشرة بدل
+        // رفض الرسالة (قرارات المالك §5.3: الرقم البديل يُستخدم للمطابقة بعد
+        // الربط)، ولا يُشتق منه أي رقم إرسال: [deliveryPhone] يبقى من الهوية
+        // الفعلية فقط، ومسارات التسليم ترفض الغياب بـ`delivery_phone_missing`.
+        shortAlternate = true;
+      } else {
+        lookupValue = PhoneNormalizer.canonicalize(trimmed) ?? trimmed;
       }
-      lookupValue = PhoneNormalizer.canonicalize(trimmed) ?? trimmed;
     }
 
     final found = await customers.findByIdentifier(lookupValue);
@@ -79,9 +81,11 @@ final class LocalCustomerIdentityResolver {
     if (customer == null) {
       return Success(
         CustomerIdentityResolution.unresolved(
-          reasonCode: 'customer_not_found',
-          reasonMessage:
-              'No customer mapping for ${identifierType.name}: $trimmed',
+          reasonCode:
+              shortAlternate ? 'invalid_phone_identifier' : 'customer_not_found',
+          reasonMessage: shortAlternate
+              ? 'Phone identifier is not a sendable number'
+              : 'No customer mapping for ${identifierType.name}: $trimmed',
         ),
       );
     }
