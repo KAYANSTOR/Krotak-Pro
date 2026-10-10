@@ -208,6 +208,78 @@ void main() {
     });
   });
 
+  group('إصلاح صيغة ون كاش المزروعة — قرارات المالك §6', () {
+    const legacyId = 'tpl-default-one-cash-ar-received';
+    const legacyPattern = 'استملت {amount} من {account} رصيدك هوه {ref} ر.ي';
+
+    test('repairs the misspelled seeded pattern', () async {
+      final oneCashWallet =
+          ((await wallets.listAll()) as Success<List<Wallet>>)
+              .value
+              .firstWhere((w) => w.name == 'ون كاش');
+      await templates.save(
+        TransferTemplate(
+          id: legacyId,
+          name: 'ون كاش — استلمت',
+          pattern: legacyPattern,
+          isActive: true,
+          walletId: oneCashWallet.id,
+          priority: 10,
+          senderCode: 'ONE Cash',
+        ),
+      );
+
+      final seeder = DefaultWalletTemplatesSeeder(
+        wallets: wallets,
+        templates: templates,
+        settings: settings,
+        clock: FixedClock(now),
+        ids: SequentialIdGenerator(),
+      );
+      expect(await seeder.seedIfNeeded(), isA<Success<int>>());
+
+      final stored =
+          ((await templates.findById(legacyId)) as Success<TransferTemplate?>)
+              .value!;
+      expect(stored.pattern, isNot(contains('استملت')));
+      expect(stored.pattern, isNot(contains('هوه')));
+      expect(stored.pattern, contains('استلمت'));
+    });
+
+    test('keeps an operator-edited pattern untouched', () async {
+      const editedPattern = 'استملت {amount} من {account} — نص المشغّل';
+      final oneCashWallet =
+          ((await wallets.listAll()) as Success<List<Wallet>>)
+              .value
+              .firstWhere((w) => w.name == 'ون كاش');
+      await templates.save(
+        TransferTemplate(
+          id: legacyId,
+          name: 'ون كاش — استلمت',
+          pattern: editedPattern,
+          isActive: true,
+          walletId: oneCashWallet.id,
+          priority: 10,
+          senderCode: 'ONE Cash',
+        ),
+      );
+
+      final seeder = DefaultWalletTemplatesSeeder(
+        wallets: wallets,
+        templates: templates,
+        settings: settings,
+        clock: FixedClock(now),
+        ids: SequentialIdGenerator(),
+      );
+      await seeder.seedIfNeeded();
+
+      final stored =
+          ((await templates.findById(legacyId)) as Success<TransferTemplate?>)
+              .value!;
+      expect(stored.pattern, editedPattern);
+    });
+  });
+
   group('ون كاش — ONE Cash', () {
     test('extracts the composed name and amount from the owner-approved format', () {
       final p = parseFor(

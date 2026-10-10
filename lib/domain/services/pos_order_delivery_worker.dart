@@ -197,6 +197,7 @@ final class PosOrderDeliveryWorker {
         unitCharge: commit.unitCharge,
         cards: loadedCards,
         quantity: commit.quantity,
+        instantCharge: commit.instantCharge,
       );
       if (rendered is Failure<PosOrderMessages>) {
         await _recordFailure(message: message, error: rendered.error, commit: commit);
@@ -422,6 +423,7 @@ final class PosOrderDeliveryWorker {
       final faceValueMinor = _requiredInt(map, 'faceValueMinor');
       final unitChargeMinor = _requiredInt(map, 'unitChargeMinor');
       final quantity = _requiredInt(map, 'quantity');
+      final instantCharge = map['instantCharge'] == true;
       final currencyCode = _requiredString(map, 'currencyCode');
       final rawItems = map['items'];
       if (rawItems is! List || rawItems.isEmpty) {
@@ -458,6 +460,7 @@ final class PosOrderDeliveryWorker {
             currencyCode: currencyCode,
           ),
           quantity: quantity,
+          instantCharge: instantCharge,
           items: items,
           occurredAt: occurredAt,
         ),
@@ -558,6 +561,7 @@ final class _PosOrderCommit {
     required this.quantity,
     required this.items,
     required this.occurredAt,
+    this.instantCharge = false,
   });
 
   final String operationId;
@@ -571,6 +575,9 @@ final class _PosOrderCommit {
   final int quantity;
   final List<_PosOrderItem> items;
   final DateTime occurredAt;
+
+  /// طلب شحن فوري (`شحن <رقم> <مبلغ>`) — يحدد قالب تأكيد نقطة البيع.
+  final bool instantCharge;
 }
 
 final class _PosOrderItem {

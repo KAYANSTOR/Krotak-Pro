@@ -16,7 +16,6 @@ void main() {
     late _MemSettings settings;
     late _MemCategories categories;
     late InMemoryCardRepository cards;
-    late _MemSender sender;
     late LocalLowStockAlertService service;
     final clock = FixedClock(DateTime.utc(2026, 9, 20, 21));
 
@@ -26,13 +25,11 @@ void main() {
         ..values.addAll(OutboundTemplateCatalog.initialBodies());
       categories = _MemCategories();
       cards = InMemoryCardRepository();
-      sender = _MemSender();
       service = LocalLowStockAlertService(
         settings: settings,
         categories: categories,
         cards: cards,
         clock: clock,
-        messageSender: sender,
       );
     });
 
@@ -83,18 +80,28 @@ void main() {
       expect(alerts.single.available, 1);
     });
 
-    test('sends a clear customer SMS instead of staying silent', () async {
-      final sent = await service.notifyCustomer(
-        destination: '777123456',
-        categoryName: '100',
-        available: 0,
+    test('renders the operator alert from the registered template only', () async {
+      // قرارات المالك §7: هذا تنبيه داخلي للمشغّل — لا يمر على MessageSender
+      // ولا يُرسل لأي رقم عميل؛ رسالة العميل تأتي من مسار الإيداع وحده.
+      final body = await service.renderOperatorBody(const [
+        LowStockAlert(categoryId: 'cat-1', categoryName: '100', available: 0),
+      ]);
+      expect(body, contains('100'));
+      expect(body, contains('0'));
+      expect(body, isNot(contains('الإدارة')));
+    });
+
+    test('falls back to the built-in operator summary when the template is absent', () async {
+      final bare = LocalLowStockAlertService(
+        settings: _MemSettings(),
+        categories: categories,
+        cards: cards,
+        clock: clock,
       );
-      expect(sent, isA<Success<void>>());
-      expect(sender.bodies, hasLength(1));
-      expect(sender.destinations.single, '777123456');
-      expect(sender.bodies.single, contains('غير متوفرة'));
-      expect(sender.bodies.single, contains('100'));
-      expect(sender.bodies.single, contains('الإدارة'));
+      final body = await bare.renderOperatorBody(const [
+        LowStockAlert(categoryId: 'cat-1', categoryName: '100', available: 0),
+      ]);
+      expect(body, contains('كرت 100 (0)'));
     });
 
     test('syncDeviceAlert publishes the live alert and clears it after refill', () async {
@@ -112,7 +119,8 @@ void main() {
       expect(notifier.shows, 1);
       expect(notifier.clears, 0);
       expect(notifier.lastTitle, contains('تنبيه المخزون'));
-      expect(notifier.lastBody, contains('كرت 100 (0)'));
+      expect(notifier.lastBody, contains('100'));
+      expect(notifier.lastBody, contains('0'));
 
       // تعبئة جزئية (ما دون العتبة): يبقى الإشعار ويُحدَّث نصه بالعدد الجديد.
       await cards.save(
@@ -127,7 +135,7 @@ void main() {
       await synced.syncDeviceAlert();
       expect(notifier.shows, 2);
       expect(notifier.clears, 0);
-      expect(notifier.lastBody, contains('كرت 100 (1)'));
+      expect(notifier.lastBody, contains('1'));
 
       await settings.save(
         AppSetting(
@@ -140,50 +148,6 @@ void main() {
       expect(notifier.clears, 1);
     });
 
-    test('renderCustomerMessage substitutes placeholders', () {
-      final text = service.renderCustomerMessage(
-        categoryName: '200',
-        available: 0,
-        template: 'نفد {category} المتبقي {count}',
-      );
-      expect(text, isA<Success<String>>());
-      expect((text as Success<String>).value, 'نفد 200 المتبقي 0');
-    });
-
-    test('renderCustomerMessage refuses an unresolved placeholder', () {
-      final text = service.renderCustomerMessage(
-        categoryName: '200',
-        available: 0,
-        template: 'نفد {category} المتبقي {unknown_var}',
-      );
-      expect(text, isA<Failure<String>>());
-      expect(
-        (text as Failure<String>).error.code,
-        'outbound_unresolved_placeholder',
-      );
-    });
-
-    test('notifyCustomer refuses to send when the template is missing', () async {
-      final bare = LocalLowStockAlertService(
-        settings: _MemSettings(),
-        categories: categories,
-        cards: cards,
-        clock: clock,
-        messageSender: sender,
-      );
-      final sent = await bare.notifyCustomer(
-        destination: '777123456',
-        categoryName: '100',
-        available: 0,
-      );
-      expect(sent, isA<Failure<void>>());
-      expect(
-        (sent as Failure<void>).error.code,
-        'outbound_template_missing',
-        reason: 'لا إرسال بلا قالب مسجّل في الإعدادات',
-      );
-      expect(sender.bodies, isEmpty);
-    });
   });
 }
 
@@ -247,14 +211,3 @@ final class _MemNotifier implements StockAlertNotifier {
   }
 }
 
-final class _MemSender implements MessageSender {
-  final destinations = <String>[];
-  final bodies = <String>[];
-
-  @override
-  Future<Result<void>> send({required String destination, required String body}) async {
-    destinations.add(destination);
-    bodies.add(body);
-    return const Success(null);
-  }
-}

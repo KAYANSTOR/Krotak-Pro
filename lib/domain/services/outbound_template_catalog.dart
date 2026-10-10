@@ -318,12 +318,14 @@ abstract final class OutboundTemplateCatalog {
     ),
     OutboundTemplateDefinition(
       key: SettingKeys.lowStockAlertTemplate,
-      title: 'تنبيه انخفاض مخزون الكروت',
+      title: 'تنبيه داخلي للمشغّل — انخفاض مخزون الكروت',
       category: OutboundTemplateCategory.system,
       variables: {'category', 'category_name', 'count', 'CARD_VALUE'},
       requiredVariables: {'category'},
       initialBody: SettingDefaults.lowStockAlertTemplate,
-      usage: 'يُرسل للعميل الذي طلب فئة غير متوفرة في المخزون.',
+      // قرارات المالك §7: فصل تنبيه المشغّل الداخلي عن رسالة العميل.
+      usage:
+          'تنبيه داخلي للمشغّل في إشعار الجهاز الحي (يظهر ويُلغى مع المخزون)؛ لا يُرسل للعملاء. رسالة العميل عند وصول إيداع بلا كرت مطابق هي قالب «استلام إيداع بلا كرت متوفر».',
     ),
     // ── قوالب إرسال الكروت حسب نوع العملية (مرحلة A من خطة التطوير) ──
     OutboundTemplateDefinition(
@@ -399,6 +401,9 @@ abstract final class OutboundTemplateCatalog {
     'code',
     'secret',
     'CARD_CODE',
+    // قرارات المالك §2: هوية الكرت (رقم/اسم المستخدم أو قيمة الهوية/الرمز).
+    'المستخدم',
+    'user',
     'CURRENCY',
   };
 

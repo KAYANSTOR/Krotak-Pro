@@ -104,6 +104,34 @@ void main() {
     expect(value.totalCharge.minorUnits, 18000);
   });
 
+  test('instant charge confirms to the POS with its own template', () async {
+    final renderer = PosOrderMessageRenderer(
+      settings: _Settings(<String, String>{
+        ..._seeded(),
+        SettingKeys.posInstantChargeConfirmTemplate:
+            'شحن فوري {amount} ر.ي إلى {phone} من {POS_NAME}',
+      }),
+    );
+
+    final result = await renderer.render(
+      posAccount: pos,
+      customerPhone: '779776919',
+      posNotificationPhone: '777000111',
+      categoryName: category.name,
+      faceValue: category.faceValue,
+      unitCharge: const Money(minorUnits: 9000, currencyCode: 'YER'),
+      cards: cards,
+      quantity: 2,
+      instantCharge: true,
+    );
+
+    expect(result, isA<Success<PosOrderMessages>>());
+    final value = (result as Success<PosOrderMessages>).value;
+    expect(value.posBody, 'شحن فوري 90 ر.ي إلى 779776919 من بقالة الأمل');
+    expect(value.posDestination, '777000111');
+    expect(value.customerBody, contains('100001'));
+  });
+
   test('uses persisted custom templates', () async {
     final renderer = PosOrderMessageRenderer(
       settings: _Settings(<String, String>{

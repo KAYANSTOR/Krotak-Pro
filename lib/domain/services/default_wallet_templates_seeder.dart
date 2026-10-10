@@ -38,6 +38,15 @@ final class DefaultWalletTemplatesSeeder {
   static const _legacyJaibSharedPattern =
       'اضيف {amount} ر.ي تحويل مشترك رص:{ref} ر.ي من {account}-{phone}';
 
+  /// صيغة ون كاش القديمة المزروعة بأخطاء إملائية (`استملت` / `هوه`).
+  ///
+  /// قرارات المالك §6: هذه الصيغة خطأ إملائي وليست الصيغة المعتمدة، فتُصحَّح
+  /// في القالب المزروع نفسه ولا تبقى وحدها صالحة.
+  static const _legacyOneCashPattern =
+      'استملت {amount} من {account} رصيدك هوه {ref} ر.ي';
+
+  static const _oneCashReceivedTemplateId = 'tpl-default-one-cash-ar-received';
+
   /// Idempotent: skips the **insert** pass when [seededKey] is set, otherwise
   /// inserts missing templates keyed by stable id `tpl-default-{senderCode}-{variant}`.
   ///
@@ -119,6 +128,18 @@ final class DefaultWalletTemplatesSeeder {
           pattern: _specFor('Jaib', 'ar-shared').pattern,
           sampleBody:
               'اضيف 100 ر.ي تحويل مشترك رص:10615 ر.ي من جارالله الكبودي 773086403',
+        );
+        templateChanged = true;
+      }
+
+      // v5: تصحيح صيغة ون كاش المزروعة بأخطاء إملائية إلى الصيغة المصححة
+      // (قرارات المالك §6) — لا يُلمس أي نص عدّله المشغّل بنفسه.
+      if (t.id == _oneCashReceivedTemplateId &&
+          t.pattern == _legacyOneCashPattern) {
+        final oneCash = _specFor('ONE Cash', 'ar-received');
+        t = t.copyWith(
+          pattern: oneCash.pattern,
+          sampleBody: oneCash.sampleBody,
         );
         templateChanged = true;
       }

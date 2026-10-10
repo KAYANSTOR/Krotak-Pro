@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
@@ -45,6 +46,14 @@ class _InventoryScreenState extends State<InventoryScreen> {
   String _query = '';
   String? _categoryFilter;
   domain.CardStatus? _statusFilter;
+
+  /// حجم الصفحة المُحمّلة من الاستعلام — القائمة لا تُحمّل المخزون كاملًا.
+  static const int _pageSize = 50;
+  bool _loadingMore = false;
+  bool _hasMore = true;
+
+  /// تأخير بحث بسيط: لا استعلام لكل ضغطة مفتاح على مخزون كبير.
+  Timer? _searchDebounce;
   bool _revealSecrets = false;
   final _searchCtrl = TextEditingController();
 
@@ -60,6 +69,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     _searchCtrl.dispose();
     super.dispose();
   }
@@ -71,7 +81,14 @@ class _InventoryScreenState extends State<InventoryScreen> {
     });
     final c = AppScope.of(context);
     final cats = await c.categories.listAll();
-    final cards = await c.cards.listPage(limit: 50, offset: 0);
+    // الفلاتر تُطبَّق في الاستعلام نفسه (فئة/حالة/بحث) لا على الصفحات المحمّلة.
+    final cards = await c.cards.listPage(
+      limit: _pageSize,
+      offset: 0,
+      categoryId: _categoryFilter,
+      status: _statusFilter,
+      query: _query.trim().isEmpty ? null : _query.trim(),
+    );
     final available = await c.cards.countByStatus(domain.CardStatus.available);
     final reserved = await c.cards.countByStatus(domain.CardStatus.reserved);
     final sold = await c.cards.countByStatus(domain.CardStatus.sold);
@@ -97,6 +114,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
       _loading = false;
       _categories = (cats as Success<List<domain.CardCategory>>).value;
       _cards = (cards as Success<List<domain.Card>>).value;
+      _hasMore = _cards.length >= _pageSize;
       _availableCount = (available as Success<int>).value;
       _reservedCount = (reserved as Success<int>).value;
       _soldCount = (sold as Success<int>).value;
@@ -106,25 +124,11 @@ class _InventoryScreenState extends State<InventoryScreen> {
     await c.lowStockAlerts.syncDeviceAlert();
   }
 
+  /// ترتيب العرض فقط — الفلاتر (فئة/حالة/بحث) تُطبَّق في استعلام
+  /// `CardRepository.listPage`، فلا تُصفّى الصفحات المحمّلة محليًا.
   List<domain.Card> get _filtered {
-    var list = _cards;
-    if (_categoryFilter != null) {
-      list = list.where((e) => e.categoryId == _categoryFilter).toList();
-    }
-    if (_statusFilter != null) {
-      list = list.where((e) => e.status == _statusFilter).toList();
-    }
-    final q = _query.trim();
-    if (q.isNotEmpty) {
-      list = list
-          .where((e) =>
-              e.serialNumber.contains(q) ||
-              e.secretCode.contains(q) ||
-              e.id.contains(q))
-          .toList();
-    }
     // ترتيب العرض: المتاح في الأعلى ثم المحجوز، والمباع في الأسفل.
-    final ordered = List<domain.Card>.of(list);
+    final ordered = List<domain.Card>.of(_cards);
     ordered.sort((a, b) {
       final byRank = _statusRank(a.status).compareTo(_statusRank(b.status));
       if (byRank != 0) return byRank;
@@ -194,6 +198,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
   }
 
   void _resetInventoryFilters() {
+    _searchDebounce?.cancel();
     setState(() {
       _query = '';
       _categoryFilter = null;
@@ -202,6 +207,8 @@ class _InventoryScreenState extends State<InventoryScreen> {
       _selectionMode = false;
       _selectedIds.clear();
     });
+    // الفلاتر تُطبَّق في الاستعلام، فإلغاؤها يعيد تحميل الصفحة الأولى.
+    _load();
   }
 
   void _enterSelection(String cardId) {
@@ -225,10 +232,44 @@ class _InventoryScreenState extends State<InventoryScreen> {
     });
   }
 
+  /// تحديد كل الكروت المحمّلة حاليًا (الصفحات التي نزلت فقط، وليست المخزون
+  /// كاملًا) — تسمية الزر في الواجهة تقول ذلك صراحةً.
   void _selectAllVisible() {
     setState(() {
       _selectionMode = true;
       _selectedIds.addAll(_filtered.map((e) => e.id));
+    });
+  }
+
+  /// تحميل الصفحة التالية بنفس الفلاتر من الاستعلام، بلا إعادة تحميل السابقة.
+  Future<void> _loadMore() async {
+    if (_loadingMore || !_hasMore) return;
+    setState(() => _loadingMore = true);
+    final c = AppScope.of(context);
+    final next = await c.cards.listPage(
+      limit: _pageSize,
+      offset: _cards.length,
+      categoryId: _categoryFilter,
+      status: _statusFilter,
+      query: _query.trim().isEmpty ? null : _query.trim(),
+    );
+    if (!mounted) return;
+    if (next is Failure<List<domain.Card>>) {
+      setState(() => _loadingMore = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('تعذّر تحميل المزيد: ${next.error.message}')),
+      );
+      return;
+    }
+    final loaded = (next as Success<List<domain.Card>>).value;
+    final known = _cards.map((e) => e.id).toSet();
+    setState(() {
+      _loadingMore = false;
+      _cards = <domain.Card>[
+        ..._cards,
+        ...loaded.where((e) => !known.contains(e.id)),
+      ];
+      _hasMore = loaded.length >= _pageSize;
     });
   }
 
@@ -515,9 +556,14 @@ class _InventoryScreenState extends State<InventoryScreen> {
                         color: _categoryFilter == cat.id ? palette.primary : palette.border,
                       ),
                       shape: RoundedRectangleBorder(borderRadius: NetRadii.pillAll),
-                      onSelected: (_) => setState(() {
-                        _categoryFilter = _categoryFilter == cat.id ? null : cat.id;
-                      }),
+                      onSelected: (_) {
+                        setState(() {
+                          _categoryFilter =
+                              _categoryFilter == cat.id ? null : cat.id;
+                        });
+                        // فلتر الفئة يُطبَّق في الاستعلام لا على الصفحة المحمّلة.
+                        _load();
+                      },
                     ),
                   ),
               ],
@@ -532,7 +578,13 @@ class _InventoryScreenState extends State<InventoryScreen> {
           ),
           child: TextField(
             controller: _searchCtrl,
-            onChanged: (v) => setState(() => _query = v),
+            onChanged: (v) {
+              setState(() => _query = v);
+              _searchDebounce?.cancel();
+              _searchDebounce = Timer(const Duration(milliseconds: 300), () {
+                if (mounted) _load();
+              });
+            },
             decoration: InputDecoration(
               hintText: 'بحث برقم الكرت أو الرمز',
               hintStyle: TextStyle(
@@ -588,9 +640,28 @@ class _InventoryScreenState extends State<InventoryScreen> {
                   color: palette.primary,
                   child: ListView.separated(
                     padding: const EdgeInsets.only(bottom: 88),
-                    itemCount: filtered.length,
+                    itemCount: filtered.length + (_hasMore ? 1 : 0),
                     separatorBuilder: (_, __) => const SizedBox(height: NetSpacing.sm),
                     itemBuilder: (_, index) {
+                      if (index >= filtered.length) {
+                        return Padding(
+                          padding: const EdgeInsets.only(top: NetSpacing.sm),
+                          child: Center(
+                            child: _loadingMore
+                                ? const SizedBox(
+                                    width: 22,
+                                    height: 22,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2.4,
+                                    ),
+                                  )
+                                : TextButton(
+                                    onPressed: _loadMore,
+                                    child: const Text('تحميل المزيد'),
+                                  ),
+                          ),
+                        );
+                      }
                       final card = filtered[index];
                       return _CardRow(
                         card: card,

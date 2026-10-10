@@ -1096,6 +1096,7 @@ final class LocalTransferProcessor implements TransferProcessor {
       'unitChargeMinor': unitCharge.minorUnits,
       'totalChargeMinor': unitCharge.minorUnits * items.length,
       'quantity': items.length,
+      'instantCharge': transfer.instantCharge,
       'items': [
         for (final item in items)
           {
@@ -1156,6 +1157,7 @@ final class LocalTransferProcessor implements TransferProcessor {
       unitCharge: unitCharge,
       cards: items.map((e) => e.card).toList(growable: false),
       quantity: items.length,
+      instantCharge: transfer.instantCharge,
     );
     if (rendered is Failure<PosOrderMessages>) {
       await _persistTerminalFailure(

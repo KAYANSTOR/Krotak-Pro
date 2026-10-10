@@ -160,8 +160,9 @@ abstract final class SettingDefaults {
   static const posCustomerSmsTailTemplate = '\n— {pos}';
   static const posInstantChargeConfirmTemplate =
       'تم إرسال كرت {amount} ر.ي إلى {phone}';
+  /// تنبيه داخلي للمشغّل (إشعار الجهاز الحي) — ليس رسالة عميل.
   static const lowStockAlertTemplate =
-      'عذراً، كروت فئة {category} غير متوفرة حالياً (المتبقي: {count}). يرجى التواصل مع الإدارة.';
+      'تنبيه: كروت فئة {category} أوشكت على النفاد (المتبقي: {count}).';
   static const cardDeliveryCashTemplate =
       'كرتك من شبكة {اسم_المحفظة}\n{الفئة}\n{الرقم}\n{الرمز}';
   static const cardDeliveryCreditTemplate =

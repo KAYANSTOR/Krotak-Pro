@@ -117,6 +117,17 @@ void main() {
     );
   });
 
+  test('falls back to the card secret when the card has no serial', () async {
+    final result = await OutboundTemplateRenderer(
+      settings: _Settings(<String, String>{
+        SettingKeys.voucherDeliverySmsTemplate: 'هوية {المستخدم}',
+      }),
+    ).renderVoucherDelivery(serialNumber: '   ', secretCode: 'PIN-9');
+
+    expect(result, isA<Success<String>>());
+    expect((result as Success<String>).value, 'هوية PIN-9');
+  });
+
   test('maps المستخدم to the card serial number, never an operator name', () async {
     final result = await OutboundTemplateRenderer(
       settings: _Settings(<String, String>{

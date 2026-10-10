@@ -21,6 +21,7 @@ final class PosOrderMessageRenderer {
     required Money unitCharge,
     required List<Card> cards,
     required int quantity,
+    bool instantCharge = false,
   }) async {
     if (cards.isEmpty) {
       return const Failure(
@@ -82,8 +83,13 @@ final class PosOrderMessageRenderer {
       },
     );
 
+    // قرارات المالك §7: طلب الشحن الفوري (`شحن <رقم> <مبلغ>`) يؤكد لنقطة
+    // البيع بمبلغ العملية ورقم العميل المستلم عبر قالب تأكيد الشحن الفوري
+    // المسجّل؛ الطلب العادي يبقى على قالب نجاح الطلب بلا تغيير.
     final posBodyResult = await renderer.renderRegistered(
-      key: SettingKeys.posOrderSuccessTemplate,
+      key: instantCharge
+          ? SettingKeys.posInstantChargeConfirmTemplate
+          : SettingKeys.posOrderSuccessTemplate,
       values: <String, String>{
         'pos': posAccount.name,
         'POS_NAME': posAccount.name,

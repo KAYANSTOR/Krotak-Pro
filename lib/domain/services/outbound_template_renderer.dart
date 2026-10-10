@@ -276,6 +276,11 @@ final class OutboundTemplateRenderer {
 
     // المتغيرات العربية (aliases) تُمرَّر بنفس قيمة نظيرها الإنجليزي: تعريفها في
     // عقد القوالب وحده لا يكفي، لأن المحرك يستبدل ما وُجدت له قيمة فقط.
+    //
+    // قرارات المالك §2: `{المستخدم}` هو هوية الكرت الموجودة فعلًا في بياناته
+    // (رقم/اسم المستخدم = السيريال، وإلا قيمة الهوية/الرمز)، ويمنع تمرير اسم
+    // العميل أو اسم المشغّل إليه.
+    final identity = serial.isNotEmpty ? serial : secret;
     final values = <String, String>{
       'serial': serial,
       'serial_number': serial,
@@ -285,8 +290,8 @@ final class OutboundTemplateRenderer {
       'الرمز': secret,
       'CARD_CODE': serial,
       'CARD_SERIAL': serial,
-      'المستخدم': serial,
-      'user': serial,
+      'المستخدم': identity,
+      'user': identity,
       'CARD_VALUE': resolvedCardValue,
       'الفئة': resolvedCardValue,
       'NETWORK_NAME': resolvedNetworkName,

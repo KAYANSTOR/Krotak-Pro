@@ -444,7 +444,10 @@ final class AppContainer {
         auditLogs: auditLogs,
         unitOfWork: uow,
         clock: clock,
-        ids: ids);
+        ids: ids,
+        // قرارات المالك §7: قالب سداد دين العميل يُرسل من مسار التسوية الفعلي.
+        settings: settings,
+        messageSender: messageSender);
     final retryService = LocalMessageRetryService(
         auditLogs: auditLogs, messages: messages, clock: clock, ids: ids);
     final notificationBridge = NotificationBridge();
