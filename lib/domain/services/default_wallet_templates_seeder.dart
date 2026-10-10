@@ -339,9 +339,8 @@ final class DefaultWalletTemplatesSeeder {
       variant: 'ar-received',
       name: 'ون كاش — استلمت',
       priority: 10,
-      pattern: 'استملت {amount} من {account} رصيدك هوه {ref} ر.ي',
-      sampleBody:
-          'استملت 200.00 من وسام مرشد علي حمود رصيدك هوه 252.33 ر.ي',
+      pattern: 'استلمت {amount}\nمن {account}\nرصيدك{ref} ر.ي',
+      sampleBody: 'استلمت 500.00\nمن عبدالله عادل عب\nرصيدك500.00 ر.ي',
     ),
     _TplSpec(
       walletKey: 'ONE Cash',

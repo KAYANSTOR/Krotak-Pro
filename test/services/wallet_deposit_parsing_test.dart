@@ -209,13 +209,13 @@ void main() {
   });
 
   group('ون كاش — ONE Cash', () {
-    test('extracts the composed name and amount, ignoring the balance', () {
+    test('extracts the composed name and amount from the owner-approved format', () {
       final p = parseFor(
         'ون كاش',
-        'استملت 200.00 من وسام مرشد علي حمود رصيدك هوه 252.33 ر.ي',
+        'استلمت 500.00\nمن عبدالله عادل عب\nرصيدك500.00 ر.ي',
       );
-      expect(p.amount.minorUnits, 20000);
-      expect(p.customerIdentifier, 'وسام مرشد علي حمود');
+      expect(p.amount.minorUnits, 50000);
+      expect(p.customerIdentifier, 'عبدالله عادل عب');
       expect(p.identifierType, TransferIdentifierType.account);
     });
   });

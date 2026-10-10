@@ -117,6 +117,17 @@ void main() {
     );
   });
 
+  test('maps المستخدم to the card serial number, never an operator name', () async {
+    final result = await OutboundTemplateRenderer(
+      settings: _Settings(<String, String>{
+        SettingKeys.voucherDeliverySmsTemplate: 'هوية {المستخدم} / {user}',
+      }),
+    ).renderVoucherDelivery(serialNumber: 'SERIAL-9', secretCode: 'PIN-9');
+
+    expect(result, isA<Success<String>>());
+    expect((result as Success<String>).value, 'هوية SERIAL-9 / SERIAL-9');
+  });
+
   group('no template in settings → no send', () {
     test('a missing template setting is refused (never the built-in fallback)',
         () async {

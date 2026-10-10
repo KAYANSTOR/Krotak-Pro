@@ -285,6 +285,8 @@ final class OutboundTemplateRenderer {
       'الرمز': secret,
       'CARD_CODE': serial,
       'CARD_SERIAL': serial,
+      'المستخدم': serial,
+      'user': serial,
       'CARD_VALUE': resolvedCardValue,
       'الفئة': resolvedCardValue,
       'NETWORK_NAME': resolvedNetworkName,
