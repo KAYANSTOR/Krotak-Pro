@@ -68,7 +68,7 @@ class TransactionReceiptCard extends StatelessWidget {
                 ),
                 const Spacer(),
                 Text(
-                  'بيانات الحركة',
+                  'إشعار حركة',
                   style: TextStyle(
                     fontFamily: NetTypography.family,
                     fontSize: 12,

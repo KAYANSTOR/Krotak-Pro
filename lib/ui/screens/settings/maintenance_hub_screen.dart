@@ -193,7 +193,7 @@ class _MaintenanceHubScreenState extends State<MaintenanceHubScreen> {
     if (before == null || after == null) return head;
     final freed = before - after;
     final sizeLine =
-        'حجم قاعدة البيانات: ${formatBytes(before)} ← ${formatBytes(after)}';
+        'حجم القاعدة: ${formatBytes(before)} ← ${formatBytes(after)}';
     if (freed > 0) return '$head $sizeLine (حُرّر ${formatBytes(freed)}).';
     return '$head $sizeLine (لا مساحة قابلة للتحرير حالياً).';
   }

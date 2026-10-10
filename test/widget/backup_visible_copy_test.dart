@@ -64,6 +64,12 @@ void main() {
       ),
     );
     await tester.pump();
+    // `listBackups` يقرأ نظام الملفات (I/O حقيقي): لا يكتمل داخل الزمن الوهمي
+    // للاختبار، فنمنحه حلقة زمن حقيقية قبل فحص الواجهة.
+    await tester.runAsync(() async {
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+    });
+    await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
 
     await tester.tap(find.textContaining('إنشاء نسخة'));
