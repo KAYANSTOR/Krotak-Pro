@@ -112,6 +112,44 @@ final class LocalSaleRepository implements SaleRepository, CustomerHistoryMover 
     }
   }
 
+  @override
+  Future<Result<int>> sumCompletedBetween(DateTime from, DateTime to) async {
+    try {
+      final result = await database.customSelect(
+        'SELECT COALESCE(SUM(amount_minor_units), 0) AS total '
+        'FROM sales '
+        'WHERE created_at >= ? AND created_at <= ? AND status = ?',
+        variables: [
+          Variable.withDateTime(from),
+          Variable.withDateTime(to),
+          Variable.withString(domain.TransactionStatus.completed.name),
+        ],
+      ).getSingle();
+      return Success(result.read<int>('total'));
+    } catch (error) {
+      return Failure(_failure('sale_sum_between_failed', error));
+    }
+  }
+
+  @override
+  Future<Result<int>> countCompletedBetween(DateTime from, DateTime to) async {
+    try {
+      final result = await database.customSelect(
+        'SELECT COUNT(*) AS cnt '
+        'FROM sales '
+        'WHERE created_at >= ? AND created_at <= ? AND status = ?',
+        variables: [
+          Variable.withDateTime(from),
+          Variable.withDateTime(to),
+          Variable.withString(domain.TransactionStatus.completed.name),
+        ],
+      ).getSingle();
+      return Success(result.read<int>('cnt'));
+    } catch (error) {
+      return Failure(_failure('sale_count_between_failed', error));
+    }
+  }
+
   domain.Sale _toSale(Sale row) {
     return domain.Sale(
       id: row.id,
