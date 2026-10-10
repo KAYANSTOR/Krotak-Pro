@@ -39,6 +39,9 @@ class _InventoryScreenState extends State<InventoryScreen> {
   String? _error;
   List<domain.CardCategory> _categories = const [];
   List<domain.Card> _cards = const [];
+  int _availableCount = 0;
+  int _reservedCount = 0;
+  int _soldCount = 0;
   String _query = '';
   String? _categoryFilter;
   domain.CardStatus? _statusFilter;
@@ -69,8 +72,11 @@ class _InventoryScreenState extends State<InventoryScreen> {
     final c = AppScope.of(context);
     final cats = await c.categories.listAll();
     final cards = await c.cards.listAll();
+    final available = await c.cards.countByStatus(domain.CardStatus.available);
+    final reserved = await c.cards.countByStatus(domain.CardStatus.reserved);
+    final sold = await c.cards.countByStatus(domain.CardStatus.sold);
     if (!mounted) return;
-    if (cats is Failure || cards is Failure) {
+    if (cats is Failure || cards is Failure || available is Failure || reserved is Failure || sold is Failure) {
       ScreenOpenTrace.instance.markLatestDataReady('cards');
       setState(() {
         _loading = false;
@@ -85,6 +91,9 @@ class _InventoryScreenState extends State<InventoryScreen> {
       _loading = false;
       _categories = (cats as Success<List<domain.CardCategory>>).value;
       _cards = (cards as Success<List<domain.Card>>).value;
+      _availableCount = available is Success<int> ? available.value : 0;
+      _reservedCount = reserved is Success<int> ? reserved.value : 0;
+      _soldCount = sold is Success<int> ? sold.value : 0;
     });
     // الاستيراد والحذف يغيّران المخزون: نُزامن إشعار أندرويد الحي فوراً (يظهر عند
     // الهبوط تحت العتبة، ويُلغى فقط بعد إعادة التعبئة فوقها).
@@ -304,9 +313,9 @@ class _InventoryScreenState extends State<InventoryScreen> {
     final palette = KayanPalette.of(context);
     final net = context.netColors;
     final filtered = _filtered;
-    final available = _cards.where((e) => e.status == domain.CardStatus.available).length;
-    final reserved = _cards.where((e) => e.status == domain.CardStatus.reserved).length;
-    final sold = _cards.where((e) => e.status == domain.CardStatus.sold).length;
+    final available = _availableCount;
+    final reserved = _reservedCount;
+    final sold = _soldCount;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
