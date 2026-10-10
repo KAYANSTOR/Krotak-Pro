@@ -25,6 +25,15 @@ object VisibleStorage {
 
     const val IMAGE_MIME = "image/png"
 
+    /**
+     * جذور المسارات النسبية. قيم ثابتة في الكود لا `Environment.*` لأن ثوابت
+     * `android.jar` غير مُضمَّنة في اختبارات JVM (تُرجع null)، والنواة يجب أن
+     * تبقى قابلة للاختبار بلا جهاز. القيم مطابقة لثوابت أندرويد رسميًا.
+     */
+    const val DOWNLOADS_ROOT = "Download"
+
+    const val PICTURES_ROOT = "Pictures"
+
     /** ينظّف اسم الملف: يمنع فواصل المسارات والمحارف الممنوعة. */
     fun sanitizeFileName(rawName: String): String {
         val cleaned = rawName
@@ -52,13 +61,13 @@ object VisibleStorage {
 
     /** `Download/Krotak Pro[/sub]` — المسار النسبي المطلوب من MediaStore. */
     fun relativeDownloadsPath(subfolder: String? = null): String =
-        listOf(Environment.DIRECTORY_DOWNLOADS, FOLDER_NAME, normalizeSubfolder(subfolder))
+        listOf(DOWNLOADS_ROOT, FOLDER_NAME, normalizeSubfolder(subfolder))
             .filter { it.isNotBlank() }
             .joinToString("/")
 
     /** `Pictures/Krotak Pro[/sub]` (D5). */
     fun relativePicturesPath(subfolder: String? = null): String =
-        listOf(Environment.DIRECTORY_PICTURES, FOLDER_NAME, normalizeSubfolder(subfolder))
+        listOf(PICTURES_ROOT, FOLDER_NAME, normalizeSubfolder(subfolder))
             .filter { it.isNotBlank() }
             .joinToString("/")
 
