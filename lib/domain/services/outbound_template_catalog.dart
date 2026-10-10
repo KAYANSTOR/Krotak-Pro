@@ -301,9 +301,9 @@ abstract final class OutboundTemplateCatalog {
       key: SettingKeys.salafniSettledTemplate,
       title: 'سداد سلفني',
       category: OutboundTemplateCategory.salafni,
-      variables: {'amount', 'remaining', 'CURRENCY'},
+      variables: {'amount', 'paid', 'surplus', 'remaining', 'balance', 'CURRENCY', 'AMOUNT', 'PAID', 'SURPLUS', 'BALANCE'},
       requiredVariables: {'amount'},
-      initialBody: LocalAdvanceService.defaultSettled,
+      initialBody: SettingDefaults.salafniSettlementNoticeTemplate,
       usage: 'يُرسل للعميل عند تسجيل سداد (كامل أو جزئي) على سلفناه.',
     ),
     OutboundTemplateDefinition(

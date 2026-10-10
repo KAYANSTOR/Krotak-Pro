@@ -140,6 +140,10 @@ abstract final class SettingDefaults {
       'تم إرسال {QUANTITY_TEXT} بنجاح إلى {CUSTOMER_PHONE}\nالفئة: {CARD_VALUE} {CURRENCY}\nنقطة البيع: {POS_NAME}\nإجمالي الخصم من الحساب: {TOTAL} {CURRENCY}';
   static const customerDebtPaymentTemplate =
       'تم تأكيد سداد مبلغ {amount} ر.ي. رصيدك الحالي: {balance} ر.ي';
+
+  /// رسالة سداد سلفني بعد إيداع: تعرض الإيداع والمخصوم والفائض والرصيد.
+  static const salafniSettlementNoticeTemplate =
+      'تم استلام إيداع بمبلغ {amount} {CURRENCY}\nتم خصم {paid} {CURRENCY} لسداد السلفة\nتم إضافة {surplus} {CURRENCY} إلى رصيد حسابك\nرصيدك الحالي: {balance} {CURRENCY}';
   static const posBalanceResponseTemplate =
       'رصيد نقطة البيع {pos}: {balance} ر.ي\nالدين: {debt} ر.ي';
   static const posCreditLimitExceededTemplate =
