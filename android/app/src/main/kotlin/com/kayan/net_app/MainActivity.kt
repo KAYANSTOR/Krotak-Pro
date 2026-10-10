@@ -32,6 +32,7 @@ class MainActivity : FlutterActivity(), SmsListener {
     private val diagnosticsChannelName = "com.kayan.net/diagnostics"
     private val alertsChannelName = "com.kayan.net/alerts"
     private val keepAliveChannelName = "com.kayan.net/keepalive"
+    private val storageChannelName = "com.kayan.net/storage"
     private var eventSink: EventChannel.EventSink? = null
     private var pendingContactResult: MethodChannel.Result? = null
 
@@ -172,6 +173,7 @@ class MainActivity : FlutterActivity(), SmsListener {
         }
 
         wireKeepAlive(flutterEngine)
+        wireStorage(flutterEngine)
 
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, diagnosticsChannelName).setMethodCallHandler { call, result ->
             when (call.method) {
@@ -311,6 +313,66 @@ class MainActivity : FlutterActivity(), SmsListener {
                 else -> result.notImplemented()
             }
         }
+    }
+
+    /**
+     * WP-S1 — قناة الحفظ في مجلدات عامة ظاهرة لمدير الملفات
+     * (`Download/Krotak Pro/` و`Pictures/Krotak Pro/`).
+     *
+     * تُرجع خريطة `{path, uri, fileName}` بالمسار الفعلي لا المتوقع.
+     */
+    private fun wireStorage(flutterEngine: FlutterEngine) {
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, storageChannelName).setMethodCallHandler { call, result ->
+            val bytes = call.argument<ByteArray>("bytes")
+            val fileName = call.argument<String>("fileName")
+            val subfolder = call.argument<String>("subfolder")
+            if (bytes == null || fileName.isNullOrBlank()) {
+                result.error("storage_invalid_arguments", "بيانات الملف غير مكتملة", null)
+                return@setMethodCallHandler
+            }
+            try {
+                when (call.method) {
+                    "saveToDownloads" -> {
+                        val mime = call.argument<String>("mimeType") ?: "application/octet-stream"
+                        val saved = VisibleStorage.saveToDownloads(
+                            applicationContext,
+                            bytes,
+                            fileName,
+                            mime,
+                            subfolder,
+                        )
+                        result.success(
+                            storageResult(saved, VisibleStorage.sanitizeFileName(fileName)),
+                        )
+                    }
+                    "saveImageToPictures" -> {
+                        val saved = VisibleStorage.saveImageToPictures(
+                            applicationContext,
+                            bytes,
+                            fileName,
+                            subfolder,
+                        )
+                        result.success(
+                            storageResult(saved, VisibleStorage.sanitizeFileName(fileName)),
+                        )
+                    }
+                    else -> result.notImplemented()
+                }
+            } catch (error: SecurityException) {
+                result.error("storage_permission_denied", error.message, null)
+            } catch (error: Exception) {
+                result.error("storage_failed", error.message, null)
+            }
+        }
+    }
+
+    private fun storageResult(path: String?, fileName: String): Map<String, Any?>? {
+        if (path.isNullOrBlank()) return null
+        return mapOf(
+            "path" to path,
+            "uri" to path,
+            "fileName" to fileName,
+        )
     }
 
     override fun onStart() {
