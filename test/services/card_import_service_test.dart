@@ -57,8 +57,7 @@ void main() {
   test('ملف CSV بـBOM وأرقام عربية: استيراد كامل وسجل مطابق', () async {
     final read = await container.cardImportService.readAndAnalyze(
       fileName: 'كروت-المورد.csv',
-      bytes: csvBytes('776733907,77330393
-٨٢٧٣٧٣٨,112233'),
+      bytes: csvBytes('776733907,77330393\n٨٢٧٣٧٣٨,112233'),
       format: CardImportFormat.serialAndPin,
     );
     expect(read, isA<Success<CardImportReadOutcome>>());
@@ -95,8 +94,7 @@ void main() {
   test('تكرار داخل الملف وتكرار في المخزون يُستبعدان بلا فشل الدفعة', () async {
     final first = await container.cardImportService.readAndAnalyze(
       fileName: 'دفعة-1.csv',
-      bytes: csvBytes('A-1,111
-A-2,222'),
+      bytes: csvBytes('A-1,111\nA-2,222'),
       format: CardImportFormat.serialAndPin,
     );
     final firstOutcome = (first as Success<CardImportReadOutcome>).value;
@@ -110,9 +108,7 @@ A-2,222'),
     // ملف يحوي مكررًا داخله ومكررًا في المخزون وجديدًا.
     final second = await container.cardImportService.readAndAnalyze(
       fileName: 'دفعة-2.csv',
-      bytes: csvBytes('A-2,999
-B-1,333
-B-1,444'),
+      bytes: csvBytes('A-2,999\nB-1,333\nB-1,444'),
       format: CardImportFormat.serialAndPin,
     );
     final preview = (second as Success<CardImportReadOutcome>).value.preview;
@@ -139,8 +135,7 @@ B-1,444'),
   test('إعادة العملية لا تُنشئ كروتًا مكررة', () async {
     final read = await container.cardImportService.readAndAnalyze(
       fileName: 'دفعة.csv',
-      bytes: csvBytes('C-1,111
-C-2,222'),
+      bytes: csvBytes('C-1,111\nC-2,222'),
       format: CardImportFormat.serialAndPin,
     );
     final preview = (read as Success<CardImportReadOutcome>).value.preview;
@@ -154,8 +149,7 @@ C-2,222'),
     // نفس الملف مرة ثانية: كل الأرقام موجودة في المخزون.
     final again = await container.cardImportService.readAndAnalyze(
       fileName: 'دفعة.csv',
-      bytes: csvBytes('C-1,111
-C-2,222'),
+      bytes: csvBytes('C-1,111\nC-2,222'),
       format: CardImportFormat.serialAndPin,
     );
     final repeated = (again as Success<CardImportReadOutcome>).value.preview;

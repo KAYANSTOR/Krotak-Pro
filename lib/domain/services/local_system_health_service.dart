@@ -1,6 +1,7 @@
 import '../../core/clock.dart';
 import '../../core/result.dart';
 import '../../platform/system_diagnostics_bridge.dart';
+import '../entities/background_diagnostics.dart';
 import '../entities/system_capability.dart';
 
 /// خدمة فحص جاهزية النظام — Critical / Recommended / Optional.
@@ -24,6 +25,27 @@ final class LocalSystemHealthService {
     } catch (e) {
       return Failure(
         AppFailure(code: 'health_check_failed', message: e.toString()),
+      );
+    }
+  }
+
+  /// WP-9 — تشخيص العمل في الخلفية: أسباب إنهاء العملية وأحداث
+  /// خدمة الحفاظ، بأسماء عربية وبلا أي رمز برمجي في العرض.
+  Future<Result<BackgroundDiagnostics>> backgroundDiagnostics() async {
+    try {
+      final reasons = await _bridge.exitReasons();
+      final events = await _bridge.keepAliveEvents();
+      final sdk = await _bridge.targetSdk();
+      return Success(
+        BackgroundDiagnostics.fromPayload(
+          exitReasons: reasons,
+          serviceEvents: events,
+          targetSdk: sdk,
+        ),
+      );
+    } catch (e) {
+      return Failure(
+        AppFailure(code: 'background_diagnostics_failed', message: e.toString()),
       );
     }
   }

@@ -26,6 +26,13 @@ class SmsReceiver : BroadcastReceiver() {
         } catch (e: Exception) {
             Log.w(TAG, "keep-alive start after sms failed: ${e.message}")
         }
+        // WP-9: الدليل — كل رسالة تُحفظ فورًا قبل أي معالجة،
+        // فلا يُفقد حدث إن قتل النظام العملية بعد البثّ (الاستئناف يتم من SmsInboxQueue).
+        DeliveryKeepAliveEventStore.record(
+            context,
+            DeliveryKeepAliveEvent.SMS_TRIGGER,
+            "received=${messages.size}",
+        )
         val store = SmsInboxStore(context)
         for (sms in messages) {
             val sender = sms.displayOriginatingAddress ?: continue

@@ -138,8 +138,7 @@ void main() {
       pickerCalls.add(kind);
       return CardImportPickedFile(
         name: 'كروت-المورد.csv',
-        bytes: csvBytes('776733907,77330393
-8273738,112233'),
+        bytes: csvBytes('776733907,77330393\n8273738,112233'),
       );
     });
 

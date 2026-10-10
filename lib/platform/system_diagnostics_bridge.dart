@@ -84,4 +84,37 @@ final class SystemDiagnosticsBridge {
       await _channel.invokeMethod<void>('cancelDailySummary');
     } catch (_) {}
   }
+
+  /// WP-9 — أسباب إنهاء العملية من النظام (Android 11+).
+  ///
+  /// تُرجع أرماز مستقرة فقط؛ النص العربي يُبنى في
+  /// `BackgroundDiagnostics` ليُختبر محليًا.
+  Future<List<Object?>> exitReasons() async {
+    try {
+      final raw = await _channel.invokeMethod<List<Object?>>('exitReasons');
+      return raw ?? const <Object?>[];
+    } catch (_) {
+      return const <Object?>[];
+    }
+  }
+
+  /// WP-9 — سجل أحداث خدمة الحفاظ (بدء/رفض/مهلة/إعادة تشغيل).
+  Future<List<Object?>> keepAliveEvents() async {
+    try {
+      final raw = await _channel.invokeMethod<List<Object?>>('keepAliveEvents');
+      return raw ?? const <Object?>[];
+    } catch (_) {
+      return const <Object?>[];
+    }
+  }
+
+  /// مستوى الاستهداف الفعلي من التطبيق (يحدّد سلوك الخدمة الأمامية).
+  Future<int?> targetSdk() async {
+    try {
+      return await _channel.invokeMethod<int>('targetSdk');
+    } catch (_) {
+      return null;
+    }
+  }
 }
+

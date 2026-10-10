@@ -88,6 +88,19 @@ class DeliveryKeepAlivePolicyTest {
     }
 
     @Test
+    fun `after a system timeout the restart is scheduled only with sms permissions`() {
+        // WP-9 / H1: مهلة النظام تنتهي فنُجدول إعادة تشغيل،
+        // وبلا صلاحية SMS لا وظيفة للخدمة فلا نُبقي إشعارًا دائمًا.
+        assertTrue(DeliveryKeepAlivePolicy.shouldRestartAfterTimeout(smsPermissionsGranted = true))
+        assertFalse(DeliveryKeepAlivePolicy.shouldRestartAfterTimeout(smsPermissionsGranted = false))
+    }
+
+    @Test
+    fun `the timeout restart delay is one minute`() {
+        assertEquals(60_000L, DeliveryKeepAlivePolicy.TIMEOUT_RESTART_DELAY_MILLIS)
+    }
+
+    @Test
     fun `the throttle window is five seconds by default`() {
         assertEquals(5_000L, DeliveryKeepAlivePolicy.MIN_START_INTERVAL_MILLIS)
         assertTrue(

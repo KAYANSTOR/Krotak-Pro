@@ -24,6 +24,9 @@ class BootReceiver : BroadcastReceiver() {
             return
         }
         Log.i(TAG, "boot/package event action=$action — recovery + auto-start")
+        // WP-9: الدليل — نُسجّل أن الإقلاع/التحديث جرّب إعادة التشغيل،
+        // والرفض يُبتلع ويُسجّل بدل أن يُسقط المستقبل (H2).
+        DeliveryKeepAliveEventStore.record(context, DeliveryKeepAliveEvent.BOOT_TRIGGER, action)
         DailySummaryScheduler.rescheduleIfEnabled(context)
         try {
             context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)

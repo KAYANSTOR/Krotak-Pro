@@ -13,8 +13,9 @@
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="28"/>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
-    <!-- نوع الخدمة الأمامية: معالجة محلية وإرسال رسائل، لا مزامنة شبكة. -->
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC"/>
+    <!-- WP-9 (القرار D7): نوع الخدمة الأمامية `specialUse` لأن العمل محلي وإرسال رسائل،
+         وليس مزامنة شبكة (dataSync) المُقيّد بحد زمني تراكمي على Android 15. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE"/>
     <uses-permission android:name="android.permission.WAKE_LOCK"/>
 
     <!-- Android 11+ needs these so the dialer and SMS apps stay resolvable
@@ -99,8 +100,19 @@
         <service
             android:name=".DeliveryKeepAliveService"
             android:exported="false"
-            android:foregroundServiceType="dataSync"
-            android:stopWithTask="false" />
+            android:foregroundServiceType="specialUse"
+            android:stopWithTask="false">
+            <!-- WP-9 / D7: تعريف الاستخدام الخاص المطلوب لنوع specialUse. -->
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="إتمام تسليم كروت العملاء ومعالجة رسائل المحافظ محليًا" />
+        </service>
+
+        <!-- WP-9: عمل مجدول يُعاود تشغيل خدمة الحفاظ بعد onTimeout. -->
+        <service
+            android:name=".KeepAliveRestartJobService"
+            android:exported="false"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
 
         <service
             android:name=".NotificationListener"

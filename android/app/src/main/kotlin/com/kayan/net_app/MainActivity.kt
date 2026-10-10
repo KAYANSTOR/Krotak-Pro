@@ -178,6 +178,23 @@ class MainActivity : FlutterActivity(), SmsListener {
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, diagnosticsChannelName).setMethodCallHandler { call, result ->
             when (call.method) {
                 "probe" -> result.success(probeCapabilities())
+                // WP-9 — الدليل: أسباب إنهاء العملية وأحداث خدمة الحفاظ.
+                // تُرسل أرماز مستقرة فقط والنص العربي يُبنى في طبقة Dart.
+                "exitReasons" -> result.success(ProcessExitReasonsReader.read(applicationContext))
+                "keepAliveEvents" -> result.success(
+                    DeliveryKeepAliveEventStore.read(applicationContext).map { entry ->
+                        mapOf(
+                            "atMillis" to entry.atMillis,
+                            "event" to entry.event,
+                            "detail" to entry.detail,
+                        )
+                    },
+                )
+                "clearKeepAliveEvents" -> {
+                    DeliveryKeepAliveEventStore.clear(applicationContext)
+                    result.success(true)
+                }
+                "targetSdk" -> result.success(applicationContext.applicationInfo.targetSdkVersion)
                 "requestSmsPermissions" -> {
                     requestSmsPermissions()
                     result.success(hasSmsPermissions())
@@ -400,6 +417,8 @@ class MainActivity : FlutterActivity(), SmsListener {
             "manufacturer" to Build.MANUFACTURER,
             "model" to Build.MODEL,
             "sdk" to Build.VERSION.SDK_INT,
+            // WP-9: مستوى الاستهداف الفعلي — يحدّد سلوك الخدمة الأمامية وحدودها.
+            "targetSdk" to applicationInfo.targetSdkVersion,
             "oemBackgroundState" to oemBackgroundState(),
         )
     }

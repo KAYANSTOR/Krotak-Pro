@@ -34,6 +34,7 @@ class DeliveryKeepAliveService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) {
+            DeliveryKeepAliveEventStore.record(this, DeliveryKeepAliveEvent.STOPPED, "app_request")
             stopForegroundAndSelf()
             return START_NOT_STICKY
         }
@@ -44,12 +45,45 @@ class DeliveryKeepAliveService : Service() {
             startForeground(NOTIFICATION_ID, buildNotification())
             running = true
             lastStartAttemptAtMillis = System.currentTimeMillis()
+            DeliveryKeepAliveEventStore.record(
+                this,
+                DeliveryKeepAliveEvent.STARTED,
+                "foreground=specialUse",
+            )
             START_STICKY
         } catch (e: Exception) {
             // مثلاً منع النظام بدء خدمة أمامية، أو تعطيل الإشعارات في بعض الواجهات.
+            DeliveryKeepAliveEventStore.record(
+                this,
+                DeliveryKeepAliveEvent.START_REJECTED,
+                e.javaClass.simpleName,
+            )
             Log.w(TAG, "startForeground rejected: ${e.message}")
             stopSelf()
             START_NOT_STICKY
+        }
+    }
+
+    /**
+     * WP-9 / H1 — Android 15 ينادي `onTimeout` عند انتهاء حد النوع الأمامي.
+     * لو تركناه بلا معالجة يمرشح التطبيق إلى حالة «لا يستجيب»، وهو الأقرب
+     * لوصف المشكلة «بعد ساعات». المعالجة: توقف نظيف وتسجيل الحدث
+     * وجدولة إعادة تشغيل مؤجلة بمسار مسموح.
+     */
+    override fun onTimeout(startId: Int, fgsType: Int) {
+        handleTimeout("fgsType=$fgsType")
+    }
+
+    /** النسخة الأقدم من النداء (API 34). */
+    override fun onTimeout(startId: Int) {
+        handleTimeout("legacy")
+    }
+
+    private fun handleTimeout(detail: String) {
+        DeliveryKeepAliveEventStore.record(this, DeliveryKeepAliveEvent.TIMEOUT, detail)
+        stopForegroundAndSelf()
+        if (DeliveryKeepAlivePolicy.shouldRestartAfterTimeout(smsPermissionsGranted(applicationContext))) {
+            KeepAliveRestartScheduler.schedule(applicationContext)
         }
     }
 

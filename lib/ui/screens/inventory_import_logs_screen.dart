@@ -158,9 +158,7 @@ class _InventoryImportLogsScreenState extends State<InventoryImportLogsScreen> {
             style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.w800),
           ),
           content: const Text(
-            'يُحذف سجل العملية فقط. لا تُحذف أي كروت من المخزون ولا أي حركة مالية.
-
-'
+            'يُحذف سجل العملية فقط. لا تُحذف أي كروت من المخزون ولا أي حركة مالية.\n\n'
             'هل تريد المتابعة؟',
             style: TextStyle(fontFamily: 'Tajawal'),
           ),
@@ -278,7 +276,7 @@ class _InventoryImportLogsScreenState extends State<InventoryImportLogsScreen> {
               ),
             ),
             const SizedBox(height: NetSpacing.xs),
-            const Text(
+            Text(
               'يُسجّل هنا كل ملف يُستورد منه الكروت: النوع والتاريخ والمقبول والمكرر والمرفوض.',
               textAlign: TextAlign.center,
               style: TextStyle(

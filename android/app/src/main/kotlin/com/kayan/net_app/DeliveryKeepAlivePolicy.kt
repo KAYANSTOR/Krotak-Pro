@@ -22,7 +22,23 @@ internal object DeliveryKeepAlivePolicy {
      */
     const val MIN_START_INTERVAL_MILLIS = 5_000L
 
+    /**
+     * مهلة إعادة المحاولة بعد مهلة النظام (`onTimeout`).
+     *
+     * لا نُعاود فورًا: النظام على Android 15 قد يرفض بدء خدمة أمامية جديدة
+     * من الخلفية، فنمنح النظام مهلة قبل المحاولة (والمسار المعتمد
+     * يبقى فتح التطبيق أو وصول SMS).
+     */
+    const val TIMEOUT_RESTART_DELAY_MILLIS = 60_000L
+
     enum class Action { START, STOP, NOOP }
+
+    /**
+     * هل نُجدول إعادة تشغيل بعد `onTimeout`؟
+     *
+     * بلا صلاحية SMS لا وظيفة للخدمة، فلا نُبقي إشعارًا دائمًا بلا عمل.
+     */
+    fun shouldRestartAfterTimeout(smsPermissionsGranted: Boolean): Boolean = smsPermissionsGranted
 
     /**
      * [smsPermissionsGranted] الخدمة موجودة لإكمال تسليم الرسائل عبر SMS؛ بلا

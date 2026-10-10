@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 
 import '../../../core/result.dart';
 import '../../../domain/device_verification_gate.dart';
+import '../../../domain/entities/background_diagnostics.dart';
 import '../../../domain/services/local_device_verification_service.dart';
 import '../../app_scope.dart';
 import '../../theme/kayan_palette.dart';
@@ -26,6 +27,9 @@ class _DeviceVerificationScreenState extends State<DeviceVerificationScreen> {
   bool _loading = true;
   String? _error;
   DeviceVerificationSnapshot _snapshot = const DeviceVerificationSnapshot(statuses: {});
+
+  /// WP-9 — تشخيص الخلفية: أسباب إنهاء العملية وأحداث خدمة الحفاظ.
+  BackgroundDiagnostics _background = const BackgroundDiagnostics();
 
   LocalDeviceVerificationService _service() {
     final c = AppScope.of(context);
@@ -56,6 +60,17 @@ class _DeviceVerificationScreenState extends State<DeviceVerificationScreen> {
       _loading = false;
       _snapshot = (result as Success<DeviceVerificationSnapshot>).value;
     });
+    await _loadBackground();
+  }
+
+  /// يقرأ تشخيص الخلفية من الجهة الأصلية (بلا إسقاط الشاشة عند فشله).
+  Future<void> _loadBackground() async {
+    final c = AppScope.of(context);
+    final result = await c.systemHealth.backgroundDiagnostics();
+    if (!mounted) return;
+    if (result is Success<BackgroundDiagnostics>) {
+      setState(() => _background = result.value);
+    }
   }
 
   Future<void> _set(String id, DeviceVerificationStatus status) async {
@@ -195,8 +210,152 @@ class _DeviceVerificationScreenState extends State<DeviceVerificationScreen> {
                           onBlocked: () => _set(item.id, DeviceVerificationStatus.blocked),
                           onReset: () => _set(item.id, DeviceVerificationStatus.pending),
                         ),
+                      const SettingsSectionHeader(title: 'تشخيص الخلفية'),
+                      _BackgroundDiagnosticsCard(diagnostics: _background),
                     ],
                   ),
+      ),
+    );
+  }
+}
+
+/// WP-9 — بطاقة تشخيص الخلفية: أسباب إنهاء العملية وأحداث خدمة الحفاظ
+/// بأسماء عربية (بلا أي رمز برمجي)، وتنص على أن تحقق 12 ساعة يبقى يدويًا.
+class _BackgroundDiagnosticsCard extends StatelessWidget {
+  const _BackgroundDiagnosticsCard({required this.diagnostics});
+
+  final BackgroundDiagnostics diagnostics;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = KayanPalette.of(context);
+    final net = context.netColors;
+    return NetSurfaceCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'آخر أسباب إنهاء التطبيق وأحداث خدمة الحفاظ في الخلفية.',
+            style: TextStyle(
+              fontFamily: NetTypography.family,
+              fontSize: 12.5,
+              height: 1.4,
+              color: palette.textSecondary,
+            ),
+          ),
+          if (diagnostics.targetSdk != null) ...[
+            const SizedBox(height: NetSpacing.xs),
+            _DiagnosticsRow(
+              label: 'مستوى الاستهداف',
+              value: '${diagnostics.targetSdk}',
+            ),
+          ],
+          if (diagnostics.exitReasons.isNotEmpty) ...[
+            const SizedBox(height: NetSpacing.sm),
+            Text(
+              'أسباب الإنهاء',
+              style: TextStyle(
+                fontFamily: NetTypography.family,
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+                color: palette.textPrimary,
+              ),
+            ),
+            for (final reason in diagnostics.exitReasons.take(6))
+              _DiagnosticsRow(
+                label: _formatStamp(reason.at),
+                value: reason.code.arabicLabel,
+              ),
+          ],
+          if (diagnostics.serviceEvents.isNotEmpty) ...[
+            const SizedBox(height: NetSpacing.sm),
+            Text(
+              'أحداث خدمة الحفاظ على التسليم',
+              style: TextStyle(
+                fontFamily: NetTypography.family,
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+                color: palette.textPrimary,
+              ),
+            ),
+            for (final event in diagnostics.serviceEvents.take(8))
+              _DiagnosticsRow(
+                label: _formatStamp(event.at),
+                value: event.detail.isEmpty
+                    ? event.code.arabicLabel
+                    : '${event.code.arabicLabel} — ${event.detail}',
+              ),
+          ],
+          if (diagnostics.isEmpty) ...[
+            const SizedBox(height: NetSpacing.xs),
+            Text(
+              'لا توجد بيانات بعد — تظهر بعد أول تشغيل للخدمة في الخلفية.',
+              style: TextStyle(
+                fontFamily: NetTypography.family,
+                fontSize: 12,
+                color: palette.textSecondary,
+              ),
+            ),
+          ],
+          const SizedBox(height: NetSpacing.sm),
+          Text(
+            'تحقق العمل 12 ساعة متواصلة مع قفل الشاشة يبقى فحصًا يدويًا على جهاز حقيقي — وقد يوقف النظام التطبيق لأسباب خارج سيطرة التطبيق (إيقاف يدوي أو توفير بطارية من الشركة المصنّعة).',
+            style: TextStyle(
+              fontFamily: NetTypography.family,
+              fontSize: 12,
+              height: 1.4,
+              color: net.pending,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static String _formatStamp(DateTime at) {
+    final day = at.day.toString().padLeft(2, '0');
+    final month = at.month.toString().padLeft(2, '0');
+    final hour = at.hour.toString().padLeft(2, '0');
+    final minute = at.minute.toString().padLeft(2, '0');
+    return '$day/$month ${hour}:$minute';
+  }
+}
+
+class _DiagnosticsRow extends StatelessWidget {
+  const _DiagnosticsRow({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = KayanPalette.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 2),
+      child: Row(
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontFamily: NetTypography.family,
+              fontSize: 12,
+              color: palette.textSecondary,
+            ),
+          ),
+          const SizedBox(width: NetSpacing.xs),
+          Expanded(
+            child: Text(
+              value,
+              textAlign: TextAlign.end,
+              style: TextStyle(
+                fontFamily: NetTypography.family,
+                fontSize: 12.5,
+                fontWeight: FontWeight.w700,
+                color: palette.textPrimary,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
