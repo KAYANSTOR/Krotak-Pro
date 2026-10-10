@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
@@ -11,6 +13,7 @@ import '../../domain/entities/money.dart';
 import '../../domain/entities/setting.dart';
 import '../../domain/entities/system_capability.dart';
 import '../../domain/entities/transaction.dart';
+import '../../domain/repositories/repositories.dart';
 import '../app_scope.dart';
 import '../perf/screen_open_trace.dart';
 import '../labels/net_labels.dart';
@@ -86,6 +89,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   /// Locally dismissed alert banners (presentation-only state).
   final Set<String> _dismissedAlerts = <String>{};
+  final List<StreamSubscription<int>> _messageCountSubscriptions =
+      <StreamSubscription<int>>[];
+  final Map<MessageProcessingStatus, int> _liveMessageCounts =
+      <MessageProcessingStatus, int>{};
 
   // يجب أن تُطابق هذه القائمة تمامًا مصدر `PendingMessageReviewService
   // .listPending()` — هو ما تفتحه أيقونة التنبيهات فعليًا. كانت تشمل
@@ -109,6 +116,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   void dispose() {
     widget.refreshSignal?.removeListener(_onExternalRefresh);
+    for (final subscription in _messageCountSubscriptions) {
+      unawaited(subscription.cancel());
+    }
+    _messageCountSubscriptions.clear();
     super.dispose();
   }
 
@@ -174,6 +185,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         final r = await c.messages.countByStatus(status);
         if (r is Success<int>) {
           attentionCount += r.value;
+          _liveMessageCounts[status] = r.value;
         } else {
           attentionFailed = true;
         }
@@ -186,6 +198,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           await c.messages.countByStatus(MessageProcessingStatus.rejected);
       if (rejectedResult is Success<int>) {
         rejectedCount = rejectedResult.value;
+        _liveMessageCounts[MessageProcessingStatus.rejected] = rejectedCount;
       } else {
         attentionFailed = true;
       }
@@ -253,6 +266,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       });
       // شارة التنبيه في الشريط السفلي: عدد الرسائل المعلّقة/المرفوضة.
       widget.onAttentionChanged?.call(attentionCount);
+      _startMessageCountWatches(c.messages);
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -262,6 +276,41 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _error = e.toString();
       });
     }
+  }
+
+  void _startMessageCountWatches(MessageRepository messages) {
+    for (final subscription in _messageCountSubscriptions) {
+      unawaited(subscription.cancel());
+    }
+    _messageCountSubscriptions.clear();
+
+    final statuses = <MessageProcessingStatus>[
+      ..._attentionStatuses,
+      MessageProcessingStatus.rejected,
+    ];
+    for (final status in statuses) {
+      final subscription = messages.watchCountByStatus(status).listen(
+        (count) => _onLiveMessageCount(status, count),
+        onError: (_, __) {},
+      );
+      _messageCountSubscriptions.add(subscription);
+    }
+  }
+
+  void _onLiveMessageCount(MessageProcessingStatus status, int count) {
+    if (!mounted) return;
+    _liveMessageCounts[status] = count;
+    final attentionCount = _attentionStatuses.fold<int>(
+      0,
+      (total, item) => total + (_liveMessageCounts[item] ?? 0),
+    );
+    final rejectedCount =
+        _liveMessageCounts[MessageProcessingStatus.rejected] ?? 0;
+    setState(() {
+      _attentionMessagesCount = attentionCount;
+      _rejectedCount = rejectedCount;
+    });
+    widget.onAttentionChanged?.call(attentionCount);
   }
 
   /// Buckets completed sales into 7 daily totals (major units), oldest first.
