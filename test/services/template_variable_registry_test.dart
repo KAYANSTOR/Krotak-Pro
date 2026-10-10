@@ -40,6 +40,17 @@ void main() {
     expect(TemplateVariableRegistry.duplicatesIn(['serial', 'secret']), isEmpty);
     expect(TemplateVariableRegistry.duplicatesIn(['code', 'secret']), {'secret'});
     expect(TemplateVariableRegistry.duplicatesIn(['CARDS', 'cards']), {'cards'});
+    expect(TemplateVariableRegistry.duplicatesIn(['cards', 'CARDS', 'cards']), {'cards'});
+    expect(
+      TemplateVariableRegistry.duplicatesIn(['amount', 'AMOUNT', 'reward_value']),
+      {'amount'},
+    );
+    expect(
+      TemplateVariableRegistry.duplicatesIn(['serial', 'CARD_CODE', 'CARD_SERIAL']),
+      {'serial'},
+    );
+    expect(TemplateVariableRegistry.duplicatesIn(const []), isEmpty);
+    expect(TemplateVariableRegistry.duplicatesIn(['  ', '']), isEmpty);
   });
 
   test('لا اسم عربي مكرر ولا اسم لاتيني في الأزرار', () {

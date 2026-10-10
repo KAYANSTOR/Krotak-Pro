@@ -154,11 +154,16 @@ abstract final class TemplateVariableRegistry {
       .toSet();
 
   /// المتغيرات المكررة **بعد التطبيع** (مثال: `{code}` و`{secret}` في قالب واحد).
+  ///
+  /// مهم: الفحص يمرّ على المدخلات **بترتيبها ومع تكرارها** لا على مجموعة
+  /// مُطبَّعة، لأن `Set` تُزيل التكرار قبل الفحص فيضيع الاكتشاف.
   static Set<String> duplicatesIn(Iterable<String> keys) {
     final seen = <String>{};
     final duplicates = <String>{};
-    for (final key in canonicalize(keys)) {
-      if (!seen.add(key)) duplicates.add(key);
+    for (final key in keys) {
+      final canonicalKey = canonical(key) ?? key.trim();
+      if (canonicalKey.isEmpty) continue;
+      if (!seen.add(canonicalKey)) duplicates.add(canonicalKey);
     }
     return duplicates;
   }
