@@ -42,6 +42,44 @@ final class LocalCardRepository implements CardRepository {
   }
 
   @override
+  Future<Result<List<domain.Card>>> listPage({
+    int limit = 50,
+    int offset = 0,
+    String? categoryId,
+    domain.CardStatus? status,
+    String? query,
+  }) async {
+    try {
+      var stmt = database.select(database.cards);
+      final conditions = <Expression<bool>>[];
+      if (categoryId != null) {
+        conditions.add(database.cards.categoryId.equals(categoryId));
+      }
+      if (status != null) {
+        conditions.add(database.cards.status.equals(status.name));
+      }
+      if (query != null && query.trim().isNotEmpty) {
+        final q = '%${query.trim()}%';
+        conditions.add(
+          database.cards.serialNumber.like(q) |
+          database.cards.secretCode.like(q) |
+          database.cards.id.like(q),
+        );
+      }
+      if (conditions.isNotEmpty) {
+        stmt = stmt..where((table) => conditions.reduce((a, b) => a & b));
+      }
+      stmt = stmt
+        ..orderBy([(table) => OrderingTerm(expression: table.serialNumber)])
+        ..limit(limit, offset: offset);
+      final rows = await stmt.get();
+      return Success(rows.map(_toCard).toList(growable: false));
+    } catch (error) {
+      return Failure(_failure('card_list_page_failed', error));
+    }
+  }
+
+  @override
   Future<Result<Set<String>>> existingSerialsAmong(Iterable<String> serials) async {
     try {
       final needles = serials.map((e) => e.trim()).where((e) => e.isNotEmpty).toSet();
