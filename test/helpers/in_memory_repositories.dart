@@ -546,6 +546,24 @@ final class InMemorySaleRepository implements SaleRepository {
       return !s.createdAt.isBefore(from) && !s.createdAt.isAfter(to);
     }).toList());
   }
+
+  @override
+  Future<Result<int>> sumCompletedBetween(DateTime from, DateTime to) async {
+    final matching = _sales.values.where((s) {
+      if (s.status != TransactionStatus.completed) return false;
+      return !s.createdAt.isBefore(from) && !s.createdAt.isAfter(to);
+    });
+    return Success(matching.fold<int>(0, (a, s) => a + s.amount.minorUnits));
+  }
+
+  @override
+  Future<Result<int>> countCompletedBetween(DateTime from, DateTime to) async {
+    final matching = _sales.values.where((s) {
+      if (s.status != TransactionStatus.completed) return false;
+      return !s.createdAt.isBefore(from) && !s.createdAt.isAfter(to);
+    });
+    return Success(matching.length);
+  }
 }
 
 final class InMemoryTransferTemplateRepository implements TransferTemplateRepository {
