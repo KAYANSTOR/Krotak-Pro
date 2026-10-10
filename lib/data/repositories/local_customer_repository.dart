@@ -44,6 +44,20 @@ final class LocalCustomerRepository implements CustomerRepository {
   }
 
   @override
+  Future<Result<int>> countByStatus(domain.CustomerStatus status) async {
+    try {
+      final query = database.selectOnly(database.customers)
+        ..where(database.customers.status.equals(status.name))
+        ..addColumns([database.customers.id.count()]);
+      final row = await query.getSingle();
+      final value = row.read(database.customers.id.count()) ?? 0;
+      return Success(value);
+    } catch (error) {
+      return Failure(_failure('customer_count_by_status_failed', error));
+    }
+  }
+
+  @override
   Future<Result<List<domain.Customer>>> searchPage(
     String query, {
     int limit = 80,

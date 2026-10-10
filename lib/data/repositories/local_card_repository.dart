@@ -225,6 +225,20 @@ final class LocalCardRepository implements CardRepository {
   }
 
   @override
+  Future<Result<int>> countByStatus(domain.CardStatus status) async {
+    try {
+      final query = database.selectOnly(database.cards)
+        ..where(database.cards.status.equals(status.name))
+        ..addColumns([database.cards.id.count()]);
+      final row = await query.getSingle();
+      final value = row.read(database.cards.id.count()) ?? 0;
+      return Success(value);
+    } catch (error) {
+      return Failure(_failure('card_count_by_status_failed', error));
+    }
+  }
+
+  @override
   Future<Result<int>> expireReservations(DateTime now) async {
     try {
       final changed = await (database.update(database.cards)

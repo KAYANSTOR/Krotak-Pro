@@ -22,6 +22,9 @@ abstract interface class CustomerRepository {
     int offset = 0,
   });
 
+  /// عدد الحسابات بحالة معينة دون تحميل الصفوف (للوحة التحكم وغيرها).
+  Future<Result<int>> countByStatus(CustomerStatus status);
+
   /// اقتراح أرقام جوال بالبادئة أثناء الكتابة (بيع مباشر).
   /// يعيد أرقاماً مطبّعة مع الاسم والحالة، مرتبة بالأحدث، بدون حسابات موقوفة/مدمجة/مؤرشفة.
   /// [limit] يمنع N+1 واستعلامات ثقيلة.
@@ -81,6 +84,8 @@ abstract interface class CardRepository {
     required DateTime expiresAt,
   });
   Future<Result<List<Card>>> listByStatus(CardStatus status);
+  /// عدد الكروت بحالة معينة دون تحميل الصفوف.
+  Future<Result<int>> countByStatus(CardStatus status);
   Future<Result<void>> save(Card card);
   Future<Result<void>> saveAll(List<Card> cards);
   Future<Result<int>> expireReservations(DateTime now);

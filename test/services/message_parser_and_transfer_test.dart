@@ -567,6 +567,13 @@ final class _FakeMessages implements MessageRepository {
 }
 
 final class _FakeCustomers implements CustomerRepository {
+
+  @override
+  Future<Result<int>> countByStatus(CustomerStatus status) async {
+    final count = byId.values.where((c) => c.status == status).length;
+    return Success(count);
+  }
+
   final byId = <String, Customer>{};
   final identifiers = <String, List<CustomerIdentifier>>{};
 

@@ -129,8 +129,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final dateLabel = formatArabicDashboardDate(now);
 
     try {
-      final customers = await c.customers.search('');
-      final available = await c.cards.listByStatus(domain.CardStatus.available);
+      final accountsResult = await c.customers.countByStatus(CustomerStatus.active);
+      final availableResult = await c.cards.countByStatus(domain.CardStatus.available);
       final dailySales = await c.sales.listCompletedBetween(dayStart, now);
       final monthlySales = await c.sales.listCompletedBetween(monthStart, now);
       final recent = await c.transactions.listRecent(limit: 10);
@@ -169,9 +169,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
       var attentionCount = 0;
       var attentionFailed = false;
       for (final status in _attentionStatuses) {
-        final r = await c.messages.listByStatus(status);
-        if (r is Success<List<IncomingMessage>>) {
-          attentionCount += r.value.length;
+        final r = await c.messages.countByStatus(status);
+        if (r is Success<int>) {
+          attentionCount += r.value;
         } else {
           attentionFailed = true;
         }
@@ -181,19 +181,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
       // / `onRejectedTap`) ولا تفتحها أيقونة التنبيهات.
       var rejectedCount = 0;
       final rejectedResult =
-          await c.messages.listByStatus(MessageProcessingStatus.rejected);
-      if (rejectedResult is Success<List<IncomingMessage>>) {
-        rejectedCount = rejectedResult.value.length;
+          await c.messages.countByStatus(MessageProcessingStatus.rejected);
+      if (rejectedResult is Success<int>) {
+        rejectedCount = rejectedResult.value;
       } else {
         attentionFailed = true;
       }
 
-      var accounts = 0;
-      if (customers is Success<List<Customer>>) {
-        accounts = customers.value
-            .where((e) => e.status == CustomerStatus.active)
-            .length;
-      }
+      final accounts = accountsResult is Success<int> ? accountsResult.value : 0;
+      final availableCards = availableResult is Success<int> ? availableResult.value : 0;
 
       int sumSales(Result<List<Sale>> r) {
         if (r is! Success<List<Sale>>) return 0;
@@ -238,9 +234,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ? totalBalance.value.minorUnits
             : 0;
         _accountsCount = accounts;
-        _availableCards = available is Success<List<domain.Card>>
-            ? available.value.length
-            : 0;
+        _availableCards = availableCards;
         _dailySalesMinor = sumSales(dailySales);
         _dailyCards = countSales(dailySales);
         _monthlySalesMinor = sumSales(monthlySales);
@@ -251,8 +245,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _health = healthResult is Success<SystemHealthSnapshot>
             ? healthResult.value
             : null;
-        if (customers is Failure ||
-            available is Failure ||
+        if (accountsResult is Failure ||
+            availableResult is Failure ||
             dailySales is Failure ||
             monthlySales is Failure ||
             recent is Failure ||

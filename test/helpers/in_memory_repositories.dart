@@ -245,6 +245,12 @@ final class InMemoryCustomerRepository implements CustomerRepository {
   }
 
   @override
+  @override
+  Future<Result<int>> countByStatus(CustomerStatus status) async {
+    final count = _customers.values.where((c) => c.status == status).length;
+    return Success(count);
+  }
+
   Future<Result<List<CustomerIdentifier>>> listIdentifiers(String customerId) async {
     return Success(_identifiers.values.where((i) => i.customerId == customerId).toList());
   }
@@ -346,6 +352,12 @@ final class InMemoryCardRepository implements CardRepository {
       Success(_cards.values.where((c) => c.status == status).toList());
 
   @override
+  @override
+  Future<Result<int>> countByStatus(CardStatus status) async {
+    final count = _cards.values.where((c) => c.status == status).length;
+    return Success(count);
+  }
+
   Future<Result<void>> save(Card card) async {
     _cards[card.id] = card;
     return const Success(null);
