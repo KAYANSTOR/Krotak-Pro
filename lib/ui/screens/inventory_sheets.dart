@@ -1,5 +1,7 @@
 part of 'inventory_screen.dart';
-import '../errors/user_facing_error_localizer.dart';
+// لا `import` داخل ملف `part`: الواردات تُعلن في المكتبة الأم
+// (`inventory_screen.dart`) التي تستورد `user_facing_error_localizer.dart`،
+// وكل `part` يرث واردات مكتبته.
 
 /// تأكيد حذف كرت واحد أو عدة كروت من المخزون.
 ///
