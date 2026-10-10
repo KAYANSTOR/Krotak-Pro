@@ -1386,7 +1386,7 @@ final class LocalTransferProcessor implements TransferProcessor {
   }) async {
     final sender = messageSender;
     if (sender == null) return;
-    final destination = await _deliveryPhone(customerId);
+    final destination = await _customerDeliveryPhone(customerId);
     if (destination.isEmpty) return;
     final balance = await balances.getBalance(
       customerId: customerId,
@@ -1409,6 +1409,16 @@ final class LocalTransferProcessor implements TransferProcessor {
       destination: destination,
       body: (rendered as Success<String>).value,
     );
+  }
+
+  Future<String> _customerDeliveryPhone(String customerId) async {
+    final result = await customers.listIdentifiers(customerId);
+    if (result is Failure<List<CustomerIdentifier>>) return '';
+    final phones = (result as Success<List<CustomerIdentifier>>).value
+        .where((item) => item.type == CustomerIdentifierType.phoneNumber)
+        .toList(growable: false);
+    if (phones.isEmpty) return '';
+    return phones.first.value.trim();
   }
 
   /// يُرسل قالب «إيداع بلا كرت» دون أن يفشل مسار الرفض إن تعذّر الإرسال.
