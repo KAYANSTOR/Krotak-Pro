@@ -135,6 +135,17 @@ void main() {
       expect(p.customerIdentifier, '8483883');
       expect(p.identifierType, TransferIdentifierType.phone);
     });
+
+    test('blocked notification format extracts the last 7-digit suffix', () {
+      final p = parseFor(
+        'جيب',
+        'اضيف 300ر.ي تحويل مشترك رص:4650ر.ي من د**** ح****** ح** م******-6557728',
+      );
+      expect(p.amount.minorUnits, 30000);
+      expect(p.customerIdentifier, '6557728');
+      expect(p.identifierType, TransferIdentifierType.phone);
+      expect(p.rawIdentifier, '6557728');
+    });
   });
 
   group('جوالي — Jawali', () {

@@ -242,9 +242,19 @@ final class DefaultWalletTemplatesSeeder {
     _TplSpec(
       walletKey: 'Jaib',
       senderCode: 'Jaib',
+      variant: 'ar-blocked',
+      name: 'Jaib — إشعار محجوب',
+      priority: 30,
+      pattern: 'اضيف {amount} ر.ي تحويل مشترك رص:{ref} ر.ي من {account}-{phone}',
+      sampleBody:
+          'اضيف 300ر.ي تحويل مشترك رص:4650ر.ي من د**** ح****** ح** م******-6557728',
+    ),
+    _TplSpec(
+      walletKey: 'Jaib',
+      senderCode: 'Jaib',
       variant: 'ar-account-only',
       name: 'جيب — تحويل (اسم/Offline)',
-      priority: 30,
+      priority: 40,
       pattern: 'اضيف {amount} ر.ي تحويل مشترك رص:{ref} ر.ي من {account}',
       sampleBody:
           'اضيف 200 ر.ي تحويل مشترك رص:414445 ر.ي من روضه نعمان اسم البعداني -77',
@@ -254,7 +264,7 @@ final class DefaultWalletTemplatesSeeder {
       senderCode: 'Jaib',
       variant: 'en-received',
       name: 'Jaib — received (EN)',
-      priority: 40,
+      priority: 50,
       pattern: 'You have received {amount} YER from {phone} your balance {ref}',
       sampleBody: 'You have received 10 YER from 779776919 your balance 20',
     ),
