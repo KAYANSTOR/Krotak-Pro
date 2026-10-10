@@ -455,10 +455,6 @@ class _AccountAuthScreenState extends State<AccountAuthScreen> {
               ),
             ],
             const SizedBox(height: NetSpacing.lg),
-            if (_isRegister) ...[
-              _trialCard(context, net),
-              const SizedBox(height: NetSpacing.lg),
-            ],
             SizedBox(
               height: 50,
               child: FilledButton(
@@ -499,50 +495,6 @@ class _AccountAuthScreenState extends State<AccountAuthScreen> {
     );
   }
 
-  Widget _trialCard(BuildContext context, NetSemanticColors net) {
-    final palette = KayanPalette.of(context);
-    return Container(
-      padding: const EdgeInsets.all(NetSpacing.md),
-      decoration: BoxDecoration(
-        color: net.premiumContainer.withValues(alpha: palette.isDark ? 0.55 : 0.85),
-        borderRadius: NetRadii.smAll,
-        border: Border.all(color: net.premium.withValues(alpha: 0.45)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(Icons.workspace_premium_rounded, size: 20, color: net.premium),
-          const SizedBox(width: NetSpacing.sm),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'حساب دائم — بدون فترة تجريبية',
-                  style: TextStyle(
-                    fontFamily: NetTypography.family,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w800,
-                    color: palette.textPrimary,
-                  ),
-                ),
-                const SizedBox(height: NetSpacing.xxs),
-                Text(
-                  'يظهر الحساب فوراً في لوحة الإدارة، وتستطيع الإدارة تفعيله أو إيقافه أو إرسال إشعارات إليه.',
-                  style: TextStyle(
-                    fontFamily: NetTypography.family,
-                    fontSize: 11.5,
-                    height: 1.45,
-                    color: palette.textSecondary,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 
   Widget _errorNotice(BuildContext context) {
     final net = context.netColors;
