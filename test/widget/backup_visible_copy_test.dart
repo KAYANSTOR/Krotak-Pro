@@ -86,10 +86,13 @@ void main() {
 
     await tester.tap(find.text('إنشاء النسخة'));
     await tester.pump();
+    // حركة إغلاق الحوار تجري بالزمن الوهمي، والإنشاء لا يبدأ إلا بعد
+    // اكتمالها — فنتقدّم بالزمن أولًا ثم نمنح العمل الحقيقي حلقة زمن.
+    await tester.pump(const Duration(milliseconds: 400));
     // إنشاء النسخة يكتب ملفًا حقيقيًا (PBKDF2 + AES-GCM + كتابة على القرص):
     // نمنح الحلقة الحقيقية وقتًا ليكتمل العمل قبل فحص الواجهة.
     await tester.runAsync(() async {
-      await Future<void>.delayed(const Duration(milliseconds: 1200));
+      await Future<void>.delayed(const Duration(milliseconds: 1800));
     });
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
