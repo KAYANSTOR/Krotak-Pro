@@ -15,7 +15,7 @@ abstract interface class CustomerRepository {
   Future<Result<List<Customer>>> search(String query);
 
   /// صفحة من نتائج البحث لتفادي تحميل آلاف الحسابات دفعة واحدة.
-  /// [offset] صفوف تُتخطى بعد الترتيب بالاسم.
+  /// [offset] صفوف تُتخطّى بعد الترتيب بالاسم.
   Future<Result<List<Customer>>> searchPage(
     String query, {
     int limit = 80,
@@ -121,6 +121,10 @@ abstract interface class SaleRepository {
   Future<Result<List<Sale>>> findByCustomer(String customerId);
   Future<Result<List<Sale>>> listRecent({int limit = 50});
   Future<Result<List<Sale>>> listCompletedBetween(DateTime from, DateTime to);
+  /// مجموع المبالغ المكتملة بين تاريخين دون تحميل الصفوف.
+  Future<Result<int>> sumCompletedBetween(DateTime from, DateTime to);
+  /// عدد المبيعات المكتملة بين تاريخين دون تحميل الصفوف.
+  Future<Result<int>> countCompletedBetween(DateTime from, DateTime to);
 }
 
 abstract interface class AdvanceRepository {
