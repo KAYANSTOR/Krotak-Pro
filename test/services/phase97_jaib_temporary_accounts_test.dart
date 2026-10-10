@@ -213,12 +213,14 @@ void main() {
       templateId: 'tpl-default-jaib-ar-phone-only',
     );
 
-    expect(await processor.process(transfer), isA<Success<Transaction>>());
+    final first = await processor.process(transfer);
+    expect(first, isA<Success<Transaction>>(), reason: _describe(first));
 
     final customer = ((await customers.findByIdentifier('687471')) as Success<Customer?>).value!;
     expect(customer.status, CustomerStatus.provisional);
 
-    expect(await processor.process(transfer), isA<Success<Transaction>>());
+    final second = await processor.process(transfer);
+    expect(second, isA<Success<Transaction>>(), reason: _describe(second));
     final after = ((await customers.findById(customer.id)) as Success<Customer?>).value!;
     expect(after.status, CustomerStatus.provisional);
   });
@@ -256,4 +258,13 @@ class _RecordingMessageSender implements MessageSender {
     sent.add('$destination:$body');
     return const Success(null);
   }
+}
+
+/// سبب فشل واضح في سجل CI بدل «ليست Success» فقط.
+String _describe(Result<Transaction> result) {
+  if (result is Failure) {
+    final failure = result as Failure;
+    return '${failure.error.code}: ${failure.error.message}';
+  }
+  return 'unexpected result type';
 }

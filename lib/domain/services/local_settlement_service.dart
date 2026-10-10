@@ -136,8 +136,10 @@ final class LocalSettlementService {
       if (audited is Failure<void>) return Failure(audited.error);
       return Success(tx);
     });
-    if (settled is Failure<Transaction>) return settled;
-    final transaction = (settled as Success<Transaction>).value;
+    // لا يُستخدم cast إلى Success: وحدة العمل قد ترجع Failure بنوع داخلي مختلف
+    // (Failure<Object?>) عند التراجع، فالفحص النمطي هو الآمن هنا.
+    if (settled is! Success<Transaction>) return settled;
+    final transaction = settled.value;
     // الرسالة خارج الوحدة الذرّية: فشل الإرسال لا يُلغي تسوية مالية مكتملة.
     await _notifyDebtSettlement(transaction);
     return Success(transaction);
