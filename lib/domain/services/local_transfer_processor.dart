@@ -1,4 +1,5 @@
 import 'dart:convert';
+import '../phone_normalizer.dart';
 
 import '../../core/clock.dart';
 import '../../core/id_generator.dart';
@@ -1535,7 +1536,13 @@ final class LocalTransferProcessor implements TransferProcessor {
     if (transfer.identifierType != TransferIdentifierType.phone) return false;
     final value = transfer.customerIdentifier.trim();
     if (value.isEmpty) return false;
-    return value.length >= 7 && RegExp(r'^[0-9+\s-]+$').hasMatch(value);
+    final numeric = RegExp(r'^[0-9+\s-]+$').hasMatch(value);
+    if (!numeric) return false;
+    // Jaib temporary (blocked / alternate) may be short alternate codes (4–15).
+    if (_isJaibTemporaryTemplate(transfer)) {
+      return value.length >= 4 && value.length <= 15;
+    }
+    return value.length >= 7;
   }
 
   Future<Result<Customer>> _autoProvisionCustomer(ParsedTransfer transfer) async {
@@ -1553,12 +1560,17 @@ final class LocalTransferProcessor implements TransferProcessor {
     if (match != null && match.displayName.trim().isNotEmpty) {
       displayName = match.displayName.trim();
     }
-    final status = _isJaibTemporaryTemplate(transfer)
+    final isTemporary = _isJaibTemporaryTemplate(transfer);
+    final status = isTemporary
         ? CustomerStatus.provisional
         : CustomerStatus.active;
+    // Short alternate codes from Jaib temporary templates are not full phone numbers.
+    final identifierType = isTemporary && !PhoneNormalizer.isPhoneLike(phone)
+        ? CustomerIdentifierType.externalReference
+        : CustomerIdentifierType.phoneNumber;
     final created = await service.create(
       displayName: displayName,
-      identifierType: CustomerIdentifierType.phoneNumber,
+      identifierType: identifierType,
       identifierValue: phone,
       status: status,
     );
