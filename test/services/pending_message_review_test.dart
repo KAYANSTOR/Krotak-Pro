@@ -189,7 +189,7 @@ final class _FakeCustomers implements CustomerRepository {
 
   @override
   Future<Result<int>> countByStatus(CustomerStatus status) async {
-    final count = byId.values.where((c) => c.status == status).length;
+    final count = store.values.where((c) => c.status == status).length;
     return Success(count);
   }
 

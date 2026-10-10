@@ -553,7 +553,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 children: [
                   Expanded(
                     child: NetMetricCard(
-                      label: 'مبيعات اليوم',
+                      title: 'مبيعات اليوم',
                       value: formatMoneyMinor(_dailySalesMinor),
                       subtitle: '$_dailyCards كرت',
                       icon: Icons.today_rounded,
@@ -563,7 +563,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   const SizedBox(width: NetSpacing.md),
                   Expanded(
                     child: NetMetricCard(
-                      label: 'مبيعات الشهر',
+                      title: 'مبيعات الشهر',
                       value: formatMoneyMinor(_monthlySalesMinor),
                       subtitle: '$_monthlyCards كرت',
                       icon: Icons.calendar_month_rounded,
@@ -600,7 +600,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   child: Text(
                     group.label,
                     style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          color: net.muted,
+                          color: KayanPalette.of(context).textTertiary,
                         ),
                   ),
                 ),
@@ -668,7 +668,7 @@ class _MessageStatusCard extends StatelessWidget {
               Text(
                 'فقط مبالغ الفئات',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: net.muted,
+                      color: KayanPalette.of(context).textTertiary,
                     ),
               ),
             ],
@@ -688,7 +688,7 @@ class _MessageStatusCard extends StatelessWidget {
                   child: _StatusChip(
                     label: 'مرفوضة',
                     count: rejectedCount,
-                    color: net.danger,
+                    color: net.error,
                     onTap: onRejectedTap,
                   ),
                 ),
@@ -718,7 +718,7 @@ class _StatusChip extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(NetRadius.md),
+      borderRadius: BorderRadius.circular(NetRadii.md),
       child: Container(
         padding: const EdgeInsets.symmetric(
           horizontal: NetSpacing.md,
@@ -726,7 +726,7 @@ class _StatusChip extends StatelessWidget {
         ),
         decoration: BoxDecoration(
           color: color.withValues(alpha: 0.12),
-          borderRadius: BorderRadius.circular(NetRadius.md),
+          borderRadius: BorderRadius.circular(NetRadii.md),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,

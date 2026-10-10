@@ -293,6 +293,30 @@ final class InMemoryCardRepository implements CardRepository {
       Success(_cards.values.toList(growable: false));
 
   @override
+  Future<Result<List<Card>>> listPage({
+    int limit = 50,
+    int offset = 0,
+    String? categoryId,
+    CardStatus? status,
+    String? query,
+  }) async {
+    final needle = (query ?? '').trim().toLowerCase();
+    final matches = _cards.values
+        .where((c) => categoryId == null || c.categoryId == categoryId)
+        .where((c) => status == null || c.status == status)
+        .where((c) =>
+            needle.isEmpty ||
+            c.serialNumber.toLowerCase().contains(needle) ||
+            c.secretCode.toLowerCase().contains(needle) ||
+            c.id.toLowerCase().contains(needle))
+        .toList()
+      ..sort((a, b) => a.serialNumber.compareTo(b.serialNumber));
+    final start = offset < 0 ? 0 : offset;
+    final take = limit < 1 ? 50 : limit;
+    return Success(matches.skip(start).take(take).toList(growable: false));
+  }
+
+  @override
   Future<Result<Set<String>>> existingSerialsAmong(Iterable<String> serials) async {
     final set = serials.toSet();
     return Success(_cards.values.map((c) => c.serialNumber).where(set.contains).toSet());
