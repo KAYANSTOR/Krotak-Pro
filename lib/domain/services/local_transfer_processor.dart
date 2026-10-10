@@ -482,6 +482,23 @@ final class LocalTransferProcessor implements TransferProcessor {
     final sender = messageSender!;
     final transactionRepo = transactions!;
     final customer = resolution.customer!;
+
+    // Temporary Jaib accounts (blocked notice / alternate number) stay provisional
+    // and receive the deposit as balance only — no automatic card sale until linked.
+    //
+    // يُفحص قبل اشتراط رقم التسليم: الرقم البديل القصير ليس رقم هاتف قابلًا
+    // للإرسال (deliveryPhone = null)، ومع ذلك يُقيَّد الإيداع في الحساب المؤقت
+    // بلا كرت حتى يُربط بعميل (قرارات المالك §5.3).
+    if (!isPosOrder &&
+        customer.status == CustomerStatus.provisional &&
+        _isJaibTemporaryTemplate(transfer)) {
+      return _creditWithoutMatchingCategory(
+        message: message,
+        transfer: transfer,
+        customerId: customer.id,
+      );
+    }
+
     final destination = (isPosOrder
             ? (transfer.deliveryOverride ?? transfer.customerIdentifier)
             : resolution.deliveryPhone)
@@ -633,18 +650,6 @@ final class LocalTransferProcessor implements TransferProcessor {
         await messages.updateStatus(message.id, MessageProcessingStatus.processed);
         return Success<Transaction>(settlementTransaction);
       }
-    }
-
-    // Temporary Jaib accounts (blocked notice / alternate number) stay provisional
-    // and receive the deposit as balance only — no automatic card sale until linked.
-    if (!isPosOrder &&
-        customer.status == CustomerStatus.provisional &&
-        _isJaibTemporaryTemplate(transfer)) {
-      return _creditWithoutMatchingCategory(
-        message: message,
-        transfer: transfer,
-        customerId: customer.id,
-      );
     }
 
     final matchResult = await _matchActiveCategory(effectiveAmount);
