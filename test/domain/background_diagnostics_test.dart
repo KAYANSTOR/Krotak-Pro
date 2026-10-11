@@ -88,7 +88,8 @@ void main() {
     expect(payload.exitReasons.first.code, ProcessExitReasonCode.anr);
     expect(payload.exitReasons.first.description, isEmpty);
     expect(payload.exitReasons.last.description, 'ذاكرة منخفضة جدًا');
-    expect(payload.serviceEvents.single.detail, 'fgsType=8');
+    expect(payload.serviceEvents.single.detail, isEmpty,
+        reason: 'التفاصيل اللاتينية من النظام لا تُعرض للمستخدم');
     expect(payload.targetSdk, 36);
     expect(payload.isEmpty, isFalse);
   });

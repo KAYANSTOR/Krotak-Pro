@@ -88,15 +88,19 @@ void main() {
     await tester.pump();
     // حركة إغلاق الحوار تجري بالزمن الوهمي، والإنشاء لا يبدأ إلا بعدها.
     await tester.pump(const Duration(milliseconds: 400));
-    // الإنشاء يقرأ ويكتب ملفات حقيقية (PBKDF2 + AES-GCM + قرص): كل
-    // قراءة/كتابة تحتاج حلقة زمن حقيقية، فنتبادل بينها وبين تقديم
-    // الزمن الوهمي حتى تكتمل سلسلة العمل كاملة.
-    for (var attempt = 0; attempt < 40; attempt++) {
+    // الإنشاء يقرأ إعدادات متعددة ويشفّر قاعدة البيانات ثم يكتب ملفات
+    // حقيقية (PBKDF2 + AES-GCM + قرص). امنح سلسلة I/O زمناً حقيقياً كافياً
+    // على CI البطيء، مع ضخ واجهة Flutter بين المحاولات.
+    for (var attempt = 0; attempt < 120; attempt++) {
       await tester.runAsync(() async {
-        await Future<void>.delayed(const Duration(milliseconds: 40));
+        await Future<void>.delayed(const Duration(milliseconds: 100));
       });
       await tester.pump();
-      if (storageCalls.isNotEmpty) break;
+      if (storageCalls.isNotEmpty ||
+          find.textContaining('تم إنشاء النسخة').evaluate().isNotEmpty ||
+          find.textContaining('تعذر').evaluate().isNotEmpty) {
+        break;
+      }
     }
     await tester.pump(const Duration(milliseconds: 300));
 
