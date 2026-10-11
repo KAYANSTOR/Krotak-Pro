@@ -10,6 +10,7 @@ import 'package:net_app/domain/services/default_wallet_specs.dart';
 import 'package:net_app/domain/services/default_wallet_templates_seeder.dart';
 import 'package:net_app/domain/services/local_catalog_services.dart';
 import 'package:net_app/domain/services/local_message_parser.dart';
+import 'package:net_app/domain/template_draft_rules.dart';
 
 import '../helpers/in_memory_repositories.dart';
 
@@ -83,6 +84,71 @@ void main() {
             .toList(growable: false),
     };
     parser = LocalMessageParser(templates: allTemplates);
+  });
+
+  test('seeded wallet templates use their real identifiers and are not drafts', () async {
+    final all = ((await templates.listAll()) as Success<List<TransferTemplate>>).value;
+    final seeded = all.where((t) => t.id.startsWith('tpl-default-')).toList();
+    expect(seeded, isNotEmpty);
+    expect(seeded.where(isTemplateDraft), isEmpty);
+
+    final received = seeded.singleWhere((t) => t.id == 'tpl-default-one-cash-ar-received');
+    final hawala = seeded.singleWhere((t) => t.id == 'tpl-default-one-cash-ar-hawala');
+    expect(received.identifierKind, TemplateIdentifierKind.account);
+    expect(hawala.identifierKind, TemplateIdentifierKind.account);
+  });
+
+  test('seeder repairs legacy account templates misclassified as phone', () async {
+    final original = (await templates.findById('tpl-default-one-cash-ar-received')
+            as Success<TransferTemplate?>)
+        .value!;
+    await templates.save(original.copyWith(
+      identifierKind: TemplateIdentifierKind.phone,
+    ));
+    final seeder = DefaultWalletTemplatesSeeder(
+      wallets: wallets,
+      templates: templates,
+      settings: settings,
+      clock: FixedClock(now),
+      ids: SequentialIdGenerator(),
+    );
+    expect(await seeder.seedIfNeeded(), isA<Success<int>>());
+    final repaired = (await templates.findById(original.id)
+            as Success<TransferTemplate?>)
+        .value!;
+    expect(repaired.identifierKind, TemplateIdentifierKind.account);
+    expect(isTemplateDraft(repaired), isFalse);
+  });
+
+  test('seeder removes exact duplicate system templates but preserves custom rows', () async {
+    final all = ((await templates.listAll()) as Success<List<TransferTemplate>>).value;
+    final canonical = all.singleWhere((t) => t.id == 'tpl-default-one-cash-ar-hawala');
+    await templates.save(canonical.copyWith(
+      id: 'tpl-default-one-cash-ar-hawala-duplicate',
+      priority: 99,
+    ));
+    await templates.save(canonical.copyWith(id: 'custom-one-cash-hawala'));
+
+    final seeder = DefaultWalletTemplatesSeeder(
+      wallets: wallets,
+      templates: templates,
+      settings: settings,
+      clock: FixedClock(now),
+      ids: SequentialIdGenerator(),
+    );
+    expect(await seeder.seedIfNeeded(), isA<Success<int>>());
+    expect(
+      (await templates.findById('tpl-default-one-cash-ar-hawala-duplicate')
+              as Success<TransferTemplate?>)
+          .value,
+      isNull,
+    );
+    expect(
+      (await templates.findById('custom-one-cash-hawala')
+              as Success<TransferTemplate?>)
+          .value,
+      isNotNull,
+    );
   });
 
   ParsedTransfer parseFor(String walletName, String body) {

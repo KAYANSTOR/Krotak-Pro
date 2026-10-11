@@ -130,7 +130,7 @@ void main() {
     });
     final service = LocalSystemHealthService(
       bridge: SystemDiagnosticsBridge(),
-      clock: const FixedClock(DateTime(2026, 10, 10)),
+      clock: FixedClock(DateTime(2026, 10, 10)),
     );
     final result = await service.backgroundDiagnostics();
     expect(result, isA<Success<BackgroundDiagnostics>>());
@@ -143,7 +143,7 @@ void main() {
   test('غياب القناة (منصّة غير أندرويد) يُعيد تشخيصًا فارغًا بلا فشل', () async {
     final service = LocalSystemHealthService(
       bridge: SystemDiagnosticsBridge(),
-      clock: const FixedClock(DateTime(2026, 10, 10)),
+      clock: FixedClock(DateTime(2026, 10, 10)),
     );
     final result = await service.backgroundDiagnostics();
     expect(result, isA<Success<BackgroundDiagnostics>>());

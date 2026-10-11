@@ -109,7 +109,7 @@ final class DefaultWalletTemplatesSeeder {
           priority: spec.priority,
           sampleBody: spec.sampleBody,
           senderCode: spec.senderCode,
-          identifierKind: TemplateIdentifierKind.phone,
+          identifierKind: spec.identifierKind,
         );
         final saved = await templates.save(tpl);
         if (saved is Failure<void>) return Failure(saved.error);
@@ -156,6 +156,17 @@ final class DefaultWalletTemplatesSeeder {
         final official = _officialSenderCodeForTemplateId(t.id);
         if (official != null && t.senderCode != official) {
           t = t.copyWith(senderCode: official);
+          templateChanged = true;
+        }
+
+        // أصلح القوالب النظامية القديمة التي زُرعت بنوع phone حتى عندما
+        // تستخرج اسم الحساب من الإشعار. لا أغيّر النمط الذي عدّله المشغّل.
+        final spec = _specForTemplateId(t.id);
+        final expectedKind = _identifierKindForPattern(t.pattern);
+        if (expectedKind != null &&
+            t.identifierKind != expectedKind &&
+            (spec == null || t.pattern == spec.pattern)) {
+          t = t.copyWith(identifierKind: expectedKind);
           templateChanged = true;
         }
       }
@@ -217,12 +228,58 @@ final class DefaultWalletTemplatesSeeder {
       changed += 1;
     }
 
+    // إزالة النسخ النظامية المتطابقة تمامًا فقط. نحتفظ بأعلى أولوية،
+    // ولا نمس القوالب المخصصة أو الأنماط المختلفة التي قد تمثل صيغة صحيحة.
+    final refreshed = await templates.listAll();
+    if (refreshed is Failure<List<TransferTemplate>>) {
+      return Failure(refreshed.error);
+    }
+    final duplicates = <String, List<TransferTemplate>>{};
+    for (final t in (refreshed as Success<List<TransferTemplate>>).value) {
+      if (!t.id.startsWith('tpl-default-')) continue;
+      final sender = (t.senderCode ?? '').trim().toLowerCase();
+      final pattern = t.pattern.trim().replaceAll(RegExp(r'\s+'), ' ');
+      if (sender.isEmpty || pattern.isEmpty) continue;
+      final fingerprint = '${t.walletId ?? sender}|$sender|${t.identifierKind.name}|$pattern';
+      (duplicates[fingerprint] ??= <TransferTemplate>[]).add(t);
+    }
+    for (final matches in duplicates.values.where((items) => items.length > 1)) {
+      matches.sort((a, b) {
+        final byPriority = a.priority.compareTo(b.priority);
+        return byPriority != 0 ? byPriority : a.id.compareTo(b.id);
+      });
+      for (final duplicate in matches.skip(1)) {
+        final deleted = await templates.delete(duplicate.id);
+        if (deleted is Failure<void>) return Failure(deleted.error);
+        changed += 1;
+      }
+    }
+
     if (!alreadySeeded) {
       await settings.save(
         AppSetting(key: seededKey, value: 'true', updatedAt: clock.now()),
       );
     }
     return Success(changed);
+  }
+
+  static TemplateIdentifierKind? _identifierKindForPattern(String pattern) {
+    if (pattern.contains('{phone}') || pattern.contains('%phone')) {
+      return TemplateIdentifierKind.phone;
+    }
+    if (pattern.contains('{account}') || pattern.contains('%account')) {
+      return TemplateIdentifierKind.account;
+    }
+    return null;
+  }
+
+  static _TplSpec? _specForTemplateId(String id) {
+    for (final spec in _specs) {
+      final expected =
+          'tpl-default-${spec.senderCode.toLowerCase().replaceAll(' ', '-')}-${spec.variant}';
+      if (id == expected) return spec;
+    }
+    return null;
   }
 
   static _TplSpec _specFor(String walletKey, String variant) => _specs.firstWhere(
@@ -417,4 +474,10 @@ final class _TplSpec {
   final int priority;
   final String pattern;
   final String sampleBody;
+
+  /// نوع هوية العميل المستخرجة من محتوى القالب. عند وجود الهاتف والحساب
+  /// معًا يُفضّل الهاتف كما في صيغ التحويل المشترك.
+  TemplateIdentifierKind get identifierKind =>
+      DefaultWalletTemplatesSeeder._identifierKindForPattern(pattern) ??
+      TemplateIdentifierKind.senderNameOnly;
 }

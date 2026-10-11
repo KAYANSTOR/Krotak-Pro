@@ -13,6 +13,7 @@ import 'package:net_app/domain/entities/card.dart' as domain;
 import 'package:net_app/domain/entities/card_import_log.dart';
 import 'package:net_app/domain/entities/money.dart';
 import 'package:net_app/domain/services/card_import_preview.dart';
+import 'package:net_app/domain/services/card_import_service.dart';
 import 'package:net_app/domain/services/services.dart';
 
 /// WP-5 — مسار الاستيراد المنفّذ في الخدمة:

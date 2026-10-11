@@ -50,6 +50,8 @@ class _TemplatesScreenState extends State<TemplatesScreen> {
 
   /// عدد القوالب النشطة من إجمالي قوالب هذا المصدر.
   int _activeCount = 0;
+  int _activatableCount = 0;
+  int _draftCount = 0;
 
   /// مفتاح تجميع المصدر (نقطة بيع / محفظة) — null في العرض العام.
   String? get _groupKey {
@@ -117,10 +119,6 @@ class _TemplatesScreenState extends State<TemplatesScreen> {
         }
       }
     }
-    final counts = _groupKey == null
-        ? null
-        : await LocalTransferTemplateActivationService(c.transferTemplates)
-            .groupCounts(_groupKey!);
     if (!mounted) return;
     setState(() {
       _loading = false;
@@ -149,11 +147,10 @@ class _TemplatesScreenState extends State<TemplatesScreen> {
       } else {
         _error = localizedError((r as Failure).error);
       }
-      if (counts is Success<({int active, int total})>) {
-        _activeCount = counts.value.active;
-      } else {
-        _activeCount = _items.where((t) => t.isActive).length;
-      }
+      _activeCount =
+          _items.where((t) => t.isActive && !isTemplateDraft(t)).length;
+      _activatableCount = _items.where((t) => !isTemplateDraft(t)).length;
+      _draftCount = _items.where(isTemplateDraft).length;
     });
   }
 
@@ -174,7 +171,7 @@ class _TemplatesScreenState extends State<TemplatesScreen> {
           ),
           content: Text(
             isActive
-                ? 'سيتم تفعيل كل قوالب «$owner» معاً — وهكذا يستجيب النظام لجميع صيغ رسائل العملاء (طلب كرت، عدة كروت، رقم تسليم، طلب رصيد).'
+                ? 'سيتم تفعيل القوالب المكتملة في «$owner» فقط. القوالب المصنفة مسودة تبقى متوقفة حتى تُستكمل من قائمة التعديل.'
                 : 'سيتم إيقاف كل قوالب «$owner» — لن يعالج النظام أي رسالة واردة من هذا المصدر حتى تُفعّل قوالب مرة أخرى.',
             style: const TextStyle(fontFamily: 'Tajawal', height: 1.5),
           ),
@@ -317,11 +314,11 @@ class _TemplatesScreenState extends State<TemplatesScreen> {
   /// وينبّه إذا أصبح المصدر «أصمّ» (لا قالب نشط) ويقترح التفعيل الجماعي.
   Widget _activationBanner() {
     final palette = KayanPalette.of(context);
-    final total = _items.length;
+    final total = _activatableCount;
     final active = _activeCount;
-    final deaf = active == 0;
-    final partial = !deaf && active < total;
-    if (!deaf && !partial) {
+    final deaf = total > 0 && active == 0;
+    final partial = active < total;
+    if (!deaf && !partial && _draftCount == 0) {
       return Container(
         width: double.infinity,
         margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
@@ -336,7 +333,7 @@ class _TemplatesScreenState extends State<TemplatesScreen> {
             const SizedBox(width: 8),
             Expanded(
               child: Text(
-                'كل القوالب نشطة ($active من $total) — يستجيب النظام لكل صيغ رسائل هذا المصدر',
+                'كل القوالب القابلة للتفعيل نشطة ($active من $total) — يستجيب النظام لكل الصيغ المكتملة',
                 style: TextStyle(
                   fontFamily: 'Tajawal',
                   fontSize: 12,
@@ -368,9 +365,13 @@ class _TemplatesScreenState extends State<TemplatesScreen> {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  deaf
-                      ? 'لا يوجد قالب نشط — النظام لن يستجيب لأي رسالة من هذا المصدر'
-                      : '$active من $total قالب نشط — بعض صيغ الرسائل قد لا تُعالج (مثال: طلب عدة كروت أو رقم التسليم)',
+                  total == 0
+                      ? 'لا يوجد قالب مكتمل قابل للتفعيل — افتح قائمة ⋮ على المسودة وأكمل بياناتها'
+                      : deaf
+                          ? 'لا يوجد قالب مكتمل نشط — فعّل القوالب المكتملة أو أكمل المسودات من قائمة ⋮'
+                          : _draftCount > 0 && !partial
+                              ? 'كل القوالب المكتملة نشطة ($active من $total)، وتوجد $_draftCount مسودة تحتاج إلى استكمال'
+                              : '$active من $total قالبًا مكتملًا نشط — بعض الصيغ المكتملة لا تزال متوقفة',
                   style: TextStyle(fontFamily: 'Tajawal', fontSize: 12.5, height: 1.45, color: palette.textPrimary),
                 ),
               ),
@@ -661,10 +662,20 @@ class _TemplateCard extends StatelessWidget {
               ),
             ),
             // Switch — مسودة لا يمكن تفعيلها حتى تُستكمل
-            Switch.adaptive(
+            Switch(
               value: active,
-              activeColor: context.kayan.primary,
               onChanged: draft ? null : onToggle,
+              activeThumbColor: Colors.white,
+              activeTrackColor: context.netColors.available,
+              inactiveThumbColor: Theme.of(context).colorScheme.onSurfaceVariant,
+              inactiveTrackColor:
+                  Theme.of(context).colorScheme.surfaceContainerHighest,
+              trackOutlineColor: WidgetStateProperty.resolveWith((states) {
+                if (states.contains(WidgetState.selected)) {
+                  return context.netColors.available;
+                }
+                return Theme.of(context).colorScheme.outlineVariant;
+              }),
             ),
             const SizedBox(width: 4),
             // المحتوى النصي

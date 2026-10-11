@@ -63,6 +63,28 @@ void main() {
     expect((await repo.findById('w') as Success).value!.isActive, isTrue);
   });
 
+  test('setGroupActive never activates a draft and counts only activatable templates', () async {
+    await repo.save(_tpl(id: 'ready', active: false, posId: 'pos-1'));
+    await repo.save(const TransferTemplate(
+      id: 'draft',
+      name: 'draft',
+      pattern: 'استلمت {amount}',
+      isActive: false,
+      posId: 'pos-1',
+      identifierKind: TemplateIdentifierKind.phone,
+    ));
+
+    final activated = await service.setGroupActive(key: 'pos:pos-1', isActive: true);
+    expect((activated as Success<int>).value, 1);
+    expect((await repo.findById('ready') as Success).value!.isActive, isTrue);
+    expect((await repo.findById('draft') as Success).value!.isActive, isFalse);
+
+    final counts = (await service.groupCounts('pos:pos-1')
+        as Success<({int active, int total})>).value;
+    expect(counts.active, 1);
+    expect(counts.total, 1);
+  });
+
   test('setGroupActive writes nothing when already in target state', () async {
     await repo.save(_tpl(id: 'p1', active: true, posId: 'pos-1'));
 

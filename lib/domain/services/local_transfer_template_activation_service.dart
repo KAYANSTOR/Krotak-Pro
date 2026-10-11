@@ -1,6 +1,7 @@
 import '../../core/result.dart';
 import '../entities/message.dart';
 import '../repositories/repositories.dart';
+import '../template_draft_rules.dart';
 
 /// تفعيل/إيقاف قوالب التحويل **دون إلغاء القوالب الأخرى لنفس المصدر**.
 ///
@@ -44,6 +45,8 @@ final class LocalTransferTemplateActivationService {
     var changed = 0;
     for (final t in (listed as Success<List<TransferTemplate>>).value) {
       if (groupKey(t) != key) continue;
+      // لا تجعل التفعيل الجماعي يتجاوز حماية المسودة؛ أصلح القالب أولاً.
+      if (isActive && isTemplateDraft(t)) continue;
       if (t.isActive == isActive) continue;
       final saved = await templates.save(t.copyWith(isActive: isActive));
       if (saved is Failure<void>) return Failure(saved.error);
@@ -60,6 +63,7 @@ final class LocalTransferTemplateActivationService {
     var total = 0;
     for (final t in (listed as Success<List<TransferTemplate>>).value) {
       if (groupKey(t) != key) continue;
+      if (isTemplateDraft(t)) continue;
       total += 1;
       if (t.isActive) active += 1;
     }
