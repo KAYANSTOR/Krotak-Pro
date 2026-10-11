@@ -88,20 +88,25 @@ void main() {
     await tester.pump();
     // حركة إغلاق الحوار تجري بالزمن الوهمي، والإنشاء لا يبدأ إلا بعدها.
     await tester.pump(const Duration(milliseconds: 400));
-    // الإنشاء يقرأ إعدادات متعددة ويشفّر قاعدة البيانات ثم يكتب ملفات
-    // حقيقية (PBKDF2 + AES-GCM + قرص). امنح سلسلة I/O زمناً حقيقياً كافياً
-    // على CI البطيء، مع ضخ واجهة Flutter بين المحاولات.
-    for (var attempt = 0; attempt < 120; attempt++) {
+
+    // السبب الجذري لفشل هذا الاختبار سابقاً: `pump()` بلا مدة **لا تُقدّم
+    // الساعة الوهمية** (لا تنادي `FakeAsync.elapse`)، فأي خطوة تنتظر مؤقّتاً
+    // (تنفيذ createBackup أو قراءة الملف) لا تُنفَّذ أبداً، فلا يكتمل الإنشاء
+    // ولا تُستدعى قناة التخزين. الإصلاح: الضخّ بمدة موجبة لتقدّم الزمن مع
+    // إتاحة زمن حقيقي لـI/O — وليس زيادة مدة الانتظار.
+    for (var attempt = 0; attempt < 240; attempt++) {
       await tester.runAsync(() async {
-        await Future<void>.delayed(const Duration(milliseconds: 100));
+        await Future<void>.delayed(const Duration(milliseconds: 50));
       });
-      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
       if (storageCalls.isNotEmpty ||
           find.textContaining('تم إنشاء النسخة').evaluate().isNotEmpty ||
           find.textContaining('تعذر').evaluate().isNotEmpty) {
         break;
       }
     }
+    // مزيد من الضخ ليُغلق مستقبل قناة التخزين وتُطبَّق `setState` قبل الفحص.
+    await tester.pump(const Duration(milliseconds: 300));
     await tester.pump(const Duration(milliseconds: 300));
 
     final visibleText = tester

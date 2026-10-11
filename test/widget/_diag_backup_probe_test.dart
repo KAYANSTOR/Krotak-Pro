@@ -79,6 +79,53 @@ void main() {
     print('PROBE-BACKUP: done=$ok elapsed=${sw.elapsedMilliseconds}ms value=${value.runtimeType}');
   });
 
+  testWidgets('probe bare pump vs timed pump', (tester) async {
+    // (أ) pump() بلا مدة — كما في الاختبار الأصلي.
+    {
+      final database = AppDatabase(NativeDatabase.memory());
+      final container = await AppContainer.bootstrap(
+        databaseOverride: database,
+        backupDirectoryOverride: Directory('test-backups'),
+      );
+      var done = false;
+      container.backupService.createBackup(password: 'secret-pass').then((_) {
+        done = true;
+      });
+      for (var i = 0; i < 40 && !done; i++) {
+        await tester.runAsync(() async {
+          await Future<void>.delayed(const Duration(milliseconds: 50));
+        });
+        await tester.pump();
+      }
+      // ignore: avoid_print
+      print('PROBE-BARE: done=$done');
+      await container.dispose();
+      await database.close();
+    }
+    // (ب) pump(50ms) — يُقدّم الساعة الوهمية.
+    {
+      final database = AppDatabase(NativeDatabase.memory());
+      final container = await AppContainer.bootstrap(
+        databaseOverride: database,
+        backupDirectoryOverride: Directory('test-backups'),
+      );
+      var done = false;
+      container.backupService.createBackup(password: 'secret-pass').then((_) {
+        done = true;
+      });
+      for (var i = 0; i < 40 && !done; i++) {
+        await tester.runAsync(() async {
+          await Future<void>.delayed(const Duration(milliseconds: 50));
+        });
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      // ignore: avoid_print
+      print('PROBE-TIMED: done=$done');
+      await container.dispose();
+      await database.close();
+    }
+  });
+
   testWidgets('probe drift find + file write', (tester) async {
     final database = AppDatabase(NativeDatabase.memory());
     final container = await AppContainer.bootstrap(
