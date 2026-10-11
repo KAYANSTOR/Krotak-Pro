@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:net_app/core/clock.dart';
 import 'package:net_app/core/id_generator.dart';
@@ -102,6 +104,62 @@ void main() {
     final csv = service.exportCsv(rows);
     expect(csv.contains('SN-1001'), isTrue);
     expect(csv.contains('فئة 100'), isTrue);
+  });
+
+  test('exportCsvBytes adds a UTF-8 BOM so Excel shows Arabic', () async {
+    final cards = InMemoryCardRepository();
+    final sales = InMemorySaleRepository();
+    final customers = InMemoryCustomerRepository();
+    final categories = _MemCategories();
+    final audits = InMemoryAuditLogRepository();
+
+    await categories.save(
+      CardCategory(
+        id: 'cat-100',
+        name: 'فئة 100',
+        faceValue: const Money(minorUnits: 10000, currencyCode: 'YER'),
+        isActive: true,
+      ),
+    );
+    await cards.save(
+      const Card(
+        id: 'card-1',
+        categoryId: 'cat-100',
+        serialNumber: 'SN-1001',
+        secretCode: 'SEC',
+        status: CardStatus.sold,
+      ),
+    );
+    await sales.save(
+      Sale(
+        id: 'sale-1',
+        customerId: 'cust-1',
+        cardId: 'card-1',
+        amount: const Money(minorUnits: 10000, currencyCode: 'YER'),
+        status: TransactionStatus.completed,
+        createdAt: DateTime.utc(2026, 9, 20, 10),
+      ),
+    );
+
+    final service = SoldCardsService(
+      cards: cards,
+      sales: sales,
+      customers: customers,
+      categories: categories,
+      auditLogs: audits,
+      unitOfWork: InMemoryUnitOfWork(),
+      clock: _Clock(),
+      ids: _Ids(),
+    );
+
+    final rows = ((await service.query(const SoldCardsFilter()))
+            as Success<List<SoldCardRow>>)
+        .value;
+    final bytes = service.exportCsvBytes(rows);
+    expect(bytes.sublist(0, 3), <int>[0xEF, 0xBB, 0xBF]);
+    final decoded = utf8.decode(bytes.sublist(3));
+    expect(decoded.contains('SN-1001'), isTrue);
+    expect(decoded.contains('فئة 100'), isTrue);
   });
 
   test('category filter narrows sold results', () async {

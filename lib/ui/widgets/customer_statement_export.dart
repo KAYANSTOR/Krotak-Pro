@@ -1,11 +1,14 @@
-import 'dart:io';
+import 'dart:convert';
+import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
-import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
+
+import '../../core/result.dart';
+import '../app_scope.dart';
+import '../errors/user_facing_error_localizer.dart';
 
 import '../../domain/entities/customer.dart';
 import '../../domain/entities/money.dart';
@@ -91,33 +94,26 @@ class _StatementExportSheetState extends State<_StatementExportSheet> {
 
   Future<void> _saveText() async {
     setState(() => _busy = true);
-    try {
-      final dir = await getApplicationDocumentsDirectory();
-      final name =
-          'net-statement-${DateTime.now().millisecondsSinceEpoch}.txt';
-      await File(p.join(dir.path, name)).writeAsString(widget.statementText);
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'تم حفظ النسخة النصية: $name',
-            style: const TextStyle(fontFamily: 'Tajawal'),
-          ),
+    final c = AppScope.of(context);
+    // WP-3/5.3: ملف نصي فعلي في مجلد ظاهر بدل مجلد التطبيق غير المرئي.
+    final saved = await c.visibleStorage.saveToDownloads(
+      bytes: Uint8List.fromList(utf8.encode(widget.statementText)),
+      fileName: 'كشف-الحساب.txt',
+      mimeType: 'text/plain',
+      subfolder: 'Exports',
+    );
+    if (!mounted) return;
+    setState(() => _busy = false);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          saved is Success<String>
+              ? 'تم حفظ كشف الحساب في مجلد التنزيلات.'
+              : localizedError((saved as Failure).error),
+          style: const TextStyle(fontFamily: 'Tajawal'),
         ),
-      );
-    } on Object {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'تعذّر حفظ الملف النصي',
-            style: TextStyle(fontFamily: 'Tajawal'),
-          ),
-        ),
-      );
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
+      ),
+    );
   }
 
   Future<void> _saveImage() async {
@@ -127,20 +123,22 @@ class _StatementExportSheetState extends State<_StatementExportSheet> {
           as RenderRepaintBoundary?;
       if (boundary == null) throw StateError('no-boundary');
       final image = await boundary.toImage(pixelRatio: 3);
-      final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
-      if (bytes == null) throw StateError('no-bytes');
-      final dir = await getApplicationDocumentsDirectory();
-      final name =
-          'net-statement-${DateTime.now().millisecondsSinceEpoch}.png';
-      await File(p.join(dir.path, name)).writeAsBytes(
-        bytes.buffer.asUint8List(),
-        flush: true,
+      final data = await image.toByteData(format: ui.ImageByteFormat.png);
+      if (data == null) throw StateError('no-bytes');
+      final c = AppScope.of(context);
+      // WP-8/5.3: صورة PNG تُحفظ في مجلد الصور الظاهر لا في مجلد التطبيق.
+      final saved = await c.visibleStorage.saveImageToPictures(
+        bytes: data.buffer.asUint8List(),
+        fileName: 'كشف-الحساب.png',
+        subfolder: 'Krotak Pro',
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'تم حفظ صورة الكشف: $name',
+            saved is Success<String>
+                ? 'تم حفظ صورة الكشف في مجلد الصور.'
+                : localizedError((saved as Failure).error),
             style: const TextStyle(fontFamily: 'Tajawal'),
           ),
         ),

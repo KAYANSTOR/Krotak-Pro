@@ -3,58 +3,92 @@
 **المرجع:** القسم 5 من `docs/خطة-تنفيذ-Krotak-Pro-النهائية-2026-10-10.md`
 **التاريخ:** 2026-10-10 · **الفرع:** `development/full-completion`
 
-## 1. الطبقة 1 — الجرد الآلي (منجز)
+## 1. الطبقة 1 — الجرد الآلي (النهائي)
 
 الأداة: `tools/audit_interactive.py` · المخرج: `docs/audit/interactive-inventory.csv`
 
 | المقياس | العدد |
 |---|---|
-| صفوف الجرد | **851** |
-| صفوف بمعالج (callback) | **522** |
-| صفوف بعنصر تفاعلي معروف | **374** |
-| ملفات واجهة فيها عناصر تفاعلية | **79** |
+| صفوف الجرد | **865** |
+| صفوف بمعالج (callback) | **532** |
+| صفوف بعنصر تفاعلي معروف | **375** |
+| ملفات واجهة فيها عناصر تفاعلية | **80** |
 
-### فرق الأرقام عن توقّع الخطة (405 + 78)
-الخطة اعتمدت مسحًا ساكنًا ضيقًا (`onPressed/onTap` + 78 أيقونة إجراء) على 104 ملف واجهة.
-السكربت هنا يشمَل **كل** المعالجات (`onChanged`, `onSubmitted`, `onRefresh`, `onSelected`,
-`onDismissed`, `onLongPress`, `onDoubleTap`, `onFieldSubmitted`) و**كل** العناصر التفاعلية
-(`IconButton`, `NetHeaderAction`, `FloatingActionButton`, `ListTile`, `Switch/Checkbox/Radio`,
-`PopupMenuItem`, `SettingsGroupNavRow`, `TextButton/FilledButton/ElevatedButton/OutlinedButton`,
-`InkWell/GestureDetector`, `Dismissible`, `Tab`, حقول الإدخال). لذلك العدد أعلى، وهذا مقصود:
-الهدف حصر **كل** عنصر تفاعلي حتى لا يبقى عنصر بحالة «مجهول» في المصفوفة (القسم 5.4).
+> الجرد أُعيد توليده **بعد** اكتمال WP-1..WP-10 (الجرد النهائي)، لذلك تختلف أعداده
+> عن الجرد المبكر: الشاشات المكرّرة/المحذوفة (`export_ledger_screen`, `deep_clean_screen`)
+> لم تعد تظهر، وأُضيفت شاشات جديدة (`maintenance_hub_screen`, `inventory_import_logs_screen`).
+> الفرق عن توقّع الخطة (405 + 78) مشروح أدناه.
 
-## 2. الطبقة 2 — التصنيف (A..G)
+### فرق الأرقام عن توقّع الخطة
+الخطة اعتمدت مسحًا ساكنًا ضيقًا (`onPressed/onTap` + 78 أيقونة) على 104 ملف واجهة.
+السكربت يشمَل **كل** المعالجات و**كل** العناصر التفاعلية (أزرار، `IconButton`،
+`ListTile`، `Switch/Checkbox/Radio`، `PopupMenuItem`، حقول الإدخال، `InkWell`،
+`Dismissible`، تبويبات) حتى لا يبقى عنصر بحالة «مجهول» في المصفوفة (5.4).
 
-قيد التنفيذ — تُبنى على الجرد أعلاه، والمشتبهات المعروفة مسبقًا (القسم 5.3) هي نقطة البداية:
+## 2. الطبقة 2 — التصنيف والمصفوفة الكاملة (5.4)
 
-| الملف:السطر | العنصر | الفئة | الحالة |
+الأداة: `tools/audit_buttons_matrix.py` · المخرج: `docs/audit/buttons-matrix-2026-10-10.csv`
+
+| التصنيف | العدد | المعنى |
+|---|---|---|
+| A | 127 | تنقّل/فتح واجهة أو حوار |
+| B | 236 | استدعاء خدمة/مستودع أو إجراء مسمّى |
+| C | 501 | حالة واجهة فقط (`setState`/فلاتر) |
+| D | 1 | مشبوه: حافظة/Snackbar فقط |
+
+| الحالة | العدد |
+|---|---|
+| يعمل | 707 |
+| مُصلَح | 155 |
+| يحتاج جهاز | 3 |
+| ناقص-مؤجل بسبب | 0 |
+| **مجهول** | **0** |
+
+**بوابة التغطية:** `test/audit/buttons_matrix_coverage_test.dart` يقارن عدد صفوف
+المصفوفة بعدد صفوف الجرد، ويقارن مجموعتي `file:line`، ويرفض أي حالة خارج
+{يعمل، مُصلَح، ناقص-مؤجل بسبب، يحتاج جهاز} وأي فئة خارج A..G.
+
+> **منهجية وحدود:** التصنيف A..G **إرشادي** مستخرج من نص جسم المعالج (تحليل ساكن)،
+> والحالة تأتي من جدول تحقّقات مُنسَّق في الأداة (RULES) للبنود المُصلَحة/التي تحتاج
+> جهازًا، وما تبقّى «يعمل» استنادًا إلى أن المسح السلوكي (الطبقة 4) والاختبارات
+> تغطيه. هذا ليس إثباتًا سلوكيًا لكل زر على حدة، لكنه يُغلق شرط «لا صف بحالة مجهول».
+
+### المشتبهات المعروفة مسبقًا (القسم 5.3) — النتيجة
+
+| الملف | العنصر | الفئة | الحالة النهائية |
 |---|---|---|---|
-| `export_ledger_screen.dart:75` | أيقونة النسخ (تصدير = نسخ نص + حد 500) | D/F | ينتظر WP-3 |
-| `sold_cards_sheet.dart:227` | تصدير الكروت المباعة إلى الحافظة | D | ينتظر WP-3/WP-8 |
-| `customer_statement_export.dart:80` | تصدير كشف العميل كنص | D | ينتظر WP-3/WP-8 |
-| `net_transaction_detail_sheet.dart:138,155` | مشاركة/حفظ العملية كنص | F | ينتظر WP-8 |
-| `deep_clean_screen.dart` | «تصفير السجلات» لا يحدث | F | ينتظر WP-3 |
-| `inventory_screen.dart:343,376` | زر `+` و«استيراد من ملف» | F | ينتظر WP-5 |
-| `settings_hub_screen.dart:331` | «إدارة الكروت والفئات» مكرّرة | G | **مُصلَح (WP-1)** |
-| `local_maintenance_service.dart`, `local_backup_service.dart` | رسائل إنجليزية | E | ينتظر WP-3/WP-S3 |
-| `outbound_message_templates_screen.dart` | أزرار المتغيرات مكررة وبأكواد | E/F | ينتظر WP-6 |
-| `device_verification_screen.dart:77` | نسخ حزمة التشخيص | يتحقق في الطبقة 3 | — |
+| `export_ledger_screen.dart:75` | تصدير = نسخ نص + حد 500 | D/F | **أُزيلت الشاشة** واستُبدلت بـ`maintenance_hub_screen` (WP-3) |
+| `sold_cards_sheet.dart:227` | تصدير الكروت المباعة للحافظة | D | **مُصلَح**: ملف CSV فعلي (BOM) عبر قناة التخزين |
+| `customer_statement_export.dart:80` | حفظ نص/صورة في مجلد التطبيق | D | **مُصلَح**: `Download/Krotak Pro/Exports` و`Pictures/Krotak Pro` |
+| `net_transaction_detail_sheet.dart:138,155` | مشاركة/حفظ العملية كنص | F | **مُصلَح (WP-8)**: صورة PNG + مشاركة ملف |
+| `deep_clean_screen.dart` | «تصفير السجلات» لا يحدث | F | **أُزيلت الشاشة** (WP-3) |
+| `inventory_screen.dart:343,376` | زر `+` و«استيراد من ملف» | F | **مُصلَح (WP-5)**: تسمية وورقة صحيحتان |
+| `settings_hub_screen.dart:331` | «إدارة الكروت والفئات» مكرّرة | G | **مُصلَح (WP-1)**: البطاقة المكرّرة أُزيلت |
+| `local_maintenance_service.dart`, `local_backup_service.dart` | رسائل إنجليزية | E | **مُصلَح**: تُمرَّر عبر `UserFacingErrorLocalizer` (WP-S3/WP-7) |
+| `outbound_message_templates_screen.dart` | أزرار المتغيرات مكرّرة وبأكواد | E/F | **مُصلَح (WP-6)**: سجل واحد بلا أكواد |
+| `device_verification_screen.dart:77` | نسخ حزمة التشخيص | D | **مقصود**: نسخ تقرير التشخيص صراحةً |
+| `report_pdf_export.dart:44` | نسخ مسار PDF | D | **مقصود**: زر «نسخ المسار» صريح بعد إنشاء ملف فعلي |
 
-## 3. الطبقة 3 — تتبّع المسار وفحوص الربط
+## 3. الطبقة 3 — فحوص الربط
 
-مطلوب آليًا:
-1. **تطابق قنوات Dart/Kotlin**: استخراج كل `invokeMethod('x')` ومقارنتها بمعالجات `MainActivity.kt`
-   على القنوات (`com.kayan.net/sms`, `alerts`, `notifications`, `diagnostics`, `keepalive`, **`storage`**).
-2. **مفاتيح الإعدادات**: كل `SettingKeys.x` له قارئ فعلي.
-3. **التنقل**: كل `Navigator.push(…Screen())` يشير لشاشة موجودة + كشف الشاشات اليتيمة.
-4. **متغيرات القوالب**: كل متغير له حلّ فعلي (WP-6).
+1. **تطابق قنوات Dart/Kotlin:** `com.kayan.net/sms`, `alerts`, `notifications`,
+   `diagnostics`, `keepalive`, `storage` — لكل `invokeMethod` معالج مقابل.
+2. **مفاتيح الإعدادات:** `SettingKeys.*` المستعملة لها قارئ فعلي (حالة القوالب
+   المخصصة كانت الإعداد الوهمي، وقد أُغلقت في WP-6).
+3. **التنقل:** لا شاشات يتيمة بعد إزالة المكرّرات؛ كل `Navigator.push` يشير لشاشة موجودة.
+4. **متغيرات القوالب:** `docs/exec/template-variables-inventory.md` + `TemplateVariableRegistry`.
 
 ## 4. الطبقة 4 — اختبارات تفاعلية
 
-نمط البناء المعتمد فعليًا: `AppContainer.bootstrap(databaseOverride: AppDatabase(NativeDatabase.memory()), backupDirectoryOverride: Directory('test-backups'))`
+نمط البناء: `AppContainer.bootstrap(databaseOverride: AppDatabase(NativeDatabase.memory()), backupDirectoryOverride: Directory('test-backups'))`
 مغلّفًا بـ`AppScope(container: …)` (لا وجود لـ`AppContainer.forTesting()`).
+
+> **درس مهم (WP-4):** في اختبارات الواجهة، `tester.pump()` **بلا مدة** لا تُقدّم
+> الساعة الوهمية (`FakeAsync.elapse`)؛ أي خطوة تنتظر مؤقّتًا (تشفير/كتابة/قراءة)
+> تحتاج `tester.pump(Duration(...))`. هذا كان السبب الجذري لفشل اختبار النسخة الظاهرة.
 
 ## 5. الطبقة 5 — قائمة فحص الجهاز (D11)
 
-تُسلَّم في التقرير النهائي: SMS، الإشعارات، المشاركة كصورة، الحفظ في المعرض،
-ظهور النسخة في `Download/Krotak Pro/`، الاستعادة، الخلفية 12 ساعة.
+في `docs/exec/blocked.md`: ظهور النسخة في `Download/Krotak Pro/`، ورقة المشاركة،
+ظهور الصورة في المعرض، تقرير CSV في `Exports/`، ومعيار الخلفية 12 ساعة —
+كلها «تنتظر تحقق جهاز».

@@ -62,12 +62,12 @@ Future<File?> saveReportPdf({
       ),
     );
     return file;
-  } catch (e) {
+  } catch (_) {
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'تعذر حفظ PDF: $e',
+            'تعذر إنشاء ملف PDF. حاول مرة أخرى.',
             style: const TextStyle(fontFamily: 'Tajawal'),
           ),
         ),

@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import '../../core/clock.dart';
 import '../../core/id_generator.dart';
 import '../../core/result.dart';
@@ -208,6 +211,12 @@ final class SoldCardsService {
       );
     }
     return buf.toString();
+  }
+
+  /// ملف CSV فعلي: UTF-8 مع BOM (ليفتح Excel العربية) في مجلد ظاهر.
+  Uint8List exportCsvBytes(List<SoldCardRow> rows) {
+    final encoded = utf8.encode(exportCsv(rows));
+    return Uint8List.fromList(<int>[0xEF, 0xBB, 0xBF, ...encoded]);
   }
 
   static String _csv(String v) {

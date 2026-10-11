@@ -73,6 +73,5 @@ internal object DeliveryKeepAliveEventFormat {
         entries.mapNotNull { decode(it) }
 
     private fun sanitize(detail: String): String =
-        detail.replace(SEPARATOR, '/').replace('
-', ' ').trim()
+        detail.replace(SEPARATOR, '/').replace('\n', ' ').trim()
 }

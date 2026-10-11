@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import '../../domain/entities/setting.dart';
 import '../../domain/services/report_pdf_service.dart';
 import '../services/report_pdf_export.dart';
-import 'package:flutter/services.dart';
 
 import '../../core/result.dart';
 import '../../domain/entities/card.dart' as domain;
@@ -231,14 +230,22 @@ class _SoldCardsSheetState extends State<_SoldCardsSheet> {
 
   Future<void> _export() async {
     if (_rows.isEmpty) return;
-    final csv = _service().exportCsv(_rows);
-    await Clipboard.setData(ClipboardData(text: csv));
+    final c = AppScope.of(context);
+    // WP-3/5.3: تصدير فعلي إلى ملف CSV في مجلد ظاهر بدل النسخ للحافظة.
+    final saved = await c.visibleStorage.saveToDownloads(
+      bytes: _service().exportCsvBytes(_rows),
+      fileName: 'الكروت-المباعة.csv',
+      mimeType: 'text/csv',
+      subfolder: 'Exports',
+    );
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
+      SnackBar(
         content: Text(
-          'تم نسخ تقرير الكروت المباعة (CSV) — الصقه في Excel أو ملف',
-          style: TextStyle(fontFamily: 'Tajawal'),
+          saved is Success<String>
+              ? 'تم تصدير ${_rows.length} كرت إلى ملف CSV في مجلد التنزيلات.'
+              : localizedError((saved as Failure).error),
+          style: const TextStyle(fontFamily: 'Tajawal'),
         ),
       ),
     );
