@@ -104,7 +104,16 @@ void main() {
     }
     await tester.pump(const Duration(milliseconds: 300));
 
-    expect(storageCalls, isNotEmpty, reason: 'لم تُنسخ النسخة إلى المجلد الظاهر');
+    final visibleText = tester
+        .widgetList<Text>(find.byType(Text))
+        .map((widget) => widget.data ?? '')
+        .where((text) => text.isNotEmpty)
+        .join(' | ');
+    expect(
+      storageCalls,
+      isNotEmpty,
+      reason: 'لم تُنسخ النسخة إلى المجلد الظاهر. نص الواجهة: $visibleText',
+    );
     final call = storageCalls.first;
     expect(call.method, 'saveToDownloads');
     final args = call.arguments as Map;
