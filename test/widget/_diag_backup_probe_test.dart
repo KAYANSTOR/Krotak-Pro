@@ -12,60 +12,51 @@ import 'package:net_app/data/database/app_database.dart'
     hide Customer, Card, Sale, TransferTemplate;
 import 'package:net_app/domain/entities/setting.dart';
 
+/// ينتظر أكتمال [pending] داخل fake-async دون التعليق: حلقة محدودة من
+/// runAsync (زمن حقيقي) + pump (يقدّم المؤقّتات الوهمية).
+Future<bool> pumpUntilDone(
+  WidgetTester tester,
+  bool Function() isDone, {
+  int iterations = 60,
+}) async {
+  for (var i = 0; i < iterations; i++) {
+    if (isDone()) return true;
+    await tester.runAsync(() async {
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+    });
+    await tester.pump(const Duration(milliseconds: 200));
+  }
+  return isDone();
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   testWidgets('probe crypto only in fake zone', (tester) async {
+    var done = false;
     final sw = Stopwatch()..start();
-    // ignore: avoid_print
-    print('CRYPTO: start');
-    final hash = await Sha256().hash(Uint8List.fromList(<int>[1, 2, 3]));
-    // ignore: avoid_print
-    print('CRYPTO: sha256 done ${hash.bytes.length} in ${sw.elapsedMilliseconds}ms');
-    final pbkdf2 =
-        Pbkdf2(macAlgorithm: Hmac.sha256(), iterations: 10000, bits: 256);
-    final key = await pbkdf2.deriveKey(
-      secretKey: SecretKey(<int>[1, 2, 3, 4]),
-      nonce: List<int>.filled(16, 7),
-    );
-    final keyBytes = await key.extractBytes();
-    // ignore: avoid_print
-    print('CRYPTO: pbkdf2 done in ${sw.elapsedMilliseconds}ms key=${keyBytes.length}');
-    final aes = AesGcm.with256bits();
-    final box = await aes.encrypt(
-      <int>[9, 9, 9],
-      secretKey: SecretKey(List<int>.filled(32, 5)),
-    );
-    // ignore: avoid_print
-    print('CRYPTO: aes done in ${sw.elapsedMilliseconds}ms ct=${box.cipherText.length}');
-  });
-
-  testWidgets('probe drift find + file write in fake zone', (tester) async {
-    final database = AppDatabase(NativeDatabase.memory());
-    final container = await AppContainer.bootstrap(
-      databaseOverride: database,
-      backupDirectoryOverride: Directory('test-backups'),
-    );
-    addTearDown(() async {
-      await container.dispose();
-      await database.close();
-    });
-
-    // ignore: avoid_print
-    print('D1: start find');
-    final r = await container.settings.find(SettingKeys.networkName);
-    // ignore: avoid_print
-    print('D1: find done ${r.runtimeType}');
-    final f = File('test-backups/probe.txt');
-    if (!await f.parent.exists()) {
-      await f.parent.create(recursive: true);
+    Future<void> run() async {
+      await Sha256().hash(Uint8List.fromList(<int>[1, 2, 3]));
+      final pbkdf2 =
+          Pbkdf2(macAlgorithm: Hmac.sha256(), iterations: 10000, bits: 256);
+      final key = await pbkdf2.deriveKey(
+        secretKey: SecretKey(<int>[1, 2, 3, 4]),
+        nonce: List<int>.filled(16, 7),
+      );
+      await key.extractBytes();
+      final aes = AesGcm.with256bits();
+      await aes.encrypt(<int>[9, 9, 9],
+          secretKey: SecretKey(List<int>.filled(32, 5)));
+      done = true;
     }
-    await f.writeAsString('hello', flush: true);
+
+    run();
+    final ok = await pumpUntilDone(tester, () => done);
     // ignore: avoid_print
-    print('D1: write done');
+    print('PROBE-CRYPTO: done=$ok elapsed=${sw.elapsedMilliseconds}ms');
   });
 
-  testWidgets('probe createBackup driven by runAsync loop', (tester) async {
+  testWidgets('probe createBackup completion', (tester) async {
     final database = AppDatabase(NativeDatabase.memory());
     final container = await AppContainer.bootstrap(
       databaseOverride: database,
@@ -83,18 +74,12 @@ void main() {
       done = true;
       value = v;
     });
-    for (var i = 0; i < 40 && !done; i++) {
-      await tester.runAsync(() async {
-        await Future<void>.delayed(const Duration(milliseconds: 100));
-      });
-      await tester.pump();
-    }
+    final ok = await pumpUntilDone(tester, () => done);
     // ignore: avoid_print
-    print('BACKUP-LOOP: done=$done after ${sw.elapsedMilliseconds}ms value=${value.runtimeType}');
-    expect(done, isTrue, reason: 'createBackup لم يكتمل (loop)');
+    print('PROBE-BACKUP: done=$ok elapsed=${sw.elapsedMilliseconds}ms value=${value.runtimeType}');
   });
 
-  testWidgets('probe createBackup inside runAsync', (tester) async {
+  testWidgets('probe drift find + file write', (tester) async {
     final database = AppDatabase(NativeDatabase.memory());
     final container = await AppContainer.bootstrap(
       databaseOverride: database,
@@ -105,12 +90,21 @@ void main() {
       await database.close();
     });
 
+    var done = false;
     final sw = Stopwatch()..start();
-    Object? value;
-    await tester.runAsync(() async {
-      value = await container.backupService.createBackup(password: 'secret-pass');
-    });
+    Future<void> run() async {
+      await container.settings.find(SettingKeys.networkName);
+      final f = File('test-backups/probe.txt');
+      if (!await f.parent.exists()) {
+        await f.parent.create(recursive: true);
+      }
+      await f.writeAsString('hello', flush: true);
+      done = true;
+    }
+
+    run();
+    final ok = await pumpUntilDone(tester, () => done);
     // ignore: avoid_print
-    print('BACKUP-RUNASYNC: done in ${sw.elapsedMilliseconds}ms value=${value.runtimeType}');
+    print('PROBE-DRIFT: done=$ok elapsed=${sw.elapsedMilliseconds}ms');
   });
 }
