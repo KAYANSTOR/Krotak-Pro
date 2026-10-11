@@ -99,8 +99,9 @@ void main() {
         await Future<void>.delayed(const Duration(milliseconds: 50));
       });
       await tester.pump(const Duration(milliseconds: 50));
-      if (storageCalls.isNotEmpty ||
-          find.textContaining('تم إنشاء النسخة').evaluate().isNotEmpty ||
+      // ننتظر ظهور نص النتيجة في الواجهة (نجاح أو فشل) لا مجرد تسجيل
+      // استدعاء القناة، لأن `setState` لا يقع إلا بعد عودة مستقبل القناة.
+      if (find.textContaining('تم إنشاء النسخة').evaluate().isNotEmpty ||
           find.textContaining('تعذر').evaluate().isNotEmpty) {
         break;
       }
@@ -125,7 +126,11 @@ void main() {
     expect((args['fileName'] as String).endsWith('.krt'), isTrue);
     expect(args['mimeType'], 'application/octet-stream');
 
-    expect(find.textContaining('المسار الظاهر'), findsOneWidget);
+    expect(
+      find.textContaining('المسار الظاهر'),
+      findsOneWidget,
+      reason: 'نص الواجهة: $visibleText',
+    );
     expect(find.text('مشاركة النسخة'), findsOneWidget);
   });
 }
